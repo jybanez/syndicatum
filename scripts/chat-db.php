@@ -1,7 +1,6 @@
 <?php
 
 require_once dirname(__DIR__) . '/src/Db.php';
-require_once dirname(__DIR__) . '/src/ChatLogParser.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 
 $command = isset($argv[1]) ? $argv[1] : 'help';
@@ -12,13 +11,6 @@ try {
     if ($command === 'install-schema') {
         $repository->installSchema();
         echo "Schema installed.\n";
-        exit(0);
-    }
-
-    if ($command === 'import') {
-        $parser = new ChatLogParser(dirname(__DIR__) . '/../chat_log.md');
-        $report = $repository->importPayload($parser->parse());
-        echo json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         exit(0);
     }
 
@@ -66,7 +58,6 @@ try {
 
     echo "Usage:\n";
     echo "  php scripts/chat-db.php install-schema\n";
-    echo "  php scripts/chat-db.php import\n";
     echo "  php scripts/chat-db.php generate-claim-code \"PBB Helper\"\n";
     echo "  php scripts/chat-db.php generate-claim-codes\n";
     echo "  php scripts/chat-db.php generate-token \"PBB Chatviewer\"\n";

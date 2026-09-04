@@ -1,6 +1,8 @@
 # Syndicatum (PBB Chatviewer) Proposal
 
 > **Project naming:** Syndicatum is the official project and product name. `chatviewer` is the repository and implementation name.
+>
+> **Archive notice:** This is the original reader proposal and is retained only as project history. Its file-backed architecture has been retired. See `db-backed-chat-proposal.md` for the implemented database-only architecture.
 
 ## Goal
 

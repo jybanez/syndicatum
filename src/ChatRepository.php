@@ -113,76 +113,6 @@ class ChatRepository
         $this->ensureCredentialVersionColumns();
     }
 
-    public function importPayload(array $payload)
-    {
-        $this->installSchema();
-        $now = Db::now();
-        $report = [
-            'agents_created_or_updated' => 0,
-            'inactive_senders_created' => 0,
-            'topics_created_or_updated' => 0,
-            'entries_created' => 0,
-            'entries_skipped' => 0,
-            'recipients_created' => 0,
-            'warnings' => [],
-        ];
-
-        $this->pdo->beginTransaction();
-        try {
-            foreach ($payload['projects'] as $index => $project) {
-                $this->upsertAgent($project['name'], isset($project['summary']) ? $project['summary'] : '', $index + 1, true);
-                $report['agents_created_or_updated']++;
-            }
-
-            $this->pdo->exec('UPDATE chat_topics SET is_active = 0, updated_at = ' . $this->pdo->quote($now) . ' WHERE deleted_at IS NULL');
-            foreach ($payload['active_topics'] as $topic) {
-                $hash = hash('sha256', 'topic|' . $topic);
-                $this->upsertTopic($topic, $hash, $now);
-                $report['topics_created_or_updated']++;
-            }
-
-            foreach ($payload['messages'] as $message) {
-                $senderId = $this->findAgentId($message['sender']);
-                if ($senderId === null) {
-                    $senderId = $this->upsertAgent($message['sender'], 'Imported sender not listed in #Projects.', null, false);
-                    $report['inactive_senders_created']++;
-                }
-
-                $sourceHash = $this->sourceHash($message);
-                $entryId = $this->findEntryIdByHash($sourceHash);
-                if ($entryId !== null) {
-                    $report['entries_skipped']++;
-                } else {
-                    $entryId = $this->insertEntry($senderId, $message, $sourceHash, $now);
-                    $report['entries_created']++;
-                }
-
-                $targetNames = isset($message['targets']) && is_array($message['targets'])
-                    ? $message['targets']
-                    : $this->splitTargetNames(isset($message['target']) ? $message['target'] : '');
-
-                foreach ($targetNames as $targetName) {
-                    $targetId = $this->findAgentId($targetName);
-                    if ($targetId === null) {
-                        $report['warnings'][] = 'Unknown target skipped: ' . $targetName . ' for message source_order=' . $message['source_order'];
-                        continue;
-                    }
-
-                    if ($this->insertRecipient($entryId, $targetId, $now)) {
-                        $report['recipients_created']++;
-                    }
-                }
-            }
-
-            $this->pdo->commit();
-        } catch (Exception $exception) {
-            $this->pdo->rollBack();
-            throw $exception;
-        }
-
-        return $report;
-    }
-
     public function payload()
     {
         $agents = $this->agents(true);
@@ -803,19 +733,6 @@ class ChatRepository
         return $value ?: Db::now();
     }
 
-    private function upsertAgent($name, $description, $sourceOrder, $active)
-    {
-        $now = Db::now();
-        $statement = $this->pdo->prepare(
-            'INSERT INTO chat_agents (project_name, description, source_order, is_active, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE description = VALUES(description), source_order = VALUES(source_order), is_active = VALUES(is_active), updated_at = VALUES(updated_at)'
-        );
-        $statement->execute([$name, $description, $sourceOrder, $active ? 1 : 0, $now, $now]);
-
-        return $this->findAgentId($name);
-    }
-
     private function findAgentId($name, $activeOnly = false)
     {
         $sql = 'SELECT id FROM chat_agents WHERE project_name = ?';
@@ -875,56 +792,6 @@ class ChatRepository
         }
 
         return $prefix . '_' . substr($safeName, 0, 20) . '_' . bin2hex($this->randomBytes(24));
-    }
-
-    private function upsertTopic($body, $hash, $now)
-    {
-        $statement = $this->pdo->prepare(
-            'INSERT INTO chat_topics (body, source_hash, is_active, created_at, updated_at)
-             VALUES (?, ?, 1, ?, ?)
-             ON DUPLICATE KEY UPDATE body = VALUES(body), is_active = 1, updated_at = VALUES(updated_at), deleted_at = NULL'
-        );
-        $statement->execute([$body, $hash, $now, $now]);
-    }
-
-    private function sourceHash(array $message)
-    {
-        return hash('sha256', implode('|', [
-            isset($message['timestamp']) ? $message['timestamp'] : '',
-            isset($message['sender']) ? $message['sender'] : '',
-            isset($message['target']) ? $message['target'] : '',
-            isset($message['body']) ? $message['body'] : '',
-        ]));
-    }
-
-    private function findEntryIdByHash($hash)
-    {
-        $statement = $this->pdo->prepare('SELECT id FROM chat_entries WHERE source_hash = ?');
-        $statement->execute([$hash]);
-        $value = $statement->fetchColumn();
-
-        return $value === false ? null : (int) $value;
-    }
-
-    private function insertEntry($senderId, array $message, $sourceHash, $now)
-    {
-        $statement = $this->pdo->prepare(
-            'INSERT INTO chat_entries (entry_uuid, sender_agent_id, message_timestamp, body, source_line, source_order, source_hash, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $statement->execute([
-            $this->uuid(),
-            $senderId,
-            $message['timestamp'],
-            $message['body'],
-            isset($message['source_line']) ? $message['source_line'] : null,
-            isset($message['source_order']) ? $message['source_order'] : null,
-            $sourceHash,
-            $now,
-            $now,
-        ]);
-
-        return (int) $this->pdo->lastInsertId();
     }
 
     private function insertRecipient($entryId, $targetId, $now)

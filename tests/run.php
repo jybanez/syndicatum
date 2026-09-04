@@ -1,7 +1,6 @@
 <?php
 
 require_once dirname(__DIR__) . '/src/Db.php';
-require_once dirname(__DIR__) . '/src/ChatLogParser.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 
 class TestSuite
@@ -188,8 +187,12 @@ function startServer($root, $port, array $environment)
 $suite = new TestSuite();
 $root = dirname(__DIR__);
 $database = 'syndicatum_test_' . bin2hex(random_bytes(6));
+$emptyDatabase = $database . '_empty';
 if (!preg_match('/^syndicatum_test_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe test database name.');
+}
+if (!preg_match('/^syndicatum_test_[a-f0-9]{12}_empty$/', $emptyDatabase)) {
+    throw new RuntimeException('Unsafe empty test database name.');
 }
 
 $primarySecret = bin2hex(random_bytes(32));
@@ -200,6 +203,7 @@ $adminToken = 'test_admin_' . bin2hex(random_bytes(24));
 
 $admin = new PDO('mysql:host=127.0.0.1;charset=utf8mb4', 'root', '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $admin->exec('CREATE DATABASE `' . $database . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+$admin->exec('CREATE DATABASE `' . $emptyDatabase . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
 
 putenv('PBB_AGENTCHAT_DB_HOST=127.0.0.1');
 putenv('PBB_AGENTCHAT_DB_NAME=' . $database);
@@ -302,7 +306,7 @@ try {
         $suite->assertTrue($statement->fetchColumn() !== null);
     });
 
-    $suite->test('topic ownership and imported-topic admin rules are enforced', function () use ($suite, $repository, $pdo, $alice, $bob, $administrator) {
+    $suite->test('topic ownership and migrated-topic admin rules are enforced', function () use ($suite, $repository, $pdo, $alice, $bob, $administrator) {
         $topic = $repository->createTopic($alice, ['body' => 'Owned topic']);
         $suite->assertThrows('RuntimeException', function () use ($repository, $topic, $bob) {
             $repository->updateTopic($topic['id'], $bob, ['body' => 'Unauthorized topic edit']);
@@ -325,19 +329,6 @@ try {
             $suite->assertTrue(!array_key_exists('token_hash', $agent));
             $suite->assertTrue(!array_key_exists('claim_hash', $agent));
         }
-    });
-
-    $suite->test('Markdown import is idempotent and resolves multiple recipients', function () use ($suite, $repository, $root) {
-        $parser = new ChatLogParser($root . '/tests/fixtures/chat_log.md');
-        $first = $repository->importPayload($parser->parse());
-        $second = $repository->importPayload($parser->parse());
-        $suite->assertSame(2, $first['entries_created']);
-        $suite->assertSame(2, $first['recipients_created']);
-        $suite->assertSame(0, $second['entries_created']);
-        $suite->assertSame(2, $second['entries_skipped']);
-        $messages = $repository->messages(['sender' => 'Import Sender', 'direct' => '1']);
-        $suite->assertSame(['Import Target A', 'Import Target B'], $messages[0]['targets']);
-        $suite->assertTrue(strpos($messages[0]['body'], 'Continuation line') !== false);
     });
 
     $suite->test('payload ETag changes after a message write', function () use ($suite, $repository, $alice) {
@@ -416,11 +407,9 @@ try {
         $suite->assertSame('primary', $version);
     });
 
-    $suite->test('disabled maintenance HTTP endpoints return Gone', function () use ($suite, $baseUrl) {
+    $suite->test('disabled schema-installation HTTP endpoint returns Gone', function () use ($suite, $baseUrl) {
         $install = httpRequest($baseUrl, 'POST', '/api/install-schema.php');
-        $import = httpRequest($baseUrl, 'POST', '/api/import-chat-log.php');
         $suite->assertSame(410, $install['status']);
-        $suite->assertSame(410, $import['status']);
     });
 
     $suite->test('chat-log API honors ETag conditional requests', function () use ($suite, $baseUrl) {
@@ -429,6 +418,27 @@ try {
         $suite->assertTrue(isset($first['headers']['etag']));
         $second = httpRequest($baseUrl, 'GET', '/api/chat-log.php', ['If-None-Match: ' . $first['headers']['etag']]);
         $suite->assertSame(304, $second['status']);
+    });
+
+    $suite->test('chat-log API returns Service Unavailable when the schema is missing', function () use ($suite, $root, $environment, $emptyDatabase) {
+        $environment['PBB_AGENTCHAT_DB_NAME'] = $emptyDatabase;
+        $process = null;
+        $logPath = null;
+        try {
+            list($process, $baseUrl, $logPath) = startServer($root, reservePort(), $environment);
+            $response = httpRequest($baseUrl, 'GET', '/api/chat-log.php');
+            $suite->assertSame(503, $response['status']);
+            $body = decodedBody($response);
+            $suite->assertSame('Chat database schema is not installed.', $body['message']);
+        } finally {
+            if (is_resource($process)) {
+                proc_terminate($process);
+                proc_close($process);
+            }
+            if ($logPath && is_file($logPath)) {
+                unlink($logPath);
+            }
+        }
     });
 } finally {
     if (is_resource($server)) {
@@ -443,6 +453,10 @@ try {
             throw new RuntimeException('Refusing to drop unsafe database name.');
         }
         $admin->exec('DROP DATABASE `' . $database . '`');
+        if (!preg_match('/^syndicatum_test_[a-f0-9]{12}_empty$/', $emptyDatabase)) {
+            throw new RuntimeException('Refusing to drop unsafe empty database name.');
+        }
+        $admin->exec('DROP DATABASE `' . $emptyDatabase . '`');
     }
 }
 

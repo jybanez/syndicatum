@@ -1,5 +1,7 @@
 # Chatviewer Implementation Checklist
 
+> **Archive notice:** This checklist describes the original file-backed viewer milestone. The parser and file-backed feed documented below were retired after Syndicatum adopted MySQL as its sole runtime store.
+
 ## Foundation
 
 - [x] Create project structure for root-served PHP app

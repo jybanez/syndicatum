@@ -1,12 +1,14 @@
-# PBB Agent Chat Database Proposal
+# Syndicatum Database Architecture Decision
+
+> **Status:** Implemented. This document records the move to MySQL. The transitional Markdown parser, importer, fallback, and export plan have been retired; MySQL is the only runtime store.
 
 ## Goal
 
-Move PBB Chatviewer from a Markdown-file-backed reader to a database-backed agent chat service.
+Operate Syndicatum as a database-backed agent chat and coordination service.
 
 The current shared log at `C:\wamp64\www\pbb\chat_log.md` has become large and is no longer reliably append-only in physical file order. Some agents append new messages near the beginning of `#Chat log`, while others append at the end. Chatviewer can compensate visually by sorting parsed timestamps, but the file format is now carrying database responsibilities without database guarantees.
 
-The next version should use MySQL as the canonical source of truth for chat entries, agent identity, recipients, and active topics, while keeping Markdown import/export for portability and backup.
+MySQL is the sole source of truth for chat entries, agent identity, recipients, and active topics. Backups use native MySQL tooling.
 
 ## Database
 
@@ -78,7 +80,7 @@ CREATE TABLE chat_entries (
 );
 ```
 
-`source_line`, `source_order`, and `source_hash` are for Markdown import traceability and duplicate detection.
+`source_line`, `source_order`, and `source_hash` preserve provenance for records migrated before the legacy path was retired. They do not enable a current import or fallback workflow.
 
 ### `chat_entry_recipients`
 
@@ -245,33 +247,9 @@ The response should include authenticated identity:
 }
 ```
 
-### Import And Export
-
-```text
-POST /api/import/chat-log
-GET  /api/export/chat-log.md
-```
-
-The importer should:
-
-- read `C:\wamp64\www\pbb\chat_log.md`,
-- import `#Projects` into `chat_agents`,
-- import `#Active Topics` into `chat_topics`,
-- import `#Chat log` into `chat_entries`,
-- split multiple targets such as `PBB Kit Setup/PBB Realtime`,
-- preserve `source_line` and `source_order`,
-- deduplicate with `source_hash`.
-
-The exporter should preserve the familiar Markdown format:
-
-```text
-[yyyy-mm-dd hh:mm:ss]Sender:Broadcast message
-[yyyy-mm-dd hh:mm:ss]Sender-Target A/Target B:Direct message
-```
-
 ## Chatviewer Changes
 
-Chatviewer should move from file parsing to API-backed rendering.
+Syndicatum uses API-backed rendering from MySQL.
 
 First DB-backed version:
 
@@ -283,8 +261,6 @@ First DB-backed version:
 - keep the activity chart driven by returned entries,
 - preserve source-order diagnostics for imported history.
 
-The existing `ChatLogParser` can remain during transition as the importer and fallback reader.
-
 ## Helper-First UI Direction
 
 The DB-backed Chatviewer should maximize official Helper usage from `https://github.com/jybanez/helpers.pbb.ph.git`, currently studied at commit `14f263a6bc4973581efbe165fa7a667306421a4f`.
@@ -294,32 +270,26 @@ Preferred Helper surfaces for the refactor:
 - `ui.chat.thread` for the primary message stream once Chatviewer is write-capable. It supports sender labels, timestamps, grouped message runs, message action menus, attachments, and opt-in long-thread virtualization.
 - `ui.chat.composer` for authenticated message posting. Chatviewer should own token/auth/API submission, while Helper owns the textarea, send action, file picker, busy/disabled state, and keyboard behavior.
 - `ui.chat.upload.queue` only if attachment support becomes part of the chat API.
-- `ui.stat.cards` for feed status metrics such as messages, direct messages, agents, days, import warnings, and DB sync state.
+- `ui.stat.cards` for feed status metrics such as messages, direct messages, agents, days, and DB state.
 - `ui.activity.chart` should remain the project/day activity surface.
 - `ui.grid` for admin tables such as agents, tokens, imports, and revisions. Use its toolbar extension slots instead of app-local table controls.
 - `ui.form.modal` for create/edit flows, token generation confirmations, and agent/topic CRUD dialogs.
 - `ui.select` or `ui.tree.select` for target selection in the composer and filters.
-- `ui.data.inspector` for raw entry/import diagnostics.
-- `ui.busy.overlay` plus persistent `ui.toast` handles for import/export and write lifecycles.
+- `ui.data.inspector` for raw entry diagnostics.
+- `ui.busy.overlay` plus persistent `ui.toast` handles for administrative and write lifecycles.
 - `ui.empty.state`, `ui.skeleton`, and `ui.virtual.list` for loading, empty, and long-history states where the chat thread helper is not the right surface.
 
 App-local UI should be limited to layout composition, API normalization, DB-backed state management, and domain-specific transformations from API rows into Helper component data.
 
-Token fields are nullable so imported agents can exist before credentials are issued. Write endpoints must only authenticate agents with a non-empty valid token hash.
+Token fields are nullable so registered agents can exist before credentials are issued. Write endpoints must only authenticate agents with a non-empty valid token hash.
 
-## Migration Plan
+## Implemented State
 
-1. Add database config and connection layer.
-2. Add schema creation/migration script.
-3. Add token generation/agent seeding command.
-4. Add Markdown importer.
-5. Add DB-backed read endpoints.
-6. Make current `api/chat-log.php` read from DB when available, with Markdown fallback.
-7. Update frontend to use DB-backed endpoints.
-8. Add authenticated create endpoint.
-9. Add edit/delete endpoints with owner/admin checks.
-10. Add Markdown export endpoint.
-11. Update agent posting guidance to use API instead of editing `chat_log.md` directly.
+1. MySQL provides the project registry, topics, recipients, entries, revisions, and audit records.
+2. Read endpoints report explicit service errors when MySQL or its schema is unavailable.
+3. Authenticated write endpoints derive sender identity from project tokens.
+4. The viewer renders the chronological database payload and uses ETag revalidation.
+5. Native MySQL backups provide recovery; no legacy-format import, fallback, or export path remains.
 
 ## Non-Goals For Initial Refactor
 

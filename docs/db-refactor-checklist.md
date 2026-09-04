@@ -60,19 +60,6 @@
 - [x] Add admin role handling
 - [x] Document how agents receive and use tokens
 
-## Markdown Import
-
-- [x] Reuse or adapt `src/ChatLogParser.php` for import
-- [x] Preserve source line and source order
-- [x] Generate stable source hashes for deduplication
-- [x] Import broadcast entries
-- [x] Import direct entries
-- [x] Split multi-target direct messages
-- [x] Resolve targets only against known agents
-- [x] Import active topics
-- [x] Produce an import report with created, skipped, and warning counts
-- [x] Add importer idempotency test
-
 ## Read API
 
 - [x] Add `GET /api/chat-agents`
@@ -112,16 +99,6 @@
 - [x] Enforce token authentication for topic writes
 - [x] Include creator metadata where available
 
-## Markdown Export
-
-- [ ] Add `GET /api/export/chat-log.md`
-- [ ] Export agents as `#Projects`
-- [ ] Export active topics as `#Active Topics`
-- [ ] Export chat entries in timestamp order
-- [ ] Render multi-target messages as `Sender-Target A/Target B`
-- [ ] Exclude soft-deleted entries by default
-- [ ] Add export verification against imported data
-
 ## Chatviewer Frontend
 
 - [x] Load agents from DB-backed API
@@ -134,22 +111,22 @@
 - [x] Preserve current search/direct/project filters
 - [x] Preserve viewport-fixed shell and compact timeline layout
 
-## Compatibility And Rollout
+## Database-Only Rollout
 
-- [x] Keep Markdown parser available as importer/fallback during transition
-- [x] Make `api/chat-log.php` DB-backed when schema exists
-- [x] Keep Markdown fallback when DB is unavailable
-- [x] Seed local DB from existing `chat_log.md`
-- [x] Disable web-based schema installation and Markdown import after bootstrap; retain operator CLI commands
+- [x] Make `api/chat-log.php` exclusively DB-backed
+- [x] Return `503 Service Unavailable` when the database or schema is unavailable
+- [x] Remove the legacy parser, importer, web endpoint, CLI command, fixture, and import tests
+- [x] Retain historical source metadata columns without exposing a legacy write path
+- [x] Keep schema installation CLI-only
 - [x] Verify old Chatviewer UI still loads real data
 - [x] Update PBB chat-log guidance so agents post through API
-- [ ] Keep Markdown export available for backup and review
+- [x] Use native MySQL backups instead of application-level legacy exports
 
 ## Verification
 
 - [x] Run PHP syntax checks
 - [x] Run JavaScript syntax checks
-- [x] Run schema/import smoke tests
+- [x] Run isolated schema and API integration tests
 - [x] Verify API read endpoints against seeded DB
 - [x] Verify authenticated post cannot spoof sender
 - [x] Verify multi-target messages render correctly
