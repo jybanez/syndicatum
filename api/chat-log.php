@@ -9,10 +9,11 @@ try {
     if (!$repository->hasSchema()) {
         Api::json(['error' => true, 'message' => 'Chat database schema is not installed.'], 503);
     }
-    $payload = $repository->payload();
+    $feedVersion = $repository->feedVersion();
 
-    $etag = $payload['meta']['etag'];
-    $lastModified = gmdate('D, d M Y H:i:s', (int) $payload['meta']['last_modified_unix']) . ' GMT';
+    $etag = $feedVersion['etag'];
+    $lastModifiedUnix = strtotime($feedVersion['last_updated']) ?: time();
+    $lastModified = gmdate('D, d M Y H:i:s', $lastModifiedUnix) . ' GMT';
 
     header('ETag: ' . $etag);
     header('Last-Modified: ' . $lastModified);
@@ -24,6 +25,7 @@ try {
         exit;
     }
 
+    $payload = $repository->payload($feedVersion);
     Api::json($payload);
 } catch (Exception $exception) {
     Api::json(['error' => true, 'message' => 'Chat database is unavailable.'], 503);

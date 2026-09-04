@@ -161,6 +161,8 @@ The DB-backed chat-log payload stays chronological for Chatviewer timeline rende
 GET /api/chat-log.php
 ```
 
+Clients should retain the returned `ETag` and send it as `If-None-Match` on later refreshes. Syndicatum evaluates the feed version before loading the full history and returns `304 Not Modified` when unchanged.
+
 ## Post A Broadcast Message
 
 ```http

@@ -141,6 +141,12 @@ function decodedBody(array $response)
     return $decoded;
 }
 
+function sessionQuestionCount(PDO $pdo)
+{
+    $row = $pdo->query("SHOW SESSION STATUS LIKE 'Questions'")->fetch();
+    return (int) $row['Value'];
+}
+
 function reservePort()
 {
     $socket = stream_socket_server('tcp://127.0.0.1:0', $errorNumber, $errorMessage);
@@ -266,6 +272,13 @@ try {
     $bob = $repository->authenticate($bobToken);
     $administrator = $repository->authenticate($adminToken);
 
+    $suite->test('routine primary-token authentication does not invalidate the feed ETag', function () use ($suite, $repository, $bobToken) {
+        $before = $repository->feedVersion()['etag'];
+        $suite->assertSame('Bob Project', $repository->authenticate($bobToken)['project_name']);
+        $after = $repository->feedVersion()['etag'];
+        $suite->assertSame($before, $after);
+    });
+
     $suite->test('sender is derived from authentication and submitted sender is ignored', function () use ($suite, $repository, $alice) {
         $entry = $repository->createEntry($alice, ['sender' => 'Admin Project', 'body' => 'Authenticated sender test']);
         $suite->assertSame('Alice Project', $entry['sender']);
@@ -282,6 +295,20 @@ try {
         $suite->assertThrows('InvalidArgumentException', function () use ($repository, $alice) {
             $repository->createEntry($alice, ['body' => 'Bad target', 'targets' => ['Missing Project']]);
         }, 'Unknown or inactive target');
+    });
+
+    $suite->test('message recipient loading uses a fixed number of queries', function () use ($suite, $repository, $pdo, $alice) {
+        for ($index = 0; $index < 20; $index++) {
+            $repository->createEntry($alice, [
+                'body' => 'Batch recipient query test ' . $index,
+                'targets' => ['Bob Project'],
+            ]);
+        }
+        $before = sessionQuestionCount($pdo);
+        $messages = $repository->messages(['order' => 'asc']);
+        $after = sessionQuestionCount($pdo);
+        $suite->assertTrue(count($messages) >= 20);
+        $suite->assertTrue(($after - $before) <= 4, 'Message loading executed too many database queries: ' . ($after - $before));
     });
 
     $suite->test('message ownership and revision history are enforced', function () use ($suite, $repository, $pdo, $alice, $bob, &$directEntry) {
@@ -336,6 +363,14 @@ try {
         $repository->createEntry($alice, ['body' => 'ETag change test']);
         $after = $repository->payload()['meta']['etag'];
         $suite->assertTrue($before !== $after);
+    });
+
+    $suite->test('feed version matches materialized payload metadata', function () use ($suite, $repository) {
+        $version = $repository->feedVersion();
+        $payload = $repository->payload($version);
+        $suite->assertSame($version['etag'], $payload['meta']['etag']);
+        $suite->assertSame($version['message_count'], $payload['meta']['message_count']);
+        $suite->assertSame($version['direct_count'], $payload['meta']['direct_count']);
     });
 
     $environment = getenv();

@@ -113,8 +113,11 @@ class ChatRepository
         $this->ensureCredentialVersionColumns();
     }
 
-    public function payload()
+    public function payload(array $feedVersion = null)
     {
+        if ($feedVersion === null) {
+            $feedVersion = $this->feedVersion();
+        }
         $agents = $this->agents(true);
         $participants = $this->participants();
         $topics = array_map(function ($topic) {
@@ -128,8 +131,7 @@ class ChatRepository
         $days = array_values(array_unique(array_map(function ($message) {
             return $message['day_key'];
         }, $messages)));
-        $lastUpdated = $this->lastUpdated();
-        $etag = '"' . sha1($lastUpdated . '|' . $messageCount . '|' . $directCount) . '"';
+        $lastUpdated = $feedVersion['last_updated'];
 
         return [
             'meta' => [
@@ -138,7 +140,7 @@ class ChatRepository
                 'source_type' => 'database',
                 'last_modified_unix' => strtotime($lastUpdated) ?: time(),
                 'last_modified_iso' => gmdate(DATE_ATOM, strtotime($lastUpdated) ?: time()),
-                'etag' => $etag,
+                'etag' => $feedVersion['etag'],
                 'message_count' => $messageCount,
                 'direct_count' => $directCount,
                 'participant_count' => count($participants),
@@ -154,6 +156,34 @@ class ChatRepository
             'active_topics' => $topics,
             'participants' => $participants,
             'messages' => $messages,
+        ];
+    }
+
+    public function feedVersion()
+    {
+        $row = $this->pdo->query(
+            "SELECT
+                GREATEST(
+                    COALESCE((SELECT MAX(updated_at) FROM chat_entries), '1970-01-01 00:00:00'),
+                    COALESCE((SELECT MAX(updated_at) FROM chat_agents), '1970-01-01 00:00:00'),
+                    COALESCE((SELECT MAX(updated_at) FROM chat_topics), '1970-01-01 00:00:00'),
+                    COALESCE((SELECT MAX(created_at) FROM chat_entry_recipients), '1970-01-01 00:00:00')
+                ) AS last_updated,
+                (SELECT COUNT(*) FROM chat_entries WHERE deleted_at IS NULL) AS message_count,
+                (SELECT COUNT(*) FROM chat_entries e
+                 WHERE e.deleted_at IS NULL
+                   AND EXISTS (SELECT 1 FROM chat_entry_recipients r WHERE r.entry_id = e.id)) AS direct_count"
+        )->fetch();
+
+        $lastUpdated = $row && $row['last_updated'] ? $row['last_updated'] : Db::now();
+        $messageCount = $row ? (int) $row['message_count'] : 0;
+        $directCount = $row ? (int) $row['direct_count'] : 0;
+
+        return [
+            'last_updated' => $lastUpdated,
+            'message_count' => $messageCount,
+            'direct_count' => $directCount,
+            'etag' => '"' . sha1($lastUpdated . '|' . $messageCount . '|' . $directCount) . '"',
         ];
     }
 
@@ -223,10 +253,15 @@ class ChatRepository
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
         $rows = $statement->fetchAll();
+        $entryIds = array_map(function ($row) {
+            return (int) $row['id'];
+        }, $rows);
+        $targetsByEntry = $this->targetsForEntries($entryIds);
         $messages = [];
 
         foreach ($rows as $index => $row) {
-            $targets = $this->targetsForEntry((int) $row['id']);
+            $entryId = (int) $row['id'];
+            $targets = isset($targetsByEntry[$entryId]) ? $targetsByEntry[$entryId] : [];
             if (!empty($filters['target']) && !in_array($filters['target'], $targets, true)) {
                 continue;
             }
@@ -295,8 +330,8 @@ class ChatRepository
             $agent['token_hash'] = $hash;
             $agent['token_secret_version'] = 'primary';
         } else {
-            $update = $this->pdo->prepare('UPDATE chat_agents SET token_secret_version = ?, last_used_at = ?, updated_at = ? WHERE id = ?');
-            $update->execute(['primary', $now, $now, $agent['id']]);
+            $update = $this->pdo->prepare('UPDATE chat_agents SET token_secret_version = ?, last_used_at = ? WHERE id = ?');
+            $update->execute(['primary', $now, $agent['id']]);
         }
 
         return $agent;
@@ -720,19 +755,6 @@ class ChatRepository
         return array_values($participants);
     }
 
-    private function lastUpdated()
-    {
-        $value = $this->pdo->query(
-            "SELECT GREATEST(
-                COALESCE((SELECT MAX(updated_at) FROM chat_entries), '1970-01-01 00:00:00'),
-                COALESCE((SELECT MAX(updated_at) FROM chat_agents), '1970-01-01 00:00:00'),
-                COALESCE((SELECT MAX(updated_at) FROM chat_topics), '1970-01-01 00:00:00')
-            )"
-        )->fetchColumn();
-
-        return $value ?: Db::now();
-    }
-
     private function findAgentId($name, $activeOnly = false)
     {
         $sql = 'SELECT id FROM chat_agents WHERE project_name = ?';
@@ -806,14 +828,38 @@ class ChatRepository
 
     private function targetsForEntry($entryId)
     {
-        $statement = $this->pdo->prepare(
-            'SELECT a.project_name FROM chat_entry_recipients r JOIN chat_agents a ON a.id = r.target_agent_id WHERE r.entry_id = ? ORDER BY a.source_order IS NULL, a.source_order ASC, a.project_name ASC'
-        );
-        $statement->execute([$entryId]);
+        $targets = $this->targetsForEntries([(int) $entryId]);
 
-        return array_values(array_map(function ($row) {
-            return $row['project_name'];
-        }, $statement->fetchAll()));
+        return isset($targets[(int) $entryId]) ? $targets[(int) $entryId] : [];
+    }
+
+    private function targetsForEntries(array $entryIds)
+    {
+        $entryIds = array_values(array_unique(array_map('intval', $entryIds)));
+        if (empty($entryIds)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($entryIds), '?'));
+        $statement = $this->pdo->prepare(
+            'SELECT r.entry_id, a.project_name
+             FROM chat_entry_recipients r
+             JOIN chat_agents a ON a.id = r.target_agent_id
+             WHERE r.entry_id IN (' . $placeholders . ')
+             ORDER BY r.entry_id ASC, a.source_order IS NULL, a.source_order ASC, a.project_name ASC'
+        );
+        $statement->execute($entryIds);
+
+        $targets = [];
+        foreach ($statement->fetchAll() as $row) {
+            $entryId = (int) $row['entry_id'];
+            if (!isset($targets[$entryId])) {
+                $targets[$entryId] = [];
+            }
+            $targets[$entryId][] = $row['project_name'];
+        }
+
+        return $targets;
     }
 
     private function rawEntry($entryId)

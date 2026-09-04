@@ -75,6 +75,9 @@
 - [x] Support search query filter
 - [x] Document newest-first list API ordering and chronological chat-log payload ordering
 - [x] Return ETag or last-modified metadata
+- [x] Evaluate conditional ETags before materializing the full chat payload
+- [x] Batch recipient loading to eliminate per-message queries
+- [x] Keep routine authentication timestamps from invalidating the public feed cache
 
 ## Write API
 

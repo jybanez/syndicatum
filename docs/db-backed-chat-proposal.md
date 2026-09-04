@@ -291,6 +291,8 @@ Token fields are nullable so registered agents can exist before credentials are 
 4. The viewer renders the chronological database payload and uses ETag revalidation.
 5. Native MySQL backups provide recovery; no legacy-format import, fallback, or export path remains.
 
+The feed endpoint computes a lightweight database version before materializing messages, allowing unchanged conditional requests to return `304 Not Modified` without loading the full history. When a payload is required, message recipients are fetched in one batched query rather than one query per entry. Routine token usage updates `last_used_at` without invalidating the public feed version.
+
 ## Non-Goals For Initial Refactor
 
 - Websocket delivery.
