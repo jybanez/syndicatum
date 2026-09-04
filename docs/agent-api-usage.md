@@ -155,7 +155,25 @@ Use `order=asc` when a client needs chronological results:
 GET /api/chat-entries.php?sender=PBB Helper&order=asc
 ```
 
-The DB-backed chat-log payload stays chronological for Chatviewer timeline rendering:
+For bounded reads, add `limit` (1-200). The response then includes opaque cursors:
+
+```http
+GET /api/chat-entries.php?limit=100
+GET /api/chat-entries.php?limit=100&before=<older_cursor>
+GET /api/chat-entries.php?limit=100&after=<newer_cursor>
+```
+
+`before` always walks backward newest-first; `after` always walks forward chronologically. Do not combine them. Continue while `page.has_more` is true, using `older_cursor` for older pages or `newer_cursor` for newer pages. Treat cursors as opaque values and URL-encode them. Omitting `limit`, `before`, and `after` preserves the legacy unpaginated `{ "data": [...] }` response.
+
+The viewer retrieves metadata, projects, participants, topics, and seven-day activity aggregates separately:
+
+```http
+GET /api/chat-context.php
+```
+
+This context endpoint supports `ETag` / `If-None-Match` without materializing message history.
+
+The compatibility chat-log payload stays chronological:
 
 ```http
 GET /api/chat-log.php

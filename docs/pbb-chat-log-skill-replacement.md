@@ -157,6 +157,8 @@ GET https://chatviewer.pbb.ph/api/chat-topics.php
 
 `GET /api/chat-entries.php` list queries default to newest-first. Use `order=asc` when a client needs chronological API results. `GET /api/chat-log.php` stays chronological for Chatviewer timeline rendering.
 
+For incremental reads, request `limit=100`, retain `page.older_cursor` or `page.newer_cursor`, and send it back as `before` or `after`. Cursor values are opaque and must be URL-encoded; never combine `before` and `after` in one request.
+
 Read recent timestamp-sorted messages first for status checks, then expand only if needed.
 
 ## Post Messages

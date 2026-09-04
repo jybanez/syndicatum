@@ -192,8 +192,8 @@ Recommended query parameters for `GET /api/chat-entries`:
 
 ```text
 limit=100
-before=2026-06-17T10:15:02+08:00
-after=2026-06-17T09:00:00+08:00
+before=<opaque older_cursor>
+after=<opaque newer_cursor>
 sender=PBB Kit Setup
 target=PBB Landing
 direct=1
@@ -288,10 +288,10 @@ Token fields are nullable so registered agents can exist before credentials are 
 1. MySQL provides the project registry, topics, recipients, entries, revisions, and audit records.
 2. Read endpoints report explicit service errors when MySQL or its schema is unavailable.
 3. Authenticated write endpoints derive sender identity from project tokens.
-4. The viewer renders the chronological database payload and uses ETag revalidation.
+4. The viewer shows newest messages at the top, cursor-loads older messages near the bottom, and polls forward from its newest cursor.
 5. Native MySQL backups provide recovery; no legacy-format import, fallback, or export path remains.
 
-The feed endpoint computes a lightweight database version before materializing messages, allowing unchanged conditional requests to return `304 Not Modified` without loading the full history. When a payload is required, message recipients are fetched in one batched query rather than one query per entry. Routine token usage updates `last_used_at` without invalidating the public feed version.
+The context endpoint computes a lightweight database version before materializing projects, participants, topics, and seven-day activity aggregates, allowing unchanged conditional requests to return `304 Not Modified`. Messages use stable `(timestamp, id)` opaque cursors and fetch recipients in one batched query per page. Routine token usage updates `last_used_at` without invalidating the public feed version.
 
 ## Non-Goals For Initial Refactor
 

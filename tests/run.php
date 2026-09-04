@@ -391,6 +391,59 @@ try {
         $suite->assertTrue(!array_key_exists('token_hash', $body['data'][0]));
     });
 
+    $suite->test('message pagination has stable cursors without duplicates', function () use ($suite, $baseUrl) {
+        $seen = [];
+        $cursor = '';
+        $pages = 0;
+        do {
+            $path = '/api/chat-entries.php?limit=5&order=desc' . ($cursor !== '' ? '&before=' . rawurlencode($cursor) : '');
+            $response = httpRequest($baseUrl, 'GET', $path);
+            $suite->assertSame(200, $response['status']);
+            $body = decodedBody($response);
+            foreach ($body['data'] as $message) {
+                $suite->assertTrue(!isset($seen[$message['db_id']]), 'Duplicate message across cursor pages.');
+                $seen[$message['db_id']] = true;
+            }
+            $cursor = $body['page']['older_cursor'] ?: '';
+            $hasMore = $body['page']['has_more'];
+            $pages++;
+            $suite->assertTrue($pages < 20, 'Cursor traversal did not terminate.');
+        } while ($hasMore);
+        $suite->assertTrue(count($seen) >= 20);
+    });
+
+    $suite->test('message pagination rejects malformed and conflicting cursors', function () use ($suite, $baseUrl) {
+        $invalid = httpRequest($baseUrl, 'GET', '/api/chat-entries.php?limit=5&before=not-a-cursor');
+        $conflicting = httpRequest($baseUrl, 'GET', '/api/chat-entries.php?limit=5&before=not-a-cursor&after=also-bad');
+        $suite->assertSame(422, $invalid['status']);
+        $suite->assertSame(422, $conflicting['status']);
+    });
+
+    $suite->test('newer cursor returns messages created after the loaded page', function () use ($suite, $baseUrl, $aliceToken) {
+        $initial = decodedBody(httpRequest($baseUrl, 'GET', '/api/chat-entries.php?limit=3'));
+        $cursor = $initial['page']['newer_cursor'];
+        $created = decodedBody(httpRequest($baseUrl, 'POST', '/api/chat-entries.php', ['Authorization: Bearer ' . $aliceToken], [
+            'body' => 'Incremental cursor test',
+        ]));
+        $response = httpRequest($baseUrl, 'GET', '/api/chat-entries.php?limit=3&after=' . rawurlencode($cursor));
+        $suite->assertSame(200, $response['status']);
+        $body = decodedBody($response);
+        $ids = array_column($body['data'], 'db_id');
+        $suite->assertTrue(in_array($created['data']['db_id'], $ids, true));
+        $suite->assertSame('asc', $body['page']['order']);
+    });
+
+    $suite->test('context API excludes messages and honors ETag', function () use ($suite, $baseUrl) {
+        $first = httpRequest($baseUrl, 'GET', '/api/chat-context.php');
+        $suite->assertSame(200, $first['status']);
+        $body = decodedBody($first);
+        $suite->assertTrue(!array_key_exists('messages', $body));
+        $suite->assertTrue(isset($body['activity']['dates'], $body['activity']['records']));
+        $suite->assertTrue(isset($first['headers']['etag']));
+        $second = httpRequest($baseUrl, 'GET', '/api/chat-context.php', ['If-None-Match: ' . $first['headers']['etag']]);
+        $suite->assertSame(304, $second['status']);
+    });
+
     $suite->test('write API rejects missing and invalid tokens', function () use ($suite, $baseUrl) {
         $missing = httpRequest($baseUrl, 'POST', '/api/chat-entries.php', [], ['body' => 'No token']);
         $invalid = httpRequest($baseUrl, 'POST', '/api/chat-entries.php', ['X-Agent-Token: invalid'], ['body' => 'Bad token']);

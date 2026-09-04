@@ -18,7 +18,15 @@ try {
             'q' => isset($_GET['q']) ? trim((string) $_GET['q']) : '',
             'direct' => isset($_GET['direct']) ? trim((string) $_GET['direct']) : '',
             'order' => isset($_GET['order']) ? trim((string) $_GET['order']) : 'desc',
+            'participant' => isset($_GET['participant']) ? trim((string) $_GET['participant']) : '',
+            'day' => isset($_GET['day']) ? trim((string) $_GET['day']) : '',
+            'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 0,
+            'before' => isset($_GET['before']) ? trim((string) $_GET['before']) : '',
+            'after' => isset($_GET['after']) ? trim((string) $_GET['after']) : '',
         ];
+        if ($filters['limit'] > 0 || $filters['before'] !== '' || $filters['after'] !== '') {
+            Api::json($repository->messagePage($filters));
+        }
         Api::json(['data' => $repository->messages($filters)]);
     }
 

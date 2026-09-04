@@ -10,6 +10,12 @@ const state = {
   activityProject: "",
   activityDate: "",
   etag: "",
+  oldestCursor: "",
+  newestCursor: "",
+  hasOlder: false,
+  loadingMessages: false,
+  filterGeneration: 0,
+  filterTimer: null,
   pollingHandle: null,
   mobilePanel: "summary",
   summaryTabId: "projects",
@@ -26,6 +32,7 @@ const elements = {
   activityHost: document.getElementById("activity-host"),
   activityClear: document.getElementById("activity-clear"),
   timelineCount: document.getElementById("timeline-count"),
+  timelineScroll: document.getElementById("timeline-scroll"),
   timelineHost: document.getElementById("timeline-host"),
   panelButtons: Array.from(document.querySelectorAll("[data-panel-button]")),
   panels: Array.from(document.querySelectorAll("[data-panel]")),
@@ -110,11 +117,17 @@ function buildActivityRecords() {
 
   const projectNames = state.payload.projects.map((project) => project.name);
   const projectSet = new Set(projectNames);
-  const dates = getActivityDates(state.payload.messages);
+  const activity = state.payload.activity;
+  const sourceMessages = state.payload.messages;
+  const dates = activity?.dates?.length ? activity.dates : getActivityDates(sourceMessages);
   const dateSet = new Set(dates);
   const buckets = new Map();
 
-  state.payload.messages.forEach((message) => {
+  if (activity?.records) {
+    activity.records.forEach((record) => {
+      buckets.set(`${record.project}\u0000${record.date}`, record);
+    });
+  } else sourceMessages.forEach((message) => {
     if (!projectSet.has(message.sender) || !dateSet.has(message.day_key)) {
       return;
     }
@@ -189,25 +202,6 @@ function setMobilePanel(panelName) {
   });
 }
 
-function matchesSearch(message, term) {
-  if (!term) {
-    return true;
-  }
-
-  const haystack = [
-    message.sender,
-    message.target || "",
-    ...(Array.isArray(message.targets) ? message.targets : []),
-    message.body,
-    message.timestamp,
-    message.day_key,
-  ]
-    .join("\n")
-    .toLowerCase();
-
-  return haystack.includes(term.toLowerCase());
-}
-
 function senderColor(senderName) {
   if (!state.payload) {
     return "8db8ff";
@@ -219,14 +213,15 @@ function senderColor(senderName) {
 
 function ensureSelection() {
   if (!state.filteredMessages.some((message) => message.id === state.selectedMessageId)) {
-    state.selectedMessageId = state.filteredMessages.at(-1)?.id || null;
+    state.selectedMessageId = state.filteredMessages[0]?.id || null;
   }
 }
 
 function renderMeta() {
   const meta = state.payload.meta;
   const lastUpdated = new Date(meta.last_modified_iso);
-  const statusLabel = state.directOnly ? "Filtered" : "Live";
+  const filtered = state.search || state.directOnly || state.participant || state.activityProject || state.activityDate;
+  const statusLabel = filtered ? "Filtered" : "Live";
   elements.statusBadge.textContent = `${statusLabel} · ${lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 
   const stats = [
@@ -251,7 +246,7 @@ function renderMeta() {
     });
   }
 
-  elements.timelineCount.textContent = `${state.filteredMessages.length} visible`;
+  elements.timelineCount.textContent = `${state.filteredMessages.length} loaded${state.hasOlder ? " · more available" : ""}`;
 }
 
 function renderActivityChart() {
@@ -273,7 +268,7 @@ function renderActivityChart() {
     onSelect(selection) {
       state.activityProject = selection.project || "";
       state.activityDate = selection.date && selection.summary?.total ? selection.date : "";
-      applyFiltersAndRender();
+      void reloadMessagesForFilters();
       if (window.matchMedia("(max-width: 1180px)").matches) {
         setMobilePanel("timeline");
       }
@@ -321,7 +316,7 @@ function renderParticipantsPanel(panel) {
   panel.querySelectorAll("[data-participant]").forEach((button) => {
     button.addEventListener("click", () => {
       state.participant = button.dataset.participant || "";
-      applyFiltersAndRender();
+      void reloadMessagesForFilters();
       if (window.matchMedia("(max-width: 1180px)").matches) {
         setMobilePanel("timeline");
       }
@@ -332,7 +327,7 @@ function renderParticipantsPanel(panel) {
   if (clearButton) {
     clearButton.addEventListener("click", () => {
       state.participant = "";
-      applyFiltersAndRender();
+      void reloadMessagesForFilters();
     });
   }
 }
@@ -473,22 +468,7 @@ function applyFiltersAndRender() {
     return;
   }
 
-  state.filteredMessages = state.payload.messages.filter((message) => {
-    if (state.directOnly && !message.is_direct) {
-      return false;
-    }
-    const targets = Array.isArray(message.targets) ? message.targets : (message.target ? [message.target] : []);
-    if (state.participant && message.sender !== state.participant && !targets.includes(state.participant)) {
-      return false;
-    }
-    if (state.activityProject && message.sender !== state.activityProject) {
-      return false;
-    }
-    if (state.activityDate && message.day_key !== state.activityDate) {
-      return false;
-    }
-    return matchesSearch(message, state.search);
-  });
+  state.filteredMessages = state.payload.messages.slice();
 
   ensureSelection();
   renderMeta();
@@ -497,43 +477,141 @@ function applyFiltersAndRender() {
   renderTimeline();
 }
 
-async function loadPayload({ force = false } = {}) {
-  elements.statusBadge.textContent = force ? "Refreshing" : "Loading";
-  const previousCount = state.payload?.meta?.message_count || 0;
+function messageQuery({ before = "", after = "", order = "desc" } = {}) {
+  const params = new URLSearchParams({ limit: "200", order });
+  if (before) params.set("before", before);
+  if (after) params.set("after", after);
+  if (state.search) params.set("q", state.search);
+  if (state.directOnly) params.set("direct", "1");
+  if (state.participant) params.set("participant", state.participant);
+  if (state.activityProject) params.set("sender", state.activityProject);
+  if (state.activityDate) params.set("day", state.activityDate);
+  return params.toString();
+}
+
+function sortAndDedupeMessages(messages) {
+  const unique = new Map(messages.map((message) => [message.id, message]));
+  return Array.from(unique.values()).sort((left, right) => {
+    return right.timestamp.localeCompare(left.timestamp) || right.db_id - left.db_id;
+  });
+}
+
+async function loadContext({ force = false } = {}) {
   const headers = {};
   if (state.etag && !force) {
     headers["If-None-Match"] = state.etag;
   }
 
-  const response = await fetch("api/chat-log.php", {
+  const response = await fetch("api/chat-context.php", {
     headers,
     cache: "no-store",
   });
 
   if (response.status === 304) {
-    elements.statusBadge.textContent = "Live · unchanged";
-    return;
+    return false;
   }
 
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
 
+  const messages = state.payload?.messages || [];
   state.etag = response.headers.get("ETag") || "";
-  state.payload = await response.json();
-  applyFiltersAndRender();
+  state.payload = { ...(await response.json()), messages };
+  return true;
+}
 
-  if (previousCount && state.payload.meta.message_count > previousCount) {
-    const delta = state.payload.meta.message_count - previousCount;
-    state.components.toast.info(`${delta} new message${delta === 1 ? "" : "s"} loaded`, {
-      title: "Chat log updated",
-    });
+async function loadMessagePage(mode = "initial", generation = state.filterGeneration) {
+  if (!state.payload || (state.loadingMessages && mode !== "initial")) return 0;
+  state.loadingMessages = true;
+  const previousCount = state.payload.messages.length;
+  const previousHeight = elements.timelineScroll.scrollHeight;
+  const previousTop = elements.timelineScroll.scrollTop;
+  try {
+    let query;
+    if (mode === "older") {
+      if (!state.hasOlder || !state.oldestCursor) return 0;
+      query = messageQuery({ before: state.oldestCursor, order: "desc" });
+    } else if (mode === "newer") {
+      if (!state.newestCursor) return 0;
+      query = messageQuery({ after: state.newestCursor, order: "asc" });
+    } else {
+      query = messageQuery({ order: "desc" });
+    }
+    let response = await fetch(`api/chat-entries.php?${query}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+    let result = await response.json();
+    if (mode === "newer") {
+      while (result.page.has_more && result.page.newer_cursor) {
+        const nextResponse = await fetch(`api/chat-entries.php?${messageQuery({ after: result.page.newer_cursor, order: "asc" })}`, { cache: "no-store" });
+        if (!nextResponse.ok) throw new Error(`Request failed with status ${nextResponse.status}`);
+        const nextResult = await nextResponse.json();
+        result.data.push(...nextResult.data);
+        result.page = nextResult.page;
+      }
+    }
+    if (generation !== state.filterGeneration) return 0;
+    if (mode === "initial") {
+      state.payload.messages = sortAndDedupeMessages(result.data);
+      state.oldestCursor = result.page.older_cursor || "";
+      state.newestCursor = result.page.newer_cursor || "";
+      state.hasOlder = Boolean(result.page.has_more);
+    } else if (mode === "older") {
+      state.payload.messages = sortAndDedupeMessages([...result.data, ...state.payload.messages]);
+      state.oldestCursor = result.page.older_cursor || state.oldestCursor;
+      state.hasOlder = Boolean(result.page.has_more);
+    } else {
+      state.payload.messages = sortAndDedupeMessages([...state.payload.messages, ...result.data]);
+      state.newestCursor = result.page.newer_cursor || state.newestCursor;
+    }
+    applyFiltersAndRender();
+    if (mode === "initial") {
+      requestAnimationFrame(() => {
+        elements.timelineScroll.scrollTop = 0;
+      });
+    } else if (mode === "newer" && previousTop > 160) {
+      requestAnimationFrame(() => {
+        elements.timelineScroll.scrollTop = previousTop + elements.timelineScroll.scrollHeight - previousHeight;
+      });
+    }
+    const delta = state.payload.messages.length - previousCount;
+    if (mode === "newer" && delta > 0) {
+      state.components.toast.info(`${delta} new message${delta === 1 ? "" : "s"} loaded`, {
+        title: "Chat log updated",
+      });
+    }
+    return Math.max(0, delta);
+  } finally {
+    state.loadingMessages = false;
   }
+}
+
+async function reloadMessagesForFilters() {
+  const generation = ++state.filterGeneration;
+  elements.statusBadge.textContent = "Filtering";
+  try {
+    await loadMessagePage("initial", generation);
+  } catch (error) {
+    if (generation === state.filterGeneration) {
+      elements.statusBadge.textContent = "Filter error";
+      state.components.toast.warn(error.message || "Unable to filter messages.", { title: "Filter failed" });
+    }
+  }
+}
+
+function scheduleFilterReload() {
+  window.clearTimeout(state.filterTimer);
+  state.filterTimer = window.setTimeout(() => void reloadMessagesForFilters(), 250);
 }
 
 async function refreshLoop() {
   try {
-    await loadPayload();
+    const contextChanged = await loadContext();
+    const added = contextChanged && !state.newestCursor
+      ? await loadMessagePage("initial")
+      : await loadMessagePage("newer");
+    if (contextChanged || added) applyFiltersAndRender();
+    if (!contextChanged && !added) renderMeta();
   } catch (error) {
     elements.statusBadge.textContent = "Update error";
     if (state.components.toast) {
@@ -578,7 +656,7 @@ async function bootstrap() {
     inputClass: "ui-input",
     onChange(value) {
       state.search = value.trim();
-      applyFiltersAndRender();
+      scheduleFilterReload();
     },
   });
 
@@ -592,19 +670,23 @@ async function bootstrap() {
   elements.directToggle.addEventListener("click", () => {
     state.directOnly = !state.directOnly;
     elements.directToggle.setAttribute("aria-pressed", String(state.directOnly));
-    applyFiltersAndRender();
+    void reloadMessagesForFilters();
   });
   elements.directToggle.innerHTML = `${iconMarkup("navigation.arrow-right", { size: 14, title: "Direct only" })}<span>Direct Only</span>`;
   elements.refreshButton.innerHTML = `${iconMarkup("actions.download", { size: 14, title: "Refresh" })}<span>Refresh</span>`;
 
   elements.refreshButton.addEventListener("click", () => {
-    void loadPayload({ force: true });
+    void (async () => {
+      elements.statusBadge.textContent = "Refreshing";
+      await loadContext({ force: true });
+      await reloadMessagesForFilters();
+    })();
   });
 
   elements.activityClear.addEventListener("click", () => {
     state.activityProject = "";
     state.activityDate = "";
-    applyFiltersAndRender();
+    void reloadMessagesForFilters();
   });
 
   elements.panelButtons.forEach((button) => {
@@ -613,8 +695,19 @@ async function bootstrap() {
     });
   });
 
+  elements.timelineScroll.addEventListener("scroll", () => {
+    const distanceFromBottom = elements.timelineScroll.scrollHeight
+      - elements.timelineScroll.scrollTop
+      - elements.timelineScroll.clientHeight;
+    if (distanceFromBottom < 160) {
+      void loadMessagePage("older");
+    }
+  });
+
+  await loadContext({ force: true });
+  await loadMessagePage("initial");
   setMobilePanel("summary");
-  await refreshLoop();
+  state.pollingHandle = window.setTimeout(() => void refreshLoop(), 15000);
 }
 
 bootstrap().catch((error) => {

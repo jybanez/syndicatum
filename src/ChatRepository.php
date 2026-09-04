@@ -187,6 +187,155 @@ class ChatRepository
         ];
     }
 
+    public function contextPayload(array $feedVersion = null)
+    {
+        if ($feedVersion === null) {
+            $feedVersion = $this->feedVersion();
+        }
+        $agents = $this->agents(true);
+        $participants = $this->participants();
+        $topics = array_map(function ($topic) {
+            return $topic['body'];
+        }, $this->topics());
+        $lastUpdatedUnix = strtotime($feedVersion['last_updated']) ?: time();
+        $dayCount = (int) $this->pdo->query(
+            'SELECT COUNT(DISTINCT DATE(message_timestamp)) FROM chat_entries WHERE deleted_at IS NULL'
+        )->fetchColumn();
+
+        return [
+            'meta' => [
+                'source_path' => 'mysql:pbb_agentchat',
+                'source_name' => 'pbb_agentchat',
+                'source_type' => 'database',
+                'last_modified_unix' => $lastUpdatedUnix,
+                'last_modified_iso' => gmdate(DATE_ATOM, $lastUpdatedUnix),
+                'etag' => $feedVersion['etag'],
+                'message_count' => $feedVersion['message_count'],
+                'direct_count' => $feedVersion['direct_count'],
+                'participant_count' => count($participants),
+                'day_count' => $dayCount,
+            ],
+            'projects' => array_map(function ($agent) {
+                return ['id' => (int) $agent['id'], 'name' => $agent['project_name'], 'summary' => $agent['description'] ?: ''];
+            }, $agents),
+            'active_topics' => $topics,
+            'participants' => $participants,
+            'activity' => $this->activitySummary(),
+        ];
+    }
+
+    private function activitySummary()
+    {
+        $latestDay = $this->pdo->query(
+            'SELECT DATE(MAX(message_timestamp)) FROM chat_entries WHERE deleted_at IS NULL'
+        )->fetchColumn();
+        if (!$latestDay) {
+            return ['dates' => [], 'records' => []];
+        }
+
+        $end = new DateTimeImmutable($latestDay);
+        $start = $end->modify('-6 days');
+        $dates = [];
+        for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
+            $dates[] = $day->format('Y-m-d');
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT DATE(e.message_timestamp) AS activity_date,
+                    sender.project_name AS project_name,
+                    COUNT(*) AS total,
+                    SUM(EXISTS (SELECT 1 FROM chat_entry_recipients r WHERE r.entry_id = e.id)) AS direct_count
+             FROM chat_entries e
+             JOIN chat_agents sender ON sender.id = e.sender_agent_id
+             WHERE e.deleted_at IS NULL AND e.message_timestamp >= ? AND e.message_timestamp < DATE_ADD(?, INTERVAL 1 DAY)
+             GROUP BY DATE(e.message_timestamp), sender.project_name"
+        );
+        $statement->execute([$start->format('Y-m-d'), $end->format('Y-m-d')]);
+        $records = [];
+        foreach ($statement->fetchAll() as $row) {
+            $key = $row['project_name'] . "\0" . $row['activity_date'];
+            $direct = (int) $row['direct_count'];
+            $total = (int) $row['total'];
+            $records[$key] = [
+                'date' => $row['activity_date'],
+                'project' => $row['project_name'],
+                'total' => $total,
+                'direct' => $direct,
+                'broadcast' => $total - $direct,
+                'targeted' => $direct,
+                'targets' => [],
+            ];
+        }
+
+        $targetStatement = $this->pdo->prepare(
+            "SELECT DATE(e.message_timestamp) AS activity_date,
+                    sender.project_name AS project_name,
+                    target.project_name AS target_name,
+                    COUNT(*) AS target_count
+             FROM chat_entries e
+             JOIN chat_agents sender ON sender.id = e.sender_agent_id
+             JOIN chat_entry_recipients r ON r.entry_id = e.id
+             JOIN chat_agents target ON target.id = r.target_agent_id
+             WHERE e.deleted_at IS NULL AND e.message_timestamp >= ? AND e.message_timestamp < DATE_ADD(?, INTERVAL 1 DAY)
+             GROUP BY DATE(e.message_timestamp), sender.project_name, target.project_name"
+        );
+        $targetStatement->execute([$start->format('Y-m-d'), $end->format('Y-m-d')]);
+        foreach ($targetStatement->fetchAll() as $row) {
+            $key = $row['project_name'] . "\0" . $row['activity_date'];
+            if (isset($records[$key])) {
+                $records[$key]['targets'][$row['target_name']] = (int) $row['target_count'];
+            }
+        }
+
+        return ['dates' => $dates, 'records' => array_values($records)];
+    }
+
+    public function messagePage(array $filters = [])
+    {
+        $limit = isset($filters['limit']) ? (int) $filters['limit'] : 100;
+        $limit = max(1, min(200, $limit));
+        if (!empty($filters['before']) && !empty($filters['after'])) {
+            throw new InvalidArgumentException('Use either before or after, not both.');
+        }
+        if (!empty($filters['before'])) {
+            $cursor = $this->decodeCursor($filters['before']);
+            $filters['before_timestamp'] = $cursor['timestamp'];
+            $filters['before_id'] = $cursor['id'];
+            $filters['order'] = 'desc';
+        }
+        if (!empty($filters['after'])) {
+            $cursor = $this->decodeCursor($filters['after']);
+            $filters['after_timestamp'] = $cursor['timestamp'];
+            $filters['after_id'] = $cursor['id'];
+            $filters['order'] = 'asc';
+        }
+        $filters['limit'] = $limit + 1;
+        $messages = $this->messages($filters);
+        $hasMore = count($messages) > $limit;
+        if ($hasMore) {
+            array_pop($messages);
+        }
+
+        $chronological = $messages;
+        usort($chronological, function ($left, $right) {
+            $comparison = strcmp($left['timestamp'], $right['timestamp']);
+            return $comparison !== 0 ? $comparison : ($left['db_id'] - $right['db_id']);
+        });
+        $oldest = empty($chronological) ? null : $chronological[0];
+        $newest = empty($chronological) ? null : $chronological[count($chronological) - 1];
+
+        return [
+            'data' => $messages,
+            'page' => [
+                'limit' => $limit,
+                'order' => isset($filters['order']) && strtolower($filters['order']) === 'asc' ? 'asc' : 'desc',
+                'has_more' => $hasMore,
+                'older_cursor' => $oldest ? $this->encodeCursor($oldest['timestamp'], $oldest['db_id']) : null,
+                'newer_cursor' => $newest ? $this->encodeCursor($newest['timestamp'], $newest['db_id']) : null,
+            ],
+        ];
+    }
+
     public function agents($activeOnly = false)
     {
         $sql = 'SELECT * FROM chat_agents';
@@ -236,9 +385,43 @@ class ChatRepository
             $params[] = $filters['sender'];
         }
         if (!empty($filters['q'])) {
-            $where[] = '(e.body LIKE ? OR sender.project_name LIKE ?)';
+            $where[] = '(e.body LIKE ? OR sender.project_name LIKE ? OR EXISTS (
+                SELECT 1 FROM chat_entry_recipients qr JOIN chat_agents qa ON qa.id = qr.target_agent_id
+                WHERE qr.entry_id = e.id AND qa.project_name LIKE ?
+            ))';
             $params[] = '%' . $filters['q'] . '%';
             $params[] = '%' . $filters['q'] . '%';
+            $params[] = '%' . $filters['q'] . '%';
+        }
+        if (!empty($filters['target'])) {
+            $where[] = 'EXISTS (SELECT 1 FROM chat_entry_recipients tr JOIN chat_agents ta ON ta.id = tr.target_agent_id WHERE tr.entry_id = e.id AND ta.project_name = ?)';
+            $params[] = $filters['target'];
+        }
+        if (!empty($filters['participant'])) {
+            $where[] = '(sender.project_name = ? OR EXISTS (SELECT 1 FROM chat_entry_recipients pr JOIN chat_agents pa ON pa.id = pr.target_agent_id WHERE pr.entry_id = e.id AND pa.project_name = ?))';
+            $params[] = $filters['participant'];
+            $params[] = $filters['participant'];
+        }
+        if (isset($filters['direct']) && $filters['direct'] !== '') {
+            $where[] = ((int) $filters['direct']) === 1
+                ? 'EXISTS (SELECT 1 FROM chat_entry_recipients dr WHERE dr.entry_id = e.id)'
+                : 'NOT EXISTS (SELECT 1 FROM chat_entry_recipients dr WHERE dr.entry_id = e.id)';
+        }
+        if (!empty($filters['day'])) {
+            $where[] = 'DATE(e.message_timestamp) = ?';
+            $params[] = $filters['day'];
+        }
+        if (!empty($filters['before_timestamp'])) {
+            $where[] = '(e.message_timestamp < ? OR (e.message_timestamp = ? AND e.id < ?))';
+            $params[] = $filters['before_timestamp'];
+            $params[] = $filters['before_timestamp'];
+            $params[] = (int) $filters['before_id'];
+        }
+        if (!empty($filters['after_timestamp'])) {
+            $where[] = '(e.message_timestamp > ? OR (e.message_timestamp = ? AND e.id > ?))';
+            $params[] = $filters['after_timestamp'];
+            $params[] = $filters['after_timestamp'];
+            $params[] = (int) $filters['after_id'];
         }
 
         $order = isset($filters['order']) && strtolower((string) $filters['order']) === 'asc'
@@ -250,6 +433,9 @@ class ChatRepository
             JOIN chat_agents sender ON sender.id = e.sender_agent_id
             WHERE " . implode(' AND ', $where) . "
             ORDER BY e.message_timestamp " . $order . ", e.id " . $order;
+        if (!empty($filters['limit'])) {
+            $sql .= ' LIMIT ' . max(1, min(201, (int) $filters['limit']));
+        }
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
         $rows = $statement->fetchAll();
@@ -262,14 +448,6 @@ class ChatRepository
         foreach ($rows as $index => $row) {
             $entryId = (int) $row['id'];
             $targets = isset($targetsByEntry[$entryId]) ? $targetsByEntry[$entryId] : [];
-            if (!empty($filters['target']) && !in_array($filters['target'], $targets, true)) {
-                continue;
-            }
-
-            if (isset($filters['direct']) && $filters['direct'] !== '' && ((int) $filters['direct']) !== (empty($targets) ? 0 : 1)) {
-                continue;
-            }
-
             $timestamp = $row['message_timestamp'];
             $target = implode('/', $targets);
             $body = $row['body'];
@@ -292,6 +470,30 @@ class ChatRepository
         }
 
         return $messages;
+    }
+
+    private function encodeCursor($timestamp, $id)
+    {
+        return rtrim(strtr(base64_encode(json_encode(['timestamp' => $timestamp, 'id' => (int) $id])), '+/', '-_'), '=');
+    }
+
+    private function decodeCursor($cursor)
+    {
+        $cursor = trim((string) $cursor);
+        $padding = strlen($cursor) % 4;
+        if ($padding) {
+            $cursor .= str_repeat('=', 4 - $padding);
+        }
+        $decoded = base64_decode(strtr($cursor, '-_', '+/'), true);
+        $value = $decoded === false ? null : json_decode($decoded, true);
+        if (!is_array($value)
+            || !isset($value['timestamp'], $value['id'])
+            || !is_string($value['timestamp'])
+            || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value['timestamp'])
+            || filter_var($value['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+            throw new InvalidArgumentException('Invalid message cursor.');
+        }
+        return ['timestamp' => $value['timestamp'], 'id' => (int) $value['id']];
     }
 
     public function authenticate($token)

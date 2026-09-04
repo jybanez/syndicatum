@@ -67,7 +67,7 @@
 - [x] Add `GET /api/chat-entries`
 - [x] Add `GET /api/chat-entries/{id}`
 - [x] Add `GET /api/chat-summary`
-- [ ] Support pagination or cursor loading
+- [x] Support stable opaque before/after cursor loading
 - [x] Support timestamp sorting independent of source order
 - [x] Support sender filter
 - [x] Support target filter
@@ -109,7 +109,7 @@
 - [x] Load messages from DB-backed API
 - [x] Keep existing activity chart behavior
 - [x] Keep project/participant counts aligned with `chat_agents`
-- [ ] Add pagination or incremental loading UI
+- [x] Show newest messages first, load older pages at the bottom, and poll newer messages into the top
 - [ ] Add source-order warning or diagnostics indicator for imported history
 - [x] Preserve current search/direct/project filters
 - [x] Preserve viewport-fixed shell and compact timeline layout

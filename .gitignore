@@ -1,2 +1,3 @@
 pbb-chat-token.local.json
 output/*.sql
+.playwright-cli/
