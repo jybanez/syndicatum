@@ -1,0 +1,80 @@
+.claim-page {
+  overflow: auto;
+}
+
+.claim-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.claim-panel {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 22px;
+  padding: 28px;
+  border-color: var(--app-panel-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--app-panel-bg), rgba(10, 18, 31, 0.94));
+  box-shadow: var(--app-shadow);
+}
+
+.claim-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.claim-heading .ui-title {
+  font-size: 30px;
+}
+
+.claim-heading p:last-child {
+  margin: 0;
+  color: var(--ui-muted);
+}
+
+.claim-form {
+  display: grid;
+  gap: 14px;
+}
+
+.claim-field {
+  display: grid;
+  gap: 7px;
+  color: var(--ui-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.claim-field .ui-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.claim-result {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(74, 97, 138, 0.58);
+  border-radius: 12px;
+  background: rgba(9, 17, 31, 0.7);
+}
+
+.claim-result.is-error {
+  border-color: rgba(225, 87, 87, 0.7);
+  background: rgba(80, 24, 28, 0.38);
+}
+
+.claim-token {
+  min-height: 92px;
+  resize: vertical;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.claim-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

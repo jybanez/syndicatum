@@ -1,0 +1,18 @@
+{
+  "contract_version": "1",
+  "app_code": "chatviewer",
+  "name": "PBB Chatviewer",
+  "app_kind": "static-site",
+  "launch_path": "/",
+  "health_url": null,
+  "access_check_url": null,
+  "embeddable": true,
+  "icon": "app-window",
+  "category": "Utilities",
+  "service_auth_type": null,
+  "preferred_window": {
+    "width": 1360,
+    "height": 860
+  },
+  "workspace_notes": "Draft manifest generated from current repo state and chat-log context. Chatviewer is currently a lightweight PHP/static reader shell and no dedicated health or Workspace access-check endpoint was found."
+}
