@@ -109,6 +109,7 @@ class SettingsService
     public function update(array $changes, $actorUserId)
     {
         $changes = $this->withDerivedRealtimeEndpoints($changes);
+        $this->validateRealtimeEndpointCompatibility($changes);
         $registry = self::registry();
         $this->pdo->beginTransaction();
         try {
@@ -176,20 +177,32 @@ class SettingsService
         }
 
         $baseUrl = rtrim(trim((string) $changes['realtime.base_url']), '/');
-        if (!array_key_exists('realtime.publish_url', $changes)) {
-            $changes['realtime.publish_url'] = $baseUrl === '' ? '' : $baseUrl . '/api/v1/events/publish';
-        }
-        if (!array_key_exists('realtime.websocket_url', $changes)) {
-            if ($baseUrl === '') {
-                $changes['realtime.websocket_url'] = '';
-            } else {
-                $scheme = strtolower((string) parse_url($baseUrl, PHP_URL_SCHEME));
-                $socketBase = ($scheme === 'https' ? 'wss://' : 'ws://') . substr($baseUrl, strlen($scheme . '://'));
-                $changes['realtime.websocket_url'] = rtrim($socketBase, '/') . '/realtime';
-            }
+        $changes['realtime.publish_url'] = $baseUrl === '' ? '' : $baseUrl . '/api/v1/events/publish';
+        if ($baseUrl === '') {
+            $changes['realtime.websocket_url'] = '';
+        } else {
+            $scheme = strtolower((string) parse_url($baseUrl, PHP_URL_SCHEME));
+            $socketBase = ($scheme === 'https' ? 'wss://' : 'ws://') . substr($baseUrl, strlen($scheme . '://'));
+            $changes['realtime.websocket_url'] = rtrim($socketBase, '/') . '/realtime';
         }
 
         return $changes;
+    }
+
+    private function validateRealtimeEndpointCompatibility(array $changes)
+    {
+        if (!array_key_exists('realtime.websocket_url', $changes)) {
+            return;
+        }
+
+        $baseUrl = array_key_exists('realtime.base_url', $changes)
+            ? trim((string) $changes['realtime.base_url'])
+            : trim((string) $this->get('realtime.base_url'));
+        $websocketUrl = trim((string) $changes['realtime.websocket_url']);
+        if (strtolower((string) parse_url($baseUrl, PHP_URL_SCHEME)) === 'https'
+            && strtolower((string) parse_url($websocketUrl, PHP_URL_SCHEME)) === 'ws') {
+            throw new InvalidArgumentException('realtime.websocket_url must use wss when realtime.base_url uses https.');
+        }
     }
 
     private function validateValue($key, $value, array $definition)

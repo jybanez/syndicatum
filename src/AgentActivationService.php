@@ -3,6 +3,7 @@
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/ProjectManagementService.php';
+require_once __DIR__ . '/DiscussionProviderRegistry.php';
 
 class AgentActivationService
 {
@@ -33,14 +34,24 @@ class AgentActivationService
         (new ProjectManagementService($this->pdo))->authorizeAgentManagement($projectId, $actorUserId);
         $this->requireProjectAgent($projectId, $agentId);
         $existing = $this->row($projectId, $agentId);
-        $conversationId = array_key_exists('conversation_id', $input)
-            ? trim((string) $input['conversation_id'])
-            : ($existing ? $existing['conversation_id'] : '');
+        $provider = strtolower(trim((string) (array_key_exists('provider', $input)
+            ? $input['provider'] : ($existing ? $existing['runtime_type'] : 'codex'))));
+        $registry = new DiscussionProviderRegistry();
+        if (array_key_exists('discussion_reference', $input)) {
+            $reference = trim((string) $input['discussion_reference']);
+            $conversationId = $reference === '' ? '' : $registry->normalize($provider, $reference)['discussion_id'];
+        } else {
+            $conversationId = array_key_exists('conversation_id', $input)
+                ? trim((string) $input['conversation_id'])
+                : ($existing ? $existing['conversation_id'] : '');
+            if ($conversationId !== '') { $registry->fromStoredId($provider, $conversationId); }
+        }
         $workingDirectory = array_key_exists('working_directory', $input)
             ? trim((string) $input['working_directory'])
             : ($existing ? $existing['working_directory'] : '');
         $normalized = $this->validateConfigurationInput([
             'enabled' => array_key_exists('enabled', $input) ? $input['enabled'] : ($existing ? (bool) $existing['enabled'] : false),
+            'provider' => $provider,
             'conversation_id' => $conversationId,
             'working_directory' => $workingDirectory,
         ]);
@@ -52,15 +63,15 @@ class AgentActivationService
         $statement = $this->pdo->prepare(
             "INSERT INTO agent_activation_bindings
              (agent_id, project_id, runtime_type, conversation_id, working_directory, enabled, created_by_user_id, created_at, updated_at)
-             VALUES (?, ?, 'codex', ?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE conversation_id = VALUES(conversation_id), working_directory = VALUES(working_directory),
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE runtime_type = VALUES(runtime_type), conversation_id = VALUES(conversation_id), working_directory = VALUES(working_directory),
                enabled = VALUES(enabled), updated_at = VALUES(updated_at)"
         );
-        $statement->execute([(int) $agentId, (int) $projectId, $conversationId, $workingDirectory,
+        $statement->execute([(int) $agentId, (int) $projectId, $provider, $conversationId, $workingDirectory,
             $enabled ? 1 : 0, (int) $actorUserId, $now, $now]);
         $this->auth->audit((int) $actorUserId, 'project.agent_activation_configured', 'agent', (string) ((int) $agentId), [
             'project_id' => (int) $projectId,
-            'runtime_type' => 'codex',
+            'provider' => $provider,
             'enabled' => $enabled,
             'conversation_configured' => $conversationId !== '',
             'working_directory_configured' => $workingDirectory !== '',
@@ -70,27 +81,42 @@ class AgentActivationService
 
     public function validateConfigurationInput(array $input)
     {
-        $conversationId = trim(isset($input['conversation_id']) ? (string) $input['conversation_id'] : '');
+        $provider = strtolower(trim(isset($input['provider']) ? (string) $input['provider'] : 'codex'));
+        $registry = new DiscussionProviderRegistry();
+        $registry->definition($provider);
+        $reference = array_key_exists('discussion_reference', $input) ? trim((string) $input['discussion_reference']) : null;
+        $conversationId = $reference !== null
+            ? ($reference === '' ? '' : $registry->normalize($provider, $reference)['discussion_id'])
+            : trim(isset($input['conversation_id']) ? (string) $input['conversation_id'] : '');
+        if ($conversationId !== '') { $registry->fromStoredId($provider, $conversationId); }
         $workingDirectory = trim(isset($input['working_directory']) ? (string) $input['working_directory'] : '');
         $enabled = filter_var(isset($input['enabled']) ? $input['enabled'] : false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
         if ($enabled === null) { throw new InvalidArgumentException('Activation enabled must be boolean.'); }
         $this->validateConversationId($conversationId);
         $this->validateWorkingDirectory($workingDirectory);
-        return ['enabled' => $enabled, 'conversation_id' => $conversationId, 'working_directory' => $workingDirectory];
+        if ($enabled && $conversationId === '') { throw new InvalidArgumentException('A provider discussion reference is required when activation is enabled.'); }
+        return ['enabled' => $enabled, 'provider' => $provider, 'conversation_id' => $conversationId, 'working_directory' => $workingDirectory];
     }
 
     private function binding($projectId, $agentId)
     {
         $row = $this->row($projectId, $agentId);
+        $provider = $row ? $row['runtime_type'] : 'codex';
+        $reference = '';
+        if ($row && $row['conversation_id'] !== '') {
+            try { $reference = (new DiscussionProviderRegistry())->fromStoredId($provider, $row['conversation_id'])['canonical_reference']; }
+            catch (Exception $ignored) { $reference = ''; }
+        }
         return [
             'project_id' => (int) $projectId,
             'agent_id' => (int) $agentId,
-            'runtime_type' => $row ? $row['runtime_type'] : 'codex',
+            'runtime_type' => $provider,
+            'provider' => $provider,
+            'discussion_reference' => $reference,
             'conversation_id' => $row ? $row['conversation_id'] : '',
             'working_directory' => $row ? $row['working_directory'] : '',
             'enabled' => $row ? (bool) $row['enabled'] : false,
             'configured' => $row && (bool) $row['enabled'],
-            'legacy_route_configured' => $row && $row['conversation_id'] !== '' && $row['working_directory'] !== '',
             'updated_at' => $row ? $row['updated_at'] : null,
         ];
     }

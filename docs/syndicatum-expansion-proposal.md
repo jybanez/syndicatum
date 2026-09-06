@@ -273,8 +273,9 @@ Syndicatum can queue messages and notify a running runtime, but it cannot univer
 An agent may also have an optional project-scoped notification webhook. A webhook can wake or signal a compatible runtime, but it does not replace the agent token, authorize an API action, or make delivery the source of truth. Webhooks are configured independently of the installation-wide PBB Realtime integration.
 
 A local activation connector may map the Syndicatum agent to an existing
-provider conversation, such as a Codex `session_id`. The connector automates
-only the human reminder to check Syndicatum. It does not interpret the message,
+provider discussion. Syndicatum validates the provider's user-facing reference,
+such as a Codex deeplink, and stores a normalized discussion ID. The connector
+automates only the human reminder to check Syndicatum. It does not interpret the message,
 reply, or acknowledge on behalf of the linked conversation; the agent uses its
 own skill and token to perform those actions against the authoritative timeline.
 
@@ -326,9 +327,9 @@ Suggested event:
 }
 ```
 
-Normal connected operation requires no message-fetch request after an event. HTTP synchronization remains necessary for initial history and gap recovery after reconnecting. Project sequence numbers and message IDs provide ordering and deduplication.
+Normal connected operation requires no message-fetch request after an event and no periodic timeline polling. HTTP synchronization remains necessary for initial history, user-requested filtering and pagination, and one-time gap recovery after reconnecting. Project sequence numbers and message IDs provide ordering and deduplication.
 
-Publication occurs only after the database transaction commits. A transactional outbox and retry worker prevent temporary Realtime failure from affecting message creation. When Realtime is disabled or unavailable, polling and manual refresh continue to work.
+Publication occurs only after the database transaction commits. A transactional outbox and retry worker prevent temporary Realtime failure from affecting message creation. When Realtime is enabled but temporarily unavailable, the client reconnects with bounded exponential backoff rather than switching to periodic timeline polling. When Realtime is disabled, polling remains available; manual refresh remains available in either mode.
 
 ### 10.1 Optional per-agent notification webhooks
 
@@ -414,7 +415,7 @@ Boot-critical configuration remains outside the database:
 - the master key protecting stored secrets;
 - emergency/bootstrap administrator configuration.
 
-Realtime setup uses one administrator-facing base URL plus the provisioned Realtime client code and project-scope code. Syndicatum derives the normal WebSocket and backend-publish endpoints from that base URL. The form names and stores two independent write-only credentials: the token-signing secret used to issue short-lived room admission JWTs, and the backend-ingress secret used to publish committed message events. It also exposes enablement, issuer, audience, masked configuration state, and a connection test. Endpoint overrides, timeouts, CA configuration, and the reserved admission URL remain backend-managed advanced settings so normal setup does not require transport-level knowledge. PBB Account settings include enablement, base URL, client ID, callback URL, post-logout URL, scopes, masked OAuth secret, native-login policy, timeout, CA configuration, and status. Per-agent webhook destinations and secrets are managed within the Project agent surface, not the global System Settings modal.
+Realtime setup uses one administrator-facing base URL plus the provisioned Realtime client code and project-scope code. Syndicatum treats that base URL as canonical whenever it is saved and derives the normal WebSocket and backend-publish endpoints from it; an HTTPS base always produces WSS and cannot be paired with an insecure WS override. The form names and stores two independent write-only credentials: the token-signing secret used to issue short-lived room admission JWTs, and the backend-ingress secret used to publish committed message events. It also exposes enablement, issuer, audience, masked configuration state, and a connection test. Endpoint overrides, timeouts, CA configuration, and the reserved admission URL remain backend-managed advanced settings so normal setup does not require transport-level knowledge. PBB Account settings include enablement, base URL, client ID, callback URL, post-logout URL, scopes, masked OAuth secret, native-login policy, timeout, CA configuration, and status. Per-agent webhook destinations and secrets are managed within the Project agent surface, not the global System Settings modal.
 
 ## 13. Conceptual Data Model
 

@@ -54,7 +54,7 @@ class ProjectRepository
                 'realtime' => [
                     'enabled' => $this->settings->get('realtime.enabled') === true,
                     'admission_url' => '/api/v1/realtime-admission.php?project_id=' . $projectId,
-                    'sdk_module_url' => rtrim((string) $this->settings->get('realtime.base_url'), '/') . '/js/sdk/index.js',
+                    'sdk_module_url' => '/vendor/pbb-realtime/js/sdk/index.js',
                 ],
             ],
         ];

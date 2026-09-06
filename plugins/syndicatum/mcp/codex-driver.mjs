@@ -4,16 +4,40 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 
 export class CodexDriver {
-  constructor(config, commandRunner = runCommand) { this.config = config; this.commandRunner = commandRunner; }
+  constructor(config, commandRunner = runCommand, threadLoader = loadCodexThread) {
+    this.config = config;
+    this.commandRunner = commandRunner;
+    this.threadLoader = threadLoader;
+  }
   async activate(message) {
     const executable = await resolveCodexPath(this.config);
     const result = await this.commandRunner(executable, ["queue", "--thread", String(this.config.codexThreadId), "--message", formatActivationPrompt(message, this.config)], {
-      cwd: this.config.workingDirectory,
+      cwd: this.config.workingDirectory || undefined,
       timeoutMs: 60000,
     });
     if (!/queued message/i.test(result.stdout)) throw new Error(`Codex did not confirm queued delivery: ${result.stdout || result.stderr || "no output"}`);
-    return result;
+    try {
+      await this.threadLoader(this.config.codexThreadId);
+      return { ...result, threadLoadStarted: true };
+    } catch (error) {
+      return { ...result, threadLoadStarted: false, threadLoadWarning: safeError(error) };
+    }
   }
+}
+
+export async function loadCodexThread(threadId, commandRunner = runCommand, platform = process.platform) {
+  const normalized = String(threadId || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(normalized)) {
+    throw new Error("The linked Codex discussion ID is invalid.");
+  }
+  const uri = `codex://threads/${normalized}`;
+  const launch = platform === "win32"
+    ? { executable: "rundll32.exe", args: ["url.dll,FileProtocolHandler", uri] }
+    : platform === "darwin"
+      ? { executable: "open", args: [uri] }
+      : { executable: "xdg-open", args: [uri] };
+  await commandRunner(launch.executable, launch.args, { timeoutMs: 15000 });
+  return { uri };
 }
 
 export async function resolveCodexPath(config = {}, env = process.env, platform = process.platform) {
@@ -75,4 +99,8 @@ export function formatActivationPrompt(message, config) {
 function safeSenderName(value) {
   const normalized = String(value ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
   return normalized || "another participant";
+}
+
+function safeError(error) {
+  return String(error?.message || error).replace(/[\r\n\t]+/g, " ").slice(0, 300);
 }

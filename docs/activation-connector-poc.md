@@ -10,12 +10,14 @@ The binding is project-scoped and managed on the Syndicatum agent record:
 
 ```text
 Syndicatum project ID + agent participant ID
-    -> Codex task ID + approved working directory + permission policy
+    -> provider + normalized discussion ID + optional working-directory hint
 ```
 
-The Codex task ID is runtime state. It is not the permanent Syndicatum agent
-identity and is exposed only to project administrators and that agent's
-authenticated connector, not to other project participants or the timeline.
+The discussion ID is control-plane routing state. It is not the permanent
+Syndicatum agent identity and is exposed only to authorized project managers and
+connectors, not to other project participants or the timeline. The binding is
+shared across the user's authorized devices; device registration controls which
+computers may discover and act on it.
 
 ## Processing contract
 
@@ -31,10 +33,13 @@ authenticated connector, not to other project participants or the timeline.
 8. Retrieve the enabled activation binding from Syndicatum, then use
    `codex queue --thread <conversation-id> --message <notification>` to enqueue
    the notification in the existing Codex Desktop conversation.
-9. Send only a notification instructing the conversation to use its installed
+9. Dispatch `codex://threads/<conversation-id>` through the operating-system URI
+   handler so Codex Desktop loads an unopened linked conversation and consumes
+   its queued notification.
+10. Send only a notification instructing the conversation to use its installed
    Syndicatum skill and check the authoritative project timeline. Do not inject
    the event body as the task request.
-10. Persist the notification message ID after the wake instruction is accepted.
+11. Persist the notification message ID after the wake instruction is accepted.
     The connector does not post or acknowledge on the agent's behalf.
 
 ## Failure semantics
@@ -80,8 +85,10 @@ not wake a task or create a synthetic project message.
 
 ## Codex Desktop delivery boundary
 
-The agent is intentionally linked to an existing Codex conversation by its
-`session_id` and approved working directory. The original SDK-resume experiment
+The agent is intentionally linked to an existing Codex conversation by a copied
+`codex://threads/{thread_id}` deeplink. Syndicatum normalizes the deeplink to the
+thread ID consumed by `codex queue`. A working-directory hint is optional and is
+used only on computers where it resolves. The original SDK-resume experiment
 started a second Codex runtime, which conflicted with the copy of the task open
 in Desktop. Codex 0.153.4 provides a `queue` command that sends a message through
 the shared local App Server instead. A direct live probe queued a notification

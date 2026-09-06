@@ -91,7 +91,12 @@ try {
             'realtime.websocket_url' => 'ws://socket.example.test/custom',
         ], $administrator['id']);
         $suite->same('http://gateway.example.test/api/v1/events/publish', $settings->get('realtime.publish_url'));
-        $suite->same('ws://socket.example.test/custom', $settings->get('realtime.websocket_url'));
+        $suite->same('ws://gateway.example.test/realtime', $settings->get('realtime.websocket_url'));
+
+        $settings->update(['realtime.base_url' => 'https://gateway.example.test'], $administrator['id']);
+        $suite->throws('realtime.websocket_url must use wss when realtime.base_url uses https', function () use ($settings, $administrator) {
+            $settings->update(['realtime.websocket_url' => 'ws://gateway.example.test:8080/realtime'], $administrator['id']);
+        });
     });
 
     $now = Db::now();

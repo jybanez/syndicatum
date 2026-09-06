@@ -327,19 +327,20 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add update, acknowledgement, deletion, and participant-change events as needed
 - [x] Add retry, backoff, failure visibility, and dead-letter handling
 - [ ] Deduplicate sender HTTP responses and echoed Realtime events
-- [ ] Recover sequence gaps through the HTTP API after reconnecting
-- [ ] Keep polling/manual refresh operational when Realtime is disabled or unavailable
+- [x] Recover sequence gaps through one HTTP API synchronization after reconnecting
+- [x] Avoid periodic timeline polling while Realtime is enabled; reconnect with bounded backoff instead
+- [x] Keep polling operational when Realtime is disabled and manual refresh operational in either mode
 - [x] Ensure Realtime failure never fails message creation
 - [ ] Add enabled, disabled, disconnected, duplicate, out-of-order, and recovery tests
 - [x] Verify backend ingress, room delivery, addressed filtering, and connector invocation against the live local gateway
 - [x] Run Realtime publication continuously through a guarded hidden outbox worker
-- [x] Define an existing-conversation binding using Codex `session_id`, working directory, and local permission policy
+- [x] Define an existing-conversation binding using provider code, normalized discussion ID, and an optional working-directory hint
 - [x] Limit the connector to notification delivery; keep timeline reading, replies, and acknowledgement with the linked agent and its skill
 - [x] Add project-admin agent-modal controls and agent-authenticated retrieval for the activation binding
 - [x] Make Syndicatum the activation-binding authority with no legacy runtime fallback
-- [x] Separate shared agent activation from device-scoped conversation and working-directory routes
-- [x] Let Codex link its current discussion without manual session-ID or path entry
-- [x] Treat stale routes as skipped/idle instead of failing the entire device listener
+- [x] Keep the discussion binding shared across the user's authorized devices
+- [x] Let a project administrator paste the provider's discussion reference in Syndicatum; normalize Codex deeplinks to thread IDs
+- [x] Ignore an unavailable working-directory hint instead of failing the device listener
 - [x] Verify a real addressed message wakes the linked existing conversation, which then reads and handles the timeline itself
 - [x] Verify the hidden connector rejoins its project room and continues delivery after process restart
 - [x] Verify two independent live cycles through Desktop notification, authoritative timeline read, reply, and acknowledgement (`1555` -> `1556`; `1557` -> `1558`)
@@ -406,7 +407,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Document cursor pagination and sequence recovery
 - [ ] Document optional Realtime capability discovery and connection
 - [x] Document optional addressed-agent webhook verification, deduplication, and API-auth boundary
-- [ ] Document polling fallback and startup timeline checks
+- [x] Document the Realtime reconnect/gap-recovery policy and Realtime-disabled polling behavior
 - [ ] State that direct messages are not private
 - [ ] State that notification does not always require an automatic reply
 - [ ] Add idempotency and retry guidance

@@ -111,9 +111,10 @@ Package identity: `codex@syndicatum` (planned rename from the current
 - [x] Package a Syndicatum skill and local MCP server as a Codex plugin
 - [x] Authorize a device through the Syndicatum browser flow
 - [x] Discover multiple project and agent activation targets
-- [x] Store conversation and working-directory routes per authorized device
-- [x] Link the current Codex task and working directory without manual ID/path entry
-- [x] Skip stale routes and report an explicit authorized-idle state
+- [x] Configure a shared provider discussion binding in Syndicatum
+- [x] Normalize copied Codex deeplinks to canonical thread IDs
+- [x] Treat working-directory hints as optional and tolerate machine-specific paths
+- [x] Report an explicit authorized-idle state when no valid discussion binding exists
 - [x] Route PBB Realtime events to the addressed existing Codex conversation
 - [x] Verify repeated end-to-end Windows notification, timeline-read, reply, and acknowledgement cycles
 - [x] Install a persistent per-user Windows background listener without minute polling
@@ -124,7 +125,7 @@ Package identity: `codex@syndicatum` (planned rename from the current
 - [x] Add process-attributed logs and categorized network failures
 - [ ] Rename the distributable package to `codex@syndicatum` with a controlled migration path
 - [x] Verify an upgrade on a separately installed Windows device
-- [ ] Verify device-scoped discussion linking and notification on that Windows device
+- [ ] Verify shared discussion linking and notification on that Windows device
 - [ ] Pass physical Mac installation, authorization, restart, and addressed-message acceptance
 - [ ] Verify Chrome, Edge, Firefox, and Safari authorization behavior where applicable
 - [ ] Add user-facing device listing and revocation

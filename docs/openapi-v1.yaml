@@ -41,22 +41,16 @@ paths:
         '200': { description: Pending status or a one-time device bearer credential }
   /api/v1/connector-bindings.php:
     get:
-      summary: Discover enabled Codex activation targets and this device's routes
+      summary: Discover shared Codex discussion bindings available to this device's user
       responses:
         '200': { description: Device metadata and authorized activation bindings }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-    put:
-      summary: Link a Codex conversation and working directory on the authenticated device
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/DeviceActivationRoute' }
+  /api/v1/discussion-providers.php:
+    get:
+      summary: List supported discussion providers and their reference-field metadata
       responses:
-        '200': { description: Device-scoped activation route }
+        '200': { description: Provider definitions used by the agent management surface }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/connector-realtime-admission.php:
     get:
       summary: Obtain exact-room project admission for an authenticated connector device
@@ -230,16 +224,10 @@ components:
         project_id: { type: integer, minimum: 1 }
         agent_id: { type: integer, minimum: 1 }
         enabled: { type: boolean }
-        conversation_id: { type: string, maxLength: 255 }
+        provider: { type: string, enum: [codex] }
+        discussion_reference: { type: string, description: "Provider-facing reference normalized by Syndicatum; for Codex use codex://threads/{thread_id}." }
+        conversation_id: { type: string, maxLength: 255, readOnly: true, description: Canonical normalized discussion ID. }
         working_directory: { type: string, maxLength: 1024 }
-    DeviceActivationRoute:
-      type: object
-      required: [project_id, agent_id, conversation_id, working_directory]
-      properties:
-        project_id: { type: integer, minimum: 1 }
-        agent_id: { type: integer, minimum: 1 }
-        conversation_id: { type: string, minLength: 1, maxLength: 255 }
-        working_directory: { type: string, minLength: 1, maxLength: 1024 }
   responses:
     Unauthenticated: { description: Authentication required }
     NotFound: { description: Resource unavailable; project isolation does not reveal foreign resources }

@@ -15,14 +15,18 @@ agent still uses this protocol and its own token for authoritative reads,
 replies, and acknowledgements; the plugin connector must not perform those actions on
 the agent's behalf.
 
-The verified Codex Desktop plugin implementation stores the existing task's
-`session_id` in the authenticated connector device's activation route and invokes the pinned
-Codex 0.153.4 command `codex queue --thread <session_id> --message
-<notification>`. It deliberately queues no project message body. The awakened
+The verified Codex Desktop plugin implementation accepts a copied
+`codex://threads/{thread_id}` reference in Syndicatum, normalizes it to the
+thread ID, and exposes that shared binding to every connector device authorized
+for the user. Each connector invokes the pinned Codex 0.153.4 command
+`codex queue --thread <thread_id> --message <notification>`. It deliberately
+queues no project message body. The awakened
 task loads the authoritative timeline using `pbb-chat-log`, decides what action
 is appropriate, and uses its own project-scoped agent token to reply and
 acknowledge. The plugin bundles that skill and runs its listener as a local MCP
-server, without a separate operating-system service. Other providers may implement a different activation mechanism
-without changing this protocol boundary.
+server, without a separate operating-system service. The optional working-directory
+hint is used only when it exists on that computer. Other providers may expose a
+different discussion reference or activation mechanism without changing this
+protocol boundary.
 
 The normative API route mapping and canonical message request are documented in [`project-api-v1.md`](project-api-v1.md).

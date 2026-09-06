@@ -17,6 +17,7 @@ const API = {
   projectAgents: "api/v1/project-agents.php",
   projectAgentWebhook: "api/v1/project-agent-webhook.php",
   projectAgentActivation: "api/v1/project-agent-activation.php",
+  discussionProviders: "api/v1/discussion-providers.php",
   avatarUpload: "api/v1/avatar-upload.php",
   adminUsers: "api/v1/admin/users.php",
   adminAgents: "api/v1/admin/agents.php",
@@ -41,10 +42,12 @@ const state = {
   hasOlder: false,
   loading: false,
   generation: 0,
+  messageGeneration: 0,
   filterTimer: null,
   pollingTimer: null,
   realtimeSocket: null,
   realtimeRetryTimer: null,
+  realtimeRetryCount: 0,
   realtimeGeneration: 0,
   abortController: null,
   mobilePanel: "left",
@@ -163,6 +166,12 @@ function normalizeMessage(source = {}) {
     permissions: source.permissions || {},
     deleted_at: source.deleted_at || null,
   };
+}
+
+function isBroadcastMessage(message = {}) {
+  return Array.isArray(message.addressees)
+    && message.addressees.length > 0
+    && message.addressees.every((entry) => String(entry.reason || "").toLowerCase() === "broadcast");
 }
 
 function sortAndDedupe(messages) {
@@ -440,6 +449,39 @@ function replyPreview(message) {
   };
 }
 
+function renderAddresseeChips(message) {
+  const chips = document.createElement("div");
+  chips.className = "addressee-chips";
+  if (isBroadcastMessage(message)) {
+    const chip = document.createElement("span");
+    chip.className = "addressee-chip is-broadcast";
+    chip.textContent = "Project broadcast";
+    chip.title = "Broadcast to the project";
+    chips.appendChild(chip);
+  } else if (!message.addressees.length) {
+    const chip = document.createElement("span");
+    chip.className = "addressee-chip";
+    chip.textContent = "Project timeline";
+    chips.appendChild(chip);
+  } else {
+    message.addressees.slice(0, 5).forEach((entry) => {
+      const chip = document.createElement("span");
+      chip.className = `addressee-chip${entry.acknowledged_at ? " is-acknowledged" : ""}`;
+      const participant = state.participants.find((candidate) => candidate.id === entry.participant_id);
+      chip.textContent = `@${participant?.display_name || entry.display_name}`;
+      chip.title = entry.acknowledged_at ? "Acknowledged" : "Expected to respond";
+      chips.appendChild(chip);
+    });
+    if (message.addressees.length > 5) {
+      const more = document.createElement("span");
+      more.className = "addressee-chip";
+      more.textContent = `+${message.addressees.length - 5}`;
+      chips.appendChild(more);
+    }
+  }
+  return chips;
+}
+
 function mountMessageCard(host, item) {
   const message = item.raw;
   function paint(nextItem = item) {
@@ -450,12 +492,15 @@ function mountMessageCard(host, item) {
     header.appendChild(makeAvatar(current.sender));
     const identity = document.createElement("div");
     identity.className = "message-identity";
+    const identityLine = document.createElement("div");
+    identityLine.className = "message-identity-line";
     const name = document.createElement("strong");
     name.textContent = current.sender.display_name;
     const kind = document.createElement("span");
     kind.className = `participant-kind is-${current.sender.kind}`;
     kind.textContent = current.sender.kind === "agent" ? "Agent" : "Human";
-    identity.append(name, kind);
+    identityLine.append(name, kind);
+    identity.append(identityLine, renderAddresseeChips(current));
     const time = document.createElement("time");
     time.dateTime = current.created_at;
     time.textContent = formatDate(current.created_at);
@@ -480,30 +525,6 @@ function mountMessageCard(host, item) {
 
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
-    const chips = document.createElement("div");
-    chips.className = "addressee-chips";
-    if (!current.addressees.length) {
-      const chip = document.createElement("span");
-      chip.className = "addressee-chip";
-      chip.textContent = "Project timeline";
-      chips.appendChild(chip);
-    } else {
-      current.addressees.slice(0, 5).forEach((entry) => {
-        const chip = document.createElement("span");
-        chip.className = `addressee-chip${entry.acknowledged_at ? " is-acknowledged" : ""}`;
-        const participant = state.participants.find((candidate) => candidate.id === entry.participant_id);
-        chip.textContent = `@${participant?.display_name || entry.display_name}`;
-        chip.title = entry.acknowledged_at ? "Acknowledged" : "Expected to respond";
-        chips.appendChild(chip);
-      });
-      if (current.addressees.length > 5) {
-        const more = document.createElement("span");
-        more.className = "addressee-chip";
-        more.textContent = `+${current.addressees.length - 5}`;
-        chips.appendChild(more);
-      }
-    }
-    footer.appendChild(chips);
     const actions = document.createElement("div");
     actions.className = "message-actions";
     if (state.mode === "expanded" && can("messages.write")) actions.appendChild(actionButton("Reply", () => setReply(current)));
@@ -589,7 +610,7 @@ function messageQuery({ before = "", after = "", order = "desc" } = {}) {
   return params;
 }
 
-async function loadMessages(mode = "initial", generation = state.generation) {
+async function loadMessages(mode = "initial", generation = state.generation, messageGeneration = state.messageGeneration) {
   if (state.loading && mode !== "initial") return 0;
   if (mode === "older" && (!state.hasOlder || !state.oldestCursor)) return 0;
   state.loading = true;
@@ -601,7 +622,7 @@ async function loadMessages(mode = "initial", generation = state.generation) {
     if (mode === "newer" && !after) return 0;
     const endpoint = state.mode === "legacy" ? "api/chat-entries.php" : API.messages;
     const payload = await request(`${endpoint}?${messageQuery({ before, after, order: mode === "newer" ? "asc" : "desc" })}`);
-    if (generation !== state.generation) return 0;
+    if (generation !== state.generation || messageGeneration !== state.messageGeneration) return 0;
     const source = unwrap(payload);
     const rows = Array.isArray(source) ? source : (source?.messages || payload?.data || []);
     const incoming = rows.map(normalizeMessage);
@@ -634,11 +655,12 @@ function handleLoadError(error) {
 }
 
 async function reloadForFilters() {
-  const generation = ++state.generation;
+  const generation = state.generation;
+  const messageGeneration = ++state.messageGeneration;
   renderFilters();
   el.status_badge.textContent = "Filtering";
   try {
-    await loadMessages("initial", generation);
+    await loadMessages("initial", generation, messageGeneration);
     el.status_badge.textContent = state.mode === "legacy" ? "Legacy" : "Live";
   } catch (error) {
     el.status_badge.textContent = "Filter error";
@@ -813,18 +835,30 @@ function openInviteMemberModal() {
   }}).open();
 }
 
-function openAddAgentModal() {
-  state.factories.createFormModal({ title: "Add Agent", size: "lg", submitLabel: "Create agent", initialValues: { avatar: null, activation_enabled: false, webhook_enabled: false }, rows: [
+async function loadDiscussionProviders() {
+  const providers = unwrap(await request(API.discussionProviders));
+  if (!Array.isArray(providers) || !providers.length) throw new Error("No discussion providers are currently available.");
+  return providers;
+}
+
+async function openAddAgentModal() {
+  let providers;
+  try { providers = await loadDiscussionProviders(); }
+  catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
+  const provider = providers[0];
+  state.factories.createFormModal({ title: "Add Agent", size: "lg", submitLabel: "Create agent", initialValues: { avatar: null, provider: provider.code, activation_enabled: false, webhook_enabled: false }, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true })],
     [{ type: "textarea", name: "description", label: "Description" }],
     [{ type: "divider" }], [{ type: "text", content: "Activation connector" }],
+    [{ type: "select", name: "provider", label: "Provider", required: true, options: providers.map(item => ({ value: item.code, label: item.display_name })) }],
     [{ type: "checkbox", name: "activation_enabled", label: "Enable conversation notifications" }],
-    [{ type: "text", content: "After creating the agent, ask Codex in each discussion to link this device. Codex supplies its own discussion ID and working directory; they are never posted to the project timeline." }],
+    [modalTextField("discussion_reference", provider.reference_label, { placeholder: provider.reference_placeholder, help: provider.reference_help })],
+    [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help })],
     [{ type: "divider" }], [{ type: "text", content: "Optional notification webhook" }],
     [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }], [modalTextField("webhook_url", "Webhook URL", { input: "url", placeholder: "https://agent.example/hooks/syndicatum" })],
   ], async onSubmit(values, context) {
-    try { if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); setTimeout(() => showAgentCredentialResult(result), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
+    try { if (values.activation_enabled && !String(values.discussion_reference || "").trim()) throw new Error("A discussion reference is required when conversation notifications are enabled."); if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); setTimeout(() => showAgentCredentialResult(result), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
 }
@@ -870,13 +904,17 @@ async function openEditAgentModal(agent) {
   const agentId = agent.identity_id;
   let webhook = agent.webhook || {};
   let activation = agent.activation || {};
+  let providers = [];
   try { webhook = unwrap(await request(`${API.projectAgentWebhook}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
   catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Webhook settings unavailable" }); return; } }
   try { activation = unwrap(await request(`${API.projectAgentActivation}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
   catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Activation settings unavailable" }); return; } }
+  try { providers = await loadDiscussionProviders(); }
+  catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
+  const provider = providers.find(item => item.code === activation.provider) || providers[0];
   state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
     display_name: agent.display_name, avatar: null,
-    activation_enabled: Boolean(activation.enabled),
+    provider: provider.code, activation_enabled: Boolean(activation.enabled), discussion_reference: activation.discussion_reference || "", working_directory: activation.working_directory || "",
     webhook_enabled: Boolean(webhook.enabled), webhook_url: webhook.endpoint_url || webhook.url || "",
   }, extraActionsPlacement: "start", extraActions: [{
     id: "rotate-webhook-secret",
@@ -895,16 +933,19 @@ async function openEditAgentModal(agent) {
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", previewUrl: agent.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true })],
     [{ type: "divider" }], [{ type: "text", content: "Activation connector" }],
+    [{ type: "select", name: "provider", label: "Provider", required: true, options: providers.map(item => ({ value: item.code, label: item.display_name })) }],
     [{ type: "checkbox", name: "activation_enabled", label: "Enable conversation notifications" }],
-    [{ type: "text", content: "Discussion links are configured independently on every authorized Codex device. In the discussion to link, ask Codex to link it to this Syndicatum agent." }],
+    [modalTextField("discussion_reference", provider.reference_label, { placeholder: provider.reference_placeholder, help: provider.reference_help })],
+    [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help })],
     [{ type: "divider" }], [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }],
     [modalTextField("webhook_url", "Webhook URL", { input: "url" })],
   ], async onSubmit(values, context) {
     try {
+      if (values.activation_enabled && !String(values.discussion_reference || "").trim()) throw new Error("A discussion reference is required when conversation notifications are enabled.");
       if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled.");
       const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId(), agentId }) : agent.avatar_url;
       await request(API.projectAgents, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name, avatar_url: avatarUrl || null }) });
-      await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled) }) });
+      await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), provider: values.provider, discussion_reference: values.discussion_reference, working_directory: values.working_directory }) });
       let webhookResult = {};
       if (values.webhook_enabled || String(values.webhook_url || "").trim() || webhook.endpoint_url) webhookResult = unwrap(await request(API.projectAgentWebhook, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, endpoint_url: values.webhook_url, enabled: Boolean(values.webhook_enabled) }) })) || {};
       setTimeout(() => showAgentCredentialResult(webhookResult), 0);
@@ -945,6 +986,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   closeRealtime();
   state.abortController = new AbortController();
   const generation = ++state.generation;
+  const messageGeneration = ++state.messageGeneration;
   state.messages = [];
   state.oldestCursor = "";
   state.newestCursor = "";
@@ -982,7 +1024,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   renderProjectHeader();
   rebuildParticipantControls();
   renderComposerControls();
-  await loadMessages("initial", generation);
+  await loadMessages("initial", generation, messageGeneration);
   el.status_badge.textContent = "Live";
   void connectRealtime(generation);
 }
@@ -1311,9 +1353,10 @@ function closeRealtime() {
   state.realtimeGeneration += 1;
   clearTimeout(state.realtimeRetryTimer);
   state.realtimeRetryTimer = null;
+  state.realtimeRetryCount = 0;
   const socket = state.realtimeSocket;
   state.realtimeSocket = null;
-  if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "Project changed");
+  socket?.close?.();
 }
 
 function messageMatchesFilters(message) {
@@ -1344,55 +1387,96 @@ function receiveRealtimeMessage(source) {
 }
 
 async function connectRealtime(projectGeneration = state.generation) {
-  if (state.mode !== "expanded" || projectGeneration !== state.generation || !state.project?.capabilities?.realtime?.enabled) {
+  if (state.mode !== "expanded" || projectGeneration !== state.generation) return;
+  if (!state.project?.capabilities?.realtime?.enabled) {
     startPolling();
     return;
   }
+  clearTimeout(state.pollingTimer);
+  state.pollingTimer = null;
   const attempt = ++state.realtimeGeneration;
   try {
     const admissionPath = state.project.capabilities.realtime.admission_url || `api/v1/realtime-admission.php?project_id=${encodeURIComponent(selectedProjectId())}`;
     const admission = unwrap(await request(admissionPath));
-    if (!admission?.enabled || !admission.token || !admission.websocket_url) { startPolling(); return; }
-    const url = new URL(admission.websocket_url, location.href);
-    url.searchParams.set("token", admission.token);
-    const socket = new WebSocket(url);
-    state.realtimeSocket = socket;
+    if (!admission?.enabled) { startPolling(); return; }
+    if (!admission.token || !admission.websocket_url || !admission.room) throw new Error("Realtime admission is incomplete.");
+    const websocketUrl = new URL(admission.websocket_url, window.location.href);
+    if (window.location.protocol === "https:" && websocketUrl.protocol !== "wss:") {
+      const error = new Error("Realtime is configured with an insecure WebSocket endpoint. An HTTPS page requires wss://.");
+      error.realtimeConfiguration = true;
+      throw error;
+    }
+    const sdkUrl = state.project.capabilities.realtime.sdk_module_url || "/vendor/pbb-realtime/js/sdk/index.js";
+    const sdk = await import(sdkUrl);
+    let joinRequested = false;
     let joined = false;
-    const join = () => {
-      if (joined || socket.readyState !== WebSocket.OPEN) return;
-      joined = true;
-      socket.send(JSON.stringify({
-        namespace: "pbb.realtime.v1", phase: "request", type: "room.join.request",
-        id: makeIdempotencyKey(), room: admission.room, payload: {},
-      }));
-    };
-    socket.addEventListener("message", (event) => {
+    let client;
+    const joinTimeout = setTimeout(() => {
+      if (!joined) client?.close?.();
+    }, 15000);
+    const handleMessage = (raw) => {
       let envelope;
-      try { envelope = JSON.parse(event.data); } catch (_error) { return; }
-      if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("session.auth")) { join(); return; }
-      if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("room.join") && envelope?.payload?.joined !== false) {
+      try { envelope = sdk.parseRealtimeEnvelope(raw); } catch (_error) { return; }
+      if (envelope?.phase === "ack" && envelope?.type === "session.auth.request") {
+        if (!joinRequested) {
+          joinRequested = true;
+          client.sendRequest("room.join.request", admission.room, sdk.buildRoomJoinPayload());
+        }
+        return;
+      }
+      if (envelope?.phase === "ack" && envelope?.type === "room.join.request") {
+        joined = true;
+        clearTimeout(joinTimeout);
+        state.realtimeRetryTimer = null;
+        state.realtimeRetryCount = 0;
         clearTimeout(state.pollingTimer);
+        state.pollingTimer = null;
         el.status_badge.textContent = "Realtime";
+        void loadMessages("newer", projectGeneration).catch(handleLoadError);
+        return;
+      }
+      if (envelope?.phase === "error") {
+        client.close();
         return;
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) {
         receiveRealtimeMessage(envelope.payload.message);
       }
+    };
+    client = new sdk.RealtimeSocketClient({
+      websocketUrl: admission.websocket_url,
+      token: admission.token,
+      requestPrefix: "syndicatum",
+      onMessage: handleMessage,
+      onError() { el.status_badge.textContent = "Realtime reconnecting"; },
+      onClose() {
+        clearTimeout(joinTimeout);
+        if (attempt !== state.realtimeGeneration || projectGeneration !== state.generation) return;
+        state.realtimeSocket = null;
+        el.status_badge.textContent = "Realtime reconnecting";
+        scheduleRealtimeReconnect(projectGeneration);
+      },
     });
-    socket.addEventListener("close", () => {
-      if (attempt !== state.realtimeGeneration || projectGeneration !== state.generation) return;
-      state.realtimeSocket = null;
-      el.status_badge.textContent = "Polling fallback";
-      startPolling();
-      state.realtimeRetryTimer = setTimeout(() => void connectRealtime(projectGeneration), 5000);
-    });
-    socket.addEventListener("error", () => socket.close());
-  } catch (_error) {
+    state.realtimeSocket = client;
+    client.connect();
+  } catch (error) {
     if (attempt !== state.realtimeGeneration || projectGeneration !== state.generation) return;
-    el.status_badge.textContent = "Polling fallback";
-    startPolling();
-    state.realtimeRetryTimer = setTimeout(() => void connectRealtime(projectGeneration), 5000);
+    console.warn("[Syndicatum] Realtime connection attempt failed.", error);
+    if (error?.realtimeConfiguration) {
+      el.status_badge.textContent = "Realtime configuration error";
+      state.components.toast.warn(error.message, { title: "Realtime unavailable" });
+      return;
+    }
+    el.status_badge.textContent = "Realtime reconnecting";
+    scheduleRealtimeReconnect(projectGeneration);
   }
+}
+
+function scheduleRealtimeReconnect(projectGeneration) {
+  clearTimeout(state.realtimeRetryTimer);
+  const delay = Math.min(60000, 5000 * (2 ** Math.min(state.realtimeRetryCount, 4)));
+  state.realtimeRetryCount += 1;
+  state.realtimeRetryTimer = setTimeout(() => void connectRealtime(projectGeneration), delay);
 }
 
 function startPolling() {

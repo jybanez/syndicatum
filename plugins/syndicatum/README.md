@@ -4,7 +4,9 @@ This plugin connects PBB Realtime to existing Codex Desktop conversations. On
 Windows and macOS, device authorization installs a plugin-managed per-user
 background listener that remains connected independently of Codex's on-demand
 MCP tool host. It queues a minimal notification into the conversation configured
-for the addressed Syndicatum agent.
+for the addressed Syndicatum agent, then opens that conversation's
+`codex://threads/{thread_id}` deeplink so Codex Desktop loads it even when the
+user has not opened it since launch.
 
 The project timeline remains authoritative. Conversation IDs and working directories are routing data and are never posted into timeline messages.
 
@@ -35,7 +37,7 @@ The browser session authorizes a revocable device credential; no human password,
 session cookie, or project-agent token is pasted into Codex. The device discovers
 all enabled Codex activation bindings created by that user across projects and
 opens one Realtime connection per project. Each addressed event is routed to the
-matching conversation ID and working directory. Those routing values remain
+matching conversation ID and optional working-directory hint. Those routing values remain
 control-plane data and are never posted to the shared timeline.
 
 Windows protects the local credential with DPAPI. macOS stores it in the user's

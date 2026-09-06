@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { PluginRuntime, selectAvailableBindings } from "../mcp/runtime.mjs";
 
-test("device binding validation skips stale routes without mutating server results", async () => {
+test("device binding validation tolerates missing directory hints and rejects missing discussions", async () => {
   const calls = [];
   const source = [
     { project_id: 1, agent_id: 10, conversation_id: "thread-ok", working_directory: "C:\\valid" },
@@ -16,8 +16,9 @@ test("device binding validation skips stale routes without mutating server resul
     calls.push(directory);
     if (/missing$/i.test(directory)) throw new Error("missing");
   });
-  assert.equal(result.validBindings.length, 1);
-  assert.equal(result.unavailableBindings.length, 2);
+  assert.equal(result.validBindings.length, 2);
+  assert.equal(result.validBindings[1].working_directory, null);
+  assert.equal(result.unavailableBindings.length, 1);
   assert.equal(source[0].working_directory, "C:\\valid");
   assert.equal(calls.length, 2);
 });
@@ -58,30 +59,4 @@ test("connector status is rebuilt from persisted configuration instead of stale 
   runtime.status = { state: "unconfigured" };
   const status = await runtime.currentStatus();
   assert.equal(status.state, "ready"); assert.equal(status.deviceId, "device-ready"); assert.equal(status.background.pid, 91);
-});
-
-test("link discussion uses the current Codex task and working directory", async () => {
-  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-link-"));
-  const root = path.join(localAppData, "Syndicatum", "CodexPlugin"); await mkdir(root, { recursive: true });
-  await writeFile(path.join(root, "connector.config.json"), JSON.stringify({ mode: "device", syndicatumUrl: "https://syndicatum.example", deviceId: "device-link" }), "utf8");
-  let saved;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (_url, options = {}) => {
-    if (options.method === "PUT") {
-      saved = JSON.parse(options.body);
-      return new Response(JSON.stringify({ data: { project_id: 1, agent_id: 2 } }), { status: 200, headers: { "Content-Type": "application/json" } });
-    }
-    return new Response(JSON.stringify({ data: { bindings: [{ project_id: 1, project_name: "Project", agent_id: 2, agent_name: "Agent" }] } }), { status: 200, headers: { "Content-Type": "application/json" } });
-  };
-  try {
-    let restarted = 0;
-    const runtime = new PluginRuntime({ LOCALAPPDATA: localAppData, SYNDICATUM_AGENT_TOKEN: "test-token", CODEX_THREAD_ID: "thread-current" }, { background: { async restart() { restarted += 1; return { readiness: "ready" }; } } });
-    const result = await runtime.linkDiscussion({ agentName: "Agent" });
-    assert.equal(result.state, "linked");
-    assert.equal(saved.conversation_id, "thread-current");
-    assert.equal(saved.working_directory, path.resolve(process.cwd()));
-    assert.equal(restarted, 1);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
 });

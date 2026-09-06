@@ -120,30 +120,6 @@ export class PluginRuntime {
     const state = background?.readiness === "authorized_idle" ? "authorized_idle" : ready ? "ready" : background?.readiness === "startup_error" ? "error" : "starting";
     return { state, mode: "device", deviceId: config.deviceId, role: this.manageBackground ? "background" : this.status.role, background, pairing };
   }
-  async linkDiscussion({ projectId = "", agentId = "", agentName = "", conversationId = "", workingDirectory = "" }) {
-    const config = await this.configuredDevice();
-    if (!config) throw new Error("Authorize this Codex device before linking a discussion.");
-    const client = new DeviceSyndicatumClient(config);
-    const available = await client.bindings();
-    let candidates = Array.isArray(available.bindings) ? available.bindings : [];
-    if (String(projectId).trim()) candidates = candidates.filter(item => String(item.project_id) === String(projectId));
-    if (String(agentId).trim()) candidates = candidates.filter(item => String(item.agent_id) === String(agentId));
-    if (String(agentName).trim()) candidates = candidates.filter(item => String(item.agent_name).toLocaleLowerCase() === String(agentName).trim().toLocaleLowerCase());
-    if (candidates.length !== 1) {
-      const choices = candidates.map(item => ({ projectId: item.project_id, projectName: item.project_name, agentId: item.agent_id, agentName: item.agent_name }));
-      throw new Error(candidates.length ? `More than one activation target matches. Choose one: ${JSON.stringify(choices)}` : "No enabled Syndicatum agent matches this device and user.");
-    }
-    const target = candidates[0];
-    const resolvedConversation = String(conversationId || this.env.CODEX_THREAD_ID || this.env.CODEX_SESSION_ID || "").trim();
-    const resolvedDirectory = path.resolve(String(workingDirectory || this.env.CODEX_WORKING_DIRECTORY || process.cwd()).trim());
-    if (!resolvedConversation) throw new Error("Codex did not expose the current discussion ID. Copy the session ID and provide conversation_id explicitly.");
-    await access(resolvedDirectory);
-    const binding = await client.configureBinding({
-      project_id: Number(target.project_id), agent_id: Number(target.agent_id), conversation_id: resolvedConversation, working_directory: resolvedDirectory,
-    });
-    const background = this.manageBackground ? await this.background.restart() : null;
-    return { state: "linked", projectId: binding.project_id, agentId: binding.agent_id, conversationId: resolvedConversation, workingDirectory: resolvedDirectory, background };
-  }
   async startDevice(config) {
     const client = new DeviceSyndicatumClient(config); const result = await client.bindings(); const bindings = Array.isArray(result.bindings) ? result.bindings : [];
     const { validBindings, unavailableBindings } = await selectAvailableBindings(bindings);
@@ -152,12 +128,12 @@ export class PluginRuntime {
     const logger = this.logger("listener");
     if (!validBindings.length) {
       this.status = { state: "authorized_idle", mode: "device", deviceId: config.deviceId, bindings: 0, projects: 0, unavailableBindings: unavailableBindings.length };
-      if (unavailableBindings.length) logger.error(`${unavailableBindings.length} activation route(s) are unavailable on this device.`);
+      if (unavailableBindings.length) logger.error(`${unavailableBindings.length} discussion binding(s) are unavailable.`);
       return this.status;
     }
     this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings: validBindings, log: logger });
     this.status = { state: "running", mode: "device", deviceId: config.deviceId, bindings: validBindings.length, projects: new Set(validBindings.map(item => String(item.project_id))).size, unavailableBindings: unavailableBindings.length };
-    if (unavailableBindings.length) logger.error(`${unavailableBindings.length} activation route(s) were skipped on this device.`);
+    if (unavailableBindings.length) logger.error(`${unavailableBindings.length} discussion binding(s) were skipped.`);
     this.task = this.connector.start().catch(error => { this.status = { ...this.status, state: "error", error: String(error?.message || error) }; logger.error(this.status.error); });
     return this.status;
   }
@@ -193,11 +169,16 @@ export async function selectAvailableBindings(bindings, accessImpl = access) {
     const binding = { ...source };
     try {
       if (!String(binding.conversation_id || "").trim()) throw new Error("missing_conversation");
-      binding.working_directory = path.resolve(String(binding.working_directory || ""));
-      await accessImpl(binding.working_directory);
+      const directory = String(binding.working_directory || "").trim();
+      binding.working_directory = null;
+      if (directory) {
+        const resolved = path.resolve(directory);
+        try { await accessImpl(resolved); binding.working_directory = resolved; }
+        catch (_error) { binding.working_directory = null; }
+      }
       validBindings.push(binding);
     } catch (_error) {
-      unavailableBindings.push({ projectId: binding.project_id, agentId: binding.agent_id, reason: "working_directory_unavailable" });
+      unavailableBindings.push({ projectId: binding.project_id, agentId: binding.agent_id, reason: "discussion_unavailable" });
     }
   }
   return { validBindings, unavailableBindings };

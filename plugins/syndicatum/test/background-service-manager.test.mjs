@@ -53,7 +53,7 @@ test("Windows launcher decrypts the credential before starting the background ru
   assert.match(launcher, /background-service\.mjs/);
 });
 
-test("background status distinguishes an authorized device with no local routes", async () => {
+test("background status distinguishes an authorized device with no usable discussion bindings", async () => {
   const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-health-"));
   const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
   await mkdir(manager.files.root, { recursive: true });

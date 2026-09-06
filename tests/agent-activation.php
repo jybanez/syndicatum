@@ -38,34 +38,38 @@ try {
         $suite->same(false, $binding['enabled']);
         $suite->same(false, $binding['configured']);
         $suite->same('', $binding['conversation_id']);
+        $disabled = $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
+            'enabled' => false, 'provider' => 'codex', 'discussion_reference' => '', 'working_directory' => '',
+        ]);
+        $suite->same(false, $disabled['enabled']);
     });
 
-    $suite->test('shared activation can be enabled before a device links its local route', function () use ($suite, $service, $project, $agent, $owner) {
-        $binding = $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
-            'enabled' => true,
-        ]);
-        $suite->same(true, $binding['enabled']);
-        $suite->same(true, $binding['configured']);
-        $suite->same(false, $binding['legacy_route_configured']);
+    $suite->test('provider discussion references are normalized and working directory is optional', function () use ($suite, $service, $project, $agent, $owner) {
+        $suite->throws(function () use ($service, $project, $agent, $owner) {
+            $service->configure($project['id'], $agent['agent_id'], $owner['id'], ['enabled' => true, 'provider' => 'codex', 'discussion_reference' => 'https://example.test/thread']);
+        });
         $suite->throws(function () use ($service, $project, $agent, $owner) {
             $service->configure($project['id'], $agent['agent_id'], $owner['id'], ['enabled' => true, 'conversation_id' => 'bad id', 'working_directory' => 'relative']);
         });
         $binding = $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
             'enabled' => true,
-            'conversation_id' => '01a06d4b-077b-79c0-afc9-8373a6887483',
-            'working_directory' => 'C:\\wamp64\\www\\pbb\\chatviewer',
+            'provider' => 'codex',
+            'discussion_reference' => 'codex://threads/01a06d4b-077b-79c0-afc9-8373a6887483',
+            'working_directory' => '',
         ]);
         $suite->same(true, $binding['enabled']);
         $suite->same(true, $binding['configured']);
-        $suite->same(true, $binding['legacy_route_configured']);
         $suite->same('codex', $binding['runtime_type']);
+        $suite->same('codex', $binding['provider']);
+        $suite->same('codex://threads/01a06d4b-077b-79c0-afc9-8373a6887483', $binding['discussion_reference']);
+        $suite->same('', $binding['working_directory']);
     });
 
     $suite->test('the authenticated agent view returns only its own configured binding', function () use ($suite, $service, $project, $agent) {
         $binding = $service->ownConfiguration($project['id'], $agent['agent_id']);
         $suite->same($agent['agent_id'], $binding['agent_id']);
         $suite->same('01a06d4b-077b-79c0-afc9-8373a6887483', $binding['conversation_id']);
-        $suite->true(strpos($binding['working_directory'], 'chatviewer') !== false);
+        $suite->same('', $binding['working_directory']);
     });
 
     $suite->test('activation audit metadata does not contain the conversation id or path', function () use ($suite, $pdo) {

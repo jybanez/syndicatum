@@ -13,13 +13,17 @@ try {
     if (Api::method() === 'POST') {
         $activationService = new AgentActivationService($pdo);
         $activationInput = null;
-        if (array_key_exists('activation_enabled', $body) || array_key_exists('conversation_id', $body)
+        if (array_key_exists('activation_enabled', $body) || array_key_exists('provider', $body)
+            || array_key_exists('discussion_reference', $body) || array_key_exists('conversation_id', $body)
             || array_key_exists('working_directory', $body)) {
-            $activationInput = $activationService->validateConfigurationInput([
+            $activationCandidate = [
                 'enabled' => isset($body['activation_enabled']) ? $body['activation_enabled'] : false,
+                'provider' => isset($body['provider']) ? $body['provider'] : 'codex',
                 'conversation_id' => isset($body['conversation_id']) ? $body['conversation_id'] : '',
                 'working_directory' => isset($body['working_directory']) ? $body['working_directory'] : '',
-            ]);
+            ];
+            if (array_key_exists('discussion_reference', $body)) { $activationCandidate['discussion_reference'] = $body['discussion_reference']; }
+            $activationInput = $activationService->validateConfigurationInput($activationCandidate);
         }
         $result = $service->createAgent($projectId, $user['id'], $body);
         if ($activationInput !== null) {
@@ -54,17 +58,21 @@ try {
         if (isset($webhook['webhook_signing_secret'])) { $result['webhook_signing_secret'] = $webhook['webhook_signing_secret']; }
         $changed = true;
     }
-    if (array_key_exists('activation_enabled', $body) || array_key_exists('conversation_id', $body)
+    if (array_key_exists('activation_enabled', $body) || array_key_exists('provider', $body)
+        || array_key_exists('discussion_reference', $body) || array_key_exists('conversation_id', $body)
         || array_key_exists('working_directory', $body)) {
+        $activationInput = [
+            'enabled' => isset($body['activation_enabled']) ? $body['activation_enabled'] : false,
+            'provider' => isset($body['provider']) ? $body['provider'] : 'codex',
+            'conversation_id' => isset($body['conversation_id']) ? $body['conversation_id'] : '',
+            'working_directory' => isset($body['working_directory']) ? $body['working_directory'] : '',
+        ];
+        if (array_key_exists('discussion_reference', $body)) { $activationInput['discussion_reference'] = $body['discussion_reference']; }
         $result['activation'] = (new AgentActivationService($pdo))->configure(
             $projectId,
             $agentId,
             $user['id'],
-            [
-                'enabled' => isset($body['activation_enabled']) ? $body['activation_enabled'] : false,
-                'conversation_id' => isset($body['conversation_id']) ? $body['conversation_id'] : '',
-                'working_directory' => isset($body['working_directory']) ? $body['working_directory'] : '',
-            ]
+            $activationInput
         );
         $changed = true;
     }

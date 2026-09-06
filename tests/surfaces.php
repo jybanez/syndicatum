@@ -241,6 +241,33 @@ try {
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
 
+    $suite->test('Realtime-enabled timeline reconnects without periodic polling', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $start = strpos($source, 'async function connectRealtime(');
+        $end = strpos($source, 'function scheduleRealtimeReconnect(', $start);
+        $suite->true($start !== false && $end !== false && $end > $start, 'Realtime connection implementation was not found.');
+        $connection = substr($source, $start, $end - $start);
+        $suite->same(2, substr_count($connection, 'startPolling();'), 'Polling must be limited to explicitly disabled admission paths.');
+        $suite->same(2, substr_count($connection, 'scheduleRealtimeReconnect(projectGeneration);'), 'Both socket closure and admission failure must reconnect.');
+        $suite->true(strpos($connection, 'new sdk.RealtimeSocketClient') !== false, 'The timeline must use the supported PBB Realtime SDK client.');
+        $suite->true(strpos($connection, 'error.realtimeConfiguration = true') !== false, 'Mixed-content WebSocket configuration must be treated as permanent rather than retried.');
+        $suite->true(strpos($connection, 'new WebSocket(') === false, 'The timeline must not maintain a second hand-written WebSocket protocol client.');
+        $suite->true(strpos($connection, 'loadMessages("newer", projectGeneration)') !== false, 'A successful rejoin must perform one gap-recovery synchronization.');
+        $suite->true(strpos($source, 'const delay = Math.min(60000, 5000 * (2 ** Math.min(state.realtimeRetryCount, 4)));') !== false, 'Realtime reconnects must use bounded exponential backoff.');
+        $suite->true(is_file($root . '/vendor/pbb-realtime/js/sdk/index.js'), 'The same-origin PBB Realtime SDK is missing.');
+    });
+
+    $suite->test('Broadcast messages render as broadcasts instead of mass tags', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $index = file_get_contents($root . '/index.php');
+        $suite->true(strpos($source, 'function isBroadcastMessage(') !== false, 'Broadcast detection helper is missing.');
+        $suite->true(strpos($source, 'entry.reason || "").toLowerCase() === "broadcast"') !== false, 'Broadcast detection must use addressee reason metadata.');
+        $suite->true(strpos($source, 'chip.textContent = "Project broadcast";') !== false, 'Broadcasts must collapse participant chips into one broadcast label.');
+        $suite->true(strpos($source, 'identity.append(identityLine, renderAddresseeChips(current));') !== false, 'Message addressee chips must render under the sender identity.');
+        $suite->true(strpos($source, 'footer.appendChild(chips);') === false, 'Message addressee chips must not render in the footer action row.');
+        $suite->true(strpos($index, 'Everyone active in this project will be notified.') !== false, 'Composer broadcast warning must not describe broadcasts as response tagging.');
+    });
+
     $nativePassword = 'native password one';
     $adminId = surfaceInsertUser($pdo, 'admin@surfaces.test', 'Global Administrator', 'administrator password', ['user', 'administrator']);
     $ownerId = surfaceInsertUser($pdo, 'owner@surfaces.test', 'Project Owner', 'owner password value', ['user']);
@@ -328,6 +355,7 @@ try {
             $response = surfaceRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectId, surfaceHeaders($tokens[$role]));
             $suite->same(200, $response['status'], $role . ': ' . $response['raw']);
             $suite->same($role === 'project_admin' ? 'admin' : $role, $response['body']['data']['current_role']);
+            $suite->same('/vendor/pbb-realtime/js/sdk/index.js', $response['body']['data']['capabilities']['realtime']['sdk_module_url']);
             surfaceAssertCapabilities($suite, $response['body']['data']['permissions'], $expected);
         }
         $agent = surfaceRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectId, ['Authorization: Bearer ' . $agentToken]);
@@ -341,8 +369,9 @@ try {
         $suite->same(404, $globalAdmin['status'], 'Global administrator must not silently enter a project.');
     });
 
-    $suite->test('project admins manage activation while an agent can read only its own binding', function () use ($suite, $baseUrl, $tokens, $csrf, $projectId, $agentId, $agentToken) {
+    $suite->test('project admins use provider references while an agent can read only its own binding', function () use ($suite, $baseUrl, $tokens, $csrf, $projectId, $agentId, $agentToken) {
         $query = '?project_id=' . $projectId . '&agent_id=' . $agentId;
+        $providers = surfaceRequest($baseUrl, 'GET', '/api/v1/discussion-providers.php', surfaceHeaders($tokens['owner']));
         $initial = surfaceRequest($baseUrl, 'GET', '/api/v1/project-agent-activation.php' . $query, surfaceHeaders($tokens['owner']));
         $member = surfaceRequest($baseUrl, 'GET', '/api/v1/project-agent-activation.php' . $query, surfaceHeaders($tokens['member']));
         $missingCsrf = surfaceRequest($baseUrl, 'PATCH', '/api/v1/project-agent-activation.php', surfaceHeaders($tokens['owner']), [
@@ -351,14 +380,17 @@ try {
         ]);
         $invalid = surfaceRequest($baseUrl, 'PATCH', '/api/v1/project-agent-activation.php', surfaceHeaders($tokens['owner'], $csrf['owner']), [
             'project_id' => $projectId, 'agent_id' => $agentId, 'enabled' => true,
-            'conversation_id' => '01a06d4b-077b-79c0-afc9-8373a6887483', 'working_directory' => 'relative-path',
+            'provider' => 'codex', 'discussion_reference' => 'https://example.test/thread',
         ]);
         $updated = surfaceRequest($baseUrl, 'PATCH', '/api/v1/project-agent-activation.php', surfaceHeaders($tokens['owner'], $csrf['owner']), [
             'project_id' => $projectId, 'agent_id' => $agentId, 'enabled' => true,
-            'conversation_id' => '01a06d4b-077b-79c0-afc9-8373a6887483', 'working_directory' => 'C:\\workspace',
+            'provider' => 'codex', 'discussion_reference' => 'codex://threads/01a06d4b-077b-79c0-afc9-8373a6887483', 'working_directory' => '',
         ]);
         $own = surfaceRequest($baseUrl, 'GET', '/api/v1/agent-activation-binding.php?project_id=' . $projectId, ['Authorization: Bearer ' . $agentToken]);
         $humanOwn = surfaceRequest($baseUrl, 'GET', '/api/v1/agent-activation-binding.php?project_id=' . $projectId, surfaceHeaders($tokens['owner']));
+        $suite->same(200, $providers['status'], $providers['raw']);
+        $suite->same('codex', $providers['body']['data'][0]['code']);
+        $suite->same('Codex discussion deeplink', $providers['body']['data'][0]['reference_label']);
         $suite->same(200, $initial['status'], $initial['raw']);
         $suite->same(false, $initial['body']['data']['enabled']);
         $suite->same(404, $member['status']);
@@ -366,6 +398,8 @@ try {
         $suite->same(422, $invalid['status']);
         $suite->same(200, $updated['status'], $updated['raw']);
         $suite->same(true, $updated['body']['data']['enabled']);
+        $suite->same('codex', $updated['body']['data']['provider']);
+        $suite->same('codex://threads/01a06d4b-077b-79c0-afc9-8373a6887483', $updated['body']['data']['discussion_reference']);
         $suite->same(200, $own['status'], $own['raw']);
         $suite->same($agentId, $own['body']['data']['agent_id']);
         $suite->same('01a06d4b-077b-79c0-afc9-8373a6887483', $own['body']['data']['conversation_id']);

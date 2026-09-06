@@ -81,7 +81,7 @@
                         <div class="reply-context" id="reply-context" hidden></div>
                         <div class="addressing-row">
                             <div id="address-mode"></div><div id="addressee-select" class="addressee-select"></div>
-                            <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be expected to respond.</p>
+                            <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be notified.</p>
                         </div>
                         <div id="composer-host"></div>
                     </section>

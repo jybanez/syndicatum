@@ -57,10 +57,26 @@ not create a duplicate process. Runtime logs are written beneath the ignored
 `runtime/` directory, so no repeating terminal window or Scheduled Task is
 required.
 
+In the browser, an enabled Realtime project uses the vendored official PBB
+Realtime JavaScript SDK and its WebSocket as the live
+timeline transport and does not periodically poll the message API. A dropped
+connection is retried with bounded exponential backoff; after rejoining, the
+client performs one HTTP gap-recovery request. The 15-second timeline poll is
+used only when Realtime is disabled. Initial history, pagination, filters, and
+manual refresh continue to use the HTTP API.
+
+The administrator-facing Realtime base URL is canonical. Saving an HTTPS base
+such as `https://realtime.pbb.ph` derives
+`wss://realtime.pbb.ph/realtime` and the standard HTTPS publish endpoint. An
+insecure `ws://` override is rejected while the base uses HTTPS, and the browser
+does not repeatedly retry a mixed-content configuration.
+
 The Syndicatum Codex plugin is distributed from the repository marketplace at
 `.agents/plugins/marketplace.json`. Its bundled local MCP server owns the PBB
 Realtime connector lifecycle and uses Codex's `queue` command to send an
-existing conversation only a request to check Syndicatum. On Windows, the
+existing conversation only a request to check Syndicatum. It then dispatches
+the linked `codex://threads/{thread_id}` deeplink so Codex Desktop also loads a
+discussion that was not already open. On Windows, the
 plugin installs one current-user Scheduled Task; on macOS it installs one
 current-user LaunchAgent and stores credentials in Keychain. Both keep the
 background listener alive independently of Codex Desktop, are event-driven,
@@ -70,3 +86,10 @@ service, tray application, or legacy connector fallback is used. The original
 connector experiment has been retired in favor of this plugin-owned runtime. See
 [`docs/activation-connector-poc.md`](docs/activation-connector-poc.md) for the
 verified flow and compatibility boundary.
+
+Discussion linking is configured on the project agent in Syndicatum. Select the
+provider and paste its user-facing discussion reference; Codex currently uses
+`codex://threads/{thread_id}` from **Copy deeplink**. Syndicatum normalizes the
+reference and shares the binding with every connector device authorized for that
+user. The working-directory hint is optional and may differ or be unavailable on
+another computer.

@@ -37,7 +37,8 @@ export class ActivationConnector {
     }
     await this.state.markPending(message);
     this.log.info(`Activating Codex for Syndicatum message ${message.id} (${source}).`);
-    await this.driver.activate(message);
+    const delivery = await this.driver.activate(message);
+    if (delivery?.threadLoadWarning) this.log.error(`Notification ${message.id} was queued, but Codex Desktop could not load the linked discussion: ${safe(delivery.threadLoadWarning)}`);
     await this.state.markProcessed(message); this.clearRetry(message.id);
     this.log.info(`Delivered Syndicatum notification ${message.id} to the linked conversation.`);
     return { status: "notified" };

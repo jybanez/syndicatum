@@ -101,22 +101,25 @@ The Project surface has two independently scrolling columns.
 
 Owners and project administrators may conditionally see **Edit Project**, **Invite Member**, **Manage Members**, **Add/Manage Agents**, **Transfer Ownership**, and **Archive/Restore Project**.
 
-Agent management provides an avatar upload control, a **Codex conversation notifications**
-section, and optional notification-webhook controls for each project agent. The
-activation section enables Codex conversation notifications for the agent. The
-Codex plugin then links each local discussion and working directory to that
-authorized device using its `connector_link_discussion` tool. Conversation IDs
-and paths are device-scoped control-plane data and are not entered into the
-shared project surface or posted to the timeline. A legacy activation record may
-still contain an existing `session_id` and absolute working directory as a
-temporary compatibility fallback. The authorized device plugin retrieves and
-registers routes using its revocable device credential; users do not edit a
-connector JSON file. Activation
-and webhook configuration are project-scoped, appear here rather than in global
-System Settings, and are visible only to project owners and administrators. For
-the verified Codex Desktop implementation, the conversation ID is the existing
-task's `session_id`; notification delivery does not create a replacement task or
-change that task's sandbox and approval settings.
+Agent management provides an avatar upload control, a provider-aware
+**Conversation notifications** section, and optional notification-webhook
+controls for each project agent. The user selects a provider and enters the
+reference that provider exposes. For Codex, the mapped field asks for the value
+from **Copy deeplink**, such as `codex://threads/{thread_id}`. Syndicatum validates
+the provider format and stores the normalized discussion ID. An optional absolute
+working-directory hint can help Codex open the expected project, but it is not
+required and a connector ignores the hint on a computer where the path does not
+exist.
+
+The discussion binding belongs to the project agent and is shared by every
+authorized connector device for that user; devices are not selected while
+linking. Conversation references and paths are private control-plane data shown
+only to authorized agent managers and connectors. They are never posted to the
+project timeline. Activation and webhook configuration are project-scoped,
+appear here rather than in global System Settings, and are visible only to
+project owners and administrators. Notification delivery resumes the existing
+provider discussion; it does not create a replacement discussion or change its
+permissions.
 
 ### Right: messages
 
@@ -193,8 +196,10 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project.php` | GET | Project identity, permissions, capabilities, and current participant |
 | `/api/v1/project-participants.php` | GET | Project participant column |
 | `/api/v1/project-agent-webhook.php?project_id={project}&agent_id={agent}` | GET, PATCH | Inspect, configure, enable/disable, or replace the one-time signing secret for one agent webhook |
-| `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | Project-admin management of shared agent activation permission |
+| `/api/v1/discussion-providers.php` | GET | Provider choices and mapped discussion-reference field metadata |
+| `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | Project-admin management of the shared provider discussion binding |
 | `/api/v1/agent-activation-binding.php?project_id={project}` | GET | Return only the authenticated agent's own activation binding to its connector |
+| `/api/v1/connector-bindings.php` | GET | Return the signed-in user's shared Codex bindings to an authorized connector device |
 | `/api/v1/admin/users.php` | GET, POST, PATCH | Capability-gated Users administration |
 | `/api/v1/admin/agents.php` | GET, PATCH | Capability-gated agent directory and global emergency controls |
 | `/api/v1/admin/audit.php` | GET | Capability-gated Audit surface |
@@ -203,6 +208,15 @@ The frontend implementation uses the existing static PHP route style while retai
 Human mutations require the session CSRF token. Avatar upload routes use bounded `multipart/form-data`; other mutations remain JSON. The session and project responses may add capability fields without removing the existing integration-capability fields used by deployed clients.
 
 Webhook controls never expose the stored secret. Create/rotation responses return the newly generated secret exactly once. Status responses contain only destination/status metadata, last success/failure information, and whether a secret is configured. Webhook notification is an optional runtime signal for addressed agents; it is independent of the optional global Realtime integration and never changes timeline correctness.
+
+When a project's Realtime capability is enabled, its open Project surface uses
+the same-origin vendored PBB Realtime JavaScript SDK and does
+not periodically poll for newer timeline messages. Complete message events are
+applied directly to the timeline. A disconnected socket is retried with bounded
+exponential backoff, and a successful rejoin performs one HTTP synchronization
+to recover any sequence gap. Initial history, explicit refreshes, filter
+changes, and older-page requests remain HTTP operations. The 15-second newer-
+message poll runs only when Realtime is disabled.
 
 ## Acceptance Criteria
 
