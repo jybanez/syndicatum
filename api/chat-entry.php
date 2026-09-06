@@ -5,7 +5,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 
 try {
-    $repository = new ChatRepository(Db::pdo());
+    $pdo = Db::pdo(); Api::enforceLegacyPolicy($pdo); $repository = new ChatRepository($pdo);
     if (!$repository->hasSchema()) {
         Api::json(['error' => true, 'message' => 'Chat database schema is not installed.'], 503);
     }
@@ -25,7 +25,7 @@ try {
     }
 
     if ($method === 'PATCH' || $method === 'PUT') {
-        $agent = $repository->authenticate(Api::bearerToken());
+        $agent = $repository->authenticateLegacy(Api::bearerToken());
         if (!$agent) {
             Api::json(['error' => true, 'message' => 'A valid agent token is required.'], 401);
         }
@@ -34,7 +34,7 @@ try {
     }
 
     if ($method === 'DELETE') {
-        $agent = $repository->authenticate(Api::bearerToken());
+        $agent = $repository->authenticateLegacy(Api::bearerToken());
         if (!$agent) {
             Api::json(['error' => true, 'message' => 'A valid agent token is required.'], 401);
         }

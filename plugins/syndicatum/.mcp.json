@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "connector": {
+      "command": "node",
+      "args": ["./mcp/server.mjs"],
+      "cwd": ".",
+      "env_vars": [
+        "CODEX_CLI_PATH",
+        "SYNDICATUM_PLUGIN_DATA",
+        "SYNDICATUM_AGENT_TOKEN",
+        "HOME",
+        "USERPROFILE",
+        "LOCALAPPDATA",
+        "XDG_CONFIG_HOME",
+        "PATH"
+      ],
+      "startup_timeout_sec": 15,
+      "tool_timeout_sec": 60
+    }
+  }
+}

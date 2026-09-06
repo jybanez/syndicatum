@@ -9,7 +9,7 @@ try {
         Api::json(['error' => true, 'message' => 'Method not allowed.'], 405, ['Allow' => 'POST']);
     }
 
-    $repository = new ChatRepository(Db::pdo());
+    $pdo = Db::pdo(); Api::enforceLegacyPolicy($pdo); $repository = new ChatRepository($pdo);
     if (!$repository->hasSchema()) {
         Api::json(['error' => true, 'message' => 'Chat database schema is not installed.'], 503);
     }

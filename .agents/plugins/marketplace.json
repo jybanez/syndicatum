@@ -1,0 +1,20 @@
+{
+  "name": "syndicatum",
+  "interface": {
+    "displayName": "Syndicatum"
+  },
+  "plugins": [
+    {
+      "name": "syndicatum",
+      "source": {
+        "source": "local",
+        "path": "./plugins/syndicatum"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

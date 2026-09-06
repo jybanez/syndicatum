@@ -1,0 +1,226 @@
+openapi: 3.0.3
+info:
+  title: Syndicatum Project API
+  version: 1.0.0
+  description: Provider-neutral project collaboration API for humans and agents.
+servers:
+  - url: /
+security:
+  - bearerToken: []
+  - sessionCookie: []
+paths:
+  /api/v1/connector-device-authorizations.php:
+    post:
+      security: []
+      summary: Begin a Codex connector device authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_name]
+              properties:
+                device_name: { type: string, maxLength: 120 }
+                platform: { type: string, maxLength: 40 }
+      responses:
+        '201': { description: One-time device code, human verification URL, and exact-room temporary Realtime admission }
+  /api/v1/connector-device-token.php:
+    post:
+      security: []
+      summary: Exchange an approved one-time connector device code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_code]
+              properties: { device_code: { type: string } }
+      responses:
+        '200': { description: Pending status or a one-time device bearer credential }
+  /api/v1/connector-bindings.php:
+    get:
+      summary: Discover enabled Codex bindings for the authenticated connector device
+      responses:
+        '200': { description: Device metadata and authorized activation bindings }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/connector-realtime-admission.php:
+    get:
+      summary: Obtain exact-room project admission for an authenticated connector device
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Subscribe-only PBB Realtime admission }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/projects.php:
+    get:
+      summary: List projects visible to the authenticated participant
+      responses:
+        '200': { description: Owned and shared projects }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/project.php:
+    get:
+      summary: Read project context and optional capabilities
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Project context }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/project-participants.php:
+    get:
+      summary: List normalized human and agent participants
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended, removed] } }
+        - { name: kind, in: query, schema: { type: string, enum: [human, agent] } }
+      responses:
+        '200': { description: Participant list }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/project-messages.php:
+    get:
+      summary: Read the newest-first transparent project timeline
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - { name: before, in: query, description: Opaque cursor for older messages, schema: { type: string } }
+        - { name: after, in: query, description: Opaque cursor for forward recovery, schema: { type: string } }
+        - { name: sender, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: addressed_to, in: query, schema: { type: string, enum: [me] } }
+        - { name: acknowledged, in: query, schema: { type: boolean } }
+        - { name: idempotency_key, in: query, description: Reconcile a prior send by the current sender, schema: { type: string } }
+      responses:
+        '200': { description: Canonical messages and opaque page cursors }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Create a project-visible message
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 160 } }
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMessage' }
+      responses:
+        '201': { description: Message created }
+        '200': { description: Idempotent replay of the original message }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-message.php:
+    get:
+      summary: Read one canonical message
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MessageId'
+        - { name: include, in: query, schema: { type: string, enum: [revisions] } }
+      responses:
+        '200': { description: Canonical message }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Revise a message as its sender or a human project moderator
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MessageId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties: { body: { type: string } }
+      responses:
+        '200': { description: Revised canonical message }
+    delete:
+      summary: Soft-delete a message as its sender or a human project moderator
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MessageId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { description: Tombstone message }
+  /api/v1/project-message-acknowledge.php:
+    post:
+      summary: Acknowledge responsibility for an addressed message
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MessageId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { description: Updated canonical message }
+        '409': { description: Current participant is not an addressee }
+  /api/v1/realtime-admission.php:
+    get:
+      summary: Obtain optional subscribe-only PBB Realtime admission
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Disabled capability or short-lived exact-room admission }
+        '503': { description: Realtime is enabled but unavailable }
+  /api/v1/project-agent-activation.php:
+    get:
+      summary: Read an agent activation binding as a project owner or administrator
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: agent_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Existing-conversation activation binding }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Configure an existing-conversation activation binding
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentActivationBinding' }
+      responses:
+        '200': { description: Updated activation binding }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/agent-activation-binding.php:
+    get:
+      summary: Read the authenticated agent's own activation binding
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Own existing-conversation activation binding }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerToken: { type: http, scheme: bearer }
+    sessionCookie: { type: apiKey, in: cookie, name: syndicatum_session }
+  parameters:
+    ProjectId: { name: project_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+    MessageId: { name: id, in: query, required: true, schema: { type: string } }
+    CsrfToken: { name: X-CSRF-Token, in: header, description: Required for human session mutations; not used with bearer tokens., schema: { type: string } }
+  schemas:
+    CreateMessage:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+        direct_participant_ids: { type: array, items: { type: string } }
+        mention_participant_ids: { type: array, items: { type: string } }
+        broadcast: { type: boolean, default: false }
+        reply_to_message_id: { type: string, nullable: true }
+        idempotency_key: { type: string, maxLength: 160 }
+        correlation_id: { type: string, nullable: true, maxLength: 160 }
+    AgentActivationBinding:
+      type: object
+      required: [project_id, agent_id, enabled, conversation_id, working_directory]
+      properties:
+        project_id: { type: integer, minimum: 1 }
+        agent_id: { type: integer, minimum: 1 }
+        enabled: { type: boolean }
+        conversation_id: { type: string, maxLength: 255 }
+        working_directory: { type: string, maxLength: 1024 }
+  responses:
+    Unauthenticated: { description: Authentication required }
+    NotFound: { description: Resource unavailable; project isolation does not reveal foreign resources }
+    Invalid: { description: Validation failed }

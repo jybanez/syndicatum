@@ -54,6 +54,32 @@ class Api
         ]);
     }
 
+    public static function csrfToken()
+    {
+        return self::headerValue(['X-CSRF-Token', 'HTTP_X_CSRF_TOKEN']);
+    }
+
+    public static function idempotencyKey()
+    {
+        return self::headerValue(['Idempotency-Key', 'HTTP_IDEMPOTENCY_KEY']);
+    }
+
+    public static function header($name)
+    {
+        return self::headerValue([$name]);
+    }
+
+    public static function enforceLegacyPolicy(PDO $pdo)
+    {
+        if (!Db::tableExists($pdo, 'system_settings')) {
+            return;
+        }
+        require_once __DIR__ . '/SettingsService.php';
+        if ((new SettingsService($pdo))->get('operations.legacy_api_enabled') !== true) {
+            self::json(['error' => true, 'code' => 'LEGACY_API_DISABLED', 'message' => 'This legacy API has been retired. Use /api/v1 project routes.'], 410);
+        }
+    }
+
     private static function tokenFromAuthorization($authorization)
     {
         $authorization = trim((string) $authorization);
@@ -64,7 +90,7 @@ class Api
         return '';
     }
 
-    private static function headerValue(array $names)
+    public static function headerValue(array $names)
     {
         foreach ($names as $name) {
             $serverName = strtoupper(str_replace('-', '_', $name));

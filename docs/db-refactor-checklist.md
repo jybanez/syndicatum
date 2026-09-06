@@ -17,8 +17,8 @@
 
 - [x] Record official Helper commit used for the refactor direction
 - [x] Replace local stat cards with `ui.stat.cards`
-- [ ] Evaluate replacing timeline rendering with `ui.chat.thread`
-- [ ] Use `ui.chat.thread` virtualization or `ui.virtual.list` for long histories
+- [x] Evaluate `ui.chat.thread`; retain `ui.timeline` because the chat presentation and anchoring do not fit the review feed
+- [x] Adopt native measured-height `ui.timeline` virtualization from Helper PR #68
 - [ ] Add `ui.chat.composer` for authenticated posting
 - [ ] Use `ui.select` or `ui.tree.select` for multi-target selection
 - [ ] Use `ui.form.modal` for entry/topic/agent CRUD flows

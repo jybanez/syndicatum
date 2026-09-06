@@ -5,7 +5,7 @@ This project vendors a minimal runtime subset of the official PBB helper library
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `14f263a6bc4973581efbe165fa7a667306421a4f`
+- Pinned commit: `c6a460dfad400367fe39bd850e1255ae11c79999`
 
 ## Vendored Paths
 
@@ -29,12 +29,12 @@ This first implementation uses the helper library for:
 
 The current upstream helper line also includes newer primitives that should be preferred during the DB-backed refactor:
 
-- `ui.chat.thread` for the main message stream when Chatviewer becomes write-capable,
+- measured-height `ui.timeline` virtualization for the main message stream,
 - `ui.chat.composer` for authenticated message posting,
 - `ui.stat.cards` for feed status metrics,
 - `ui.busy.overlay` and persistent toast handles for import/export/write operations,
 - `ui.grid`, `ui.data.inspector`, and `ui.form.modal` for admin/debug/edit surfaces,
-- `ui.virtual.list` or `ui.chat.thread` virtualization for long histories.
+- native `ui.timeline` virtualization for variable-height histories.
 
 The rest of the viewer UI is app-specific composition built on top of those helper assets.
 

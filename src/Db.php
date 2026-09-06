@@ -70,6 +70,11 @@ class Db
         return self::environmentSecret('PBB_AGENTCHAT_PREVIOUS_SECRET') !== null;
     }
 
+    public static function secretValue($name)
+    {
+        return self::environmentSecret($name);
+    }
+
     public static function now()
     {
         return date('Y-m-d H:i:s');

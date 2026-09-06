@@ -1,6 +1,11 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/SettingsService.php';
+require_once __DIR__ . '/MessageOutbox.php';
+require_once __DIR__ . '/AgentWebhookService.php';
+require_once __DIR__ . '/ProjectRepository.php';
+require_once __DIR__ . '/SchemaMigrator.php';
 
 class ChatRepository
 {
@@ -19,6 +24,17 @@ class ChatRepository
             && Db::tableExists($this->pdo, 'chat_topics');
     }
 
+    public function hasExpansionSchema()
+    {
+        return Db::tableExists($this->pdo, 'users')
+            && Db::tableExists($this->pdo, 'system_roles')
+            && Db::tableExists($this->pdo, 'workspaces')
+            && Db::tableExists($this->pdo, 'projects')
+            && Db::tableExists($this->pdo, 'project_members')
+            && Db::tableExists($this->pdo, 'project_agents')
+            && Db::tableExists($this->pdo, 'project_participants');
+    }
+
     public function installSchema()
     {
         $statements = [
@@ -33,6 +49,7 @@ class ChatRepository
                 claim_prefix VARCHAR(24) NULL UNIQUE,
                 claim_hash CHAR(64) NULL,
                 claim_secret_version VARCHAR(24) NULL,
+                claim_expires_at DATETIME NULL,
                 role ENUM('agent', 'admin') NOT NULL DEFAULT 'agent',
                 is_active TINYINT(1) NOT NULL DEFAULT 1,
                 created_at DATETIME NOT NULL,
@@ -111,6 +128,7 @@ class ChatRepository
 
         $this->ensureClaimColumns();
         $this->ensureCredentialVersionColumns();
+        (new SchemaMigrator($this->pdo))->migrate();
     }
 
     public function payload(array $feedVersion = null)
@@ -539,6 +557,21 @@ class ChatRepository
         return $agent;
     }
 
+    public function authenticateLegacy($token)
+    {
+        $agent = $this->authenticate($token);
+        if (!$agent) {
+            return null;
+        }
+        $defaultProjectId = $this->expandedDefaultProjectId();
+        if ($defaultProjectId === null || !Db::tableExists($this->pdo, 'project_agents')) {
+            return $agent;
+        }
+        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM project_agents WHERE project_id = ? AND agent_id = ?');
+        $statement->execute([$defaultProjectId, (int) $agent['id']]);
+        return (int) $statement->fetchColumn() === 1 ? $agent : null;
+    }
+
     public function createEntry(array $agent, array $input)
     {
         $body = trim((string) (isset($input['body']) ? $input['body'] : ''));
@@ -575,6 +608,8 @@ class ChatRepository
             foreach ($targetIds as $targetId) {
                 $this->insertRecipient($entryId, $targetId, $now);
             }
+
+            $this->mirrorLegacyEntryCreate($entryId, $agent, $targetIds, $now);
 
             $this->audit($agent, 'create_entry', true, 'Created entry ' . $entryId);
             $this->pdo->commit();
@@ -613,6 +648,7 @@ class ChatRepository
             }
             $update = $this->pdo->prepare('UPDATE chat_entries SET body = ?, updated_at = ? WHERE id = ?');
             $update->execute([$body, $now, $entryId]);
+            $this->mirrorLegacyEntryUpdate($entryId, $agent, $entry['body'], $body, $now);
             $this->audit($agent, 'update_entry', true, 'Updated entry ' . $entryId);
             $this->pdo->commit();
         } catch (Exception $exception) {
@@ -635,9 +671,18 @@ class ChatRepository
         }
 
         $now = Db::now();
-        $statement = $this->pdo->prepare('UPDATE chat_entries SET deleted_at = ?, updated_at = ? WHERE id = ?');
-        $statement->execute([$now, $now, $entryId]);
-        $this->audit($agent, 'delete_entry', true, 'Deleted entry ' . $entryId);
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare('UPDATE chat_entries SET deleted_at = ?, updated_at = ? WHERE id = ?');
+            $statement->execute([$now, $now, $entryId]);
+            $this->mirrorLegacyEntryDelete($entryId, $now);
+            $this->audit($agent, 'delete_entry', true, 'Deleted entry ' . $entryId);
+            $this->pdo->commit();
+        } catch (Exception $exception) {
+            $this->pdo->rollBack();
+            $this->audit($agent, 'delete_entry', false, $exception->getMessage());
+            throw $exception;
+        }
 
         return true;
     }
@@ -761,7 +806,7 @@ class ChatRepository
         $statement = $this->pdo->prepare(
             'UPDATE chat_agents
              SET token_prefix = ?, token_hash = ?, token_secret_version = ?, claim_prefix = NULL, claim_hash = NULL,
-                 claim_secret_version = NULL, claimed_at = ?, updated_at = ?
+                 claim_secret_version = NULL, claim_expires_at = NULL, claimed_at = ?, updated_at = ?
              WHERE id = ?'
         );
         $statement->execute([$prefix, Db::hashToken($token), 'primary', $now, $now, $agentId]);
@@ -789,13 +834,15 @@ class ChatRepository
         $claimCode = $this->makeSecret('pbbclaim', $projectName);
         $prefix = substr($claimCode, 0, 24);
         $now = Db::now();
-        $statement = $this->pdo->prepare('UPDATE chat_agents SET claim_prefix = ?, claim_hash = ?, claim_secret_version = ?, updated_at = ? WHERE id = ?');
-        $statement->execute([$prefix, Db::hashToken($claimCode), 'primary', $now, $agent['id']]);
+        $expiresAt = date('Y-m-d H:i:s', time() + 900);
+        $statement = $this->pdo->prepare('UPDATE chat_agents SET claim_prefix = ?, claim_hash = ?, claim_secret_version = ?, claim_expires_at = ?, updated_at = ? WHERE id = ?');
+        $statement->execute([$prefix, Db::hashToken($claimCode), 'primary', $expiresAt, $now, $agent['id']]);
 
         return [
             'project_name' => $projectName,
             'claim_prefix' => $prefix,
             'claim_code' => $claimCode,
+            'expires_at' => $expiresAt,
         ];
     }
 
@@ -834,6 +881,9 @@ class ChatRepository
         if (empty($agent['claim_hash'])) {
             throw new RuntimeException('No claim code is active for this agent. Ask the operator for a claim code.');
         }
+        if (!empty($agent['claim_expires_at']) && strtotime($agent['claim_expires_at']) <= time()) {
+            throw new RuntimeException('Claim code has expired. Ask the operator for a new claim code.');
+        }
         $claimMatches = hash_equals($agent['claim_hash'], Db::hashToken($claimCode));
         if (!$claimMatches) {
             $previousHash = Db::hashTokenWithPreviousSecret($claimCode);
@@ -849,7 +899,7 @@ class ChatRepository
         $statement = $this->pdo->prepare(
             'UPDATE chat_agents
              SET token_prefix = ?, token_hash = ?, token_secret_version = ?, claim_prefix = NULL, claim_hash = NULL,
-                 claim_secret_version = NULL, claimed_at = ?, updated_at = ?
+                 claim_secret_version = NULL, claim_expires_at = NULL, claimed_at = ?, updated_at = ?
              WHERE id = ? AND token_hash IS NULL'
         );
         $statement->execute([$prefix, Db::hashToken($token), 'primary', $now, $now, $agent['id']]);
@@ -994,6 +1044,9 @@ class ChatRepository
         if (!Db::columnExists($this->pdo, 'chat_agents', 'claimed_at')) {
             $this->pdo->exec('ALTER TABLE chat_agents ADD claimed_at DATETIME NULL AFTER last_used_at');
         }
+        if (!Db::columnExists($this->pdo, 'chat_agents', 'claim_expires_at')) {
+            $this->pdo->exec('ALTER TABLE chat_agents ADD claim_expires_at DATETIME NULL AFTER claim_hash');
+        }
     }
 
     private function ensureCredentialVersionColumns()
@@ -1134,6 +1187,123 @@ class ChatRepository
         }
 
         throw new RuntimeException('Secure random byte generation is unavailable.');
+    }
+
+    private function mirrorLegacyEntryCreate($entryId, array $agent, array $targetAgentIds, $now)
+    {
+        $projectId = $this->expandedDefaultProjectId();
+        if ($projectId === null) {
+            return;
+        }
+        $participant = $this->pdo->prepare(
+            "SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ? AND kind = 'agent' AND status = 'active'"
+        );
+        $participant->execute([$projectId, (int) $agent['id']]);
+        $senderParticipantId = $participant->fetchColumn();
+        if ($senderParticipantId === false) {
+            throw new RuntimeException('Legacy sender is not mapped to the default project.');
+        }
+        $entry = $this->pdo->prepare('SELECT entry_uuid, body, created_at, updated_at, deleted_at FROM chat_entries WHERE id = ?');
+        $entry->execute([(int) $entryId]);
+        $row = $entry->fetch();
+        if (!$row) {
+            return;
+        }
+        $this->pdo->prepare('INSERT IGNORE INTO project_message_sequences (project_id, next_sequence) VALUES (?, 1)')->execute([$projectId]);
+        $sequenceRow = $this->pdo->prepare('SELECT next_sequence FROM project_message_sequences WHERE project_id = ? FOR UPDATE');
+        $sequenceRow->execute([$projectId]);
+        $sequence = (int) $sequenceRow->fetchColumn();
+        $this->pdo->prepare('UPDATE project_message_sequences SET next_sequence = ? WHERE project_id = ?')->execute([$sequence + 1, $projectId]);
+        $insert = $this->pdo->prepare(
+            'INSERT INTO messages
+             (message_uuid, legacy_entry_id, project_id, project_sequence, sender_participant_id, body, created_at, updated_at, deleted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $insert->execute([$row['entry_uuid'], (int) $entryId, $projectId, $sequence, (int) $senderParticipantId,
+            $row['body'], $row['created_at'], $row['updated_at'], $row['deleted_at']]);
+        $messageId = (int) $this->pdo->lastInsertId();
+        if ($messageId < 1) {
+            return;
+        }
+        $add = $this->pdo->prepare('INSERT IGNORE INTO message_addressees (message_id, participant_id, reason, created_at) VALUES (?, ?, ?, ?)');
+        if (!empty($targetAgentIds)) {
+            $targetParticipant = $this->pdo->prepare(
+                "SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ? AND kind = 'agent' AND status = 'active'"
+            );
+            foreach ($targetAgentIds as $targetAgentId) {
+                $targetParticipant->execute([$projectId, (int) $targetAgentId]);
+                $targetParticipantId = $targetParticipant->fetchColumn();
+                if ($targetParticipantId !== false) {
+                    $add->execute([$messageId, (int) $targetParticipantId, 'direct', $now]);
+                } else {
+                    throw new RuntimeException('Legacy target is not mapped to the default project.');
+                }
+            }
+        } else {
+            $all = $this->pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND status = 'active' AND id <> ?");
+            $all->execute([$projectId, (int) $senderParticipantId]);
+            foreach ($all->fetchAll(PDO::FETCH_COLUMN) as $targetParticipantId) {
+                $add->execute([$messageId, (int) $targetParticipantId, 'broadcast', $now]);
+            }
+        }
+        $settings = new SettingsService($this->pdo);
+        if ($settings->get('realtime.enabled') === true) {
+            $access = ['project_id' => $projectId, 'participant_id' => (int) $senderParticipantId, 'role' => 'agent'];
+            $message = (new ProjectRepository($this->pdo))->message($access, $messageId);
+            (new MessageOutbox($this->pdo))->enqueueMessageCreated($projectId, $messageId, $sequence, $message);
+        }
+        if (!isset($message)) {
+            $access = ['project_id' => $projectId, 'participant_id' => (int) $senderParticipantId, 'role' => 'agent'];
+            $message = (new ProjectRepository($this->pdo))->message($access, $messageId);
+        }
+        (new AgentWebhookService($this->pdo))->enqueueMessageCreated($projectId, $messageId, $message);
+    }
+
+    private function mirrorLegacyEntryUpdate($entryId, array $agent, $previousBody, $newBody, $now)
+    {
+        if ($previousBody === $newBody || $this->expandedDefaultProjectId() === null) {
+            return;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT m.id, pp.id AS editor_participant_id FROM messages m
+             JOIN project_participants pp ON pp.project_id = m.project_id AND pp.agent_id = ?
+             WHERE m.legacy_entry_id = ? LIMIT 1'
+        );
+        $statement->execute([(int) $agent['id'], (int) $entryId]);
+        $row = $statement->fetch();
+        if (!$row) {
+            return;
+        }
+        $legacyRevision = $this->pdo->prepare(
+            'SELECT id FROM chat_entry_revisions WHERE entry_id = ? AND edited_by_agent_id = ? AND edited_at = ? ORDER BY id DESC LIMIT 1'
+        );
+        $legacyRevision->execute([(int) $entryId, (int) $agent['id'], $now]);
+        $legacyRevisionId = $legacyRevision->fetchColumn();
+        $this->pdo->prepare(
+            'INSERT INTO message_revisions (legacy_revision_id, message_id, editor_participant_id, previous_body, new_body, edited_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$legacyRevisionId === false ? null : (int) $legacyRevisionId, $row['id'], $row['editor_participant_id'], $previousBody, $newBody, $now]);
+        $this->pdo->prepare('UPDATE messages SET body = ?, updated_at = ? WHERE id = ?')->execute([$newBody, $now, $row['id']]);
+    }
+
+    private function mirrorLegacyEntryDelete($entryId, $now)
+    {
+        if ($this->expandedDefaultProjectId() === null) {
+            return;
+        }
+        $this->pdo->prepare('UPDATE messages SET deleted_at = ?, updated_at = ? WHERE legacy_entry_id = ?')
+            ->execute([$now, $now, (int) $entryId]);
+    }
+
+    private function expandedDefaultProjectId()
+    {
+        if (!Db::tableExists($this->pdo, 'system_settings') || !Db::tableExists($this->pdo, 'messages')) {
+            return null;
+        }
+        $statement = $this->pdo->prepare("SELECT value_json FROM system_settings WHERE setting_key = 'migration.default_project_id'");
+        $statement->execute();
+        $value = $statement->fetchColumn();
+        $projectId = $value === false ? 0 : (int) json_decode($value, true);
+        return $projectId > 0 ? $projectId : null;
     }
 
     private function audit($agent, $action, $success, $message)

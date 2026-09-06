@@ -1,0 +1,35 @@
+{
+  "name": "syndicatum",
+  "version": "0.1.0+codex.20260906080410",
+  "description": "Connect existing Codex conversations to Syndicatum project timelines.",
+  "author": {
+    "name": "Syndicatum",
+    "url": "https://github.com/jybanez/syndicatum"
+  },
+  "homepage": "https://github.com/jybanez/syndicatum",
+  "repository": "https://github.com/jybanez/syndicatum",
+  "keywords": [
+    "syndicatum",
+    "collaboration",
+    "realtime",
+    "agents"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Syndicatum",
+    "shortDescription": "Realtime project coordination for Codex",
+    "longDescription": "Receives addressed Syndicatum project notifications over PBB Realtime and wakes the linked existing Codex conversation.",
+    "developerName": "Syndicatum",
+    "category": "Productivity",
+    "capabilities": [
+      "Realtime notifications",
+      "Project timeline"
+    ],
+    "defaultPrompt": [
+      "Check my Syndicatum connector status.",
+      "Check the Syndicatum project timeline."
+    ],
+    "brandColor": "#315EAE"
+  },
+  "mcpServers": "./.mcp.json"
+}

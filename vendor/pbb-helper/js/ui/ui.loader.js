@@ -1,14 +1,31 @@
 const UI_TOKENS_CSS = "../../css/ui/ui.tokens.css";
 const UI_COMPONENTS_CSS = "../../css/ui/ui.components.css";
 const INCIDENT_BASE_CSS = "../../css/incident/incident.css";
-const UI_OVERLAY_ROUTING_REV = "0.21.87";
-const UI_AUDIO_REV = "0.21.60";
-const UI_ICONS_REV = "0.21.84";
-const UI_PASSWORD_REV = "0.21.64";
+const UI_OVERLAY_ROUTING_REV = "0.21.118";
+const UI_AUDIO_REV = "0.21.62";
+const UI_ICONS_REV = "0.21.118";
+const UI_FILE_INPUT_REV = "0.21.108";
+const UI_CHAT_REV = "0.21.120";
+const UI_PASSWORD_REV = "0.21.66";
+const UI_PROPERTY_VIEWER_REV = "0.21.1";
+const UI_DATE_REV = "0.21.3";
+const UI_NAV_REV = "0.21.3";
+const UI_MEDIA_REV = "0.21.3";
+const UI_PDF_REV = "0.21.1";
+const UI_TABS_REV = "0.21.1";
+const UI_SPLITTER_REV = "0.21.1";
 const UI_DEVICE_PRIMER_REV = "0.21.65";
-const UI_BUNDLE_REV = "0.21.90";
+const UI_GAME_REV = "0.21.112";
+const UI_INSPECTION_REV = "0.21.1";
+const UI_TIMELINE_REV = "0.21.1";
+const UI_BUNDLE_REV = "0.21.172";
+const UI_GAME_BUNDLE_REV = "0.21.119";
+const UI_INSPECTION_BUNDLE_REV = "0.21.1";
 const UI_BUNDLE_JS = `../../dist/helpers.ui.bundle.min.js?v=${UI_BUNDLE_REV}`;
 const UI_BUNDLE_CSS = `../../dist/helpers.ui.bundle.min.css?v=${UI_BUNDLE_REV}`;
+const UI_GAME_BUNDLE_JS = `../../dist/helpers.game.bundle.min.js?v=${UI_GAME_BUNDLE_REV}`;
+const UI_GAME_BUNDLE_CSS = `../../dist/helpers.game.bundle.min.css?v=${UI_GAME_BUNDLE_REV}`;
+const UI_INSPECTION_BUNDLE_JS = `../../dist/helpers.inspection.bundle.min.js?v=${UI_INSPECTION_BUNDLE_REV}`;
 
 export const DEFAULT_COMPONENT_REGISTRY = {
   "ui.dom": {
@@ -149,6 +166,12 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     deps: [],
     export: "createPathPicker",
   },
+  "ui.file.input": {
+    js: `./ui.file.input.js?v=${UI_FILE_INPUT_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", `../../css/ui/ui.file.input.css?v=${UI_FILE_INPUT_REV}`],
+    deps: ["ui.icons"],
+    export: "createFileInput",
+  },
   "ui.number.stepper": {
     js: "./ui.number.stepper.js",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.number.stepper.css"],
@@ -184,6 +207,30 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     css: [],
     deps: [],
     export: "fieldGroupPresets",
+  },
+  "ui.field.group.schema": {
+    js: "./ui.field.group.schema.js",
+    css: [],
+    deps: [],
+    export: null,
+  },
+  "ui.inspection.core": {
+    js: `./ui.inspection.js?v=${UI_INSPECTION_REV}`,
+    css: [],
+    deps: ["ui.field.group", "ui.field.group.schema"],
+    export: null,
+  },
+  "ui.inspection.presets": {
+    js: `./ui.inspection.js?v=${UI_INSPECTION_REV}`,
+    css: [],
+    deps: ["ui.field.group", "ui.field.group.schema"],
+    export: "inspectionFieldGroupPresets",
+  },
+  "ui.inspection.snapshot": {
+    js: `./ui.inspection.js?v=${UI_INSPECTION_REV}`,
+    css: [],
+    deps: ["ui.field.group.schema"],
+    export: "resolveInspectionPresetSnapshot",
   },
   "ui.device.primer": {
     js: `./ui.device.primer.js?v=${UI_DEVICE_PRIMER_REV}`,
@@ -263,6 +310,12 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     deps: ["ui.toggle.button", "ui.select", "ui.password"],
     export: "createPropertyEditor",
   },
+  "ui.property.viewer": {
+    js: `./ui.property.viewer.js?v=${UI_PROPERTY_VIEWER_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.property.viewer.css?v=${UI_PROPERTY_VIEWER_REV}`],
+    deps: [],
+    export: "createPropertyViewer",
+  },
   "ui.select": {
     js: "./ui.select.js",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.select.css"],
@@ -287,10 +340,16 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     deps: ["ui.toggle.button"],
     export: "createToggleGroup",
   },
-  "ui.datepicker": {
-    js: "./ui.datepicker.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.datepicker.css"],
+  "ui.calendar": {
+    js: `./ui.calendar.js?v=${UI_DATE_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.calendar.css?v=${UI_DATE_REV}`],
     deps: [],
+    export: "createCalendar",
+  },
+  "ui.datepicker": {
+    js: `./ui.datepicker.js?v=${UI_DATE_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.calendar.css?v=${UI_DATE_REV}`, `../../css/ui/ui.datepicker.css?v=${UI_DATE_REV}`],
+    deps: ["ui.calendar"],
     export: "createDatepicker",
   },
   "ui.elapsed.time": {
@@ -329,6 +388,42 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     deps: ["ui.icons"],
     export: "createIconGrid",
   },
+  "ui.game.core": {
+    js: `./ui.game.core.js?v=${UI_GAME_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", `../../css/ui/ui.game.core.css?v=${UI_GAME_REV}`],
+    deps: ["ui.icons"],
+    export: null,
+  },
+  "ui.game.objects": {
+    js: `./ui.game.objects.js?v=${UI_GAME_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS],
+    deps: [],
+    export: null,
+  },
+  "ui.game.grid": {
+    js: `./ui.game.grid.js?v=${UI_GAME_REV}`,
+    css: [],
+    deps: [],
+    export: null,
+  },
+  "ui.game.audio": {
+    js: `./ui.game.audio.js?v=${UI_GAME_REV}`,
+    css: [],
+    deps: [],
+    export: null,
+  },
+  "ui.game.effects": {
+    js: `./ui.game.effects.js?v=${UI_GAME_REV}`,
+    css: [],
+    deps: [],
+    export: null,
+  },
+  "ui.game.state.chrome": {
+    js: `./ui.game.state.chrome.js?v=${UI_GAME_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", `../../css/ui/ui.game.state.chrome.css?v=${UI_GAME_REV}`],
+    deps: ["ui.icons", "ui.game.core"],
+    export: null,
+  },
   "ui.map.controls": {
     js: "./ui.map.controls.js",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.map.controls.css"],
@@ -359,9 +454,15 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     deps: [],
     export: null,
   },
+  "ui.chart.xy": {
+    js: "./ui.chart.xy.js",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chart.xy.css"],
+    deps: [],
+    export: "createXyChart",
+  },
   "ui.timeline": {
-    js: "./ui.timeline.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.timeline.css"],
+    js: `./ui.timeline.js?v=${UI_TIMELINE_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.timeline.css?v=${UI_TIMELINE_REV}`],
     deps: [],
     export: "createTimeline",
   },
@@ -403,7 +504,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
   },
   "ui.splitter": {
     js: "./ui.splitter.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.splitter.css"],
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.splitter.css?v=${UI_SPLITTER_REV}`],
     deps: [],
     export: "createSplitter",
   },
@@ -444,8 +545,8 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createFileUploader",
   },
   "ui.chat.thread": {
-    js: "./ui.chat.thread.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css", "../../css/ui/ui.chat.thread.css", "../../css/ui/ui.media.strip.css", "../../css/ui/ui.media.viewer.css"],
+    js: `./ui.chat.thread.js?v=${UI_CHAT_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css", `../../css/ui/ui.chat.thread.css?v=${UI_CHAT_REV}`, `../../css/ui/ui.media.strip.css?v=${UI_MEDIA_REV}`, `../../css/ui/ui.media.viewer.css?v=${UI_MEDIA_REV}`],
     deps: ["ui.media.strip", "ui.menu"],
     export: "createChatThread",
   },
@@ -457,12 +558,12 @@ export const DEFAULT_COMPONENT_REGISTRY = {
   },
   "ui.chat.upload.queue": {
     js: "./ui.chat.upload.queue.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.upload.queue.css", "../../css/ui/ui.media.strip.css", "../../css/ui/ui.media.viewer.css"],
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.upload.queue.css", `../../css/ui/ui.media.strip.css?v=${UI_MEDIA_REV}`, `../../css/ui/ui.media.viewer.css?v=${UI_MEDIA_REV}`],
     deps: ["ui.media.strip"],
     export: "createChatUploadQueue",
   },
   "ui.tabs": {
-    js: "./ui.tabs.js",
+    js: `./ui.tabs.js?v=${UI_TABS_REV}`,
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.tabs.css"],
     deps: [],
     export: "createTabs",
@@ -474,16 +575,22 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createStrip",
   },
   "ui.media.strip": {
-    js: "./ui.media.strip.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.media.strip.css"],
+    js: `./ui.media.strip.js?v=${UI_MEDIA_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.media.strip.css?v=${UI_MEDIA_REV}`],
     deps: ["ui.media.viewer"],
     export: "createMediaStrip",
   },
   "ui.media.viewer": {
-    js: "./ui.media.viewer.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.media.viewer.css"],
+    js: `./ui.media.viewer.js?v=${UI_MEDIA_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.media.viewer.css?v=${UI_MEDIA_REV}`],
     deps: ["ui.audio.audiograph"],
     export: "createMediaViewer",
+  },
+  "ui.pdf.viewer": {
+    js: `./ui.pdf.viewer.js?v=${UI_PDF_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.pdf.viewer.css?v=${UI_PDF_REV}`],
+    deps: [],
+    export: "createPdfViewer",
   },
   "ui.grid": {
     js: "./ui.grid.js",
@@ -522,38 +629,38 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createScheduler",
   },
   "ui.menu": {
-    js: "./ui.menu.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css"],
+    js: `./ui.menu.js?v=${UI_NAV_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: [],
     export: "createMenu",
   },
   "ui.dropdown": {
-    js: "./ui.dropdown.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css"],
+    js: `./ui.dropdown.js?v=${UI_NAV_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: ["ui.menu"],
     export: "createDropdown",
   },
   "ui.dropup": {
-    js: "./ui.dropup.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css"],
+    js: `./ui.dropup.js?v=${UI_NAV_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: ["ui.menu"],
     export: "createDropup",
   },
   "ui.navbar": {
-    js: "./ui.navbar.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css"],
+    js: `./ui.navbar.js?v=${UI_NAV_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: ["ui.dropdown"],
     export: "createNavbar",
   },
   "ui.sidebar": {
-    js: "./ui.sidebar.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css"],
+    js: `./ui.sidebar.js?v=${UI_NAV_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: [],
     export: "createSidebar",
   },
   "ui.breadcrumbs": {
-    js: "./ui.breadcrumbs.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.nav.css"],
+    js: `./ui.breadcrumbs.js?v=${UI_NAV_REV}`,
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: [],
     export: "createBreadcrumbs",
   },
@@ -594,10 +701,11 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       UI_COMPONENTS_CSS,
       INCIDENT_BASE_CSS,
       "../../css/incident/incident.base.css",
+      "../../css/ui/ui.icons.css",
       "../../css/incident/incident.teams.assignments.css",
       "../../css/incident/incident.teams.assignments.editor.css",
     ],
-    deps: ["incident.base"],
+    deps: ["incident.base", "ui.icons"],
     export: "incidentTeamsAssignmentsEditor",
   },
   "incident.teams.assignments.viewer": {
@@ -620,11 +728,12 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       UI_COMPONENTS_CSS,
       INCIDENT_BASE_CSS,
       "../../css/incident/incident.base.css",
+      "../../css/ui/ui.icons.css",
       "../../css/incident/incident.teams.assignments.css",
       "../../css/incident/incident.teams.assignments.editor.css",
       "../../css/incident/incident.teams.assignments.viewer.css",
     ],
-    deps: ["incident.base", "incident.teams.assignments.editor", "incident.teams.assignments.viewer"],
+    deps: ["incident.base", "ui.icons", "incident.teams.assignments.editor", "incident.teams.assignments.viewer"],
     export: "incidentTeamsAssignments",
   },
   "incident.types.details.editor": {
@@ -699,6 +808,7 @@ export const DEFAULT_COMPONENT_GROUPS = {
     "ui.form.modal.reason",
     "ui.password",
     "ui.path.picker",
+    "ui.file.input",
     "ui.checkbox",
     "ui.checkbox.group",
     "ui.combobox",
@@ -706,6 +816,7 @@ export const DEFAULT_COMPONENT_GROUPS = {
     "ui.field.group.presets",
     "ui.fieldset",
     "ui.property.editor",
+    "ui.property.viewer",
     "ui.device.selector",
     "ui.device.selector.media",
     "ui.select",
@@ -722,6 +833,7 @@ export const DEFAULT_COMPONENT_GROUPS = {
   ],
   data: [
     "ui.grid",
+    "ui.calendar",
     "ui.tree.grid",
     "ui.hierarchy.map",
     "ui.tree.mind.map",
@@ -739,6 +851,7 @@ export const DEFAULT_COMPONENT_GROUPS = {
     "ui.map.markers",
     "ui.map.drawing",
     "ui.charts",
+    "ui.chart.xy",
     "ui.timeline",
     "ui.activity.chart",
     "ui.timeline.scrubber",
@@ -753,6 +866,19 @@ export const DEFAULT_COMPONENT_GROUPS = {
     "ui.audio.audiograph",
     "ui.audio.timeline",
     "ui.audio.callSession",
+  ],
+  games: [
+    "ui.game.core",
+    "ui.game.objects",
+    "ui.game.grid",
+    "ui.game.audio",
+    "ui.game.effects",
+    "ui.game.state.chrome",
+  ],
+  inspection: [
+    "ui.inspection.core",
+    "ui.inspection.presets",
+    "ui.inspection.snapshot",
   ],
   workflow: [
     "ui.command.palette",
@@ -776,10 +902,23 @@ const DEFAULT_LOADER_OPTIONS = {
   debug: false,
   preferBundles: false,
   bundles: {
+    game: {
+      prefixes: ["ui.game."],
+      js: UI_GAME_BUNDLE_JS,
+      css: [UI_GAME_BUNDLE_CSS],
+      globalName: "__PBB_HELPER_GAME_BUNDLE__",
+    },
+    inspection: {
+      prefixes: ["ui.inspection."],
+      js: UI_INSPECTION_BUNDLE_JS,
+      css: [],
+      globalName: "__PBB_HELPER_INSPECTION_BUNDLE__",
+    },
     ui: {
       prefixes: ["ui.", "incident."],
       js: UI_BUNDLE_JS,
       css: [UI_BUNDLE_CSS],
+      globalName: "__PBB_HELPER_UI_BUNDLE__",
     },
   },
 };
@@ -810,6 +949,7 @@ export function createUiLoader(initialRegistry = DEFAULT_COMPONENT_REGISTRY, con
           prefixes,
           js: String(bundle.js || ""),
           css: uniqueStrings(bundle.css),
+          globalName: String(bundle.globalName || ""),
         };
       }
     }
@@ -875,6 +1015,7 @@ export function createUiLoader(initialRegistry = DEFAULT_COMPONENT_REGISTRY, con
       await Promise.all(entry.deps.map((depName) => ensureStyles(depName, options)));
     }
     if (bundle) {
+      assertBundleCanServeStyles(name, entry, bundle);
       await Promise.all(bundle.css.map((path) => ensureStyleHref(path, parent, { bundleId: bundle.id })));
       debugLog("ensureStyles.bundle", { name, bundle: bundle.id, cssCount: bundle.css.length });
       return entry;
@@ -928,6 +1069,7 @@ export function createUiLoader(initialRegistry = DEFAULT_COMPONENT_REGISTRY, con
       }
       const bundle = resolveBundle(name, entry, options);
       if (bundle) {
+        assertBundleCanServeModule(name, entry, bundle);
         const module = await importBundleComponent(bundle, entry);
         failedModules.delete(name);
         debugLog("import.bundle", { name, bundle: bundle.id, export: entry.export || null });
@@ -964,13 +1106,34 @@ export function createUiLoader(initialRegistry = DEFAULT_COMPONENT_REGISTRY, con
     return module;
   }
 
+  function assertBundleCanServeStyles(name, entry, bundle) {
+    if (!entry.css.length || bundle.css.length) {
+      return;
+    }
+    throw new Error(`uiLoader bundle "${bundle.id}" is selected for "${name}" but does not declare bundle CSS.`);
+  }
+
+  function assertBundleCanServeModule(name, entry, bundle) {
+    if (bundle.js) {
+      return;
+    }
+    throw new Error(`uiLoader bundle "${bundle.id}" is selected for "${name}" but does not declare bundle JavaScript.`);
+  }
+
   async function ensureBundleModuleMap(bundle) {
     if (bundlePromises.has(bundle.id)) {
       return bundlePromises.get(bundle.id);
     }
+    const globalModules = getBundleGlobalModules(bundle);
+    if (globalModules) {
+      const promise = Promise.resolve(globalModules);
+      bundlePromises.set(bundle.id, promise);
+      debugLog("bundle.global", { bundle: bundle.id });
+      return promise;
+    }
     const promise = import(toAbsoluteUrl(bundle.js))
       .then((module) => {
-        const exportsMap = module?.helperUiBundleModules || module?.default || null;
+        const exportsMap = module?.helperInspectionBundleModules || module?.helperGameBundleModules || module?.helperUiBundleModules || module?.default || null;
         if (!exportsMap || typeof exportsMap !== "object") {
           throw new Error(`uiLoader bundle "${bundle.id}" did not expose a module map.`);
         }
@@ -1217,9 +1380,18 @@ function cloneBundles(bundles) {
       prefixes: uniqueStrings(bundle?.prefixes),
       js: String(bundle?.js || ""),
       css: uniqueStrings(bundle?.css),
+      globalName: String(bundle?.globalName || ""),
     };
   }
   return out;
+}
+
+function getBundleGlobalModules(bundle) {
+  if (typeof window === "undefined" || !bundle?.globalName) {
+    return null;
+  }
+  const modules = window[bundle.globalName];
+  return modules && typeof modules === "object" ? modules : null;
 }
 
 function createFailureRecord({ kind, id, path, error }) {

@@ -5,7 +5,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 
 try {
-    $repository = new ChatRepository(Db::pdo());
+    $pdo = Db::pdo(); Api::enforceLegacyPolicy($pdo); $repository = new ChatRepository($pdo);
     if (!$repository->hasSchema()) {
         Api::json(['error' => true, 'message' => 'Chat database schema is not installed.'], 503);
     }
