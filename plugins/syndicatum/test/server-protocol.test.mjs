@@ -37,6 +37,7 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     "connector_restart",
     "connector_background_status",
     "connector_background_install",
+    "connector_link_discussion",
     "connector_configure_agent",
   ]);
   child.kill(); await once(child, "close");

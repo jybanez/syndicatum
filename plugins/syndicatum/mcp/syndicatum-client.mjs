@@ -39,12 +39,17 @@ export class SyndicatumClient {
 export class DeviceSyndicatumClient {
   constructor(config, fetchImpl = fetch) { this.config = config; this.fetch = fetchImpl; }
   async bindings() { return this.request("/api/v1/connector-bindings.php").then(result => result.data ?? {}); }
+  async configureBinding(binding) { return this.request("/api/v1/connector-bindings.php", { method: "PUT", body: JSON.stringify(binding) }).then(result => result.data ?? {}); }
   async admission(projectId) { return this.request(`/api/v1/connector-realtime-admission.php?project_id=${encodeURIComponent(projectId)}`).then(result => result.data ?? {}); }
   async request(relativePath, options = {}) {
     const url = new URL(relativePath, `${this.config.syndicatumUrl}/`);
     const response = await requestFetch(this.fetch, url, { ...options, headers: { Authorization: `Bearer ${this.config.token}`, Accept: "application/json", "Content-Type": "application/json", ...(options.headers ?? {}) } });
     const body = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(`Syndicatum request failed: ${body?.message || body?.code || `HTTP ${response.status}`}`);
+    if (!response.ok) {
+      const error = new Error(`Syndicatum request failed: ${body?.message || body?.code || `HTTP ${response.status}`}`);
+      error.status = response.status;
+      throw error;
+    }
     return body ?? {};
   }
   static async begin(syndicatumUrl, deviceName, fetchImpl = fetch) {

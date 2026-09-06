@@ -30,6 +30,7 @@ export function pluginPaths(env = process.env, platform = process.platform) {
     listenerLock: path.join(root, "listener.lock"),
     backgroundLock: path.join(root, "background.lock"),
     backgroundMetadata: path.join(root, "background.json"),
+    backgroundHealth: path.join(root, "background-health.json"),
     backgroundRuntime: path.join(root, "runtime"),
     backgroundLauncher: path.join(root, "background-launcher.ps1"),
     launchAgent: path.join(home, "Library", "LaunchAgents", "ph.pbb.syndicatum.codex-connector.plist"),

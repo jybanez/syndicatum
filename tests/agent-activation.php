@@ -40,9 +40,15 @@ try {
         $suite->same('', $binding['conversation_id']);
     });
 
-    $suite->test('enabled activation requires an existing conversation id and absolute working directory', function () use ($suite, $service, $project, $agent, $owner) {
+    $suite->test('shared activation can be enabled before a device links its local route', function () use ($suite, $service, $project, $agent, $owner) {
+        $binding = $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
+            'enabled' => true,
+        ]);
+        $suite->same(true, $binding['enabled']);
+        $suite->same(true, $binding['configured']);
+        $suite->same(false, $binding['legacy_route_configured']);
         $suite->throws(function () use ($service, $project, $agent, $owner) {
-            $service->configure($project['id'], $agent['agent_id'], $owner['id'], ['enabled' => true, 'conversation_id' => '', 'working_directory' => 'relative']);
+            $service->configure($project['id'], $agent['agent_id'], $owner['id'], ['enabled' => true, 'conversation_id' => 'bad id', 'working_directory' => 'relative']);
         });
         $binding = $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
             'enabled' => true,
@@ -51,6 +57,7 @@ try {
         ]);
         $suite->same(true, $binding['enabled']);
         $suite->same(true, $binding['configured']);
+        $suite->same(true, $binding['legacy_route_configured']);
         $suite->same('codex', $binding['runtime_type']);
     });
 

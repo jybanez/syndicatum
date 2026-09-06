@@ -16,7 +16,7 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/agent-activation-binding.php?project_id={project}` | GET | `/api/v1/projects/{project}/agent-activation-binding` |
 | `/api/v1/connector-device-authorizations.php` | POST | `/api/v1/connector/device-authorizations` |
 | `/api/v1/connector-device-token.php` | POST | `/api/v1/connector/device-token` |
-| `/api/v1/connector-bindings.php` | GET | `/api/v1/connector/bindings` |
+| `/api/v1/connector-bindings.php` | GET, PUT | `/api/v1/connector/bindings` |
 | `/api/v1/connector-realtime-admission.php?project_id={project}` | GET | `/api/v1/connector/projects/{project}/realtime-admission` |
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.

@@ -54,7 +54,7 @@ Browser-based Syndicatum login compatibility is tracked separately below.
 | Browser device authorization | **Verified** | **Planned acceptance** | **Unsupported** |
 | Protected device credential | **Verified — DPAPI** | **Implemented — Keychain** | **Unsupported — Secret Service pending** |
 | Persistent background connector | **Verified — current-user Scheduled Task** | **Implemented — current-user LaunchAgent** | **Unsupported — user service pending** |
-| Multiple projects, agents, and discussions | **Verified** | **Implemented; acceptance pending** | **Unsupported** |
+| Multiple projects, agents, and discussions | **Implemented; remote-device acceptance pending** | **Implemented; acceptance pending** | **Unsupported** |
 | Existing-conversation notification | **Verified** | **Implemented; acceptance pending** | **Unsupported** |
 | Restart and login persistence | **Verified** | **Implemented; acceptance pending** | **Unsupported** |
 
@@ -110,7 +110,10 @@ Package identity: `codex@syndicatum` (planned rename from the current
 
 - [x] Package a Syndicatum skill and local MCP server as a Codex plugin
 - [x] Authorize a device through the Syndicatum browser flow
-- [x] Discover multiple project, agent, conversation, and working-directory bindings
+- [x] Discover multiple project and agent activation targets
+- [x] Store conversation and working-directory routes per authorized device
+- [x] Link the current Codex task and working directory without manual ID/path entry
+- [x] Skip stale routes and report an explicit authorized-idle state
 - [x] Route PBB Realtime events to the addressed existing Codex conversation
 - [x] Verify repeated end-to-end Windows notification, timeline-read, reply, and acknowledgement cycles
 - [x] Install a persistent per-user Windows background listener without minute polling
@@ -120,7 +123,8 @@ Package identity: `codex@syndicatum` (planned rename from the current
 - [x] Make connector status authoritative across multiple Codex MCP hosts
 - [x] Add process-attributed logs and categorized network failures
 - [ ] Rename the distributable package to `codex@syndicatum` with a controlled migration path
-- [ ] Verify an upgrade on a separately installed Windows device
+- [x] Verify an upgrade on a separately installed Windows device
+- [ ] Verify device-scoped discussion linking and notification on that Windows device
 - [ ] Pass physical Mac installation, authorization, restart, and addressed-message acceptance
 - [ ] Verify Chrome, Edge, Firefox, and Safari authorization behavior where applicable
 - [ ] Add user-facing device listing and revocation
@@ -229,7 +233,7 @@ agent surfaces. GitHub Copilot remains the separate priority-five integration.
 
 | Priority | Integration | Status | Next milestone |
 | ---: | --- | --- | --- |
-| 1 | Codex | In progress | Remote Windows upgrade, then physical Mac acceptance |
+| 1 | Codex | In progress | Remote Windows device-route acceptance, then physical Mac acceptance |
 | 2 | ChatGPT | Planned | Confirm supported surfaces and activation boundary |
 | 3 | Gemini / Gemini CLI | Planned | Scaffold and test a Gemini CLI extension |
 | 4 | Claude / Claude Code | Planned | Validate resumable-session activation |

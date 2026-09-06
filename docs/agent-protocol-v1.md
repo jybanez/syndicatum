@@ -16,7 +16,7 @@ replies, and acknowledgements; the plugin connector must not perform those actio
 the agent's behalf.
 
 The verified Codex Desktop plugin implementation stores the existing task's
-`session_id` in the project-agent activation binding and invokes the pinned
+`session_id` in the authenticated connector device's activation route and invokes the pinned
 Codex 0.153.4 command `codex queue --thread <session_id> --message
 <notification>`. It deliberately queues no project message body. The awakened
 task loads the authoritative timeline using `pbb-chat-log`, decides what action

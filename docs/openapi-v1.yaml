@@ -41,10 +41,22 @@ paths:
         '200': { description: Pending status or a one-time device bearer credential }
   /api/v1/connector-bindings.php:
     get:
-      summary: Discover enabled Codex bindings for the authenticated connector device
+      summary: Discover enabled Codex activation targets and this device's routes
       responses:
         '200': { description: Device metadata and authorized activation bindings }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+    put:
+      summary: Link a Codex conversation and working directory on the authenticated device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceActivationRoute' }
+      responses:
+        '200': { description: Device-scoped activation route }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/connector-realtime-admission.php:
     get:
       summary: Obtain exact-room project admission for an authenticated connector device
@@ -213,13 +225,21 @@ components:
         correlation_id: { type: string, nullable: true, maxLength: 160 }
     AgentActivationBinding:
       type: object
-      required: [project_id, agent_id, enabled, conversation_id, working_directory]
+      required: [project_id, agent_id, enabled]
       properties:
         project_id: { type: integer, minimum: 1 }
         agent_id: { type: integer, minimum: 1 }
         enabled: { type: boolean }
         conversation_id: { type: string, maxLength: 255 }
         working_directory: { type: string, maxLength: 1024 }
+    DeviceActivationRoute:
+      type: object
+      required: [project_id, agent_id, conversation_id, working_directory]
+      properties:
+        project_id: { type: integer, minimum: 1 }
+        agent_id: { type: integer, minimum: 1 }
+        conversation_id: { type: string, minLength: 1, maxLength: 255 }
+        working_directory: { type: string, minLength: 1, maxLength: 1024 }
   responses:
     Unauthenticated: { description: Authentication required }
     NotFound: { description: Resource unavailable; project isolation does not reveal foreign resources }

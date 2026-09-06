@@ -41,10 +41,25 @@ export class BackgroundServiceManager {
     let metadata = null;
     try { metadata = JSON.parse(await readFile(this.files.backgroundMetadata, "utf8")); }
     catch (error) { if (error.code !== "ENOENT") throw error; }
+    let health = null;
+    try { health = JSON.parse(await readFile(this.files.backgroundHealth, "utf8")); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
     const running = Boolean(pid && isProcessAlive(pid));
     const ownsListener = Boolean(running && listenerPid === pid);
-    const listenerReason = ownsListener ? "listener_owned" : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : "listener_starting";
-    return { supported: ["win32", "darwin"].includes(this.platform), platform: this.platform, installed: Boolean(metadata), running, ownsListener, listenerReason, pid, listenerPid, readiness: readinessState({ running, ownsListener }), metadata };
+    const currentHealth = running && Number(health?.pid) === pid ? health : null;
+    const readiness = readinessState({ running, ownsListener, health: currentHealth });
+    const listenerReason = ownsListener ? (readiness === "authorized_idle" ? "authorized_without_local_routes" : "listener_owned") : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : readiness === "startup_error" ? "listener_startup_failed" : "listener_starting";
+    return { supported: ["win32", "darwin"].includes(this.platform), platform: this.platform, installed: Boolean(metadata), running, ownsListener, listenerReason, pid, listenerPid, readiness, health: currentHealth, metadata };
+  }
+
+  async restart() {
+    const current = await this.status();
+    if (current.running) await this.stop(current.pid);
+    if (this.platform === "win32") await this.startWindowsLauncher();
+    else if (this.platform === "darwin") await this.registerMacLaunchAgent();
+    else return { supported: false, platform: this.platform, state: "not_available" };
+    const running = await this.waitUntilRunning();
+    return { ...running, supported: true, installed: true, state: readinessState(running) };
   }
 
   async installRuntime(metadata) {
@@ -122,7 +137,7 @@ export class BackgroundServiceManager {
   async waitUntilRunning() {
     for (let attempt = 0; attempt < 200; attempt += 1) {
       const status = await this.status();
-      if (status.running && status.ownsListener) return status;
+      if (status.running && (status.ownsListener || status.readiness === "startup_error")) return status;
       await delay(100);
     }
     return this.status();
@@ -134,7 +149,12 @@ export function windowsTaskArgument(value) { const text = String(value); return 
 export function powershellTaskArguments(file) { return ["-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", windowsTaskArgument(file)].join(" "); }
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function isProcessAlive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error.code === "EPERM"; } }
-function readinessState(status) { return status.running ? (status.ownsListener ? "ready" : "starting_listener") : "stopped"; }
+function readinessState(status) {
+  if (!status.running) return "stopped";
+  if (status.health?.state === "authorized_idle") return "authorized_idle";
+  if (status.health?.state === "error") return "startup_error";
+  return status.ownsListener ? "ready" : "starting_listener";
+}
 function xml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
 
 function run(spawnImpl, command, args, allowedExitCodes = [0]) {

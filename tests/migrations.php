@@ -45,6 +45,12 @@ class MigrationTestSuite
         throw new RuntimeException('Expected the database constraint to reject the write.');
     }
 
+    public function assertThrows(callable $callback)
+    {
+        try { $callback(); } catch (Exception $exception) { return; }
+        throw new RuntimeException('Expected the operation to be rejected.');
+    }
+
     public function finish()
     {
         echo "\n" . $this->passed . ' passed, ' . $this->failed . " failed.\n";
@@ -159,6 +165,48 @@ try {
         $suite->assertSame(1, count($bindings));
         $suite->assertSame('thread-1', $bindings[0]['conversation_id']);
         $suite->assertSame($agentId, $bindings[0]['agent_id']);
+        $suite->assertSame('legacy', $bindings[0]['route_source']);
+
+        $deviceRoute = $service->configureBinding($device, [
+            'project_id' => $projectId,
+            'agent_id' => $agentId,
+            'conversation_id' => 'thread-office',
+            'working_directory' => 'D:\\project',
+        ]);
+        $suite->assertSame('device', $deviceRoute['route_source']);
+        $suite->assertSame('thread-office', $service->bindings($device)[0]['conversation_id']);
+
+        $secondAuthorization = $service->begin(['device_name' => 'Laptop', 'platform' => 'windows']);
+        $service->approve($secondAuthorization['user_code'], ['id' => $userId]);
+        $secondExchange = $service->exchange($secondAuthorization['device_code']);
+        $secondDevice = $service->authenticate($secondExchange['access_token']);
+        $secondBindings = $service->bindings($secondDevice);
+        $suite->assertSame('thread-1', $secondBindings[0]['conversation_id']);
+        $suite->assertSame('legacy', $secondBindings[0]['route_source']);
+
+        $service->configureBinding($secondDevice, [
+            'project_id' => $projectId,
+            'agent_id' => $agentId,
+            'conversation_id' => 'thread-laptop',
+            'working_directory' => 'E:\\project',
+        ]);
+        $suite->assertSame('thread-laptop', $service->bindings($secondDevice)[0]['conversation_id']);
+        $suite->assertSame('thread-office', $service->bindings($device)[0]['conversation_id']);
+
+        $pdo->prepare('INSERT INTO users (normalized_email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+            ->execute(['outsider@example.test', 'Outsider', $now, $now]);
+        $outsiderId = (int) $pdo->lastInsertId();
+        $outsiderAuthorization = $service->begin(['device_name' => 'Outsider PC', 'platform' => 'windows']);
+        $service->approve($outsiderAuthorization['user_code'], ['id' => $outsiderId]);
+        $outsiderExchange = $service->exchange($outsiderAuthorization['device_code']);
+        $outsiderDevice = $service->authenticate($outsiderExchange['access_token']);
+        $suite->assertThrows(function () use ($service, $outsiderDevice, $projectId, $agentId) {
+            $service->configureBinding($outsiderDevice, [
+                'project_id' => $projectId, 'agent_id' => $agentId,
+                'conversation_id' => 'thread-outsider', 'working_directory' => 'C:\\outside',
+            ]);
+        });
+        $suite->assertSame(0, count($service->bindings($outsiderDevice)));
     });
 
     $suite->test('rerunning migrations is idempotent and preserves existing credentials', function () use ($suite, $repository, $pdo, $agentId, $tokenHash, $migrationCount) {

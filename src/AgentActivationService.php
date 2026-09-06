@@ -76,9 +76,6 @@ class AgentActivationService
         if ($enabled === null) { throw new InvalidArgumentException('Activation enabled must be boolean.'); }
         $this->validateConversationId($conversationId);
         $this->validateWorkingDirectory($workingDirectory);
-        if ($enabled && ($conversationId === '' || $workingDirectory === '')) {
-            throw new InvalidArgumentException('Conversation ID and working directory are required when activation is enabled.');
-        }
         return ['enabled' => $enabled, 'conversation_id' => $conversationId, 'working_directory' => $workingDirectory];
     }
 
@@ -92,7 +89,8 @@ class AgentActivationService
             'conversation_id' => $row ? $row['conversation_id'] : '',
             'working_directory' => $row ? $row['working_directory'] : '',
             'enabled' => $row ? (bool) $row['enabled'] : false,
-            'configured' => $row && $row['conversation_id'] !== '' && $row['working_directory'] !== '',
+            'configured' => $row && (bool) $row['enabled'],
+            'legacy_route_configured' => $row && $row['conversation_id'] !== '' && $row['working_directory'] !== '',
             'updated_at' => $row ? $row['updated_at'] : null,
         ];
     }

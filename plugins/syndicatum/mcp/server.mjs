@@ -36,6 +36,21 @@ const tools = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
+    name: "connector_link_discussion",
+    description: "Link this current Codex discussion and working directory to an enabled Syndicatum project agent on this authorized device.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: { type: "string" },
+        agent_id: { type: "string" },
+        agent_name: { type: "string", description: "Exact Syndicatum agent display name. Use this instead of an ID for a simple user-facing link request." },
+        conversation_id: { type: "string", description: "Optional override; defaults to the current Codex task/session ID." },
+        working_directory: { type: "string", description: "Optional override; defaults to the current Codex working directory." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: "connector_configure_agent",
     description: "Configure the local plugin for one existing Syndicatum agent binding. The token is protected locally and never returned.",
     inputSchema: {
@@ -87,6 +102,7 @@ async function callTool(name, args) {
   if (name === "connector_restart") return textResult(await runtime.start());
   if (name === "connector_background_status") return textResult(await runtime.background.status());
   if (name === "connector_background_install") return textResult(await runtime.background.ensureRunning());
+  if (name === "connector_link_discussion") return textResult(await runtime.linkDiscussion({ projectId: args.project_id, agentId: args.agent_id, agentName: args.agent_name, conversationId: args.conversation_id, workingDirectory: args.working_directory }));
   if (name === "connector_configure_agent") {
     const status = await runtime.configure({ syndicatumUrl: args.syndicatum_url, projectId: args.project_id, participantId: args.participant_id, token: args.agent_token });
     return textResult(status);

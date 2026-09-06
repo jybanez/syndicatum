@@ -5,8 +5,8 @@
 The plugin owns the connector. On Windows and macOS, successful device authorization
 installs a plugin-managed per-user background process. That process holds the
 outbound PBB Realtime connection, filters addressed message events, and invokes
-`codex queue` for the existing conversation in the agent's Syndicatum activation
-binding. The bundled MCP server controls and reports on the background process;
+`codex queue` for the existing conversation in that device's activation route.
+The bundled MCP server controls and reports on the background process;
 it is not relied upon as an always-on listener.
 
 Wake-up notifications identify the canonical sender without copying the
@@ -63,11 +63,16 @@ device name such as `Office PC` or `Laptop`. Codex opens the one-time browser
 authorization page. After the user signs in and approves the matching code, the
 page closes and the plugin starts its background listener automatically.
 
-Each PC is authorized as a separate device. Installing and authorizing both an
-office PC and laptop allows both connectors to receive the same project and
-conversation notification when both devices expose that binding. A device can
-also discover and route multiple agents and multiple Codex conversations across
-the user's accessible projects.
+Each PC is authorized as a separate device. In every Codex discussion that should
+receive notifications, ask Codex to “link this discussion to the {agent name}
+Syndicatum agent.” The plugin reads the current Codex task ID and working directory
+from its local runtime and registers that route only for the authorized device.
+No CLI, copied session ID, or manually typed path is required in the normal flow.
+
+Installing and authorizing both an office PC and laptop allows both connectors to
+receive the same project and conversation notification after that discussion is
+linked on both devices. Each device may independently route multiple agents and
+multiple Codex conversations across the user's accessible projects.
 
 Upgrades use the registered Git marketplace:
 
@@ -107,25 +112,35 @@ policy can publish only `connector.authorization.approved` under that prefix.
 The live event contains no device credential or Codex routing details.
 
 The background listener uses the revocable device credential to discover every
-enabled Codex activation binding created by that user. No human password, browser
+enabled Codex activation target created by that user and applies only the local
+routes registered for that device. A pre-device legacy route remains a temporary
+compatibility fallback, but the connector skips it when its directory does not
+exist locally. No human password, browser
 cookie, or project-agent token is copied into a Codex task. The existing
 project-agent credentials remain separate and are used only when an awakened
 agent reads or contributes to its project timeline.
 
 ## Readiness checks
 
-`connector_status` rebuilds its answer from persisted configuration and the live
-background-process locks, so separate Codex windows converge instead of retaining
-stale in-memory pairing results. It reports `ready` only after all of the following succeed:
+`connector_status` rebuilds its answer from persisted configuration, background
+health, and live process locks, so separate Codex windows converge instead of
+retaining stale in-memory pairing results. It reports `ready` only after all of
+the following succeed:
 
 - the device credential loads;
 - authorized activation bindings can be discovered;
-- every discovered binding resolves to an existing directory and conversation;
+- at least one device route resolves to an existing directory and conversation;
 - the Codex executable exposes `codex queue`;
 - the plugin can begin one Realtime connection loop per distinct project.
 
 Use `connector_restart` after correcting a recoverable configuration or
 transport problem.
+
+An authorized device with no usable local routes reports `authorized_idle`, not
+a listener startup failure. Invalid legacy or stale routes are counted and
+skipped without preventing valid routes from starting. Linking a discussion
+restarts the local background connector so the new route becomes active without
+reauthorization or a polling loop.
 
 `connector_background_status` reports installation, process, listener-lock
 ownership, and a reason when the listener is still starting or another process
@@ -163,18 +178,18 @@ development PC without the retired connector:
 - Syndicatum issues a revocable device credential bound to the signed-in human
   account and stores only its hash server-side. Windows protects the local copy
   with DPAPI; macOS protects it in Keychain.
-- One device registration can discover multiple enabled Codex activation
-  bindings across every project the user may access.
-- Every binding identifies one Syndicatum project agent, Codex conversation ID,
-  and absolute working directory. Multiple agents and multiple discussions in
-  the same project are independent bindings.
+- One device registration can discover multiple enabled Codex activation targets
+  across every project the user may access.
+- Every device route identifies one Syndicatum project agent, Codex conversation
+  ID, and absolute working directory. Multiple agents and multiple discussions
+  in the same project are independent routes.
 - The plugin opens at most one Realtime room connection per project and routes
   an addressed message to every matching local binding. It never wakes a
   discussion that is not addressed.
 - A second Codex MCP host on the same device remains standby and cannot create
   duplicate notifications.
 - Two separately authorized devices may hold the same project/discussion
-  binding and both receive the notification.
+  route and both receive the notification.
 - Conversation IDs and working directories remain control-plane data. They are
   never included in timeline messages or ordinary project-visible events.
 - Signing out or revoking a device stops admission and notification delivery
@@ -182,3 +197,8 @@ development PC without the retired connector:
 
 The single-agent `connector_configure_agent` tool and project-scoped token are
 development-only compatibility paths, not the intended user onboarding flow.
+
+`connector_link_discussion` is the normal device-routing action. With one eligible
+agent it needs no target argument. With several, Codex can select by exact agent
+name or by project and agent ID. Explicit conversation and directory overrides
+exist only as a recovery path when the host does not expose the current values.

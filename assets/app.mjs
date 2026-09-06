@@ -820,12 +820,11 @@ function openAddAgentModal() {
     [{ type: "textarea", name: "description", label: "Description" }],
     [{ type: "divider" }], [{ type: "text", content: "Activation connector" }],
     [{ type: "checkbox", name: "activation_enabled", label: "Enable conversation notifications" }],
-    [modalTextField("conversation_id", "Codex conversation ID (session_id)", { placeholder: "01abc...", help: "In Codex, open the conversation menu and choose Copy → Copy session ID." })],
-    [modalTextField("working_directory", "Working directory", { placeholder: "C:\\path\\to\\project", help: "Absolute folder used by the linked Codex conversation on the connector computer." })],
+    [{ type: "text", content: "After creating the agent, ask Codex in each discussion to link this device. Codex supplies its own discussion ID and working directory; they are never posted to the project timeline." }],
     [{ type: "divider" }], [{ type: "text", content: "Optional notification webhook" }],
     [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }], [modalTextField("webhook_url", "Webhook URL", { input: "url", placeholder: "https://agent.example/hooks/syndicatum" })],
   ], async onSubmit(values, context) {
-    try { if (values.activation_enabled && (!String(values.conversation_id || "").trim() || !String(values.working_directory || "").trim())) throw new Error("Conversation ID and working directory are required when conversation notifications are enabled."); if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); setTimeout(() => showAgentCredentialResult(result), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
+    try { if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); setTimeout(() => showAgentCredentialResult(result), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
 }
@@ -877,7 +876,7 @@ async function openEditAgentModal(agent) {
   catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Activation settings unavailable" }); return; } }
   state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
     display_name: agent.display_name, avatar: null,
-    activation_enabled: Boolean(activation.enabled), conversation_id: activation.conversation_id || "", working_directory: activation.working_directory || "",
+    activation_enabled: Boolean(activation.enabled),
     webhook_enabled: Boolean(webhook.enabled), webhook_url: webhook.endpoint_url || webhook.url || "",
   }, extraActionsPlacement: "start", extraActions: [{
     id: "rotate-webhook-secret",
@@ -897,17 +896,15 @@ async function openEditAgentModal(agent) {
     [modalTextField("display_name", "Agent display name", { required: true })],
     [{ type: "divider" }], [{ type: "text", content: "Activation connector" }],
     [{ type: "checkbox", name: "activation_enabled", label: "Enable conversation notifications" }],
-    [modalTextField("conversation_id", "Codex conversation ID (session_id)", { help: "In Codex, open the conversation menu and choose Copy → Copy session ID." })],
-    [modalTextField("working_directory", "Working directory", { placeholder: "C:\\path\\to\\project", help: "Absolute folder used by the linked Codex conversation on the connector computer." })],
+    [{ type: "text", content: "Discussion links are configured independently on every authorized Codex device. In the discussion to link, ask Codex to link it to this Syndicatum agent." }],
     [{ type: "divider" }], [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }],
     [modalTextField("webhook_url", "Webhook URL", { input: "url" })],
   ], async onSubmit(values, context) {
     try {
-      if (values.activation_enabled && (!String(values.conversation_id || "").trim() || !String(values.working_directory || "").trim())) throw new Error("Conversation ID and working directory are required when conversation notifications are enabled.");
       if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled.");
       const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId(), agentId }) : agent.avatar_url;
       await request(API.projectAgents, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name, avatar_url: avatarUrl || null }) });
-      await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), conversation_id: values.conversation_id, working_directory: values.working_directory }) });
+      await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled) }) });
       let webhookResult = {};
       if (values.webhook_enabled || String(values.webhook_url || "").trim() || webhook.endpoint_url) webhookResult = unwrap(await request(API.projectAgentWebhook, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, endpoint_url: values.webhook_url, enabled: Boolean(values.webhook_enabled) }) })) || {};
       setTimeout(() => showAgentCredentialResult(webhookResult), 0);

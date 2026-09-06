@@ -337,6 +337,9 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Limit the connector to notification delivery; keep timeline reading, replies, and acknowledgement with the linked agent and its skill
 - [x] Add project-admin agent-modal controls and agent-authenticated retrieval for the activation binding
 - [x] Make Syndicatum the activation-binding authority with no legacy runtime fallback
+- [x] Separate shared agent activation from device-scoped conversation and working-directory routes
+- [x] Let Codex link its current discussion without manual session-ID or path entry
+- [x] Treat stale routes as skipped/idle instead of failing the entire device listener
 - [x] Verify a real addressed message wakes the linked existing conversation, which then reads and handles the timeline itself
 - [x] Verify the hidden connector rejoins its project room and continues delivery after process restart
 - [x] Verify two independent live cycles through Desktop notification, authoritative timeline read, reply, and acknowledgement (`1555` -> `1556`; `1557` -> `1558`)

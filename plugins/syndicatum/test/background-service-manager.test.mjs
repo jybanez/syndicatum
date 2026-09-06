@@ -44,13 +44,23 @@ test("Windows launcher decrypts the credential before starting the background ru
     execPath: "C:\\Program Files\\nodejs\\node.exe",
     sourceDirectory,
   });
-  await import("node:fs/promises").then(({ mkdir, writeFile }) => Promise.all([
-    mkdir(sourceDirectory, { recursive: true }),
-    writeFile(path.join(sourceDirectory, "background-service.mjs"), "", "utf8"),
-  ]));
+  await mkdir(sourceDirectory, { recursive: true });
+  await writeFile(path.join(sourceDirectory, "background-service.mjs"), "", "utf8");
   await manager.installRuntime({ execPath: manager.execPath, serviceEntry: manager.serviceEntry, sourceDirectory });
   const launcher = await readFile(manager.files.backgroundLauncher, "utf8");
   assert.match(launcher, /ProtectedData\]::Unprotect/);
   assert.match(launcher, /SYNDICATUM_AGENT_TOKEN/);
   assert.match(launcher, /background-service\.mjs/);
+});
+
+test("background status distinguishes an authorized device with no local routes", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-health-"));
+  const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
+  await mkdir(manager.files.root, { recursive: true });
+  await writeFile(manager.files.backgroundLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.listenerLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "authorized_idle", unavailableBindings: 2 }), "utf8");
+  const status = await manager.status();
+  assert.equal(status.readiness, "authorized_idle");
+  assert.equal(status.listenerReason, "authorized_without_local_routes");
 });

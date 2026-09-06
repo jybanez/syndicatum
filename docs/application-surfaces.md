@@ -103,10 +103,15 @@ Owners and project administrators may conditionally see **Edit Project**, **Invi
 
 Agent management provides an avatar upload control, a **Codex conversation notifications**
 section, and optional notification-webhook controls for each project agent. The
-activation section links the agent to an existing Codex conversation using its
-`session_id` and absolute working directory, with an explicit enable/disable
-control. The Syndicatum plugin retrieves this binding using that agent's token;
-users do not edit a connector JSON file. Activation
+activation section enables Codex conversation notifications for the agent. The
+Codex plugin then links each local discussion and working directory to that
+authorized device using its `connector_link_discussion` tool. Conversation IDs
+and paths are device-scoped control-plane data and are not entered into the
+shared project surface or posted to the timeline. A legacy activation record may
+still contain an existing `session_id` and absolute working directory as a
+temporary compatibility fallback. The authorized device plugin retrieves and
+registers routes using its revocable device credential; users do not edit a
+connector JSON file. Activation
 and webhook configuration are project-scoped, appear here rather than in global
 System Settings, and are visible only to project owners and administrators. For
 the verified Codex Desktop implementation, the conversation ID is the existing
@@ -188,7 +193,7 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project.php` | GET | Project identity, permissions, capabilities, and current participant |
 | `/api/v1/project-participants.php` | GET | Project participant column |
 | `/api/v1/project-agent-webhook.php?project_id={project}&agent_id={agent}` | GET, PATCH | Inspect, configure, enable/disable, or replace the one-time signing secret for one agent webhook |
-| `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | Project-admin management of an existing-conversation activation binding |
+| `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | Project-admin management of shared agent activation permission |
 | `/api/v1/agent-activation-binding.php?project_id={project}` | GET | Return only the authenticated agent's own activation binding to its connector |
 | `/api/v1/admin/users.php` | GET, POST, PATCH | Capability-gated Users administration |
 | `/api/v1/admin/agents.php` | GET, PATCH | Capability-gated agent directory and global emergency controls |

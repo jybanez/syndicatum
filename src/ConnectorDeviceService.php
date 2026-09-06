@@ -106,27 +106,103 @@ class ConnectorDeviceService
 
     public function bindings(array $device)
     {
+        $hasDeviceRoutes = Db::tableExists($this->pdo, 'connector_device_activation_routes');
+        $routeColumns = $hasDeviceRoutes
+            ? "COALESCE(r.runtime_type, b.runtime_type) AS runtime_type,
+                    COALESCE(r.conversation_id, b.conversation_id) AS conversation_id,
+                    COALESCE(r.working_directory, b.working_directory) AS working_directory,
+                    COALESCE(r.updated_at, b.updated_at) AS updated_at,
+                    CASE WHEN r.device_id IS NULL THEN 'legacy' ELSE 'device' END AS route_source"
+            : "b.runtime_type, b.conversation_id, b.working_directory, b.updated_at, 'legacy' AS route_source";
+        $routeJoin = $hasDeviceRoutes
+            ? "LEFT JOIN connector_device_activation_routes r ON r.device_id = ? AND r.project_id = b.project_id
+                AND r.agent_id = b.agent_id AND r.enabled = 1"
+            : '';
         $statement = $this->pdo->prepare(
             "SELECT b.project_id, p.name AS project_name, b.agent_id, pp.id AS participant_id,
-                    pa.display_name AS agent_name, b.runtime_type, b.conversation_id, b.working_directory, b.updated_at
+                    pa.display_name AS agent_name,
+                    " . $routeColumns . "
              FROM agent_activation_bindings b
              JOIN projects p ON p.id = b.project_id AND p.status = 'active'
              JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ? AND pm.status = 'active'
              JOIN project_agents pa ON pa.project_id = b.project_id AND pa.agent_id = b.agent_id AND pa.status = 'active'
              JOIN project_participants pp ON pp.project_id = b.project_id AND pp.agent_id = b.agent_id AND pp.kind = 'agent' AND pp.status = 'active'
+             " . $routeJoin . "
              WHERE b.enabled = 1 AND b.created_by_user_id = ? AND b.runtime_type = 'codex'
              ORDER BY b.project_id, b.agent_id"
         );
-        $statement->execute([(int) $device['user_id'], (int) $device['user_id']]);
+        $parameters = [(int) $device['user_id']];
+        if ($hasDeviceRoutes) { $parameters[] = $device['id']; }
+        $parameters[] = (int) $device['user_id'];
+        $statement->execute($parameters);
         return array_map(function ($row) {
             return [
                 'project_id' => (int) $row['project_id'], 'project_name' => $row['project_name'],
                 'agent_id' => (int) $row['agent_id'], 'participant_id' => (int) $row['participant_id'],
                 'agent_name' => $row['agent_name'], 'runtime_type' => $row['runtime_type'],
                 'conversation_id' => $row['conversation_id'], 'working_directory' => $row['working_directory'],
-                'updated_at' => $row['updated_at'],
+                'updated_at' => $row['updated_at'], 'route_source' => $row['route_source'],
             ];
         }, $statement->fetchAll());
+    }
+
+    public function configureBinding(array $device, array $input)
+    {
+        if (!Db::tableExists($this->pdo, 'connector_device_activation_routes')) { throw new RuntimeException('CONNECTOR_SCHEMA_REQUIRED'); }
+        $projectId = isset($input['project_id']) ? (int) $input['project_id'] : 0;
+        $agentId = isset($input['agent_id']) ? (int) $input['agent_id'] : 0;
+        $conversationId = trim(isset($input['conversation_id']) ? (string) $input['conversation_id'] : '');
+        $workingDirectory = trim(isset($input['working_directory']) ? (string) $input['working_directory'] : '');
+        if ($projectId < 1 || $agentId < 1) { throw new InvalidArgumentException('project_id and agent_id are required.'); }
+        $this->validateConversationId($conversationId);
+        $this->validateWorkingDirectory($workingDirectory);
+        if ($conversationId === '' || $workingDirectory === '') { throw new InvalidArgumentException('conversation_id and working_directory are required.'); }
+
+        $eligible = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM agent_activation_bindings b
+             JOIN projects p ON p.id = b.project_id AND p.status = 'active'
+             JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ? AND pm.status = 'active'
+             JOIN project_agents pa ON pa.project_id = b.project_id AND pa.agent_id = b.agent_id AND pa.status = 'active'
+             WHERE b.project_id = ? AND b.agent_id = ? AND b.enabled = 1
+               AND b.created_by_user_id = ? AND b.runtime_type = 'codex'"
+        );
+        $eligible->execute([(int) $device['user_id'], $projectId, $agentId, (int) $device['user_id']]);
+        if ((int) $eligible->fetchColumn() !== 1) { throw new RuntimeException('ACTIVATION_BINDING_NOT_FOUND'); }
+
+        $now = Db::now();
+        $statement = $this->pdo->prepare(
+            "INSERT INTO connector_device_activation_routes
+             (device_id, agent_id, project_id, runtime_type, conversation_id, working_directory, enabled, created_at, updated_at)
+             VALUES (?, ?, ?, 'codex', ?, ?, 1, ?, ?)
+             ON DUPLICATE KEY UPDATE project_id = VALUES(project_id), runtime_type = VALUES(runtime_type),
+               conversation_id = VALUES(conversation_id), working_directory = VALUES(working_directory),
+               enabled = 1, updated_at = VALUES(updated_at)"
+        );
+        $statement->execute([$device['id'], $agentId, $projectId, $conversationId, $workingDirectory, $now, $now]);
+        $this->auth->audit((int) $device['user_id'], 'connector.device_route_configured', 'connector_device', $device['id'], [
+            'project_id' => $projectId,
+            'agent_id' => $agentId,
+            'conversation_configured' => true,
+            'working_directory_configured' => true,
+        ]);
+        return ['project_id' => $projectId, 'agent_id' => $agentId, 'runtime_type' => 'codex',
+            'conversation_id' => $conversationId, 'working_directory' => $workingDirectory,
+            'enabled' => true, 'route_source' => 'device', 'updated_at' => $now];
+    }
+
+    private function validateConversationId($value)
+    {
+        if (strlen($value) > 255 || ($value !== '' && !preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]*$/', $value))) {
+            throw new InvalidArgumentException('Conversation ID is invalid.');
+        }
+    }
+
+    private function validateWorkingDirectory($value)
+    {
+        if (strlen($value) > 1024 || ($value !== '' && (preg_match('/[\x00-\x1F\x7F]/', $value)
+            || !(preg_match('/^[A-Za-z]:[\\\\\/]/', $value) || strpos($value, '\\\\') === 0 || strpos($value, '/') === 0)))) {
+            throw new InvalidArgumentException('Working directory must be an absolute path.');
+        }
     }
 
     public function humanParticipant(array $device, $projectId)
