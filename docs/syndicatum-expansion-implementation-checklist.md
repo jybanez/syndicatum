@@ -348,6 +348,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Add native macOS Keychain credential storage and a per-user LaunchAgent
 - [ ] Complete a physical-Mac install, pairing, restart, and addressed-message acceptance run
 - [ ] Add Linux Secret Service credential storage and a per-user service before Linux public release
+- [x] Establish a prioritized, provider-neutral agent integration roadmap in [`agent-integration-roadmap.md`](agent-integration-roadmap.md)
 
 ## 16A. Optional Project-Agent Notification Webhooks
 

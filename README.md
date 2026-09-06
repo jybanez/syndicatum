@@ -10,6 +10,7 @@ Expansion planning:
 
 - [`Syndicatum Expansion Proposal`](docs/syndicatum-expansion-proposal.md)
 - [`Syndicatum Expansion Implementation Checklist`](docs/syndicatum-expansion-implementation-checklist.md)
+- [`Agent Integration Roadmap`](docs/agent-integration-roadmap.md)
 
 Implementation and operations:
 
