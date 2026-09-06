@@ -60,9 +60,10 @@ The Syndicatum Codex plugin is distributed from the repository marketplace at
 `.agents/plugins/marketplace.json`. Its bundled local MCP server owns the PBB
 Realtime connector lifecycle and uses Codex's `queue` command to send an
 existing conversation only a request to check Syndicatum. On Windows, the
-plugin installs one current-user Scheduled Task that keeps its background
-listener alive independently of Codex Desktop; it is event-driven and does not
-open a terminal or run every minute. The plugin also bundles the `pbb-chat-log`
+plugin installs one current-user Scheduled Task; on macOS it installs one
+current-user LaunchAgent and stores credentials in Keychain. Both keep the
+background listener alive independently of Codex Desktop, are event-driven,
+and never run on a repeating schedule. The plugin also bundles the `pbb-chat-log`
 skill used by the awakened conversation. No separate installer, Windows
 service, tray application, or legacy connector fallback is used. The original
 connector experiment has been retired in favor of this plugin-owned runtime. See

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { BackgroundServiceManager, powershellTaskArguments, windowsTaskArgument } from "../mcp/background-service-manager.mjs";
 
 test("Windows task arguments preserve plugin paths containing spaces", () => {
@@ -12,9 +14,25 @@ test("Windows task arguments preserve plugin paths containing spaces", () => {
   assert.match(powershellTaskArguments(file), /-File "C:\\Users\\Test User/);
 });
 
-test("non-Windows platforms remain explicit until their startup adapters exist", async () => {
-  const manager = new BackgroundServiceManager({ platform: "darwin", env: {} });
-  assert.deepEqual(await manager.ensureRunning(), { supported: false, platform: "darwin", state: "not_available" });
+test("macOS installs a per-user LaunchAgent with paths safe for spaces", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "syndicatum mac home "));
+  const sourceDirectory = path.join(home, "plugin source");
+  await mkdir(sourceDirectory, { recursive: true });
+  await writeFile(path.join(sourceDirectory, "background-service.mjs"), "", "utf8");
+  const calls = [];
+  const spawnImpl = (command, args) => {
+    calls.push([command, args]);
+    const child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    process.nextTick(() => child.emit("close", 0)); return child;
+  };
+  const manager = new BackgroundServiceManager({ platform: "darwin", env: { HOME: home, UID: "501" }, execPath: "/Applications/Codex App/node", sourceDirectory, spawnImpl });
+  await manager.installRuntime({ execPath: manager.execPath, serviceEntry: manager.serviceEntry, sourceDirectory });
+  await manager.registerMacLaunchAgent();
+  const plist = await readFile(manager.files.launchAgent, "utf8");
+  assert.match(plist, /ph\.pbb\.syndicatum\.codex-connector/);
+  assert.match(plist, /<key>KeepAlive<\/key><true\/>/);
+  assert.match(plist, /\/Applications\/Codex App\/node/);
+  assert.deepEqual(calls.map(item => item[1][0]), ["bootout", "bootstrap", "kickstart"]);
 });
 
 test("Windows launcher decrypts the credential before starting the background runtime", async () => {

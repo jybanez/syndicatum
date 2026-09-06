@@ -72,7 +72,8 @@ lines.on("line", async line => {
     }
     send({ jsonrpc: "2.0", id: request.id, result });
   } catch (error) {
-    send({ jsonrpc: "2.0", id: request.id, error: { code: error.code || -32000, message: String(error?.message || error) } });
+    const data = Object.fromEntries(Object.entries({ category: error.category, hostname: error.hostname, retryable: error.retryable, status: error.status }).filter(([, value]) => value !== undefined));
+    send({ jsonrpc: "2.0", id: request.id, error: { code: typeof error.code === "number" ? error.code : -32000, message: String(error?.message || error), ...(Object.keys(data).length ? { data } : {}) } });
   }
 });
 
@@ -82,7 +83,7 @@ process.once("SIGTERM", async () => { await runtime.stop(); process.exit(0); });
 async function callTool(name, args) {
   if (name === "connector_begin_login") return textResult(await runtime.beginLogin({ syndicatumUrl: args.syndicatum_url, deviceName: args.device_name }));
   if (name === "connector_complete_login") return textResult(await runtime.completeLogin());
-  if (name === "connector_status") return textResult(runtime.status);
+  if (name === "connector_status") return textResult(await runtime.currentStatus());
   if (name === "connector_restart") return textResult(await runtime.start());
   if (name === "connector_background_status") return textResult(await runtime.background.status());
   if (name === "connector_background_install") return textResult(await runtime.background.ensureRunning());

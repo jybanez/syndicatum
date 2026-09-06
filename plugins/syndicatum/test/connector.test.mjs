@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { ActivationConnector, isAddressedTo, isSentBy } from "../mcp/connector.mjs";
 import { CodexDriver, resolveCodexPath } from "../mcp/codex-driver.mjs";
 
@@ -70,4 +73,11 @@ test("Windows Desktop uses the executable plugin app-server CLI", async t => {
   });
   assert.match(resolved, /[\\\\\/]\.codex[\\\\\/]plugins[\\\\\/]\.plugin-appserver[\\\\\/]codex\.exe$/i);
   assert.equal(await resolveCodexPath({}, { USERPROFILE: process.env.USERPROFILE }), resolved);
+});
+
+test("macOS background routing resolves an absolute app-server Codex path", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "syndicatum-mac-codex-"));
+  const executable = path.join(home, ".codex", "plugins", ".plugin-appserver", "codex");
+  await mkdir(path.dirname(executable), { recursive: true }); await writeFile(executable, "", { mode: 0o700 });
+  assert.equal(await resolveCodexPath({}, { HOME: home, PATH: "" }, "darwin"), executable);
 });

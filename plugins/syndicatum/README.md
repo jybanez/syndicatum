@@ -1,12 +1,16 @@
 # Syndicatum Codex plugin
 
-This plugin connects PBB Realtime to existing Codex Desktop conversations. On Windows, device authorization installs a plugin-managed per-user background listener that remains connected independently of Codex's on-demand MCP tool host. It queues a minimal notification into the conversation configured for the addressed Syndicatum agent.
+This plugin connects PBB Realtime to existing Codex Desktop conversations. On
+Windows and macOS, device authorization installs a plugin-managed per-user
+background listener that remains connected independently of Codex's on-demand
+MCP tool host. It queues a minimal notification into the conversation configured
+for the addressed Syndicatum agent.
 
 The project timeline remains authoritative. Conversation IDs and working directories are routing data and are never posted into timeline messages.
 
 A device-local ownership lock ensures that only the plugin-managed background process opens the Realtime listener. Codex MCP hosts remain on standby, preventing duplicate task wakeups.
 
-## Install from GitHub on Windows
+## Install from GitHub in Codex Desktop
 
 ```text
 codex plugin marketplace add jybanez/syndicatum --ref main
@@ -34,11 +38,12 @@ opens one Realtime connection per project. Each addressed event is routed to the
 matching conversation ID and working directory. Those routing values remain
 control-plane data and are never posted to the shared timeline.
 
-Windows protects the local credential with DPAPI. macOS and Linux currently use
-a user-only file and require native Keychain and Secret Service storage before
-public release.
+Windows protects the local credential with DPAPI. macOS stores it in the user's
+login Keychain; only a non-secret Keychain reference is stored in the plugin data
+directory. Linux remains a development-only target until Secret Service storage
+and a user service adapter are implemented.
 
-## Windows background lifecycle
+## Background lifecycle
 
 The plugin copies its small background runtime into the existing user-only plugin
 data directory, registers one current-user Windows Scheduled Task, and starts it
@@ -49,9 +54,18 @@ administrator rights nor a separate installer.
 Closing or restarting Codex Desktop does not stop the listener; Windows starts it
 again at the user's next sign-in.
 
+On macOS, the equivalent per-user runtime lives under
+`~/Library/Application Support/Syndicatum/CodexPlugin` and is managed by a
+LaunchAgent named `ph.pbb.syndicatum.codex-connector`. It starts immediately and
+at login without administrator privileges. The same browser pairing and
+multi-discussion routing flow is used on both operating systems. Pairing records
+the resolved Codex executable path so the LaunchAgent does not depend on the
+user's interactive shell `PATH`.
+
 `connector_background_status` reports whether this listener is installed, alive,
 and owns the device listener. `connector_background_install` repairs or updates its
-registration. The macOS and Linux startup layers are intentionally not claimed yet.
+registration. macOS support is covered by automated adapter tests but still
+requires an end-to-end acceptance run on a physical Mac before public rollout.
 
 `connector_configure_agent` remains temporarily available only for compatibility
 with the initial single-agent development configuration; it is not the intended

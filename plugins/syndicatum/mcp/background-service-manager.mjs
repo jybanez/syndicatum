@@ -8,26 +8,31 @@ import { pluginPaths } from "./paths.mjs";
 const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE = "SyndicatumCodexConnector";
 const TASK_NAME = "Syndicatum Codex Connector";
+const LAUNCH_AGENT_LABEL = "ph.pbb.syndicatum.codex-connector";
 
 export class BackgroundServiceManager {
   constructor({ env = process.env, platform = process.platform, execPath = process.execPath, sourceDirectory = path.dirname(fileURLToPath(import.meta.url)), spawnImpl = spawn } = {}) {
     Object.assign(this, { env, platform, execPath, sourceDirectory, spawnImpl });
-    this.files = pluginPaths(env);
+    this.files = pluginPaths(env, platform);
     this.serviceEntry = path.join(this.files.backgroundRuntime, "background-service.mjs");
   }
 
   async ensureRunning() {
-    if (this.platform !== "win32") return { supported: false, platform: this.platform, state: "not_available" };
+    if (!["win32", "darwin"].includes(this.platform)) return { supported: false, platform: this.platform, state: "not_available" };
     const current = await this.status();
     const desired = { execPath: this.execPath, serviceEntry: this.serviceEntry, sourceDirectory: this.sourceDirectory };
     const matches = current.metadata?.execPath === desired.execPath && current.metadata?.serviceEntry === desired.serviceEntry && current.metadata?.sourceDirectory === desired.sourceDirectory;
     if (current.running && matches) return { ...current, supported: true, installed: true };
     if (current.running) await this.stop(current.pid);
     await this.installRuntime(desired);
-    await this.registerLauncher();
-    await this.startLauncher();
+    if (this.platform === "win32") {
+      await this.registerWindowsLauncher();
+      await this.startWindowsLauncher();
+    } else {
+      await this.registerMacLaunchAgent();
+    }
     const running = await this.waitUntilRunning();
-    return { supported: true, installed: true, running: running.running, pid: running.pid ?? null, state: running.running ? "running" : "starting" };
+    return { ...running, supported: true, installed: true, state: readinessState(running) };
   }
 
   async status() {
@@ -37,13 +42,16 @@ export class BackgroundServiceManager {
     try { metadata = JSON.parse(await readFile(this.files.backgroundMetadata, "utf8")); }
     catch (error) { if (error.code !== "ENOENT") throw error; }
     const running = Boolean(pid && isProcessAlive(pid));
-    return { supported: this.platform === "win32", installed: Boolean(metadata), running, ownsListener: Boolean(running && listenerPid === pid), pid, listenerPid, metadata };
+    const ownsListener = Boolean(running && listenerPid === pid);
+    const listenerReason = ownsListener ? "listener_owned" : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : "listener_starting";
+    return { supported: ["win32", "darwin"].includes(this.platform), platform: this.platform, installed: Boolean(metadata), running, ownsListener, listenerReason, pid, listenerPid, readiness: readinessState({ running, ownsListener }), metadata };
   }
 
   async installRuntime(metadata) {
     await mkdir(this.files.root, { recursive: true });
     await cp(this.sourceDirectory, this.files.backgroundRuntime, { recursive: true, force: true });
-    const script = [
+    if (this.platform === "win32") {
+      const script = [
       "$ErrorActionPreference = 'Stop'",
       `$stored = [IO.File]::ReadAllText('${powershellLiteral(this.files.credential)}').Trim()`,
       "if ($stored.StartsWith('plain:')) {",
@@ -58,12 +66,13 @@ export class BackgroundServiceManager {
       `& '${powershellLiteral(metadata.execPath)}' '${powershellLiteral(metadata.serviceEntry)}'`,
       "exit $LASTEXITCODE",
       "",
-    ].join("\r\n");
-    await writeFile(this.files.backgroundLauncher, script, { encoding: "utf8", mode: 0o600 });
+      ].join("\r\n");
+      await writeFile(this.files.backgroundLauncher, script, { encoding: "utf8", mode: 0o600 });
+    }
     await writeFile(this.files.backgroundMetadata, `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   }
 
-  async registerLauncher() {
+  async registerWindowsLauncher() {
     const actionArgs = powershellTaskArguments(this.files.backgroundLauncher);
     const script = [
       `Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue`,
@@ -78,8 +87,28 @@ export class BackgroundServiceManager {
     await run(this.spawnImpl, "reg.exe", ["DELETE", RUN_KEY, "/v", RUN_VALUE, "/f"], [0, 1]);
   }
 
-  async startLauncher() {
+  async startWindowsLauncher() {
     await run(this.spawnImpl, "powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `Start-ScheduledTask -TaskName '${TASK_NAME}'`]);
+  }
+
+  async registerMacLaunchAgent() {
+    await mkdir(path.dirname(this.files.launchAgent), { recursive: true });
+    const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>${LAUNCH_AGENT_LABEL}</string>
+  <key>ProgramArguments</key><array><string>${xml(this.execPath)}</string><string>${xml(this.serviceEntry)}</string></array>
+  <key>WorkingDirectory</key><string>${xml(this.files.root)}</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>
+`;
+    await writeFile(this.files.launchAgent, plist, { encoding: "utf8", mode: 0o600 });
+    const domain = `gui/${typeof process.getuid === "function" ? process.getuid() : this.env.UID}`;
+    await run(this.spawnImpl, "/bin/launchctl", ["bootout", domain, this.files.launchAgent], [0, 3, 5, 113]);
+    await run(this.spawnImpl, "/bin/launchctl", ["bootstrap", domain, this.files.launchAgent]);
+    await run(this.spawnImpl, "/bin/launchctl", ["kickstart", "-k", `${domain}/${LAUNCH_AGENT_LABEL}`]);
   }
 
   async stop(pid = null) {
@@ -91,7 +120,7 @@ export class BackgroundServiceManager {
   }
 
   async waitUntilRunning() {
-    for (let attempt = 0; attempt < 600; attempt += 1) {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
       const status = await this.status();
       if (status.running && status.ownsListener) return status;
       await delay(100);
@@ -105,6 +134,8 @@ export function windowsTaskArgument(value) { const text = String(value); return 
 export function powershellTaskArguments(file) { return ["-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", windowsTaskArgument(file)].join(" "); }
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function isProcessAlive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error.code === "EPERM"; } }
+function readinessState(status) { return status.running ? (status.ownsListener ? "ready" : "starting_listener") : "stopped"; }
+function xml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
 
 function run(spawnImpl, command, args, allowedExitCodes = [0]) {
   return new Promise((resolve, reject) => {

@@ -2,20 +2,44 @@ import { randomUUID } from "node:crypto";
 import { DeviceSyndicatumClient } from "./syndicatum-client.mjs";
 
 export class AuthorizationListener {
-  constructor({ pending, onAuthorized, exchange = value => DeviceSyndicatumClient.exchange(value), reconnectDelayMs = 2000, log = console }) {
-    Object.assign(this, { pending, onAuthorized, exchange, reconnectDelayMs, log });
-    this.stopped = false; this.socket = null; this.completed = false;
+  constructor({ pending, onAuthorized, exchange = value => DeviceSyndicatumClient.exchange(value), isCompleted = async () => false, reconnectDelayMs = 2000, reconciliationDelayMs = 8000, maxReconciliationAttempts = 2, log = console }) {
+    Object.assign(this, { pending, onAuthorized, exchange, isCompleted, reconnectDelayMs, reconciliationDelayMs, maxReconciliationAttempts, log });
+    this.stopped = false; this.socket = null; this.completed = false; this.reconciliationAttempts = 0; this.retryTimer = null; this.retryResolve = null;
   }
   async start() {
     const expiresAt = new Date(this.pending.expiresAt).getTime();
     while (!this.stopped && Date.now() < expiresAt) {
+      if (await this.isCompleted()) { this.completed = true; this.stop(); break; }
       try { await this.connectOnce(); }
-      catch (error) { if (!this.stopped) this.log.error(`Authorization listener failed: ${safe(error)}`); }
-      if (!this.stopped && Date.now() < expiresAt) await new Promise(resolve => setTimeout(resolve, this.reconnectDelayMs));
+      catch (error) {
+        let recovered = false;
+        try { if (!this.stopped) recovered = await this.reconcile(); }
+        catch (reconciliationError) { if (!this.stopped) this.log.error(`Authorization reconciliation failed: ${safe(reconciliationError)}`); }
+        if (recovered) break;
+        if (!this.stopped) this.log.error(`Authorization listener failed: ${safe(error)}`);
+      }
+      if (!this.stopped && Date.now() < expiresAt) await this.delay(this.reconnectDelayMs);
     }
     if (!this.completed && !this.stopped) throw new Error("The Syndicatum device authorization request expired.");
   }
-  stop() { this.stopped = true; if (this.socket) this.socket.close(1000, "Authorization listener stopping"); }
+  stop() { this.stopped = true; clearTimeout(this.retryTimer); this.retryTimer = null; this.retryResolve?.(); this.retryResolve = null; if (this.socket) this.socket.close(1000, "Authorization listener stopping"); }
+  delay(ms) { return new Promise(resolve => { this.retryResolve = resolve; this.retryTimer = setTimeout(() => { this.retryTimer = null; this.retryResolve = null; resolve(); }, ms); }); }
+  async reconcile() {
+    if (this.reconciliationAttempts >= this.maxReconciliationAttempts || this.stopped) return false;
+    this.reconciliationAttempts += 1;
+    if (this.reconciliationAttempts > 1) await this.delay(this.reconciliationDelayMs);
+    if (this.stopped || await this.isCompleted()) { this.completed = true; this.stop(); return true; }
+    const result = await this.exchange(this.pending);
+    if (result.status !== "authorized") return false;
+    await this.finishAuthorization(result);
+    return true;
+  }
+  async finishAuthorization(result) {
+    if (this.completed) return;
+    this.completed = true; this.stopped = true;
+    await this.onAuthorized(result);
+    if (this.socket) this.socket.close(1000, "Authorization completed");
+  }
   connectOnce() {
     const admission = this.pending.realtime;
     if (!admission?.enabled || !admission?.token || !admission?.room || !admission?.websocket_url) return Promise.reject(new Error("Authorization Realtime admission is unavailable."));
@@ -26,9 +50,7 @@ export class AuthorizationListener {
       const exchange = async () => {
         const result = await this.exchange(this.pending);
         if (result.status !== "authorized") return false;
-        this.completed = true; this.stopped = true;
-        await this.onAuthorized(result);
-        socket.close(1000, "Authorization completed");
+        await this.finishAuthorization(result);
         return true;
       };
       socket.addEventListener("message", event => {
@@ -50,7 +72,7 @@ export class AuthorizationListener {
           void exchange().catch(error => { finish(error); socket.close(); });
         }
       });
-      socket.addEventListener("error", () => finish(new Error("Authorization Realtime WebSocket error.")));
+      socket.addEventListener("error", () => { finish(new Error("Authorization Realtime WebSocket error.")); socket.close(); });
       socket.addEventListener("close", event => finish(this.stopped || event.code === 1000 ? null : new Error(`Authorization Realtime closed with code ${event.code}.`)));
     });
   }

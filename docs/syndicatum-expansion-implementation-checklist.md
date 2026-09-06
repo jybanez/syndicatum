@@ -345,7 +345,9 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Add a plugin-managed, continuously running Windows background task so notification delivery survives Codex restarts without minute polling
 - [x] Probe `codex queue` compatibility when the plugin MCP server starts
 - [x] Replace development agent-token setup with Syndicatum account/device pairing and multiple simultaneous bindings
-- [ ] Use native Keychain and Secret Service credential storage before macOS/Linux public release
+- [x] Add native macOS Keychain credential storage and a per-user LaunchAgent
+- [ ] Complete a physical-Mac install, pairing, restart, and addressed-message acceptance run
+- [ ] Add Linux Secret Service credential storage and a per-user service before Linux public release
 
 ## 16A. Optional Project-Agent Notification Webhooks
 

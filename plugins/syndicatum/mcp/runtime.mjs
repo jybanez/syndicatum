@@ -11,18 +11,19 @@ import { StateStore } from "./state-store.mjs";
 import { DeviceSyndicatumClient, SyndicatumClient } from "./syndicatum-client.mjs";
 import { AuthorizationListener } from "./authorization-listener.mjs";
 import { BackgroundServiceManager } from "./background-service-manager.mjs";
+import { loadPairingState, savePairingState } from "./pairing-state.mjs";
 
 export class PluginRuntime {
   constructor(env = process.env, { manageBackground = true, background = null } = {}) { this.env = env; this.manageBackground = manageBackground; this.background = background ?? new BackgroundServiceManager({ env }); this.connector = null; this.task = null; this.lock = null; this.pairing = null; this.pairingTask = null; this.configWatcher = null; this.reloadTimer = null; this.status = { state: "starting" }; }
   async start() {
-    this.ensureConfigWatcher();
+    await this.ensureConfigWatcher();
     await this.stop();
     try {
       const local = await loadConfig(this.env);
       if (local.mode === "device" && this.manageBackground) {
         const background = await this.background.ensureRunning();
         if (background.supported) {
-          this.status = { state: background.running ? "running" : "starting", role: "background", background };
+          this.status = { state: background.running && background.ownsListener ? "ready" : "starting", role: "background", background };
           return this.status;
         }
       }
@@ -60,24 +61,63 @@ export class PluginRuntime {
     const result = await DeviceSyndicatumClient.begin(input.syndicatumUrl, input.deviceName);
     const pending = { syndicatumUrl: result.syndicatum_url, deviceCode: result.device_code, userCode: result.user_code, verificationUrl: result.verification_url, expiresAt: result.expires_at, authorizationId: result.authorization_id, realtime: result.realtime };
     await savePendingLogin(pending, this.env);
+    await savePairingState({ state: "waiting_for_authorization", authorizationId: result.authorization_id, userCode: result.user_code, verificationUrl: result.verification_url, expiresAt: result.expires_at }, this.env);
     if (this.pairing) this.pairing.stop();
-    this.pairing = new AuthorizationListener({ pending, log: this.logger(), onAuthorized: async authorization => {
-      await saveDeviceConfig({ syndicatumUrl: pending.syndicatumUrl, deviceId: authorization.device_id, token: authorization.access_token }, this.env);
-      this.status = { state: "configured", mode: "device", deviceId: authorization.device_id, reloading: true };
-      if (this.manageBackground) await this.background.ensureRunning();
+    this.pairing = new AuthorizationListener({ pending, log: this.logger("pairing"), isCompleted: () => this.isPairingComplete(result.authorization_id), onAuthorized: async authorization => {
+      await savePairingState({ state: "authorization_approved", authorizationId: result.authorization_id, expiresAt: result.expires_at }, this.env);
+      const codexPath = await resolveCodexPath({}, this.env);
+      await saveDeviceConfig({ syndicatumUrl: pending.syndicatumUrl, deviceId: authorization.device_id, token: authorization.access_token, codexPath }, this.env);
+      await savePairingState({ state: "credential_exchanged", authorizationId: result.authorization_id, deviceId: authorization.device_id }, this.env);
+      const background = this.manageBackground ? await this.background.ensureRunning() : null;
+      await savePairingState({ state: "ready", authorizationId: result.authorization_id, deviceId: authorization.device_id, background }, this.env);
+      this.status = { state: "ready", mode: "device", deviceId: authorization.device_id, background };
       this.scheduleReload();
     } });
-    this.pairingTask = this.pairing.start().catch(error => { this.status = { ...this.status, pairingState: "error", pairingError: String(error?.message || error) }; });
+    this.pairingTask = this.pairing.start().catch(async error => {
+      const pairingError = String(error?.message || error);
+      await savePairingState({ state: "error", authorizationId: result.authorization_id, error: pairingError }, this.env);
+      this.status = { ...this.status, pairingState: "error", pairingError };
+    });
     this.status = { ...this.status, pairingState: "waiting_for_authorization", pairingExpiresAt: result.expires_at };
     return { state: "authorization_required", userCode: result.user_code, verificationUrl: result.verification_url, expiresAt: result.expires_at };
   }
   async completeLogin() {
+    const existing = await this.configuredDevice();
+    if (existing) return { state: "ready", deviceId: existing.deviceId, restartRequired: false };
     const pending = await loadPendingLogin(this.env); const result = await DeviceSyndicatumClient.exchange(pending);
     if (result.status === "pending") return { state: "authorization_pending", userCode: pending.userCode, verificationUrl: pending.verificationUrl, expiresAt: pending.expiresAt };
     if (result.status !== "authorized") throw new Error("Syndicatum did not authorize this device.");
-    await saveDeviceConfig({ syndicatumUrl: pending.syndicatumUrl, deviceId: result.device_id, token: result.access_token }, this.env);
-    if (this.manageBackground) await this.background.ensureRunning();
-    return { state: "configured", deviceId: result.device_id, restartRequired: false };
+    await savePairingState({ state: "authorization_approved", authorizationId: pending.authorizationId, expiresAt: pending.expiresAt }, this.env);
+    const codexPath = await resolveCodexPath({}, this.env);
+    await saveDeviceConfig({ syndicatumUrl: pending.syndicatumUrl, deviceId: result.device_id, token: result.access_token, codexPath }, this.env);
+    await savePairingState({ state: "credential_exchanged", authorizationId: pending.authorizationId, deviceId: result.device_id }, this.env);
+    this.pairing?.stop();
+    const background = this.manageBackground ? await this.background.ensureRunning() : null;
+    await savePairingState({ state: "ready", authorizationId: pending.authorizationId, deviceId: result.device_id, background }, this.env);
+    return { state: "ready", deviceId: result.device_id, background, restartRequired: false };
+  }
+  async configuredDevice() {
+    try { const config = await loadConfig(this.env); return config.mode === "device" ? config : null; }
+    catch (error) {
+      if (error.code === "ENOENT" || /not configured/i.test(String(error?.message || error))) return null;
+      throw error;
+    }
+  }
+  async isPairingComplete(authorizationId) {
+    if (await this.configuredDevice()) return true;
+    const pairing = await loadPairingState(this.env);
+    return pairing?.authorizationId === authorizationId && pairing?.state === "ready";
+  }
+  async currentStatus() {
+    let config;
+    try { config = await this.configuredDevice(); }
+    catch (error) { return { state: "error", stage: "credential_load", error: String(error?.message || error), pairing: await loadPairingState(this.env) }; }
+    const pairing = await loadPairingState(this.env);
+    if (!config) return pairing ? { state: pairing.state, pairing } : this.status;
+    this.pairing?.stop();
+    const background = this.manageBackground ? await this.background.status() : null;
+    const ready = !background?.supported || (background.running && background.ownsListener);
+    return { state: ready ? "ready" : "starting", mode: "device", deviceId: config.deviceId, role: this.manageBackground ? "background" : this.status.role, background, pairing };
   }
   async startDevice(config) {
     const client = new DeviceSyndicatumClient(config); const result = await client.bindings(); const bindings = Array.isArray(result.bindings) ? result.bindings : [];
@@ -87,24 +127,30 @@ export class PluginRuntime {
     }
     const codexPath = await resolveCodexPath(config, this.env); const probe = await runCommand(codexPath, ["queue", "--help"], { timeoutMs: 15000 });
     if (!/Queue a message for an existing session/i.test(probe.stdout)) throw new Error("This Codex release does not provide the required queue command.");
-    const logger = this.logger(); this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings, log: logger });
+      const logger = this.logger("listener"); this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings, log: logger });
     this.status = { state: "running", mode: "device", deviceId: config.deviceId, bindings: bindings.length, projects: new Set(bindings.map(item => String(item.project_id))).size };
     this.task = this.connector.start().catch(error => { this.status = { ...this.status, state: "error", error: String(error?.message || error) }; logger.error(this.status.error); });
     return this.status;
   }
-  logger() {
+  logger(role = this.manageBackground ? "mcp" : "background") {
     const file = pluginPaths(this.env).log;
-    const write = async (level, message) => { await mkdir(path.dirname(file), { recursive: true }); await appendFile(file, `${new Date().toISOString()} ${level} ${String(message).replace(/[\r\n]+/g, " ")}\n`, "utf8"); };
+    const write = async (level, message) => { await mkdir(path.dirname(file), { recursive: true }); await appendFile(file, `${new Date().toISOString()} ${level} pid=${process.pid} role=${role} ${String(message).replace(/[\r\n]+/g, " ")}\n`, "utf8"); };
     return { info: message => void write("INFO", message), error: message => void write("ERROR", message) };
   }
-  ensureConfigWatcher() {
+  async ensureConfigWatcher() {
     if (this.configWatcher) return;
-    const file = pluginPaths(this.env).config;
+    const files = pluginPaths(this.env);
+    await mkdir(files.root, { recursive: true });
     try {
-      this.configWatcher = watch(file, () => {
-        this.scheduleReload();
+      this.configWatcher = watch(files.root, (_event, filename) => {
+        if (String(filename) === path.basename(files.config)) {
+          this.pairing?.stop();
+          void this.configuredDevice().then(config => { if (config) this.status = { state: "configured", mode: "device", deviceId: config.deviceId }; });
+        } else if (String(filename) === path.basename(files.pairingState)) {
+          void loadPairingState(this.env).then(pairing => { if (pairing?.state === "ready") this.pairing?.stop(); }).catch(() => {});
+        }
       });
-    } catch (_error) { /* The first configuration write is still completed by the pairing host. */ }
+    } catch (_error) { /* Status still re-reads persisted state if directory watching is unavailable. */ }
   }
   scheduleReload() {
     clearTimeout(this.reloadTimer);

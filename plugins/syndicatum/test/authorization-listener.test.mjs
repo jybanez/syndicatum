@@ -34,3 +34,21 @@ test("authorization listener exchanges once on join and completes from the Realt
     assert.equal(exchanges, 2); assert.equal(authorized, "device-1"); assert.equal(listener.completed, true);
   } finally { globalThis.WebSocket = originalWebSocket; }
 });
+
+test("authorization listener performs bounded HTTPS reconciliation when Realtime fails", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  class FailedWebSocket {
+    constructor() { this.listeners = new Map(); process.nextTick(() => this.listeners.get("error")?.()); }
+    addEventListener(name, listener) { this.listeners.set(name, listener); }
+    close() {}
+  }
+  globalThis.WebSocket = FailedWebSocket;
+  let exchanges = 0; let authorized = 0;
+  const listener = new AuthorizationListener({
+    pending: { authorizationId: "a", expiresAt: new Date(Date.now() + 60000).toISOString(), realtime: { enabled: true, token: "t", room: "r", websocket_url: "wss://example.test" } },
+    exchange: async () => { exchanges += 1; return { status: "authorized", device_id: "d", access_token: "s" }; },
+    onAuthorized: async () => { authorized += 1; }, log: { info() {}, error() {} }, reconnectDelayMs: 1, reconciliationDelayMs: 1,
+  });
+  try { await listener.start(); assert.equal(exchanges, 1); assert.equal(authorized, 1); assert.equal(listener.completed, true); }
+  finally { globalThis.WebSocket = originalWebSocket; }
+});

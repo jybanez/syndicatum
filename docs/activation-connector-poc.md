@@ -58,15 +58,16 @@ authenticated connector, not to other project participants or the timeline.
 The implementation is under `plugins/syndicatum/` and is published through the
 repository marketplace at `.agents/plugins/marketplace.json`. A bundled MCP
 server provides setup and status controls. On Windows, the plugin registers one
-current-user Scheduled Task that owns the persistent Realtime connection outside
+current-user Scheduled Task; on macOS it registers one current-user LaunchAgent.
+That OS-native per-user process owns the persistent Realtime connection outside
 the on-demand MCP lifecycle. It is continuously event-driven, not a polling
 schedule, and depends on no Windows service, tray supervisor, separate installer,
 or legacy connector process.
 
 The development build supports account/device pairing and multiple simultaneous
-agent bindings. Windows credentials use DPAPI. Native macOS Keychain/Linux Secret
-Service storage and platform-specific background launchers remain required before
-general distribution on those systems.
+agent bindings. Windows credentials use DPAPI and macOS credentials use Keychain.
+Linux Secret Service storage and a user-service launcher remain required. macOS
+still needs a physical-device acceptance run before general distribution.
 
 ## Verified live transport
 

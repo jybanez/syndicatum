@@ -1,6 +1,7 @@
-import { access, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile, rm, rename } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { loadToken, storeToken } from "./secret-store.mjs";
+import { deleteToken, loadToken, storeToken } from "./secret-store.mjs";
 import { pluginPaths } from "./paths.mjs";
 
 export async function loadConfig(env = process.env) {
@@ -39,19 +40,19 @@ export async function loadConfig(env = process.env) {
 
 export async function saveDeviceConfig(input, env = process.env) {
   const files = pluginPaths(env);
-  const raw = { mode: "device", syndicatumUrl: String(input.syndicatumUrl).trim().replace(/\/+$/, ""), deviceId: String(input.deviceId).trim(), reconnectDelayMs: 5000, activationRetryLimit: 8 };
+  const raw = { mode: "device", syndicatumUrl: String(input.syndicatumUrl).trim().replace(/\/+$/, ""), deviceId: String(input.deviceId).trim(), codexPath: String(input.codexPath || "").trim() || null, reconnectDelayMs: 5000, activationRetryLimit: 8 };
   if (!raw.syndicatumUrl || !raw.deviceId) throw new Error("Syndicatum device configuration is incomplete.");
   await mkdir(files.root, { recursive: true });
   await storeToken(files.credential, input.token);
-  await writeFile(files.config, `${JSON.stringify(raw, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  await Promise.all([rm(files.pendingLogin, { force: true }), rm(files.pendingCredential, { force: true })]);
+  await writeJsonAtomic(files.config, raw);
+  await Promise.all([rm(files.pendingLogin, { force: true }), deleteToken(files.pendingCredential)]);
   return loadConfig(env);
 }
 
 export async function savePendingLogin(input, env = process.env) {
   const files = pluginPaths(env); await mkdir(files.root, { recursive: true });
   await storeToken(files.pendingCredential, input.deviceCode);
-  await writeFile(files.pendingLogin, `${JSON.stringify({ syndicatumUrl: input.syndicatumUrl, userCode: input.userCode, verificationUrl: input.verificationUrl, expiresAt: input.expiresAt, authorizationId: input.authorizationId, realtime: input.realtime }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeJsonAtomic(files.pendingLogin, { syndicatumUrl: input.syndicatumUrl, userCode: input.userCode, verificationUrl: input.verificationUrl, expiresAt: input.expiresAt, authorizationId: input.authorizationId, realtime: input.realtime });
 }
 
 export async function loadPendingLogin(env = process.env) {
@@ -80,7 +81,7 @@ export async function saveConfig(input, env = process.env) {
   }
   await mkdir(files.root, { recursive: true });
   await storeToken(files.credential, input.token);
-  await writeFile(files.config, `${JSON.stringify(raw, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeJsonAtomic(files.config, raw);
   return loadConfig(env);
 }
 
@@ -98,4 +99,10 @@ export async function resolveActivationConfig(config, syndicatum) {
 function clamp(value, minimum, maximum, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
+
+async function writeJsonAtomic(file, value) {
+  const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await rename(temporary, file);
 }

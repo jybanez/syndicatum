@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -15,11 +16,10 @@ export class CodexDriver {
   }
 }
 
-export async function resolveCodexPath(config = {}, env = process.env) {
+export async function resolveCodexPath(config = {}, env = process.env, platform = process.platform) {
   const configured = String(config.codexPath || env.CODEX_CLI_PATH || "").trim();
-  const appServerCli = process.platform === "win32"
-    ? path.join(String(env.USERPROFILE || env.HOME || ""), ".codex", "plugins", ".plugin-appserver", "codex.exe")
-    : null;
+  const home = String(env.USERPROFILE || env.HOME || "");
+  const appServerCli = path.join(home, ".codex", "plugins", ".plugin-appserver", platform === "win32" ? "codex.exe" : "codex");
   if (appServerCli && (!configured || /[\\/]WindowsApps[\\/]/i.test(configured))) {
     try { await access(appServerCli); return appServerCli; }
     catch { /* Fall through to the configured path for a useful probe error. */ }
@@ -28,7 +28,12 @@ export async function resolveCodexPath(config = {}, env = process.env) {
     try { await access(configured); return configured; }
     catch { throw new Error(`Codex CLI was not found at the path supplied by Codex Desktop: ${configured}`); }
   }
-  return process.platform === "win32" ? "codex.exe" : "codex";
+  const executable = platform === "win32" ? "codex.exe" : "codex";
+  for (const directory of String(env.PATH || "").split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(directory, executable);
+    try { await access(candidate, constants.X_OK); return candidate; } catch { /* Try the next PATH entry. */ }
+  }
+  return executable;
 }
 
 export function runCommand(executable, args, options = {}) {

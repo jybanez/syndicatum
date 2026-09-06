@@ -2,7 +2,7 @@
 
 ## Runtime model
 
-The plugin owns the connector. On Windows, successful device authorization
+The plugin owns the connector. On Windows and macOS, successful device authorization
 installs a plugin-managed per-user background process. That process holds the
 outbound PBB Realtime connection, filters addressed message events, and invokes
 `codex queue` for the existing conversation in the agent's Syndicatum activation
@@ -25,7 +25,10 @@ There is no separate installer, Windows service, polling job, tray application,
 or legacy connector fallback. The plugin copies its small background runtime into
 the existing user-only Syndicatum plugin data directory and registers one
 current-user Windows Scheduled Task that runs its Node entrypoint through a hidden
-PowerShell host. Keeping that runtime outside Codex's cache prevents Desktop shutdown
+PowerShell host. On macOS it registers a current-user LaunchAgent and protects the
+device credential in Keychain. Pairing persists the resolved Codex executable
+path so the LaunchAgent does not depend on an interactive shell `PATH`. Keeping
+that runtime outside Codex's cache prevents Desktop shutdown
 cleanup from treating it as an MCP child. The task is continuously event-driven rather than scheduled
 every minute. It starts immediately and at the user's next sign-in, requires no
 administrator rights, and survives Codex Desktop restarts.
@@ -43,10 +46,10 @@ codex plugin add syndicatum@syndicatum
 Restart Codex and start a new task after installing or updating the plugin so
 its MCP server and bundled `pbb-chat-log` skill are loaded.
 
-## Install on another Windows PC
+## Install on another Windows PC or Mac
 
 The official GitHub repository is itself a Codex plugin marketplace. A Windows
-user with Codex Desktop can install the connector without cloning this
+or macOS user with Codex Desktop can install the connector without cloning this
 repository or running a separate installer:
 
 ```text
@@ -88,6 +91,14 @@ There is no approval polling, manual completion action, or Codex restart in the
 normal flow. `connector_complete_login` is retained only as an interrupted-flow
 recovery action.
 
+Pairing progress is written atomically with a revision and explicit states:
+`waiting_for_authorization`, `authorization_approved`, `credential_exchanged`,
+and `ready`. Every MCP host observes the same files, stops obsolete pairing
+listeners when another host completes the exchange, and rebuilds status from
+persisted state. If the one-time Realtime approval event is missed, the listener
+performs at most two idempotent HTTPS reconciliation attempts; it never becomes
+a permanent polling loop.
+
 The authorization signal uses a separate least-privilege Realtime project
 configured in Syndicatum as `realtime.connector_authorization_project_code`.
 Its subscriber tokens can connect and join one exact
@@ -103,7 +114,9 @@ agent reads or contributes to its project timeline.
 
 ## Readiness checks
 
-`connector_status` reports `running` only after all of the following succeed:
+`connector_status` rebuilds its answer from persisted configuration and the live
+background-process locks, so separate Codex windows converge instead of retaining
+stale in-memory pairing results. It reports `ready` only after all of the following succeed:
 
 - the device credential loads;
 - authorized activation bindings can be discovered;
@@ -114,17 +127,24 @@ agent reads or contributes to its project timeline.
 Use `connector_restart` after correcting a recoverable configuration or
 transport problem.
 
-`connector_background_status` reports installation, process, and listener-lock
-ownership. `connector_background_install` repairs the registration, updates the
+`connector_background_status` reports installation, process, listener-lock
+ownership, and a reason when the listener is still starting or another process
+owns it. Logs include the emitting PID and runtime role. `connector_background_install` repairs the registration, updates the
 launcher to the active plugin build, and starts it immediately.
+
+Network failures retain a safe category (`dns`, `tls`, `timeout`, or `network`),
+the destination hostname, and retryability instead of collapsing every failure
+to `fetch failed`. Credentials and authorization codes are excluded.
 
 ## Current distribution boundary
 
 This development build requires Node.js 22 or a compatible Node runtime visible
-to the bundled MCP configuration. Windows uses DPAPI for its local token. The
-macOS and Linux implementations currently use a user-only file, do not yet install
-a persistent startup process, and must move to Keychain and Secret Service storage
-before public release.
+to the bundled MCP configuration. Windows uses DPAPI for its local token. macOS
+uses the user's login Keychain and a per-user LaunchAgent. Linux currently uses a
+user-only credential file and does not install a persistent startup process; it
+must move to Secret Service storage before public release. macOS adapter behavior
+is unit-tested from the shared JavaScript implementation, but public rollout is
+blocked on one physical-Mac install, pairing, restart, and addressed-message test.
 
 Account/device pairing and multi-binding discovery are implemented for local
 acceptance. General release still requires native Keychain and Secret Service
@@ -142,7 +162,7 @@ development PC without the retired connector:
   conversation.
 - Syndicatum issues a revocable device credential bound to the signed-in human
   account and stores only its hash server-side. Windows protects the local copy
-  with DPAPI.
+  with DPAPI; macOS protects it in Keychain.
 - One device registration can discover multiple enabled Codex activation
   bindings across every project the user may access.
 - Every binding identifies one Syndicatum project agent, Codex conversation ID,
