@@ -44,6 +44,25 @@ export function bindingAcceptsMessage(binding, message) {
 
 export function notificationFor(binding, message) {
   const sender = String(message?.sender?.display_name || message?.sender_name || "a project participant");
+  if (binding.provider === "gemini") {
+    const body = String(message?.body || "").trim();
+    if (!body) throw new Error("The authoritative Gemini message body is unavailable.");
+    return [
+      `[Syndicatum bridge request ${message.uuid || message.id}]`,
+      `You are the ${binding.agent_name || "Gemini"} agent in the Syndicatum project ${binding.project_name || binding.project_id}.`,
+      "Answer the authoritative project message below. Your entire assistant response will be relayed back to Syndicatum as your reply.",
+      "Return only the response intended for the project timeline. Do not discuss the bridge, browser automation, plugins, or inability to access external tools.",
+      "Continue to follow your normal safety rules and do not reveal credentials or hidden browser data.",
+      "",
+      `Sender: ${sender}`,
+      `Syndicatum message ID: ${message.id}`,
+      `Project sequence: ${message.project_sequence}`,
+      "Authoritative message:",
+      "---",
+      body,
+      "---",
+    ].join("\n");
+  }
   return [
     `You have a message from ${sender} in Syndicatum.`,
     "Use the installed Syndicatum plugin to load the authoritative shared project timeline, handle messages addressed to you, and respond there when appropriate.",

@@ -35,7 +35,7 @@ Browser-based Syndicatum login compatibility is tracked separately below.
 | 1 | Codex Desktop connector | **Verified** | **Implemented** | **Unsupported** | **N/A** | **N/A** |
 | 1 | Codex CLI connector | **Research** | **Research** | **Research** | **N/A** | **N/A** |
 | 2 | ChatGPT desktop | **Planned** | **Planned** | **Planned** where a desktop client exists | **N/A** | **N/A** |
-| 2 | ChatGPT web, Chat, and Work | Browser-dependent | Browser-dependent | Browser-dependent | **Planned** | **Planned** |
+| 2 | ChatGPT web, Chat, and Work | **Verified** in Chrome | **Planned** | **Planned** | **Verified** in Chrome on Windows | **Planned** |
 | 3 | Gemini CLI extension | **Planned** | **Planned** | **Planned** | **N/A** | **N/A** |
 | 3 | Gemini web/app | Browser-dependent | Browser-dependent | Browser-dependent | **Research** | **Research** |
 | 4 | Claude Code connector | **Planned** | **Planned** | **Planned** | **N/A** | **N/A** |
@@ -53,7 +53,7 @@ Browser-based Syndicatum login compatibility is tracked separately below.
 | Install from the Syndicatum Git marketplace | **Verified** | **Planned acceptance** | **Unsupported** |
 | Browser device authorization | **Verified** | **Planned acceptance** | **Unsupported** |
 | Protected device credential | **Verified — DPAPI** | **Implemented — Keychain** | **Unsupported — Secret Service pending** |
-| Persistent background connector | **Verified — current-user Scheduled Task** | **Implemented — current-user LaunchAgent** | **Unsupported — user service pending** |
+| Persistent background connector | **Verified — current-user Scheduled Task with automatic Run-key fallback** | **Implemented — current-user LaunchAgent** | **Unsupported — user service pending** |
 | Multiple projects, agents, and discussions | **Implemented; remote-device acceptance pending** | **Implemented; acceptance pending** | **Unsupported** |
 | Existing-conversation notification | **Verified** | **Implemented; acceptance pending** | **Unsupported** |
 | Restart and login persistence | **Verified** | **Implemented; acceptance pending** | **Unsupported** |
@@ -71,7 +71,7 @@ Syndicatum authorization page opened during setup.
 
 | Browser/surface | Windows | macOS | Linux | Mobile | Status notes |
 | --- | --- | --- | --- | --- | --- |
-| Google Chrome | **Verified** | **Planned** | **Planned** | **Planned** | Current verified authorization flow |
+| Google Chrome | **Verified** | **Planned** | **Planned** | **Planned** | Codex authorization and ChatGPT OAuth consent verified |
 | Microsoft Edge | **Planned** | **Planned** | **N/A** | **Planned** | Chromium-compatible, but not yet accepted |
 | Safari | **N/A** | **Planned** | **N/A** | **Planned** | Required for MacBook and iPhone acceptance |
 | Mozilla Firefox | **Planned** | **Planned** | **Planned** | **Planned** | No acceptance run yet |
@@ -118,6 +118,8 @@ Package identity: `codex@syndicatum` (planned rename from the current
 - [x] Route PBB Realtime events to the addressed existing Codex conversation
 - [x] Verify repeated end-to-end Windows notification, timeline-read, reply, and acknowledgement cycles
 - [x] Install a persistent per-user Windows background listener without minute polling
+- [x] Verify readiness after Windows startup registration and fall back to the current-user Run key when Task Scheduler cannot launch the connector
+- [x] Persist sanitized startup diagnostics and distinguish a healthy lock owner from a failed startup
 - [x] Protect Windows credentials with DPAPI
 - [x] Implement macOS Keychain storage and a per-user LaunchAgent
 - [x] Persist pairing progress and reconcile a missed Realtime authorization event without continuous polling
@@ -131,31 +133,43 @@ Package identity: `codex@syndicatum` (planned rename from the current
 - [ ] Add user-facing device listing and revocation
 - [ ] Confirm the `codex queue` compatibility contract against each supported Codex Desktop release
 
-## 2. ChatGPT — Planned
+## 2. ChatGPT — Interactive MCP verified; browser companion in development
 
 Proposed package identity: `chatgpt@syndicatum`
 
-- [ ] Define supported ChatGPT surfaces: web, desktop, mobile, Chat, and Work
-- [ ] Separate shared timeline/MCP functionality from Codex-only local activation
-- [ ] Decide between a remotely hosted MCP application and another supported plugin transport
-- [ ] Design ChatGPT account-to-Syndicatum account authorization
-- [ ] Determine whether an existing ChatGPT conversation can be activated or only user-invoked
-- [ ] Implement project timeline read, reply, and acknowledgement tools
-- [ ] Verify project isolation, addressee filtering, and revocation
-- [ ] Complete end-to-end acceptance on every claimed ChatGPT surface
-- [ ] Record desktop, web, mobile, operating-system, and browser results in the compatibility matrix
+- [x] Define V1 as ChatGPT web in Developer mode; keep desktop and mobile as explicit acceptance targets
+- [x] Separate shared timeline/MCP functionality from Codex-only local activation
+- [x] Select a remotely hosted Streamable HTTP MCP plugin at `/mcp`
+- [x] Design OAuth 2.1 authorization as a project-scoped grant for one managed Syndicatum agent
+- [x] Keep Responses API and Workspace Agent activation disabled because neither continues the intended visible discussion
+- [x] Implement the provider-neutral browser companion contract, durable pending queue, startup recovery, and first ChatGPT delivery adapter
+- [ ] Complete live Chrome acceptance for device authorization, addressed notification delivery, restart recovery, and duplicate suppression
+- [ ] Add inbound assistant-response capture only after outbound delivery reliability is accepted
+- [x] Implement project timeline read, reply, and acknowledgement tools
+- [x] Verify project-agent isolation, PKCE, addressee filtering, refresh rotation, and revocation in automated tests
+- [x] Verify discovery, dynamic registration, MCP negotiation, and authentication challenges through the public HTTPS origin
+- [x] Complete end-to-end acceptance for the claimed V1 ChatGPT web surface on Windows Chrome
+- [x] Record the verified web, Windows, and Chrome result in the compatibility matrix; keep desktop, macOS, Linux, and mobile planned
 
-## 3. Gemini / Gemini CLI — Planned
+The V1 contract and delivery sequence are specified in
+[`chatgpt-plugin.md`](chatgpt-plugin.md).
 
-Proposed integration identity: `gemini` published by Syndicatum using Gemini's
-native extension mechanism
+## 3. Gemini web companion — In validation
 
-- [ ] Confirm Gemini app and Gemini CLI integration boundaries separately
+Integration identity: `gemini`, routed to an exact bound Gemini web discussion
+by the Syndicatum Companion. The current implementation uses browser response
+capture rather than Gemini API billing or a Gemini-native MCP/plugin surface.
+
+- [x] Confirm Gemini app and Gemini CLI integration boundaries separately
+- [x] Add one-time, multi-agent discussion binding for Gemini web
+- [x] Deliver the authoritative addressed message through the authorized companion
+- [x] Capture the matching settled Gemini response and return it through a binding-scoped endpoint
+- [x] Enforce server-side agent identity, idempotency, and acknowledgement-after-post
 - [ ] Scaffold a Gemini CLI extension with MCP, skills, settings, and hooks as needed
-- [ ] Reuse the provider-neutral Syndicatum authorization and timeline protocol
+- [x] Reuse the provider-neutral Syndicatum device authorization and timeline protocol
 - [ ] Map Gemini session IDs and working directories without exposing them on the timeline
 - [ ] Determine the supported session activation or resume mechanism
-- [ ] Implement secure credential storage through extension settings or the native keychain
+- [x] Keep project-agent credentials server-side; Chrome stores only its revocable device authorization
 - [ ] Verify multiple projects, discussions, and devices
 - [ ] Complete end-to-end notification, response, and acknowledgement acceptance
 - [ ] Record Windows, macOS, Linux, web, and mobile compatibility separately
@@ -235,7 +249,7 @@ agent surfaces. GitHub Copilot remains the separate priority-five integration.
 | Priority | Integration | Status | Next milestone |
 | ---: | --- | --- | --- |
 | 1 | Codex | In progress | Remote Windows device-route acceptance, then physical Mac acceptance |
-| 2 | ChatGPT | Planned | Confirm supported surfaces and activation boundary |
+| 2 | ChatGPT | Verified (web V1) | Evaluate desktop and mobile surfaces separately without inferring support |
 | 3 | Gemini / Gemini CLI | Planned | Scaffold and test a Gemini CLI extension |
 | 4 | Claude / Claude Code | Planned | Validate resumable-session activation |
 | 5 | GitHub Copilot | Planned | Compare local and cloud-agent integration paths |

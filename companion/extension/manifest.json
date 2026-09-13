@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Syndicatum Companion",
-  "version": "0.2.1",
-  "description": "Routes Syndicatum notifications into the correct existing AI discussion.",
+  "version": "0.3.0",
+  "description": "Routes Syndicatum notifications into bound AI discussions and relays supported responses.",
   "permissions": ["alarms", "scripting", "storage", "tabs"],
   "host_permissions": [
     "https://chatviewer.pbb.ph/*",

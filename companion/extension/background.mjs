@@ -146,7 +146,17 @@ async function drain() {
       const [key, item] = entry;
       const startedAt = new Date().toISOString();
       try {
-        if (!item.browserDeliveredAt) {
+        let result = null;
+        if (item.provider === "gemini") {
+          result = await deliver(item);
+          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { retryable: result?.retryable !== false });
+          const response = String(result.responseText || "").trim();
+          if (!response) throw new Error("Gemini completed without a capturable response.");
+          await api("/api/v1/connector-agent-replies.php", {
+            method: "POST",
+            body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id, response }),
+          });
+        } else if (!item.browserDeliveredAt) {
           const result = await deliver(item);
           if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { retryable: result?.retryable !== false });
           const afterBrowserDelivery = await state();
@@ -154,7 +164,9 @@ async function drain() {
           stagedQueue[key] = { ...stagedQueue[key], browserDeliveredAt: new Date().toISOString(), browserDelivery: result };
           await save({ queue: stagedQueue });
         }
-        await api("/api/v1/connector-notification-deliveries.php", { method: "POST", body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id }) });
+        if (item.provider !== "gemini") {
+          await api("/api/v1/connector-notification-deliveries.php", { method: "POST", body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id }) });
+        }
         const latest = await state();
         const queue = { ...(latest.queue || {}) }; delete queue[key];
         const delivered = { ...(latest.delivered || {}), [key]: new Date().toISOString() };
@@ -170,8 +182,8 @@ async function drain() {
           startedAt,
           completedAt: delivered[key],
           attempts: Number(item.attempts || 0) + 1,
-          outcome: "delivered",
-          ...(latest.queue?.[key]?.browserDelivery || {}),
+          outcome: item.provider === "gemini" ? "replied" : "delivered",
+          ...deliveryMetadata(result || latest.queue?.[key]?.browserDelivery || {}),
         });
       } catch (error) {
         const latest = await state();
@@ -194,7 +206,13 @@ async function deliver(item) {
   if (tab.status !== "complete") {
     for (let index = 0; index < 40; index++) { await delay(250); tab = await chrome.tabs.get(tab.id); if (tab.status === "complete") break; }
   }
-  const request = { type: "syndicatum.provider.deliver", provider: item.provider, text: notificationFor(item, item.message) };
+  if (item.provider === "gemini") await injectProviderAdapter(tab.id, item.provider);
+  const request = {
+    type: "syndicatum.provider.deliver",
+    provider: item.provider,
+    text: notificationFor(item, item.message),
+    delivery: { provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id },
+  };
   const metadata = { matchingTabCount: tabs.length, selectedTabWasActive: Boolean(tab.active), selectedTabWasDiscarded: Boolean(tab.discarded) };
   try { return { ...(await chrome.tabs.sendMessage(tab.id, request)), ...metadata }; }
   catch (error) {
@@ -202,6 +220,25 @@ async function deliver(item) {
     await injectProviderAdapter(tab.id, item.provider);
     return { ...(await chrome.tabs.sendMessage(tab.id, request)), ...metadata, adapterInjected: true };
   }
+}
+
+function deliveryMetadata(result) {
+  const { responseText: _responseText, ...metadata } = result || {};
+  return metadata;
+}
+
+async function markProviderAccepted(delivery) {
+  const provider = String(delivery?.provider || "");
+  const projectId = Number(delivery?.project_id);
+  const agentId = Number(delivery?.agent_id);
+  const messageId = Number(delivery?.message_id);
+  if (provider !== "gemini" || !Number.isInteger(projectId) || !Number.isInteger(agentId) || !Number.isInteger(messageId)) {
+    throw new Error("The provider acceptance envelope is invalid.");
+  }
+  return api("/api/v1/connector-notification-deliveries.php", {
+    method: "POST",
+    body: JSON.stringify({ provider, project_id: projectId, agent_id: agentId, message_id: messageId }),
+  });
 }
 
 async function injectProviderAdapter(tabId, provider) {
@@ -280,7 +317,8 @@ async function publicStatus() {
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
   const action = request?.type;
-  const operation = action === "syndicatum.connect" ? beginConnection(request.baseUrl)
+  const operation = action === "syndicatum.provider.accepted" ? markProviderAccepted(request.delivery)
+    : action === "syndicatum.connect" ? beginConnection(request.baseUrl)
     : action === "syndicatum.disconnect" ? disconnect().then(publicStatus)
     : action === "syndicatum.refresh" ? start().then(publicStatus)
     : action === "syndicatum.bind-discussion" ? bindActiveDiscussion(request.bindingCode)

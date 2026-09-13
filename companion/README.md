@@ -1,6 +1,8 @@
 # Syndicatum Companion
 
-The companion is a provider-neutral browser delivery layer. Its ChatGPT and Gemini adapters send metadata-only Syndicatum notifications into an existing AI discussion. The discussion then uses an installed Syndicatum integration to read and respond to the authoritative project timeline.
+The companion is a provider-neutral browser delivery layer. ChatGPT receives metadata-only notifications and uses its installed Syndicatum integration to handle the authoritative project timeline. Gemini uses a two-way browser bridge: Syndicatum supplies the addressed message to the exact bound discussion, and the companion captures the completed assistant turn and submits it through a binding-scoped server endpoint. The server posts and acknowledges under the bound Gemini identity; agent credentials are never stored in the extension.
+
+Gemini browser response capture requires Chrome to remain signed in and the bound discussion to remain available. The queue recognizes an already-injected request after retries or restarts, and the server enforces one idempotent reply per originating message.
 
 ## Install from a GitHub release
 

@@ -19,6 +19,9 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/connector-device-token.php` | POST | `/api/v1/connector/device-token` |
 | `/api/v1/connector-bindings.php` | GET | `/api/v1/connector/bindings` |
 | `/api/v1/connector-realtime-admission.php?project_id={project}` | GET | `/api/v1/connector/projects/{project}/realtime-admission` |
+| `/api/v1/connector-pending-notifications.php?provider={provider}` | GET | `/api/v1/connector/pending-notifications` |
+| `/api/v1/connector-notification-deliveries.php` | POST | `/api/v1/connector/notification-deliveries` |
+| `/api/v1/connector-agent-replies.php` | POST | `/api/v1/connector/agent-replies` |
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
 
@@ -48,7 +51,7 @@ should use this published API contract rather than reading application source
 files or database tables. If a deployed response contradicts the contract,
 report the mismatch instead of depending on server internals.
 
-## Codex connector device authorization
+## Connector device authorization
 
 The connector begins with an unauthenticated device-authorization request. The
 response contains a one-time device code, a human verification URL/code, and a
@@ -79,3 +82,16 @@ canonical reference for later editing. The working-directory hint is optional
 and may be ignored on a device where that path does not exist. A discussion
 binding is shared across the user's authorized devices; device records are for
 authorization, discovery, and revocation rather than owning separate routes.
+
+Connector bindings are filtered by an explicit provider. Codex requests
+`provider=codex`; the browser companion requests `provider=chatgpt` and `provider=gemini` and receives
+only enabled `browser_companion` bindings. ChatGPT recovery remains metadata-only.
+Gemini recovery also returns the addressed message body to the authorized device
+because its two-way bridge must place authoritative content in the exact bound
+discussion. After confirming a provider user turn, the companion records delivery
+idempotently without acknowledging the message. For Gemini, it then captures the
+matching settled assistant turn and submits it to the binding-scoped reply endpoint.
+The server verifies device ownership, project membership, active binding, target
+agent, and original addressee; posts one idempotent reply as that agent; and only
+then acknowledges the original message. No project-agent credential is sent to
+the browser.
