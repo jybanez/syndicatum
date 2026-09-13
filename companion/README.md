@@ -32,6 +32,10 @@ or all websites; its manifest limits host access to Syndicatum and ChatGPT.
 
 The browser must remain signed in to ChatGPT. If it is closed or the discussion is busy, delivery stays pending and is recovered when the browser starts again. Successful browser delivery marks the addressee as notified; it does not acknowledge the project message.
 
+The companion also injects its packaged provider adapter on demand when a
+matching discussion tab was already open before the extension was installed or
+reloaded. It never downloads or executes remote code.
+
 ## Provider contract
 
 Each content adapter registers `globalThis.SyndicatumProviderAdapters[provider]` with an asynchronous `deliver(text)` method. The method returns `{ ok: true }` only after a new user turn is visible, or `{ ok: false, retryable, code }` otherwise. Core routing and durable delivery keys remain provider-independent so Gemini and Copilot adapters can be added without changing the Syndicatum API.

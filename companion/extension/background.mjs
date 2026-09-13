@@ -128,12 +128,18 @@ async function deliver(item) {
   if (tab.status !== "complete") {
     for (let index = 0; index < 40; index++) { await delay(250); tab = await chrome.tabs.get(tab.id); if (tab.status === "complete") break; }
   }
-  try {
-    return await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.provider.deliver", provider: item.provider, text: notificationFor(item, item.message) });
-  } catch {
-    await delay(750);
-    return chrome.tabs.sendMessage(tab.id, { type: "syndicatum.provider.deliver", provider: item.provider, text: notificationFor(item, item.message) });
+  const request = { type: "syndicatum.provider.deliver", provider: item.provider, text: notificationFor(item, item.message) };
+  try { return await chrome.tabs.sendMessage(tab.id, request); }
+  catch (error) {
+    if (!String(error?.message || error).includes("Receiving end does not exist")) throw error;
+    await injectProviderAdapter(tab.id, item.provider);
+    return chrome.tabs.sendMessage(tab.id, request);
   }
+}
+
+async function injectProviderAdapter(tabId, provider) {
+  if (provider !== "chatgpt") throw new Error(`No injectable adapter is available for ${provider}.`);
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["providers/chatgpt.js", "content.js"] });
 }
 
 function connectRealtime(bindings) {
