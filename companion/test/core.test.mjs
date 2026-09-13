@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, deliveryKey, normalizeDiscussionUrl, notificationFor } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeDiscussionUrl, notificationFor } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -12,3 +12,6 @@ test("routes only to the addressed participant", () => { assert.equal(bindingAcc
 test("does not route an agent's own message back to itself", () => assert.equal(bindingAcceptsMessage(binding, { ...message, sender: { participant_id: 44 }, addressees: [{ participant_id: 44 }] }), false));
 test("creates a stable provider-scoped delivery key", () => assert.equal(deliveryKey({ ...binding, message }), "chatgpt:3:30:91"));
 test("notification contains metadata but not a message body", () => { const text = notificationFor(binding, message); assert.match(text, /message ID: 91/); assert.match(text, /Project sequence: 17/); assert.doesNotMatch(text, /secret message body/); });
+test("extracts bindings from the connector response envelope", () => assert.deepEqual(bindingsFromResponse({ device: { id: "device" }, bindings: [binding] }), [binding]));
+test("retains compatibility with a direct bindings array", () => assert.deepEqual(bindingsFromResponse([binding]), [binding]));
+test("rejects malformed binding responses instead of silently showing zero", () => assert.throws(() => bindingsFromResponse({ device: {} }), /invalid connector bindings response/));

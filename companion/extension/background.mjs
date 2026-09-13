@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, recoveryItem } from "./core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, recoveryItem } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -56,8 +56,8 @@ async function pollAuthorization() {
 }
 
 async function refreshBindings() {
-  const bindings = await api("/api/v1/connector-bindings.php?provider=chatgpt");
-  const normalized = (Array.isArray(bindings) ? bindings : []).map(binding => ({ ...binding, provider: "chatgpt", conversation_id: normalizeDiscussionUrl(binding.conversation_id, "chatgpt") }));
+  const response = await api("/api/v1/connector-bindings.php?provider=chatgpt");
+  const normalized = bindingsFromResponse(response).map(binding => ({ ...binding, provider: "chatgpt", conversation_id: normalizeDiscussionUrl(binding.conversation_id, "chatgpt") }));
   await save({ bindings: normalized, status: "connected", lastSyncAt: new Date().toISOString(), lastError: null });
   connectRealtime(normalized);
   return normalized;

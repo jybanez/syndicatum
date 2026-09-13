@@ -47,3 +47,9 @@ export function notificationFor(binding, message) {
 export function recoveryItem(binding, message) {
   return { ...binding, message, provider: binding.provider || binding.runtime_type };
 }
+
+export function bindingsFromResponse(value) {
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.bindings)) return value.bindings;
+  throw new Error("Syndicatum returned an invalid connector bindings response.");
+}
