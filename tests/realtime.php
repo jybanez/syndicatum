@@ -206,6 +206,12 @@ try {
         last_error VARCHAR(500) NULL,
         created_at DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE message_addressees (
+        message_id BIGINT UNSIGNED NOT NULL,
+        participant_id BIGINT UNSIGNED NOT NULL,
+        notified_at DATETIME NULL,
+        PRIMARY KEY (message_id, participant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     $suite->test('outbox stores a full message and tracks delivery state', function () use ($suite, $pdo) {
         $outbox = new MessageOutbox($pdo);
@@ -217,8 +223,11 @@ try {
         $suite->same(1, (int) $attempt['attempt_count']);
         $outbox->markRetry($event['id'], "temporary\nerror", 5);
         $suite->same('temporary error', $pdo->query('SELECT last_error FROM message_events_outbox')->fetchColumn());
+        $pdo->exec('INSERT INTO message_addressees (message_id, participant_id) VALUES (8, 21)');
         $outbox->markPublished($event['id']);
         $suite->truthy($pdo->query('SELECT published_at FROM message_events_outbox')->fetchColumn() !== null);
+        $suite->same(null, $pdo->query('SELECT notified_at FROM message_addressees WHERE message_id = 8 AND participant_id = 21')->fetchColumn(),
+            'Publishing a shared Realtime event must not claim recipient-specific notification delivery.');
     });
 } catch (PDOException $exception) {
     echo 'SKIP  outbox database test: ' . $exception->getMessage() . "\n";

@@ -77,17 +77,12 @@ class MessageOutbox
 
     public function markPublished($id)
     {
-        $event = $this->findById((int) $id);
         $statement = $this->pdo->prepare(
             'UPDATE message_events_outbox
              SET published_at = ?, last_error = NULL
              WHERE id = ? AND published_at IS NULL AND failed_at IS NULL'
         );
         $statement->execute([Db::now(), (int) $id]);
-        if ($event && !empty($event['message_id']) && Db::tableExists($this->pdo, 'message_addressees')) {
-            $this->pdo->prepare('UPDATE message_addressees SET notified_at = COALESCE(notified_at, ?) WHERE message_id = ?')
-                ->execute([Db::now(), (int) $event['message_id']]);
-        }
     }
 
     public function markRetry($id, $error, $delaySeconds)
