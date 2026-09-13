@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Syndicatum Companion",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Routes Syndicatum notifications into the correct existing AI discussion.",
   "permissions": ["alarms", "storage", "tabs"],
   "host_permissions": [
@@ -12,9 +12,19 @@
     "service_worker": "background.mjs",
     "type": "module"
   },
+  "icons": {
+    "16": "icons/syndicatum-16.png",
+    "32": "icons/syndicatum-32.png",
+    "48": "icons/syndicatum-48.png",
+    "128": "icons/syndicatum-128.png"
+  },
   "action": {
     "default_title": "Syndicatum Companion",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/syndicatum-16.png",
+      "32": "icons/syndicatum-32.png"
+    }
   },
   "content_scripts": [
     {

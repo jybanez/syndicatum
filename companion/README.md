@@ -4,7 +4,7 @@ The companion is a provider-neutral browser delivery layer. Its first adapter se
 
 ## Install from a GitHub release
 
-1. Download `syndicatum-companion-v0.1.0.zip` from the official Syndicatum GitHub release.
+1. Download the latest `syndicatum-companion-v{version}.zip` from the official Syndicatum GitHub release.
 2. Optionally verify it against the attached `.sha256` file with `Get-FileHash`.
 3. Extract the ZIP to a permanent local directory. Do not delete that directory while the extension is installed.
 4. Open `chrome://extensions` in Chrome or Edge.
