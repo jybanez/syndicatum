@@ -16,7 +16,9 @@
 
   function responseText(turn) {
     const content = turn?.querySelector?.("message-content, .markdown-main-panel, .response-content, .model-response-text") || turn;
-    return String(content?.innerText || content?.textContent || "").trim();
+    return String(content?.innerText || content?.textContent || "")
+      .replace(/^\s*Gemini said\s*/i, "")
+      .trim();
   }
 
   function isResponseSettled(turn) {

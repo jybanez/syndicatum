@@ -6,7 +6,7 @@ const extensionUrl = new URL("../extension/", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.3.1");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -56,6 +56,7 @@ test("Gemini adapter confirms the exact injected turn", async () => {
   assert.match(source, /new_exact_user_turn/);
   assert.match(source, /waitForResponse/);
   assert.match(source, /responseText: captured/);
+  assert.match(source, /Gemini said/);
 });
 
 test("Gemini responses use a protected binding-scoped return path", async () => {
