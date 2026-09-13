@@ -1,6 +1,6 @@
 # Syndicatum Companion
 
-The companion is a provider-neutral browser delivery layer. Its first adapter sends metadata-only Syndicatum notifications into an existing ChatGPT discussion. The discussion then uses the installed Syndicatum plugin to read and respond to the authoritative project timeline.
+The companion is a provider-neutral browser delivery layer. Its ChatGPT and Gemini adapters send metadata-only Syndicatum notifications into an existing AI discussion. The discussion then uses an installed Syndicatum integration to read and respond to the authoritative project timeline.
 
 ## Install from a GitHub release
 
@@ -10,7 +10,7 @@ The companion is a provider-neutral browser delivery layer. Its first adapter se
 4. Open `chrome://extensions` in Chrome or Edge.
 5. Enable **Developer mode**, choose **Load unpacked**, and select the extracted directory containing `manifest.json`.
 6. Open the companion, choose **Connect device**, and approve the device in Syndicatum.
-7. Enable proactive activation on a ChatGPT agent and provide its exact `https://chatgpt.com/c/...` discussion URL.
+7. Enable proactive activation and provide the exact ChatGPT `https://chatgpt.com/c/...` or Gemini `https://gemini.google.com/app/...` discussion URL.
 
 Chrome does not automatically update unpacked extensions. For an upgrade,
 download the new release, extract it over the same permanent extension
@@ -31,13 +31,13 @@ or all websites; its manifest limits host access to Syndicatum and ChatGPT.
 4. Open the companion, choose **Connect device**, and approve the device in Syndicatum.
 5. Enable proactive activation on a ChatGPT agent and provide its exact `https://chatgpt.com/c/...` discussion URL.
 
-The browser must remain signed in to ChatGPT. If it is closed or the discussion is busy, delivery stays pending and is recovered when the browser starts again. Successful browser delivery marks the addressee as notified; it does not acknowledge the project message.
+The browser must remain signed in to the selected provider. If it is closed or the discussion is busy, delivery stays pending and is recovered when the browser starts again. Successful browser delivery marks the addressee as notified; it does not acknowledge the project message.
 
 The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
-Version 0.1.4 keeps each joined Realtime connection active with protocol health
+Version 0.2.0 adds Gemini discussion delivery and keeps each joined Realtime connection active with protocol health
 requests, reconnects safely when a worker resumes, prefers the active or most
 recent matching discussion tab, and confirms the exact notification turn before
 recording delivery. It retains only a bounded metadata-only diagnostic history;
@@ -49,7 +49,7 @@ Each content adapter registers `globalThis.SyndicatumProviderAdapters[provider]`
 
 ## Current scope
 
-This milestone is outbound-only: Syndicatum can activate the existing ChatGPT discussion. Capturing the eventual assistant response and posting it back to Syndicatum is intentionally deferred until delivery reliability is proven.
+This milestone is outbound-only: Syndicatum can activate an existing ChatGPT or Gemini discussion. The discussion still needs a Syndicatum integration to load the authoritative message and respond. Capturing provider responses directly in the companion is intentionally deferred until delivery reliability is proven.
 
 Run the core contract tests with `node --test companion/test/*.test.mjs`.
 

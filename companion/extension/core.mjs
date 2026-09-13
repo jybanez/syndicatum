@@ -1,5 +1,6 @@
 export const PROVIDERS = Object.freeze({
   chatgpt: Object.freeze({ host: "chatgpt.com", label: "ChatGPT" }),
+  gemini: Object.freeze({ host: "gemini.google.com", label: "Gemini" }),
 });
 
 export function normalizeBaseUrl(value) {
@@ -14,7 +15,10 @@ export function normalizeDiscussionUrl(value, provider = "chatgpt") {
   const definition = PROVIDERS[provider];
   if (!definition) throw new Error(`Unsupported provider: ${provider}`);
   const url = new URL(String(value || "").trim());
-  if (url.protocol !== "https:" || url.hostname !== definition.host || !/(?:^|\/)c\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) {
+  const validPath = provider === "chatgpt"
+    ? /(?:^|\/)c\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)
+    : provider === "gemini" && /^\/app\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
+  if (url.protocol !== "https:" || url.hostname !== definition.host || !validPath) {
     throw new Error(`A valid ${definition.label} discussion URL is required.`);
   }
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;

@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, recoveryItem, selectDeliveryTab } from "./core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -86,19 +86,24 @@ async function pollAuthorization() {
 }
 
 async function refreshBindings() {
-  const response = await api("/api/v1/connector-bindings.php?provider=chatgpt");
-  const normalized = bindingsFromResponse(response).map(binding => ({ ...binding, provider: "chatgpt", conversation_id: normalizeDiscussionUrl(binding.conversation_id, "chatgpt") }));
+  const providerBindings = await Promise.all(Object.keys(PROVIDERS).map(async provider => {
+    const response = await api(`/api/v1/connector-bindings.php?provider=${encodeURIComponent(provider)}`);
+    return bindingsFromResponse(response).map(binding => ({ ...binding, provider, conversation_id: normalizeDiscussionUrl(binding.conversation_id, provider) }));
+  }));
+  const normalized = providerBindings.flat();
   await save({ bindings: normalized, status: "connected", lastSyncAt: new Date().toISOString(), lastError: null });
   connectRealtime(normalized);
   return normalized;
 }
 
 async function recover(bindings) {
-  const items = await api("/api/v1/connector-pending-notifications.php?provider=chatgpt&limit=200");
   const byBinding = new Map(bindings.map(binding => [`${binding.project_id}:${binding.agent_id}`, binding]));
-  for (const item of Array.isArray(items) ? items : []) {
-    const binding = byBinding.get(`${item.project_id}:${item.agent_id}`);
-    if (binding) await enqueue(recoveryItem(binding, item.message));
+  for (const provider of Object.keys(PROVIDERS)) {
+    const items = await api(`/api/v1/connector-pending-notifications.php?provider=${encodeURIComponent(provider)}&limit=200`);
+    for (const item of Array.isArray(items) ? items : []) {
+      const binding = byBinding.get(`${item.project_id}:${item.agent_id}`);
+      if (binding && binding.provider === provider) await enqueue(recoveryItem(binding, item.message));
+    }
   }
 }
 
@@ -183,8 +188,8 @@ async function deliver(item) {
 }
 
 async function injectProviderAdapter(tabId, provider) {
-  if (provider !== "chatgpt") throw new Error(`No injectable adapter is available for ${provider}.`);
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["providers/chatgpt.js", "content.js"] });
+  if (!PROVIDERS[provider]) throw new Error(`No injectable adapter is available for ${provider}.`);
+  await chrome.scripting.executeScript({ target: { tabId }, files: [`providers/${provider}.js`, "content.js"] });
 }
 
 function connectRealtime(bindings) {
