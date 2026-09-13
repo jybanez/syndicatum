@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Syndicatum Companion</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <main>
+    <header><div class="mark">S</div><div><h1>Syndicatum Companion</h1><p>ChatGPT delivery</p></div></header>
+    <section id="connect-view">
+      <label for="base-url">Syndicatum URL</label>
+      <input id="base-url" type="url" value="https://chatviewer.pbb.ph" spellcheck="false">
+      <button id="connect" type="button">Connect device</button>
+    </section>
+    <section id="status-view" hidden>
+      <div class="row"><span>Status</span><strong id="status">Disconnected</strong></div>
+      <div class="row"><span>Bindings</span><strong id="bindings">0</strong></div>
+      <div class="row"><span>Pending</span><strong id="queued">0</strong></div>
+      <p id="authorization" class="notice" hidden></p>
+      <p id="error" class="error" hidden></p>
+      <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

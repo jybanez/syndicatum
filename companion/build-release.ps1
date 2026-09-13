@@ -1,0 +1,42 @@
+[CmdletBinding()]
+param(
+    [string] $OutputDirectory = (Join-Path $env:TEMP 'syndicatum-companion-releases')
+)
+
+$ErrorActionPreference = 'Stop'
+$companionRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$extensionRoot = Join-Path $companionRoot 'extension'
+$manifestPath = Join-Path $extensionRoot 'manifest.json'
+
+if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    throw "Extension manifest was not found at $manifestPath"
+}
+
+$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace([string] $manifest.version)) {
+    throw 'Extension manifest version is required.'
+}
+
+New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+$resolvedOutput = (Resolve-Path -LiteralPath $OutputDirectory).Path
+$archiveName = "syndicatum-companion-v$($manifest.version).zip"
+$archivePath = Join-Path $resolvedOutput $archiveName
+$checksumPath = "$archivePath.sha256"
+
+if (Test-Path -LiteralPath $archivePath) {
+    Remove-Item -LiteralPath $archivePath -Force
+}
+if (Test-Path -LiteralPath $checksumPath) {
+    Remove-Item -LiteralPath $checksumPath -Force
+}
+
+Compress-Archive -Path (Join-Path $extensionRoot '*') -DestinationPath $archivePath -CompressionLevel Optimal
+$hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -LiteralPath $checksumPath -Value "$hash  $archiveName" -Encoding ascii
+
+[pscustomobject]@{
+    Version = [string] $manifest.version
+    Archive = $archivePath
+    Checksum = $checksumPath
+    SHA256 = $hash
+}
