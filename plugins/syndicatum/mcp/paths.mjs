@@ -20,6 +20,7 @@ export function pluginPaths(env = process.env, platform = process.platform) {
   const home = env.HOME || env.USERPROFILE || os.homedir();
   return {
     root,
+    agentProfiles: path.join(root, "agent-identities"),
     config: path.join(root, "connector.config.json"),
     credential: path.join(root, "credential"),
     pendingCredential: path.join(root, "pending-login-credential"),
@@ -31,6 +32,7 @@ export function pluginPaths(env = process.env, platform = process.platform) {
     backgroundLock: path.join(root, "background.lock"),
     backgroundMetadata: path.join(root, "background.json"),
     backgroundHealth: path.join(root, "background-health.json"),
+    backgroundStartupLog: path.join(root, "background-startup.log"),
     backgroundRuntime: path.join(root, "runtime"),
     backgroundLauncher: path.join(root, "background-launcher.ps1"),
     launchAgent: path.join(home, "Library", "LaunchAgents", "ph.pbb.syndicatum.codex-connector.plist"),

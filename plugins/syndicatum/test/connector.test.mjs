@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ActivationConnector, isAddressedTo, isSentBy } from "../mcp/connector.mjs";
 import { CodexDriver, loadCodexThread, resolveCodexPath } from "../mcp/codex-driver.mjs";
+import { StateStore } from "../mcp/state-store.mjs";
+import { DeviceConnector } from "../mcp/device-connector.mjs";
 
 const message = { id: 1559, project_id: 1, project_sequence: 1559, sender: { id: 9, display_name: "PBB Realtime" }, addressees: [{ participant_id: 8, reason: "direct" }] };
 
@@ -18,8 +20,9 @@ test("addressed messages are delivered once", async () => {
   const processed = new Set(); let activations = 0;
   const state = {
     has: id => processed.has(String(id)),
+    activeWake: () => null,
     markPending: async () => {},
-    markProcessed: async item => { processed.add(String(item.id)); },
+    markProcessed: async item => { processed.add(String(item.id)); }, markWakeQueued: async item => { processed.add(String(item.id)); },
     observeSequence: async () => {},
   };
   const connector = new ActivationConnector({
@@ -34,9 +37,140 @@ test("addressed messages are delivered once", async () => {
   assert.equal(activations, 1);
 });
 
+test("new activity is coalesced behind one wake and only unresolved activity gets one follow-up", async () => {
+  const processed = new Set(), acknowledged = new Set(), activations = [];
+  let wake = null;
+  const state = {
+    has: id => processed.has(String(id)) || Boolean(wake?.messages.some(item => String(item.id) === String(id))),
+    activeWake: () => wake ? structuredClone(wake) : null,
+    markPending: async () => {},
+    markProcessed: async item => { processed.add(String(item.id)); },
+    markWakeQueued: async (item, discussionId) => { wake = { anchor_message_id: String(item.id), discussion_id: String(discussionId || ""), high_water_sequence: item.project_sequence, messages: [structuredClone(item)] }; },
+    coalesceWake: async item => { wake.messages.push(structuredClone(item)); wake.high_water_sequence = item.project_sequence; },
+    clearWake: async items => { for (const item of items) processed.add(String(item.id)); wake = null; },
+    observeSequence: async () => {},
+  };
+  const second = { ...message, id: 1560, project_sequence: 1560 };
+  const connector = new ActivationConnector({
+    config: { participantId: "8", coalescingPollMs: 60000, activationRetryLimit: 2, activationRetryBaseMs: 1000, activationRetryMaxMs: 1000 },
+    syndicatum: {
+      isAcknowledged: async id => acknowledged.has(String(id)),
+      addressedUnacknowledged: async () => [second],
+    },
+    driver: { activate: async item => { activations.push(String(item.id)); } },
+    state,
+    log: { info() {}, error() {} },
+  });
+  assert.equal((await connector.handleMessage(message, "test")).status, "notified");
+  assert.equal((await connector.handleMessage(second, "test")).status, "coalesced");
+  assert.deepEqual(activations, ["1559"]);
+  acknowledged.add("1559");
+  assert.equal((await connector.reconcileWake()).status, "notified");
+  assert.deepEqual(activations, ["1559", "1560"]);
+  connector.stop();
+});
+
+test("coalesced wake state and its discussion scope survive connector restart", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-wake-state-"));
+  const file = path.join(directory, "state.json");
+  try {
+    const first = new StateStore(file); await first.load();
+    const second = { ...message, id: 1560, project_sequence: 1560 };
+    await first.markPending(message);
+    await first.markWakeQueued(message, "discussion-1");
+    await first.coalesceWake(second);
+    const restored = new StateStore(file); await restored.load();
+    assert.equal(restored.activeWake().discussion_id, "discussion-1");
+    assert.equal(restored.activeWake().high_water_sequence, 1560);
+    assert.equal(restored.activeWake().messages.length, 2);
+    assert.equal(restored.has(1559), true);
+    assert.equal(restored.has(1560), true);
+    await restored.clearWake([message]);
+    assert.equal(restored.activeWake(), null);
+    assert.equal(restored.has(1559), true);
+    assert.equal(restored.has(1560), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("an unclaimed legacy binding cannot abort the device listener", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-unclaimed-binding-"));
+  const logs = [];
+  try {
+    const connector = new DeviceConnector({
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://chatviewer.pbb.ph" },
+      syndicatum: {},
+      bindings: [{ project_id: 1, participant_id: 1, agent_id: 1, conversation_id: "discussion-1", working_directory: null }],
+      loadProfile: async () => { const error = new Error("missing profile"); error.code = "ENOENT"; throw error; },
+      driverFactory: () => ({ activate: async () => {} }),
+      log: { info: value => logs.push(value), error() {} },
+    });
+    connector.stopped = true;
+    await connector.start();
+    assert.equal(connector.processors.get("1")[0].config.coalescingEnabled, false);
+    assert.match(logs[0], /local claimed profile could not be used/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("claimed bindings recover missed messages into one coalesced startup wake", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-startup-recovery-"));
+  const activations = [];
+  const older = { ...message, id: 1683, project_id: 3, project_sequence: 42, addressees: [{ participant_id: 34, reason: "mention" }] };
+  const newer = { ...message, id: 1684, project_id: 3, project_sequence: 43, addressees: [{ participant_id: 34, reason: "direct" }] };
+  try {
+    const identityClient = { isAcknowledged: async () => false, addressedUnacknowledged: async () => [newer, older] };
+    const connector = new DeviceConnector({
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://chatviewer.pbb.ph", coalescingPollMs: 60000 },
+      syndicatum: {},
+      bindings: [{ project_id: 3, participant_id: 34, agent_id: 31, conversation_id: "discussion-1", working_directory: null }],
+      loadProfile: async () => ({ syndicatum_url: "https://chatviewer.pbb.ph", project_id: 3, participant_id: 34, token: "protected" }),
+      identityClientFactory: () => identityClient,
+      driverFactory: () => ({ activate: async item => { activations.push(String(item.id)); } }),
+      log: { info() {}, error() {} },
+    });
+    connector.stopped = true;
+    await connector.start();
+    const processor = connector.processors.get("3")[0]; await processor.queue;
+    assert.deepEqual(activations, ["1683"]);
+    assert.equal(processor.state.activeWake().high_water_sequence, 43);
+    assert.equal(processor.state.activeWake().messages.length, 2);
+    processor.stop();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("a stale claimed credential cannot abort recovery for another binding", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-stale-profile-"));
+  const activations = [];
+  const recovered = { ...message, id: 1684, project_id: 3, project_sequence: 43, addressees: [{ participant_id: 34, reason: "direct" }] };
+  try {
+    const connector = new DeviceConnector({
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://chatviewer.pbb.ph", coalescingPollMs: 60000 },
+      syndicatum: {},
+      bindings: [
+        { project_id: 3, participant_id: 32, agent_id: 29, conversation_id: "discussion-stale", working_directory: null },
+        { project_id: 3, participant_id: 34, agent_id: 31, conversation_id: "discussion-helper", working_directory: null },
+      ],
+      loadProfile: async profileId => ({ syndicatum_url: "https://chatviewer.pbb.ph", project_id: 3, participant_id: profileId.endsWith(".29") ? 32 : 34, token: profileId.endsWith(".29") ? "stale" : "healthy" }),
+      identityClientFactory: options => options.token === "stale"
+        ? { addressedUnacknowledged: async () => { const error = new Error("Authentication is required."); error.status = 401; throw error; } }
+        : { isAcknowledged: async () => false, addressedUnacknowledged: async () => [recovered] },
+      driverFactory: config => ({ activate: async item => { activations.push(`${config.agentId}:${item.id}`); } }),
+      log: { info() {}, error() {} },
+    });
+    connector.stopped = true;
+    await connector.start();
+    for (const processors of connector.processors.values()) for (const processor of processors) await processor.queue;
+    assert.equal(connector.processors.get("3")[0].config.coalescingEnabled, false);
+    assert.equal(connector.processors.get("3")[1].config.coalescingEnabled, true);
+    assert.deepEqual(activations, ["31:1684"]);
+    for (const processors of connector.processors.values()) for (const processor of processors) processor.stop();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("Codex driver queues only the notification metadata", async () => {
   let invocation, loadedThread;
-  const driver = new CodexDriver({ codexPath: process.execPath, codexThreadId: "thread-1", workingDirectory: "C:\\project", projectId: "1", participantId: "8" }, async (executable, args, options) => {
+  const driver = new CodexDriver({ codexPath: process.execPath, codexThreadId: "thread-1", workingDirectory: "C:\\project", projectId: "1", participantId: "8", agentId: "29", profileId: "1234567890abcdef.1.29" }, async (executable, args, options) => {
     invocation = { executable, args, options }; return { stdout: "Queued message", stderr: "", code: 0 };
   }, async threadId => { loadedThread = threadId; });
   await driver.activate({ ...message, body: "authoritative secret body" });
@@ -44,7 +178,13 @@ test("Codex driver queues only the notification metadata", async () => {
   assert.deepEqual(invocation.args.slice(0, 4), ["queue", "--thread", "thread-1", "--message"]);
   assert.doesNotMatch(invocation.args[4], /authoritative secret body/);
   assert.match(invocation.args[4], /^You have a message from PBB Realtime in Syndicatum\./);
+  assert.match(invocation.args[4], /installed syndicatum-timeline skill/);
+  assert.match(invocation.args[4], /locally protected agent profile/);
+  assert.match(invocation.args[4], /Do not substitute another Syndicatum profile/);
+  assert.doesNotMatch(invocation.args[4], /installed pbb-chat-log skill/);
   assert.match(invocation.args[4], /Syndicatum message ID: 1559/);
+  assert.match(invocation.args[4], /Syndicatum agent ID: 29/);
+  assert.match(invocation.args[4], /Syndicatum profile ID: 1234567890abcdef\.1\.29/);
   assert.equal(loadedThread, "thread-1");
 });
 

@@ -14,7 +14,7 @@ import { BackgroundServiceManager } from "./background-service-manager.mjs";
 import { loadPairingState, savePairingState } from "./pairing-state.mjs";
 
 export class PluginRuntime {
-  constructor(env = process.env, { manageBackground = true, background = null } = {}) { this.env = env; this.manageBackground = manageBackground; this.background = background ?? new BackgroundServiceManager({ env }); this.connector = null; this.task = null; this.lock = null; this.pairing = null; this.pairingTask = null; this.configWatcher = null; this.reloadTimer = null; this.status = { state: "starting" }; }
+  constructor(env = process.env, { manageBackground = true, background = null } = {}) { this.env = env; this.manageBackground = manageBackground; this.background = background ?? new BackgroundServiceManager({ env }); this.connector = null; this.task = null; this.lock = null; this.pairing = null; this.pairingTask = null; this.configWatcher = null; this.reloadTimer = null; this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; this.status = { state: "starting" }; }
   async start() {
     await this.ensureConfigWatcher();
     await this.stop();
@@ -52,7 +52,7 @@ export class PluginRuntime {
     }
     return this.status;
   }
-  async stop() { if (this.connector) this.connector.stop(); this.connector = null; this.task = null; if (this.lock) await this.lock.release(); this.lock = null; }
+  async stop() { clearInterval(this.bindingRefreshTimer); this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; if (this.connector) this.connector.stop(); this.connector = null; this.task = null; if (this.lock) await this.lock.release(); this.lock = null; }
   async configure(input) {
     await saveConfig(input, this.env);
     return this.start();
@@ -135,7 +135,28 @@ export class PluginRuntime {
     this.status = { state: "running", mode: "device", deviceId: config.deviceId, bindings: validBindings.length, projects: new Set(validBindings.map(item => String(item.project_id))).size, unavailableBindings: unavailableBindings.length };
     if (unavailableBindings.length) logger.error(`${unavailableBindings.length} discussion binding(s) were skipped.`);
     this.task = this.connector.start().catch(error => { this.status = { ...this.status, state: "error", error: String(error?.message || error) }; logger.error(this.status.error); });
+    this.bindingSignature = deviceBindingSignature(validBindings, unavailableBindings);
+    this.bindingRefreshTimer = setInterval(() => void this.refreshDeviceBindings(client, logger), config.bindingRefreshMs);
+    this.bindingRefreshTimer.unref?.();
     return this.status;
+  }
+  async refreshDeviceBindings(client, logger) {
+    if (this.bindingRefreshBusy || !this.connector) return;
+    this.bindingRefreshBusy = true;
+    try {
+      const result = await client.bindings();
+      const selected = await selectAvailableBindings(Array.isArray(result.bindings) ? result.bindings : []);
+      const signature = deviceBindingSignature(selected.validBindings, selected.unavailableBindings);
+      if (signature !== this.bindingSignature) {
+        logger.info("Discussion bindings changed; reloading the connector listener.");
+        this.bindingSignature = signature;
+        this.scheduleReload();
+      }
+    } catch (error) {
+      logger.error(`Discussion binding refresh failed: ${String(error?.message || error).replace(/[\r\n\t]+/g, " ").slice(0, 500)}`);
+    } finally {
+      this.bindingRefreshBusy = false;
+    }
   }
   logger(role = this.manageBackground ? "mcp" : "background") {
     const file = pluginPaths(this.env).log;
@@ -182,4 +203,12 @@ export async function selectAvailableBindings(bindings, accessImpl = access) {
     }
   }
   return { validBindings, unavailableBindings };
+}
+
+export function deviceBindingSignature(validBindings, unavailableBindings = []) {
+  const normalize = binding => [
+    String(binding.project_id || ""), String(binding.participant_id || ""), String(binding.agent_id || ""),
+    String(binding.conversation_id || ""), String(binding.working_directory || ""), String(binding.reason || ""),
+  ].join("|");
+  return JSON.stringify({ valid: validBindings.map(normalize).sort(), unavailable: unavailableBindings.map(normalize).sort() });
 }

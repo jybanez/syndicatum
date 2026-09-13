@@ -2,17 +2,31 @@ import { randomUUID } from "node:crypto";
 import { ActivationConnector } from "./connector.mjs";
 import { CodexDriver } from "./codex-driver.mjs";
 import { StateStore } from "./state-store.mjs";
+import { agentProfileId, loadAgentProfile } from "./agent-profile-store.mjs";
+import { SyndicatumClient } from "./syndicatum-client.mjs";
 
 export class DeviceConnector {
-  constructor({ config, syndicatum, bindings, log = console }) {
-    Object.assign(this, { config, syndicatum, bindings, log }); this.stopped = false; this.sockets = new Set(); this.processors = new Map();
+  constructor({ config, syndicatum, bindings, log = console, loadProfile = loadAgentProfile, identityClientFactory = options => new SyndicatumClient(options), driverFactory = options => new CodexDriver(options) }) {
+    Object.assign(this, { config, syndicatum, bindings, log, loadProfile, identityClientFactory, driverFactory }); this.stopped = false; this.sockets = new Set(); this.processors = new Map();
   }
   async start() {
     for (const binding of this.bindings) {
       const state = new StateStore(`${this.config.stateFile}.participant-${binding.participant_id}`); await state.load();
-      const childConfig = { ...this.config, projectId: String(binding.project_id), participantId: String(binding.participant_id), codexThreadId: binding.conversation_id, workingDirectory: binding.working_directory };
-      const processor = new ActivationConnector({ config: childConfig, syndicatum: { isAcknowledged: async () => false }, driver: new CodexDriver(childConfig), state, log: this.log });
+      const profileId = agentProfileId(this.config.syndicatumUrl, binding.project_id, binding.agent_id);
+      let identityClient = null;
+      let recoveryMessages = [];
+      try {
+        const profile = await this.loadProfile(profileId);
+        identityClient = this.identityClientFactory({ syndicatumUrl: profile.syndicatum_url, projectId: String(profile.project_id), participantId: String(profile.participant_id), token: profile.token });
+        recoveryMessages = await identityClient.addressedUnacknowledged();
+      } catch (error) {
+        identityClient = null;
+        this.log.info(`Wake coalescing and startup recovery are unavailable for agent ${binding.agent_id}; its local claimed profile could not be used (${safe(error)}).`);
+      }
+      const childConfig = { ...this.config, projectId: String(binding.project_id), participantId: String(binding.participant_id), agentId: String(binding.agent_id), profileId, codexThreadId: binding.conversation_id, workingDirectory: binding.working_directory, coalescingEnabled: Boolean(identityClient) };
+      const processor = new ActivationConnector({ config: childConfig, syndicatum: identityClient ?? { isAcknowledged: async () => false }, driver: this.driverFactory(childConfig), state, log: this.log });
       const key = String(binding.project_id); if (!this.processors.has(key)) this.processors.set(key, []); this.processors.get(key).push(processor);
+      for (const message of [...recoveryMessages].reverse()) processor.enqueue(message, "startup-recovery");
     }
     await Promise.all([...this.processors.keys()].map(projectId => this.connectLoop(projectId)));
   }

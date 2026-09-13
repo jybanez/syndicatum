@@ -13,6 +13,8 @@ export async function loadConfig(env = process.env) {
       mode: "device", syndicatumUrl: String(raw.syndicatumUrl).replace(/\/+$/, ""), deviceId: String(raw.deviceId),
       codexPath: String(env.CODEX_CLI_PATH || raw.codexPath || "").trim() || null,
       reconnectDelayMs: clamp(raw.reconnectDelayMs, 1000, 60000, 5000),
+      bindingRefreshMs: clamp(raw.bindingRefreshMs, 5000, 300000, 15000),
+      coalescingPollMs: clamp(raw.coalescingPollMs, 1000, 60000, 5000),
       activationRetryLimit: clamp(raw.activationRetryLimit, 1, 20, 8), activationRetryBaseMs: 5000, activationRetryMaxMs: 60000,
       stateFile: files.state, token: await loadToken(files.credential, env),
     });
@@ -32,6 +34,7 @@ export async function loadConfig(env = process.env) {
     activationRetryLimit: clamp(raw.activationRetryLimit, 1, 20, 8),
     activationRetryBaseMs: clamp(raw.activationRetryBaseMs, 1000, 60000, 5000),
     activationRetryMaxMs: clamp(raw.activationRetryMaxMs, 5000, 300000, 60000),
+    coalescingPollMs: clamp(raw.coalescingPollMs, 1000, 60000, 5000),
     stateFile: files.state,
     credentialFile: files.credential,
     token: await loadToken(files.credential, env),
@@ -40,7 +43,7 @@ export async function loadConfig(env = process.env) {
 
 export async function saveDeviceConfig(input, env = process.env) {
   const files = pluginPaths(env);
-  const raw = { mode: "device", syndicatumUrl: String(input.syndicatumUrl).trim().replace(/\/+$/, ""), deviceId: String(input.deviceId).trim(), codexPath: String(input.codexPath || "").trim() || null, reconnectDelayMs: 5000, activationRetryLimit: 8 };
+  const raw = { mode: "device", syndicatumUrl: String(input.syndicatumUrl).trim().replace(/\/+$/, ""), deviceId: String(input.deviceId).trim(), codexPath: String(input.codexPath || "").trim() || null, reconnectDelayMs: 5000, bindingRefreshMs: 15000, coalescingPollMs: 5000, activationRetryLimit: 8 };
   if (!raw.syndicatumUrl || !raw.deviceId) throw new Error("Syndicatum device configuration is incomplete.");
   await mkdir(files.root, { recursive: true });
   await storeToken(files.credential, input.token);

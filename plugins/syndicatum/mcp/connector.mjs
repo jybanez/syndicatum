@@ -4,13 +4,14 @@ export class ActivationConnector {
   constructor({ config, syndicatum, driver, state, log = console }) {
     Object.assign(this, { config, syndicatum, driver, state, log });
     this.queue = Promise.resolve(); this.stopped = false; this.socket = null;
-    this.retryAttempts = new Map(); this.retryTimers = new Map();
+    this.retryAttempts = new Map(); this.retryTimers = new Map(); this.coalescingTimer = null; this.coalescingAttempt = 0;
   }
   async start() {
     await this.state.load();
     const project = await this.syndicatum.validateBinding();
     this.log.info(`Bound participant ${this.config.participantId} to ${project.name || `project ${this.config.projectId}`}.`);
     for (const message of this.state.pending()) this.enqueue(message, "pending-recovery");
+    if (this.canCoalesce() && (this.state.activeWake()?.messages.length ?? 0) > 1) this.scheduleCoalescedCheck();
     if (this.config.processExistingUnacknowledged) {
       for (const message of [...await this.syndicatum.addressedUnacknowledged()].reverse()) this.enqueue(message, "startup-recovery");
     }
@@ -20,6 +21,7 @@ export class ActivationConnector {
     this.stopped = true;
     for (const timer of this.retryTimers.values()) clearTimeout(timer);
     this.retryTimers.clear();
+    clearTimeout(this.coalescingTimer); this.coalescingTimer = null; this.coalescingAttempt = 0;
     this.socket?.close(1000, "Syndicatum plugin stopping");
   }
   enqueue(message, source = "realtime") {
@@ -35,11 +37,29 @@ export class ActivationConnector {
     if (await this.syndicatum.isAcknowledged(message.id)) {
       await this.state.markProcessed(message); this.clearRetry(message.id); return { status: "ignored", reason: "already-acknowledged" };
     }
+    const coalescingEnabled = this.canCoalesce();
+    const activeWake = this.state.activeWake();
+    if (activeWake) {
+      if (!coalescingEnabled || (activeWake.discussion_id && activeWake.discussion_id !== String(this.config.codexThreadId || ""))) {
+        await this.state.clearWake([]);
+        clearTimeout(this.coalescingTimer); this.coalescingTimer = null;
+      } else if (await this.syndicatum.isAcknowledged(activeWake.anchor_message_id)) {
+        await this.state.clearWake(activeWake.messages);
+        clearTimeout(this.coalescingTimer); this.coalescingTimer = null; this.coalescingAttempt = 0;
+      } else {
+        await this.state.coalesceWake(message);
+        this.scheduleCoalescedCheck(true);
+        this.log.info(`Coalesced Syndicatum message ${message.id} into pending wake ${activeWake.anchor_message_id}.`);
+        return { status: "coalesced", anchorMessageId: activeWake.anchor_message_id };
+      }
+    }
     await this.state.markPending(message);
     this.log.info(`Activating Codex for Syndicatum message ${message.id} (${source}).`);
     const delivery = await this.driver.activate(message);
     if (delivery?.threadLoadWarning) this.log.error(`Notification ${message.id} was queued, but Codex Desktop could not load the linked discussion: ${safe(delivery.threadLoadWarning)}`);
-    await this.state.markProcessed(message); this.clearRetry(message.id);
+    if (coalescingEnabled) await this.state.markWakeQueued(message, this.config.codexThreadId);
+    else await this.state.markProcessed(message);
+    this.clearRetry(message.id);
     this.log.info(`Delivered Syndicatum notification ${message.id} to the linked conversation.`);
     return { status: "notified" };
   }
@@ -57,6 +77,42 @@ export class ActivationConnector {
   clearRetry(id) {
     const key = String(id); const timer = this.retryTimers.get(key); if (timer) clearTimeout(timer);
     this.retryTimers.delete(key); this.retryAttempts.delete(key);
+  }
+  canCoalesce() {
+    return this.config.coalescingEnabled !== false
+      && typeof this.syndicatum.isAcknowledged === "function"
+      && typeof this.syndicatum.addressedUnacknowledged === "function";
+  }
+  scheduleCoalescedCheck(resetBackoff = false) {
+    if (resetBackoff) this.coalescingAttempt = 0;
+    if (this.stopped || this.coalescingTimer) return;
+    const base = Math.max(1000, Number(this.config.coalescingPollMs) || 5000);
+    const wait = Math.min(60000, base * (2 ** this.coalescingAttempt));
+    this.coalescingAttempt += 1;
+    this.coalescingTimer = setTimeout(() => {
+      this.coalescingTimer = null;
+      this.queue = this.queue.then(() => this.reconcileWake()).catch(error => {
+        this.log.error(`Pending wake reconciliation failed: ${safe(error)}`);
+        this.scheduleCoalescedCheck();
+      });
+    }, wait);
+    this.coalescingTimer.unref?.();
+  }
+  async reconcileWake() {
+    const wake = this.state.activeWake();
+    if (!wake || wake.messages.length < 2) return { status: "idle" };
+    if (!await this.syndicatum.isAcknowledged(wake.anchor_message_id)) {
+      this.scheduleCoalescedCheck();
+      return { status: "waiting", anchorMessageId: wake.anchor_message_id };
+    }
+    const unacknowledged = await this.syndicatum.addressedUnacknowledged();
+    const outstandingIds = new Set(unacknowledged.map(item => String(item.id)));
+    const outstanding = wake.messages.filter(item => outstandingIds.has(String(item.id)));
+    await this.state.clearWake(wake.messages.filter(item => !outstandingIds.has(String(item.id))));
+    if (!outstanding.length) { this.coalescingAttempt = 0; return { status: "caught-up" }; }
+    const candidate = outstanding.reduce((latest, item) => item.project_sequence > latest.project_sequence ? item : latest);
+    this.log.info(`Pending wake ${wake.anchor_message_id} completed with newer unacknowledged activity; queuing one follow-up at sequence ${candidate.project_sequence}.`);
+    return this.handleMessage(candidate, "coalesced-followup");
   }
   async connectLoop() {
     while (!this.stopped) {

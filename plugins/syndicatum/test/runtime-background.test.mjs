@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { PluginRuntime, selectAvailableBindings } from "../mcp/runtime.mjs";
+import { PluginRuntime, deviceBindingSignature, selectAvailableBindings } from "../mcp/runtime.mjs";
 
 test("device binding validation tolerates missing directory hints and rejects missing discussions", async () => {
   const calls = [];
@@ -21,6 +21,38 @@ test("device binding validation tolerates missing directory hints and rejects mi
   assert.equal(result.unavailableBindings.length, 1);
   assert.equal(source[0].working_directory, "C:\\valid");
   assert.equal(calls.length, 2);
+});
+
+test("device binding signatures ignore ordering but detect routing changes", () => {
+  const first = [
+    { project_id: 1, participant_id: 8, agent_id: 7, conversation_id: "thread-a", working_directory: null },
+    { project_id: 1, participant_id: 13, agent_id: 12, conversation_id: "thread-b", working_directory: "C:\\kit" },
+  ];
+  assert.equal(deviceBindingSignature(first), deviceBindingSignature([...first].reverse()));
+  assert.notEqual(deviceBindingSignature(first), deviceBindingSignature([{ ...first[0], conversation_id: "thread-new" }, first[1]]));
+  assert.notEqual(deviceBindingSignature(first), deviceBindingSignature([...first, { project_id: 1, participant_id: 30, agent_id: 28, conversation_id: "thread-frp" }]));
+});
+
+test("device binding refresh reloads only when routing changes", async () => {
+  const runtime = new PluginRuntime(process.env, { manageBackground: false });
+  runtime.connector = { stop() {} };
+  runtime.bindingSignature = deviceBindingSignature([
+    { project_id: 1, participant_id: 8, agent_id: 7, conversation_id: "thread-a" },
+  ]);
+  let reloads = 0;
+  runtime.scheduleReload = () => { reloads += 1; };
+  const logger = { info() {}, error() {} };
+
+  await runtime.refreshDeviceBindings({ bindings: async () => ({ bindings: [
+    { project_id: 1, participant_id: 8, agent_id: 7, conversation_id: "thread-a" },
+  ] }) }, logger);
+  assert.equal(reloads, 0);
+
+  await runtime.refreshDeviceBindings({ bindings: async () => ({ bindings: [
+    { project_id: 1, participant_id: 8, agent_id: 7, conversation_id: "thread-a" },
+    { project_id: 1, participant_id: 13, agent_id: 12, conversation_id: "thread-kit" },
+  ] }) }, logger);
+  assert.equal(reloads, 1);
 });
 
 test("MCP runtime leaves listener ownership with a healthy background service", async () => {

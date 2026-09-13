@@ -5,13 +5,46 @@ import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { BackgroundServiceManager, powershellTaskArguments, windowsTaskArgument } from "../mcp/background-service-manager.mjs";
+import { BackgroundServiceManager, powershellTaskArguments, runtimeRevision, windowsPowerShellPath, windowsRunCommand, windowsTaskArgument } from "../mcp/background-service-manager.mjs";
+
+function successfulSpawn(calls, stdout = "") {
+  return (command, args, options) => {
+    calls.push([command, args, options]);
+    const child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    process.nextTick(() => { if (stdout) child.stdout.end(stdout); child.emit("close", 0); });
+    return child;
+  };
+}
+
+test("background runtime revision changes when connector source changes", async () => {
+  const source = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-revision-"));
+  await writeFile(path.join(source, "connector.mjs"), "export const revision = 1;\n", "utf8");
+  const first = await runtimeRevision(source);
+  await writeFile(path.join(source, "connector.mjs"), "export const revision = 2;\n", "utf8");
+  assert.notEqual(await runtimeRevision(source), first);
+});
 
 test("Windows task arguments preserve plugin paths containing spaces", () => {
   const file = "C:\\Users\\Test User\\.codex\\plugins\\syndicatum\\background-service.mjs";
   assert.equal(windowsTaskArgument(file), `"${file}"`);
   assert.match(powershellTaskArguments(file), /-WindowStyle Hidden/);
   assert.match(powershellTaskArguments(file), /-File "C:\\Users\\Test User/);
+  assert.equal(windowsPowerShellPath({ SystemRoot: "D:\\Windows" }), "D:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+  assert.match(windowsRunCommand("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", file), /^C:\\Windows.*-File "C:\\Users\\Test User/);
+});
+
+test("Windows task registration uses an absolute PowerShell path and no working directory", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-task-"));
+  const calls = [];
+  const manager = new BackgroundServiceManager({
+    platform: "win32",
+    env: { LOCALAPPDATA: localAppData, SystemRoot: "C:\\Windows" },
+    spawnImpl: successfulSpawn(calls),
+  });
+  await manager.registerWindowsLauncher();
+  assert.equal(calls[0][0], "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+  assert.match(calls[0][1].at(-1), /New-ScheduledTaskAction -Execute 'C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe'/);
+  assert.doesNotMatch(calls[0][1].at(-1), /WorkingDirectory/);
 });
 
 test("macOS installs a per-user LaunchAgent with paths safe for spaces", async () => {
@@ -51,6 +84,31 @@ test("Windows launcher decrypts the credential before starting the background ru
   assert.match(launcher, /ProtectedData\]::Unprotect/);
   assert.match(launcher, /SYNDICATUM_AGENT_TOKEN/);
   assert.match(launcher, /background-service\.mjs/);
+  assert.match(launcher, /background-startup\.log/);
+  assert.match(launcher, /credential_dpapi/);
+  assert.match(launcher, /runtime_start/);
+});
+
+test("Windows installation falls back to the current-user Run key when the task is not healthy", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-fallback-"));
+  const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
+  const calls = [];
+  manager.status = async () => ({ running: false, ownsListener: false, metadata: null });
+  manager.installRuntime = async () => { await mkdir(manager.files.root, { recursive: true }); };
+  manager.registerWindowsLauncher = async () => { calls.push("register-task"); };
+  manager.startWindowsLauncher = async () => { calls.push("start-task"); };
+  manager.windowsTaskInfo = async () => ({ state: "Ready", lastTaskResult: 1 });
+  manager.disableWindowsTask = async () => { calls.push("disable-task"); };
+  manager.registerWindowsRunFallback = async () => { calls.push("register-run-key"); };
+  manager.startWindowsRunFallback = async () => { calls.push("start-run-key"); };
+  manager.waitUntilRunning = async options => options?.attempts === 50
+    ? { running: false, ownsListener: false, readiness: "stopped" }
+    : { running: true, ownsListener: true, readiness: "ready", pid: 42 };
+  const result = await manager.ensureRunning();
+  assert.equal(result.startupMethod, "run_key");
+  assert.match(result.startupDiagnostic, /result=1/);
+  assert.deepEqual(calls, ["register-task", "start-task", "disable-task", "register-run-key", "start-run-key"]);
+  assert.match(await readFile(manager.files.backgroundStartupLog, "utf8"), /scheduled_task/);
 });
 
 test("background status distinguishes an authorized device with no usable discussion bindings", async () => {

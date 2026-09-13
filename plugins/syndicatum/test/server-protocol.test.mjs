@@ -31,6 +31,14 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
   ]);
   assert.equal(replies.find(item => item.id === 1)?.result?.serverInfo?.name, "syndicatum-connector");
   assert.deepEqual(replies.find(item => item.id === 2)?.result?.tools?.map(tool => tool.name), [
+    "claim_agent_profile",
+    "syndicatum_list_profiles",
+    "syndicatum_list_projects",
+    "syndicatum_list_participants",
+    "syndicatum_list_messages",
+    "syndicatum_get_message",
+    "syndicatum_post_message",
+    "syndicatum_acknowledge_message",
     "connector_begin_login",
     "connector_complete_login",
     "connector_status",

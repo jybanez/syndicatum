@@ -38,7 +38,7 @@ export class SyndicatumClient {
 
 export class DeviceSyndicatumClient {
   constructor(config, fetchImpl = fetch) { this.config = config; this.fetch = fetchImpl; }
-  async bindings() { return this.request("/api/v1/connector-bindings.php").then(result => result.data ?? {}); }
+  async bindings() { return this.request("/api/v1/connector-bindings.php?provider=codex").then(result => result.data ?? {}); }
   async admission(projectId) { return this.request(`/api/v1/connector-realtime-admission.php?project_id=${encodeURIComponent(projectId)}`).then(result => result.data ?? {}); }
   async request(relativePath, options = {}) {
     const url = new URL(relativePath, `${this.config.syndicatumUrl}/`);
