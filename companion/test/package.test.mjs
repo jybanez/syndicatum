@@ -6,10 +6,21 @@ const extensionUrl = new URL("../extension/", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.2.1");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
+});
+
+test("popup offers one-time active-discussion binding", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
+  const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.match(html, /id="binding-code"/);
+  assert.match(html, /id="bind-discussion"/);
+  assert.match(popup, /syndicatum\.bind-discussion/);
+  assert.match(background, /connector-discussion-bindings\.php/);
+  assert.match(background, /active: true, currentWindow: true/);
 });
 
 test("content listener guards against duplicate programmatic injection", async () => {

@@ -14,6 +14,12 @@
       <div class="row"><span>Bindings</span><strong id="bindings">0</strong></div>
       <div class="row"><span>Pending</span><strong id="queued">0</strong></div>
       <p id="authorization" class="notice" hidden></p>
+      <div class="binding-box">
+        <label for="binding-code">Bind the active discussion</label>
+        <input id="binding-code" type="text" autocomplete="off" spellcheck="false" placeholder="Paste one-time binding code">
+        <button id="bind-discussion" type="button">Bind discussion</button>
+      </div>
+      <p id="binding-result" class="success" hidden></p>
       <p id="error" class="error" hidden></p>
       <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>
     </section>

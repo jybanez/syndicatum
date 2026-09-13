@@ -1,4 +1,4 @@
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","status","bindings","queued","authorization","error","refresh","disconnect"].map(id => [id, document.getElementById(id)]));
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","status","bindings","queued","authorization","binding-code","bind-discussion","binding-result","error","refresh","disconnect"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
 
 function render(data) {
@@ -10,6 +10,8 @@ function render(data) {
   elements.queued.textContent = String(data.queuedCount || 0);
   elements.authorization.hidden = !data.userCode;
   elements.authorization.textContent = data.userCode ? `Approve the opened Syndicatum page. Code: ${data.userCode}` : "";
+  elements["binding-result"].hidden = !data.lastBindingMessage;
+  elements["binding-result"].textContent = data.lastBindingMessage || "";
   elements.error.hidden = !data.lastError;
   elements.error.textContent = data.lastError || "";
   if (data.baseUrl) elements["base-url"].value = data.baseUrl;
@@ -19,12 +21,17 @@ async function action(message) {
   for (const button of document.querySelectorAll("button")) button.disabled = true;
   const result = await send(message).catch(error => ({ ok: false, error: String(error) }));
   for (const button of document.querySelectorAll("button")) button.disabled = false;
-  if (!result?.ok) { elements.error.hidden = false; elements.error.textContent = result?.error || "The companion request failed."; return; }
+  if (!result?.ok) { elements.error.hidden = false; elements.error.textContent = result?.error || "The companion request failed."; return false; }
   render(result.data);
+  return true;
 }
 
 elements.connect.addEventListener("click", () => action({ type: "syndicatum.connect", baseUrl: elements["base-url"].value }));
 elements.refresh.addEventListener("click", () => action({ type: "syndicatum.refresh" }));
+elements["bind-discussion"].addEventListener("click", async () => {
+  const succeeded = await action({ type: "syndicatum.bind-discussion", bindingCode: elements["binding-code"].value });
+  if (succeeded) elements["binding-code"].value = "";
+});
 elements.disconnect.addEventListener("click", () => action({ type: "syndicatum.disconnect" }));
 action({ type: "syndicatum.status" });
 setInterval(() => action({ type: "syndicatum.status" }), 2000);

@@ -24,6 +24,14 @@ export function normalizeDiscussionUrl(value, provider = "chatgpt") {
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
 }
 
+export function providerForDiscussionUrl(value) {
+  for (const provider of Object.keys(PROVIDERS)) {
+    try { return { provider, discussionUrl: normalizeDiscussionUrl(value, provider) }; }
+    catch (_error) { /* Try the next supported provider. */ }
+  }
+  throw new Error("Open the ChatGPT or Gemini discussion you want to bind, then try again.");
+}
+
 export function deliveryKey(item) {
   return [item.provider, item.project_id, item.agent_id, item.message?.id].join(":");
 }

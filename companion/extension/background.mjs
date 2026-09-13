@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -94,6 +94,23 @@ async function refreshBindings() {
   await save({ bindings: normalized, status: "connected", lastSyncAt: new Date().toISOString(), lastError: null });
   connectRealtime(normalized);
   return normalized;
+}
+
+async function bindActiveDiscussion(bindingCode) {
+  const code = String(bindingCode || "").trim();
+  if (!code) throw new Error("Enter a discussion binding code.");
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) throw new Error("The active browser tab could not be read.");
+  const detected = providerForDiscussionUrl(tab.url);
+  const result = await api("/api/v1/connector-discussion-bindings.php", {
+    method: "POST",
+    body: JSON.stringify({ binding_code: code, provider: detected.provider, discussion_reference: detected.discussionUrl }),
+  });
+  const bindings = await refreshBindings();
+  await recover(bindings);
+  await drain();
+  await save({ lastBindingMessage: `${PROVIDERS[detected.provider].label} discussion bound to ${result.agent_name || "the selected agent"}.`, lastError: null });
+  return publicStatus();
 }
 
 async function recover(bindings) {
@@ -258,7 +275,7 @@ async function disconnect() {
 
 async function publicStatus() {
   const current = await state();
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || "https://chatviewer.pbb.ph", userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || "https://chatviewer.pbb.ph", userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -266,6 +283,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
   const operation = action === "syndicatum.connect" ? beginConnection(request.baseUrl)
     : action === "syndicatum.disconnect" ? disconnect().then(publicStatus)
     : action === "syndicatum.refresh" ? start().then(publicStatus)
+    : action === "syndicatum.bind-discussion" ? bindActiveDiscussion(request.bindingCode)
     : action === "syndicatum.status" ? publicStatus()
     : null;
   if (!operation) return false;

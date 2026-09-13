@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeDiscussionUrl, notificationFor, selectDeliveryTab } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -12,6 +12,11 @@ test("normalizes an exact Gemini discussion URL", () => assert.equal(normalizeDi
 test("rejects Gemini share and non-Gemini URLs", () => {
   assert.throws(() => normalizeDiscussionUrl("https://gemini.google.com/share/abc", "gemini"), /valid Gemini/);
   assert.throws(() => normalizeDiscussionUrl("https://example.com/app/abc", "gemini"), /valid Gemini/);
+});
+test("detects the provider and canonical URL for an active discussion tab", () => {
+  assert.deepEqual(providerForDiscussionUrl("https://chatgpt.com/c/chat-one?model=x"), { provider: "chatgpt", discussionUrl: "https://chatgpt.com/c/chat-one" });
+  assert.deepEqual(providerForDiscussionUrl("https://gemini.google.com/app/gemini-one?hl=en"), { provider: "gemini", discussionUrl: "https://gemini.google.com/app/gemini-one" });
+  assert.throws(() => providerForDiscussionUrl("https://example.com/"), /Open the ChatGPT or Gemini discussion/);
 });
 test("routes only to the addressed participant", () => { assert.equal(bindingAcceptsMessage(binding, message), true); assert.equal(bindingAcceptsMessage({ ...binding, participant_id: 45 }, message), false); });
 test("does not route an agent's own message back to itself", () => assert.equal(bindingAcceptsMessage(binding, { ...message, sender: { participant_id: 44 }, addressees: [{ participant_id: 44 }] }), false));
