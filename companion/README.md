@@ -13,10 +13,11 @@ The companion is a provider-neutral browser delivery layer. Its first adapter se
 7. Enable proactive activation on a ChatGPT agent and provide its exact `https://chatgpt.com/c/...` discussion URL.
 
 Chrome does not automatically update unpacked extensions. For an upgrade,
-download and extract the new release over a new directory, select **Remove** for
-the previous build, then load the new directory and authorize it. Automatic
-updates require later distribution through the Chrome Web Store or a managed
-enterprise policy.
+download the new release, extract it over the same permanent extension
+directory, then click **Reload** for Syndicatum Companion on
+`chrome://extensions`. Keeping the same directory preserves the extension ID
+and device authorization. Automatic updates require later distribution through
+the Chrome Web Store or a managed enterprise policy.
 
 Only install release archives published by the official Syndicatum repository.
 The extension does not require access to browsing history, cookies, downloads,
@@ -35,6 +36,12 @@ The browser must remain signed in to ChatGPT. If it is closed or the discussion 
 The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
+
+Version 0.1.4 keeps each joined Realtime connection active with protocol health
+requests, reconnects safely when a worker resumes, prefers the active or most
+recent matching discussion tab, and confirms the exact notification turn before
+recording delivery. It retains only a bounded metadata-only diagnostic history;
+notification text is not copied into diagnostics.
 
 ## Provider contract
 

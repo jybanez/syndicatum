@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Syndicatum Companion",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Routes Syndicatum notifications into the correct existing AI discussion.",
   "permissions": ["alarms", "scripting", "storage", "tabs"],
   "host_permissions": [

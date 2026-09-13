@@ -1,9 +1,10 @@
-import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, recoveryItem } from "./core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, recoveryItem, selectDeliveryTab } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
 const SYNC_ALARM = "syndicatum-sync";
 const sockets = new Map();
+const heartbeatTimers = new Map();
 let running = null;
 let queueWrites = Promise.resolve();
 let drainRunning = null;
@@ -12,6 +13,35 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const uuid = () => crypto.randomUUID();
 async function state() { return (await chrome.storage.local.get(STATE_KEY))[STATE_KEY] || {}; }
 async function save(patch) { const current = await state(); const next = { ...current, ...patch }; await chrome.storage.local.set({ [STATE_KEY]: next }); return next; }
+
+function stopHeartbeat(projectId) {
+  const timer = heartbeatTimers.get(projectId);
+  if (timer) clearInterval(timer);
+  heartbeatTimers.delete(projectId);
+}
+
+function startHeartbeat(projectId, socket) {
+  stopHeartbeat(projectId);
+  const sendHealth = () => {
+    if (sockets.get(projectId) !== socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({
+      namespace: "pbb.realtime.v1",
+      phase: "request",
+      type: "session.health.request",
+      id: `req_health_${uuid()}`,
+      payload: { client_time: new Date().toISOString() },
+      meta: {},
+    }));
+  };
+  sendHealth();
+  heartbeatTimers.set(projectId, setInterval(sendHealth, 20000));
+}
+
+async function recordDeliveryDiagnostic(diagnostic) {
+  const current = await state();
+  const history = [...(current.deliveryHistory || []), diagnostic].slice(-25);
+  await save({ deliveryHistory: history, lastDeliveryDiagnostic: diagnostic });
+}
 
 async function api(path, options = {}) {
   const current = await state();
@@ -92,13 +122,14 @@ async function drain() {
       const entry = Object.entries(current.queue || {})[0];
       if (!entry) return;
       const [key, item] = entry;
+      const startedAt = new Date().toISOString();
       try {
         if (!item.browserDeliveredAt) {
           const result = await deliver(item);
           if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { retryable: result?.retryable !== false });
           const afterBrowserDelivery = await state();
           const stagedQueue = { ...(afterBrowserDelivery.queue || {}) };
-          stagedQueue[key] = { ...stagedQueue[key], browserDeliveredAt: new Date().toISOString() };
+          stagedQueue[key] = { ...stagedQueue[key], browserDeliveredAt: new Date().toISOString(), browserDelivery: result };
           await save({ queue: stagedQueue });
         }
         await api("/api/v1/connector-notification-deliveries.php", { method: "POST", body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id }) });
@@ -107,6 +138,19 @@ async function drain() {
         const delivered = { ...(latest.delivered || {}), [key]: new Date().toISOString() };
         const entries = Object.entries(delivered).slice(-1000);
         await save({ queue, delivered: Object.fromEntries(entries), lastDeliveryAt: delivered[key], lastError: null });
+        await recordDeliveryDiagnostic({
+          key,
+          provider: item.provider,
+          projectId: item.project_id,
+          agentId: item.agent_id,
+          messageId: item.message.id,
+          queuedAt: item.queuedAt || null,
+          startedAt,
+          completedAt: delivered[key],
+          attempts: Number(item.attempts || 0) + 1,
+          outcome: "delivered",
+          ...(latest.queue?.[key]?.browserDelivery || {}),
+        });
       } catch (error) {
         const latest = await state();
         const queue = { ...(latest.queue || {}) };
@@ -123,17 +167,18 @@ async function drain() {
 async function deliver(item) {
   const url = normalizeDiscussionUrl(item.conversation_id, item.provider);
   const tabs = await chrome.tabs.query({ url: `${url}*` });
-  let tab = tabs[0];
+  let tab = selectDeliveryTab(tabs);
   if (!tab) tab = await chrome.tabs.create({ url, active: false });
   if (tab.status !== "complete") {
     for (let index = 0; index < 40; index++) { await delay(250); tab = await chrome.tabs.get(tab.id); if (tab.status === "complete") break; }
   }
   const request = { type: "syndicatum.provider.deliver", provider: item.provider, text: notificationFor(item, item.message) };
-  try { return await chrome.tabs.sendMessage(tab.id, request); }
+  const metadata = { matchingTabCount: tabs.length, selectedTabWasActive: Boolean(tab.active), selectedTabWasDiscarded: Boolean(tab.discarded) };
+  try { return { ...(await chrome.tabs.sendMessage(tab.id, request)), ...metadata }; }
   catch (error) {
     if (!String(error?.message || error).includes("Receiving end does not exist")) throw error;
     await injectProviderAdapter(tab.id, item.provider);
-    return chrome.tabs.sendMessage(tab.id, request);
+    return { ...(await chrome.tabs.sendMessage(tab.id, request)), ...metadata, adapterInjected: true };
   }
 }
 
@@ -144,7 +189,7 @@ async function injectProviderAdapter(tabId, provider) {
 
 function connectRealtime(bindings) {
   const projects = new Set(bindings.map(binding => String(binding.project_id)));
-  for (const [projectId, socket] of sockets) if (!projects.has(projectId)) { socket.close(1000, "Binding removed"); sockets.delete(projectId); }
+  for (const [projectId, socket] of sockets) if (!projects.has(projectId)) { stopHeartbeat(projectId); socket.close(1000, "Binding removed"); sockets.delete(projectId); }
   for (const projectId of projects) if (!sockets.has(projectId)) void connectProject(projectId);
 }
 
@@ -153,15 +198,20 @@ async function connectProject(projectId) {
     const admission = await api(`/api/v1/connector-realtime-admission.php?project_id=${encodeURIComponent(projectId)}`);
     if (!admission.enabled) return;
     const socket = new WebSocket(admission.websocket_url); sockets.set(projectId, socket);
-    let authenticated = false; let joined = false;
+    let authenticated = false; let joinRequested = false; let joined = false;
     socket.onmessage = async event => {
       let envelope; try { envelope = JSON.parse(event.data); } catch { return; }
       if (envelope?.phase === "system" && envelope.type === "session.awaiting-auth" && !authenticated) {
         socket.send(JSON.stringify({ namespace: "pbb.realtime.v1", phase: "request", type: "session.auth.request", id: `req_auth_${uuid()}`, payload: { token: admission.token }, meta: {} })); return;
       }
-      if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("session.auth") && !joined) {
-        authenticated = true; joined = true;
+      if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("session.auth") && !joinRequested) {
+        authenticated = true; joinRequested = true;
         socket.send(JSON.stringify({ namespace: "pbb.realtime.v1", phase: "request", type: "room.join.request", id: `req_join_${uuid()}`, room: admission.room, payload: {}, meta: {} })); return;
+      }
+      if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("room.join") && !joined) {
+        joined = true;
+        startHeartbeat(projectId, socket);
+        return;
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) {
         const current = await state();
@@ -170,7 +220,12 @@ async function connectProject(projectId) {
         }
       }
     };
-    socket.onclose = () => { sockets.delete(projectId); setTimeout(() => void start(), 5000); };
+    socket.onclose = () => {
+      if (sockets.get(projectId) !== socket) return;
+      stopHeartbeat(projectId);
+      sockets.delete(projectId);
+      setTimeout(() => void start(), 1000);
+    };
     socket.onerror = () => socket.close();
   } catch (error) { await save({ lastError: `Realtime unavailable: ${String(error?.message || error)}` }); }
 }
@@ -189,6 +244,7 @@ async function start() {
 }
 
 async function disconnect() {
+  for (const projectId of heartbeatTimers.keys()) stopHeartbeat(projectId);
   for (const socket of sockets.values()) socket.close(1000, "Disconnected");
   sockets.clear();
   await chrome.alarms.clearAll();
@@ -197,7 +253,7 @@ async function disconnect() {
 
 async function publicStatus() {
   const current = await state();
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || "https://chatviewer.pbb.ph", userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || "https://chatviewer.pbb.ph", userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {

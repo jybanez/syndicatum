@@ -53,3 +53,14 @@ export function bindingsFromResponse(value) {
   if (value && Array.isArray(value.bindings)) return value.bindings;
   throw new Error("Syndicatum returned an invalid connector bindings response.");
 }
+
+export function selectDeliveryTab(tabs) {
+  const candidates = Array.isArray(tabs) ? tabs.filter(tab => tab && Number.isInteger(tab.id)) : [];
+  return candidates.sort((left, right) => {
+    const active = Number(Boolean(right.active)) - Number(Boolean(left.active));
+    if (active) return active;
+    const available = Number(Boolean(left.discarded)) - Number(Boolean(right.discarded));
+    if (available) return available;
+    return Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0);
+  })[0] || null;
+}

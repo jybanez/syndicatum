@@ -3,7 +3,12 @@
   const queryComposer = () => document.querySelector("#prompt-textarea")
     || document.querySelector("main form textarea")
     || document.querySelector("main form [contenteditable='true']");
-  const userTurnCount = () => document.querySelectorAll("[data-message-author-role='user']").length;
+  const normalizeText = value => String(value || "").replace(/\s+/g, " ").trim();
+  const userTurns = () => [...document.querySelectorAll("[data-message-author-role='user']")];
+  const matchingUserTurnCount = text => {
+    const expected = normalizeText(text);
+    return userTurns().filter(turn => normalizeText(turn.innerText || turn.textContent).includes(expected)).length;
+  };
   const isBusy = () => Boolean(document.querySelector("[data-testid='stop-button'], button[aria-label*='Stop generating' i], button[aria-label='Stop']"));
 
   function setComposerValue(element, text) {
@@ -46,14 +51,15 @@
         const loggedOut = Boolean(document.querySelector("a[href*='auth/login'], button[data-testid*='login']"));
         return { ok: false, retryable: true, code: loggedOut ? "login_required" : "composer_not_found" };
       }
-      const before = userTurnCount();
+      const before = matchingUserTurnCount(text);
+      if (before > 0) return { ok: true, confirmation: "existing_exact_user_turn", deduplicated: true };
       setComposerValue(composer, text);
       const send = await waitForSendButton();
       if (!send) return { ok: false, retryable: true, code: "send_unavailable" };
       send.click();
       const deadline = Date.now() + 12000;
       while (Date.now() < deadline) {
-        if (userTurnCount() > before) return { ok: true };
+        if (matchingUserTurnCount(text) > before) return { ok: true, confirmation: "new_exact_user_turn" };
         await wait(200);
       }
       return { ok: false, retryable: true, code: "submission_unconfirmed" };
