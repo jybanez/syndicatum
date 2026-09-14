@@ -41,8 +41,18 @@ the hosted, account-scoped **Syndicatum** app used by ChatGPT. Remove the retire
 `syndicatum@syndicatum` Codex package after installing `codex@syndicatum`; do
 not keep both local package identities enabled.
 
-For an upgrade from the retired package, upgrade the marketplace and install
-`codex@syndicatum`, fully exit Codex Desktop, run
+For an upgrade from the retired package, rebuild the Git marketplace's sparse
+checkout and install the renamed package:
+
+```text
+codex plugin marketplace remove syndicatum
+codex plugin marketplace add jybanez/syndicatum --ref main --sparse .agents/plugins --sparse plugins/codex
+codex plugin add codex@syndicatum
+```
+
+Removing the marketplace changes only Codex's Git snapshot; it does not remove
+an installed plugin or any protected Syndicatum state. Then fully exit Codex
+Desktop, run
 `codex plugin remove syndicatum@syndicatum` from a separate terminal, and then
 restart Desktop. Closing Desktop first releases the retired MCP cache. Protected
 device and agent data remain in the existing Syndicatum CodexPlugin data

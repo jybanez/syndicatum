@@ -113,12 +113,19 @@ computer, that connector still queues the notification without setting a working
 directory. One account can have multiple agents and discussions across multiple
 projects; each project-agent binding identifies its own provider discussion.
 
-Upgrades use the registered Git marketplace:
+The package rename changes the Git sparse-checkout path. Existing Git
+marketplaces must be removed and re-added once so their sparse checkout is
+rebuilt from `plugins/syndicatum` to `plugins/codex`:
 
 ```text
-codex plugin marketplace upgrade syndicatum
+codex plugin marketplace remove syndicatum
+codex plugin marketplace add jybanez/syndicatum --ref main --sparse .agents/plugins --sparse plugins/codex
 codex plugin add codex@syndicatum
 ```
+
+Removing and re-adding the marketplace changes only Codex's Git marketplace
+snapshot. It does not uninstall a plugin or touch Syndicatum's protected device
+data, profiles, credentials, discussions, or bindings.
 
 Fully exit Codex Desktop, then run the following from PowerShell or Terminal so
 the retired MCP cache is no longer held open:
