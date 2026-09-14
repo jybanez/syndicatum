@@ -6,7 +6,7 @@ const extensionUrl = new URL("../extension/", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.8.0");
+  assert.equal(manifest.version, "0.8.1");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -21,7 +21,11 @@ test("connected users can migrate servers without clearing device or binding sta
   assert.match(html, /id="edit-server"/);
   assert.match(html, /Change Syndicatum server/);
   assert.match(html, /Validate &amp; Continue/);
-  assert.match(popup, /syndicatum\.migrate-server/);
+  assert.match(popup, /syndicatum\.prepare-server-migration/);
+  assert.match(popup, /syndicatum\.resume-server-migration/);
+  assert.ok(popup.lastIndexOf("syndicatum.prepare-server-migration") < popup.lastIndexOf("chrome.permissions.request"));
+  assert.match(background, /chrome\.permissions\.onAdded/);
+  assert.match(background, /pendingServerMigration/);
   assert.match(background, /The new server did not recognize the existing Companion device/);
   assert.match(background, /different discussion binding inventory/);
   assert.match(background, /Server change rolled back/);

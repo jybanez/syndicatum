@@ -44,6 +44,12 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+Version 0.8.1 persists the requested server migration before Chrome displays
+its optional-origin permission prompt. Because Chrome may close the extension
+popup while that prompt is open, the background worker resumes the validated
+migration when permission is granted or when the popup is reopened. A denied or
+failed request clears the pending intent without changing the active server.
+
 Version 0.8.0 adds an edit control beside the connected server. Changing the
 server requests permission only for the proposed origin, validates its public
 Syndicatum identity, authenticates the existing protected device credential,

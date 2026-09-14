@@ -171,6 +171,7 @@ async function migrateServer(requestedBaseUrl) {
       status: "connected",
       lastSyncAt: new Date().toISOString(),
       lastError: null,
+      pendingServerMigration: null,
       lastServerMigration: { from: current.baseUrl, to: baseUrl, bindingCount: snapshot.bindings.length, completedAt: new Date().toISOString() },
     } });
     closeRealtime("Syndicatum server changed");
@@ -186,6 +187,42 @@ async function migrateServer(requestedBaseUrl) {
 
   await chrome.permissions.remove({ origins: [serverPermission(current.baseUrl)] }).catch(() => false);
   return publicStatus();
+}
+
+async function prepareServerMigration(requestedBaseUrl) {
+  const current = await state();
+  if (!current.accessToken || !current.deviceId || !current.baseUrl) throw new Error("Connect this Companion before changing its server.");
+  const baseUrl = normalizeBaseUrl(requestedBaseUrl);
+  await save({
+    pendingServerMigration: { from: normalizeBaseUrl(current.baseUrl), to: baseUrl, requestedAt: new Date().toISOString() },
+    lastError: null,
+  });
+  return publicStatus();
+}
+
+async function cancelServerMigration() {
+  await save({ pendingServerMigration: null });
+  return publicStatus();
+}
+
+async function resumeServerMigration() {
+  const current = await state();
+  const pending = current.pendingServerMigration;
+  if (!pending?.to) return publicStatus();
+  const permission = serverPermission(pending.to);
+  if (!await chrome.permissions.contains({ origins: [permission] })) {
+    throw new Error("Permission for the proposed Syndicatum server is still required.");
+  }
+  try {
+    return await migrateServer(pending.to);
+  } catch (error) {
+    const latest = await state();
+    if (normalizeBaseUrl(latest.baseUrl) !== normalizeBaseUrl(pending.to)) {
+      await save({ pendingServerMigration: null, lastError: String(error?.message || error) });
+      await chrome.permissions.remove({ origins: [permission] }).catch(() => false);
+    }
+    throw error;
+  }
 }
 
 async function checkBindingIntents() {
@@ -431,7 +468,7 @@ async function disconnect() {
 
 async function publicStatus() {
   const current = await state();
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -439,7 +476,9 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
   const operation = action === "syndicatum.provider.accepted" ? markProviderAccepted(request.delivery)
     : action === "syndicatum.connect" ? beginConnection(request.baseUrl)
     : action === "syndicatum.disconnect" ? disconnect().then(publicStatus)
-    : action === "syndicatum.migrate-server" ? migrateServer(request.baseUrl)
+    : action === "syndicatum.prepare-server-migration" ? prepareServerMigration(request.baseUrl)
+    : action === "syndicatum.resume-server-migration" ? resumeServerMigration()
+    : action === "syndicatum.cancel-server-migration" ? cancelServerMigration()
     : action === "syndicatum.refresh" ? start().then(publicStatus)
     : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)
     : action === "syndicatum.status" ? publicStatus()
@@ -450,8 +489,21 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
 });
 chrome.runtime.onInstalled.addListener(() => void start());
 chrome.runtime.onStartup.addListener(() => void start());
+chrome.permissions.onAdded.addListener(permissions => {
+  if (!Array.isArray(permissions.origins) || !permissions.origins.length) return;
+  void state().then(current => {
+    if (current.pendingServerMigration?.to && permissions.origins.includes(serverPermission(current.pendingServerMigration.to))) {
+      return resumeServerMigration();
+    }
+  }).catch(error => save({ lastError: String(error?.message || error) }));
+});
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === RETRY_ALARM || alarm.name === SYNC_ALARM) void start();
   if (alarm.name === BINDING_ALARM) void checkBindingIntents().catch(error => save({ lastError: String(error?.message || error) }));
 });
-void start();
+void start().then(async () => {
+  const current = await state();
+  if (!current.pendingServerMigration?.to) return;
+  const permission = serverPermission(current.pendingServerMigration.to);
+  if (await chrome.permissions.contains({ origins: [permission] })) await resumeServerMigration();
+}).catch(error => save({ lastError: String(error?.message || error) }));

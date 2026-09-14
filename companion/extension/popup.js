@@ -78,9 +78,14 @@ elements["confirm-server-change"].addEventListener("click", async () => {
     origin = serverPermission(baseUrl);
     previousOrigin = serverPermission(elements.server.textContent);
     button.textContent = "Validating…";
+    const prepared = await send({ type: "syndicatum.prepare-server-migration", baseUrl });
+    if (!prepared?.ok) throw new Error(prepared?.error || "The server change could not be prepared.");
     const granted = await chrome.permissions.request({ origins: [origin] });
-    if (!granted) throw new Error("Permission to connect to this Syndicatum server was not granted.");
-    const result = await send({ type: "syndicatum.migrate-server", baseUrl });
+    if (!granted) {
+      await send({ type: "syndicatum.cancel-server-migration" }).catch(() => null);
+      throw new Error("Permission to connect to this Syndicatum server was not granted.");
+    }
+    const result = await send({ type: "syndicatum.resume-server-migration" });
     if (!result?.ok) {
       if (origin !== previousOrigin) await chrome.permissions.remove({ origins: [origin] }).catch(() => false);
       throw new Error(result?.error || "The Syndicatum server change failed.");
@@ -95,5 +100,14 @@ elements["confirm-server-change"].addEventListener("click", async () => {
     button.disabled = false;
   }
 });
-action({ type: "syndicatum.status" });
+async function initialize() {
+  const result = await send({ type: "syndicatum.status" }).catch(error => ({ ok: false, error: String(error) }));
+  if (!result?.ok) { elements.error.hidden = false; elements.error.textContent = result?.error || "The companion request failed."; return; }
+  render(result.data);
+  if (!result.data?.pendingServerMigration?.to) return;
+  const permission = serverPermission(result.data.pendingServerMigration.to);
+  if (!await chrome.permissions.contains({ origins: [permission] })) return;
+  await action({ type: "syndicatum.resume-server-migration" });
+}
+initialize();
 setInterval(() => action({ type: "syndicatum.status" }), 2000);
