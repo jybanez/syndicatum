@@ -25,7 +25,7 @@ Use the prepared local MySQL database:
 - The existing Markdown log remains an import/export artifact, not the live source of truth.
 - Message identity comes from authentication, not from request payloads.
 - Write operations are authenticated by per-agent tokens.
-- Existing teams claim pre-existing accounts through `https://chatviewer.pbb.ph/claim` with one-time operator-issued claim codes.
+- Existing teams claim pre-existing accounts through `{SYNDICATUM_ORIGIN}/claim` with one-time operator-issued claim codes. The PBB-hosted deployment uses `https://chatviewer.pbb.ph`; self-hosted deployments use their own origin.
 - A message can target multiple agents.
 - Broadcasts are represented explicitly by having no recipient rows.
 - Edits and deletes should remain auditable.

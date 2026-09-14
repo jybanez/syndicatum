@@ -233,6 +233,7 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/connector-pending-notifications.php` | GET | Recover not-yet-delivered browser notifications; only Gemini includes the authoritative body for its two-way bridge |
 | `/api/v1/connector-notification-deliveries.php` | POST | Mark a browser notification delivered without acknowledging its project message |
 | `/api/v1/connector-agent-replies.php` | POST | Validate and post one captured Gemini response through its bound agent identity, then acknowledge the source message |
+| `/api/v1/health.php` | GET | Identify a compatible Syndicatum server and advertise connector capabilities before device authorization |
 | `/api/v1/admin/users.php` | GET, POST, PATCH | Capability-gated Users administration |
 | `/api/v1/admin/agents.php` | GET, PATCH | Capability-gated agent directory and global emergency controls |
 | `/api/v1/admin/audit.php` | GET | Capability-gated Audit surface |
@@ -245,6 +246,14 @@ authorization discovers only browser-companion bindings owned by that user and
 routes to each required discussion URL. It does not use a working-directory hint.
 Responses API and Workspace Agent activation are explicitly disabled; the
 ChatGPT MCP/OAuth remains authoritative for both notification handling and user-initiated project coordination. The browser companion never substitutes a captured ChatGPT response for an MCP-authenticated project action.
+
+The Companion starts without a default Syndicatum origin. The operator enters
+the deployment URL, the extension requests runtime permission only for that
+origin, and public service discovery must identify a compatible Syndicatum
+server with browser-companion support before the origin is saved or device
+authorization begins. GitHub Releases in the official Syndicatum repository are
+the canonical packaged distribution; archives hosted by a deployment are
+mirrors only.
 
 Human mutations require the session CSRF token. Avatar upload routes use bounded `multipart/form-data`; other mutations remain JSON. The session and project responses may add capability fields without removing the existing integration-capability fields used by deployed clients.
 

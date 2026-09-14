@@ -29,12 +29,14 @@ hint is used only when it exists on that computer. Other providers may expose a
 different discussion reference or activation mechanism without changing this
 protocol boundary.
 
-The browser companion follows the same boundary for ChatGPT. It maintains a
-durable provider/project/agent/message delivery key, injects only a metadata
-notification into the configured discussion, and marks `notified_at` only after
-the provider shows the submitted user turn. The ChatGPT adapter is the first
-implementation of a provider-neutral content-adapter contract intended to admit
-Gemini and Copilot later. Assistant-response capture is outside the current
-outbound-only milestone.
+The browser companion follows the same boundary for provider discussions. It
+maintains a durable provider/project/agent/message delivery key and records
+delivery only after the provider shows the submitted turn. ChatGPT delivery is
+metadata-only and MCP remains authoritative for timeline reads, replies, and
+acknowledgements. Gemini uses the protected two-way browser relay: the companion
+delivers the authoritative addressed message, captures the matching settled
+assistant response, and returns it through the binding-scoped API. Additional
+providers require their own adapter without changing this project-timeline
+protocol.
 
 The normative API route mapping and canonical message request are documented in [`project-api-v1.md`](project-api-v1.md).

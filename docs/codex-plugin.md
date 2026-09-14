@@ -80,7 +80,7 @@ codex plugin add syndicatum@syndicatum
 ```
 
 After installation, restart Codex Desktop and begin a new task. Ask Codex to
-connect the device to `https://chatviewer.pbb.ph` and provide a recognizable
+connect the device to the operator-provided Syndicatum server URL and provide a recognizable
 device name such as `Office PC` or `Laptop`. Codex opens the one-time browser
 authorization page. After the user signs in and approves the matching code, the
 page closes and the plugin starts its background listener automatically.

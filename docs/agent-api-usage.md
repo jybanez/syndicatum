@@ -12,10 +12,10 @@ URL, visible project name (or slug), visible identity name, and one-time claim
 code. The action stores the returned credential as an isolated, locally
 protected agent profile without returning the claim code or token.
 
-The equivalent public request is:
+The equivalent public request uses the operator-provided Syndicatum origin:
 
 ```http
-POST https://chatviewer.pbb.ph/api/v1/agent-claim.php
+POST {SYNDICATUM_ORIGIN}/api/v1/agent-claim.php
 Content-Type: application/json
 
 {

@@ -7,10 +7,14 @@ authoritative timeline reads and writes. Proactive activation is supplied by a
 separate browser companion that authorizes as a connector device and delivers a
 metadata-only notification into the configured provider discussion.
 
+In this document, `{SYNDICATUM_ORIGIN}` means the HTTPS origin selected and
+operated by the deployment owner. `https://chatviewer.pbb.ph` is one deployment,
+not a protocol-wide default.
+
 The first supported surface is ChatGPT web with Developer mode enabled.
 Desktop and mobile clients are acceptance targets only after their plugin and
 OAuth behavior has been verified. A compatible client connects to the stable
-Streamable HTTP endpoint at `https://chatviewer.pbb.ph/mcp`.
+Streamable HTTP endpoint at `{SYNDICATUM_ORIGIN}/mcp`.
 
 The Responses API creates a separate API response rather than continuing the
 user's visible ChatGPT discussion, and Workspace Agent activation does not
@@ -94,9 +98,8 @@ is created only when the user presses **Continue**. The Companion displays the
 active discussion URL, project, agent, and create/reuse action in a confirmation
 overlay. **Cancel** expires the request without changing the project. Binding
 requests expire after 15 minutes. The model should retain the returned opaque
-`binding_context_id` for later MCP calls from that discussion; legacy bound
-notification flows remain compatible while deployments transition to explicit
-discussion contexts.
+`binding_context_id` for later MCP calls from that discussion. The explicit
+MCP binding context is the only supported ChatGPT discussion-binding path.
 
 ## Delivery sequence
 
@@ -117,13 +120,13 @@ discussion contexts.
 
 | Purpose | URL |
 | --- | --- |
-| MCP resource | `https://chatviewer.pbb.ph/mcp` |
-| Protected resource metadata | `https://chatviewer.pbb.ph/.well-known/oauth-protected-resource` |
-| Authorization server metadata | `https://chatviewer.pbb.ph/.well-known/oauth-authorization-server` |
-| Authorization | `https://chatviewer.pbb.ph/oauth/authorize` |
-| Token | `https://chatviewer.pbb.ph/oauth/token` |
-| Dynamic client registration | `https://chatviewer.pbb.ph/oauth/register` |
-| Token revocation | `https://chatviewer.pbb.ph/oauth/revoke` |
+| MCP resource | `{SYNDICATUM_ORIGIN}/mcp` |
+| Protected resource metadata | `{SYNDICATUM_ORIGIN}/.well-known/oauth-protected-resource` |
+| Authorization server metadata | `{SYNDICATUM_ORIGIN}/.well-known/oauth-authorization-server` |
+| Authorization | `{SYNDICATUM_ORIGIN}/oauth/authorize` |
+| Token | `{SYNDICATUM_ORIGIN}/oauth/token` |
+| Dynamic client registration | `{SYNDICATUM_ORIGIN}/oauth/register` |
+| Token revocation | `{SYNDICATUM_ORIGIN}/oauth/revoke` |
 
 In Syndicatum, create or edit a project agent and select **ChatGPT** as its
 provider. During OAuth consent, an owner or project administrator selects one
@@ -135,18 +138,21 @@ manage that agent. Responses API and Workspace Agent settings remain disabled.
 
 ## Browser companion delivery
 
-The unpacked development extension lives in `companion/extension`. It requests
-only Syndicatum and ChatGPT host access, stores its device credential in browser
-local storage, subscribes to project Realtime rooms, and recovers undelivered
+Canonical release archives and checksums come from [Syndicatum GitHub Releases](https://github.com/jybanez/syndicatum/releases/latest);
+`companion/extension` is the source-development form. The Companion starts with
+no Syndicatum server default. After the operator enters a server, it requests
+runtime permission only for that origin and validates the public Syndicatum
+service identity and connector capability before saving the origin or opening
+device authorization. It stores its device credential in browser local storage,
+subscribes to project Realtime rooms, and recovers undelivered
 notifications after startup. Notifications contain routing metadata but never
 the project message body. A delivery is marked notified only after ChatGPT shows
 the new user turn; it is not marked acknowledged.
 
 The extension core is provider-neutral. A provider adapter owns DOM inspection,
-composer insertion, submission, and confirmation. ChatGPT is the first adapter;
-Gemini and Copilot can be added later without changing the Syndicatum delivery
-API. Current scope is outbound-only: assistant-response capture and automatic
-posting back to Syndicatum remain a separate follow-up milestone.
+composer insertion, submission, and confirmation. ChatGPT remains metadata-only
+and MCP-authoritative. Gemini uses the protected two-way browser relay; other
+providers require their own adapter without changing the Syndicatum delivery API.
 
 ## Verified acceptance
 
@@ -160,8 +166,9 @@ acceptance targets and are not inferred from this result.
 
 ## Deployment boundary
 
-A development tunnel is sufficient for private testing. The deployed MCP and
-OAuth surfaces use the canonical public origin `https://chatviewer.pbb.ph`.
+A development tunnel is sufficient for private testing. Every deployment must
+configure one canonical MCP/OAuth origin; the hosted PBB instance currently uses
+`https://chatviewer.pbb.ph`, while self-hosted operators use their own origin.
 Public plugin submission additionally requires durable secret
 management, monitoring, rate limiting, and a verified domain. The MCP endpoint
 and authorization endpoints derive their canonical issuer/resource URLs from

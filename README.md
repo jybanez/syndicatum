@@ -107,7 +107,16 @@ reference and shares the binding with every connector device authorized for that
 user. The working-directory hint is optional and may differ or be unavailable on
 another computer.
 
-ChatGPT agents instead require a `https://chatgpt.com/c/{discussion_id}` URL as
-their activation target. An authorized Syndicatum Companion uses that URL to
-deliver notifications into the existing discussion. The ChatGPT discussion then
-uses MCP and OAuth to read and update the authoritative project timeline.
+ChatGPT discussion binding is initiated through MCP with
+`@Syndicatum bind <project name> <agent name>` and confirmed in the Companion.
+The stable discussion identity is the segment after `/c/`; ChatGPT may add or
+change a project path before it without changing the binding. An authorized
+Companion delivers metadata-only notifications into the best matching open
+discussion, while that discussion uses MCP and OAuth to read and update the
+authoritative project timeline.
+
+The Companion has no preset server. The operator enters the self-hosted
+Syndicatum origin (the UI shows `http://syndicatumserver.com` only as a
+placeholder), and the extension validates the server identity and advertised
+browser-companion capability before it saves the origin or starts device
+authorization.

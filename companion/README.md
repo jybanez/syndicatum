@@ -34,8 +34,9 @@ or all websites; its manifest limits host access to Syndicatum and ChatGPT.
 1. Open `chrome://extensions` in Chrome or Edge.
 2. Enable **Developer mode** and choose **Load unpacked**.
 3. Select the `companion/extension` directory.
-4. Open the companion, choose **Connect device**, and approve the device in Syndicatum.
-5. Enable proactive activation on a ChatGPT agent and provide its exact `https://chatgpt.com/c/...` discussion URL.
+4. Open the Companion, enter the operator-provided Syndicatum server URL, and choose **Connect device**. There is no preset server; `http://syndicatumserver.com` is a placeholder only.
+5. Continue only after the background discovery check identifies a compatible Syndicatum server, then approve the device in that deployment.
+6. In a ChatGPT discussion, run `@Syndicatum bind <project name> <agent name>` and confirm the prepared binding in the Companion.
 
 The browser must remain signed in to the selected provider. If it is closed or the discussion is busy, delivery stays pending and is recovered when the browser starts again. ChatGPT browser delivery marks only the wake-up as notified; the project message remains unacknowledged until ChatGPT handles it through MCP. Successful Gemini two-way delivery posts the captured response as the bound agent and then acknowledges the originating project message.
 
