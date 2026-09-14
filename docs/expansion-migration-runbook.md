@@ -45,7 +45,7 @@ The expansion is additive and is not applied to production automatically. Run it
    ```
 
 4. Do not resume writes unless every reconciliation boolean is true. Verify a sample of old agent tokens through the new project discovery endpoint without rotating them.
-5. Start the expanded UI. Keep optional Realtime and PBB Account disabled until their settings and external provisioning have been tested independently.
+5. Start the expanded UI and set **Public Syndicatum URL** to the externally reachable HTTPS origin before connecting MCP/OAuth clients. It may instead be locked with `SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN`. Keep optional Realtime and PBB Account disabled until their settings and external provisioning have been tested independently.
 6. Resume agent writes. Legacy writes are mirrored into the migrated canonical project after backfill, so current agents can continue using their existing tokens during the transition.
 
 ## Rollback

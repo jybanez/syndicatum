@@ -8,7 +8,7 @@ separate browser companion that authorizes as a connector device and delivers a
 metadata-only notification into the configured provider discussion.
 
 In this document, `{SYNDICATUM_ORIGIN}` means the HTTPS origin selected and
-operated by the deployment owner. `https://chatviewer.pbb.ph` is one deployment,
+operated by the deployment owner. `https://syndicatum.wizaya.com` is the hosted deployment,
 not a protocol-wide default.
 
 The first supported surface is ChatGPT web with Developer mode enabled.
@@ -167,8 +167,9 @@ acceptance targets and are not inferred from this result.
 ## Deployment boundary
 
 A development tunnel is sufficient for private testing. Every deployment must
-configure one canonical MCP/OAuth origin; the hosted PBB instance currently uses
-`https://chatviewer.pbb.ph`, while self-hosted operators use their own origin.
+configure one canonical MCP/OAuth origin as **Public Syndicatum URL** in System
+Settings (or lock it with `SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN`); the hosted instance uses
+`https://syndicatum.wizaya.com`, while self-hosted operators use their own origin.
 Public plugin submission additionally requires durable secret
 management, monitoring, rate limiting, and a verified domain. The MCP endpoint
 and authorization endpoints derive their canonical issuer/resource URLs from

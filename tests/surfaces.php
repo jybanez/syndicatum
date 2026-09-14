@@ -245,6 +245,25 @@ try {
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
 
+    $suite->test('public legal pages describe hosted privacy, Google sign-in, and service terms', function () use ($suite, $root) {
+        $index = file_get_contents($root . '/index.php');
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $privacy = file_get_contents($root . '/privacy.php');
+        $terms = file_get_contents($root . '/terms.php');
+        $rewrites = file_get_contents($root . '/.htaccess');
+        $suite->true(strpos($index, 'href="privacy"') !== false && strpos($index, 'href="terms"') !== false, 'The application surface must link both public legal pages.');
+        $suite->true(strpos($source, 'menuGroups: [') !== false, 'The authenticated account menu must group account, legal, and session actions.');
+        $suite->true(strpos($source, '{ id: "privacy", label: "Privacy Policy" }') !== false && strpos($source, '{ id: "terms", label: "Terms of Service" }') !== false, 'The authenticated account menu must expose both legal pages.');
+        $suite->true(strpos($source, 'items: [{ id: "signout", label: "Logout", danger: true }]') !== false, 'Logout must follow the legal action group.');
+        $suite->true(strpos($source, 'el.public_policy_links.hidden = state.mode === "expanded";') !== false, 'Bottom legal links must be hidden after sign-in.');
+        $suite->true(strpos($source, 'name: "public_origin"') !== false && strpos($source, '"general.public_origin": values.public_origin') !== false, 'System Settings must expose the canonical public Syndicatum origin.');
+        $suite->true(strpos($privacy, "\$legalPageTitle = 'Privacy Policy';") !== false, 'The public privacy page is missing.');
+        $suite->true(strpos($privacy, 'openid') !== false && strpos($privacy, 'Google Drive') !== false, 'The privacy page must disclose the limited Google sign-in data scope.');
+        $suite->true(strpos($terms, "\$legalPageTitle = 'Terms of Service';") !== false, 'The public terms page is missing.');
+        $suite->true(strpos($terms, 'Software agents and generated output') !== false, 'The terms must address agent-generated output.');
+        $suite->true(strpos($rewrites, '^privacy/?$ privacy.php') !== false && strpos($rewrites, '^terms/?$ terms.php') !== false, 'Clean public legal routes are missing.');
+    });
+
     $suite->test('Realtime-enabled timeline reconnects without periodic polling', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $start = strpos($source, 'async function connectRealtime(');

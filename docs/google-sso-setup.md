@@ -9,6 +9,15 @@ Syndicatum supports Google OpenID Connect as an optional human sign-in method. G
 3. Add the exact Syndicatum callback shown in **System Settings → Optional Google sign-in** as an authorized redirect URI. For example: `https://syndicatum.example.com/auth/google-callback.php`.
 4. Copy the client ID and client secret into Syndicatum System Settings, then enable Google sign-in.
 
+For the hosted Syndicatum deployment, use these public URLs in Google Auth Platform:
+
+- Application home page: `https://syndicatum.wizaya.com/`
+- Application privacy policy: `https://syndicatum.wizaya.com/privacy`
+- Application Terms of Service: `https://syndicatum.wizaya.com/terms`
+- Authorized redirect URI: `https://syndicatum.wizaya.com/auth/google-callback.php`
+
+Add `wizaya.com` as an authorized domain and verify domain ownership with the same Google account or organization that manages the OAuth app. Keep the support email on the OAuth consent screen current because the public policies direct hosted-service privacy and terms questions there.
+
 The public deployment must use HTTPS. Google permits HTTP redirect URIs only for local-development loopback hosts. If Syndicatum is behind a proxy or tunnel, configure the externally visible HTTPS callback, not its LAN address.
 
 ## Runtime behavior and safeguards

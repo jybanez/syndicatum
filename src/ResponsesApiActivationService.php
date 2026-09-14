@@ -136,7 +136,7 @@ class ResponsesApiActivationService
             'tools' => [[
                 'type' => 'mcp', 'server_label' => 'syndicatum',
                 'server_description' => 'The authoritative Syndicatum project timeline for this agent.',
-                'server_url' => ChatGptOAuthService::RESOURCE,
+                'server_url' => (new ChatGptOAuthService($this->pdo))->resource(),
                 'authorization' => $this->decryptSecret($row['responses_mcp_token_encrypted']),
                 'require_approval' => 'never',
                 'allowed_tools' => ['get_project', 'list_participants', 'list_messages', 'get_message', 'post_message', 'acknowledge_message'],

@@ -131,6 +131,11 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
             </section>
         </main>
     </div>
+    <nav class="public-policy-links" id="public-policy-links" aria-label="Legal information">
+        <a href="privacy">Privacy Policy</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="terms">Terms of Service</a>
+    </nav>
     <script type="module" src="assets/app.mjs?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/assets/app.mjs')); ?>"></script>
 </body>
 </html>

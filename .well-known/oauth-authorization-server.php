@@ -1,7 +1,8 @@
 <?php
 require_once dirname(__DIR__) . '/src/Api.php';
+require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatGptOAuthService.php';
-$issuer = ChatGptOAuthService::ISSUER;
+$issuer = (new ChatGptOAuthService(Db::pdo()))->issuer();
 Api::json(['issuer' => $issuer, 'authorization_endpoint' => $issuer . '/oauth/authorize',
     'token_endpoint' => $issuer . '/oauth/token', 'registration_endpoint' => $issuer . '/oauth/register',
     'revocation_endpoint' => $issuer . '/oauth/revoke',

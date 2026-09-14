@@ -198,7 +198,7 @@ try {
         $placeholder = (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'], ['display_name' => 'OAuth Placeholder', 'provider' => 'chatgpt']);
         $pdo->prepare("INSERT INTO oauth_access_tokens
             (token_hash, client_id, user_id, project_id, agent_id, resource_uri, scope_text, created_at, expires_at)
-            VALUES (?, 'intent-test-client', ?, ?, ?, 'https://chatviewer.pbb.ph/mcp', ?, ?, ?)")
+            VALUES (?, 'intent-test-client', ?, ?, ?, 'https://syndicatum.wizaya.com/mcp', ?, ?, ?)")
             ->execute([hash('sha256', 'intent-access'), $owner['id'], $project['id'], $placeholder['agent_id'],
                 'projects:read participants:read messages:read messages:write messages:acknowledge', $now, gmdate('Y-m-d H:i:s', time() + 3600)]);
         $accessTokenId = (int) $pdo->lastInsertId();

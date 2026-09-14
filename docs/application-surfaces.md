@@ -170,7 +170,7 @@ Administration uses the same fixed shell. Navbar items are omitted unless their 
 - **Users:** account state, system roles, profile, recovery, and suspension.
 - **Agents:** installation-wide emergency suspension and credential revocation.
 - **Audit:** security and administrative events without secret or message leakage.
-- **System Settings:** an administrator-only modal for General, Projects and messaging, Integrations, Security, and Operations settings.
+- **System Settings:** an administrator-only modal for General, Projects and messaging, Integrations, Security, and Operations settings. General includes the canonical **Public Syndicatum URL** used as the MCP/OAuth issuer and resource origin; production values require HTTPS and never derive from request Host headers.
 
 Project ownership and ordinary project management remain project-scoped even when accessed by a global administrator.
 
@@ -246,6 +246,12 @@ authorization discovers only browser-companion bindings owned by that user and
 routes to each required discussion URL. It does not use a working-directory hint.
 Responses API and Workspace Agent activation are explicitly disabled; the
 ChatGPT MCP/OAuth remains authoritative for both notification handling and user-initiated project coordination. The browser companion never substitutes a captured ChatGPT response for an MCP-authenticated project action.
+
+The MCP and OAuth metadata use the explicit `general.public_origin` setting.
+Operators may instead lock it with
+`SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN`. Changing this origin deliberately
+invalidates grants issued for the previous resource audience, so connected
+ChatGPT apps must be reconnected against the new `{origin}/mcp` endpoint.
 
 The Companion starts without a default Syndicatum origin. The operator enters
 the deployment URL, the extension requests runtime permission only for that

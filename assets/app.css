@@ -20,6 +20,11 @@ button, input, textarea { font: inherit; }
 .login-form .ui-button { margin-top: 8px; justify-content: center; }
 .form-error { margin: 0; color: #ffb4ab; }
 .account-login { justify-content: center; text-decoration: none; }
+.public-policy-links { position: fixed; z-index: 10000; right: 18px; bottom: 12px; display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 999px; background: rgba(8, 16, 28, .82); color: var(--app-muted); font-size: 12px; backdrop-filter: blur(12px); }
+.public-policy-links a { color: #c8dcff; text-decoration: none; }
+.public-policy-links a:hover, .public-policy-links a:focus-visible { color: #fff; text-decoration: underline; }
+.syndicatum-account-menu-group > .ui-menu-group-heading { display: none; }
+.syndicatum-account-menu-group + .syndicatum-account-menu-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--app-border); }
 
 .app-shell { height: 100dvh; min-height: 0; min-width: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); box-sizing: border-box; overflow: hidden; }
 .app-shell > .surface-chrome { grid-row: 1; }

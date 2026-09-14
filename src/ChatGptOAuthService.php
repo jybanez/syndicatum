@@ -2,16 +2,28 @@
 
 require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/SettingsService.php';
 
 class ChatGptOAuthService
 {
-    const ISSUER = 'https://chatviewer.pbb.ph';
-    const RESOURCE = 'https://chatviewer.pbb.ph/mcp';
     const SCOPES = ['projects:read', 'participants:read', 'messages:read', 'messages:write', 'messages:acknowledge'];
 
     private $pdo;
+    private $issuer;
+    private $resource;
 
-    public function __construct(PDO $pdo) { $this->pdo = $pdo; }
+    public function __construct(PDO $pdo, $publicOrigin = null)
+    {
+        $this->pdo = $pdo;
+        $origin = $publicOrigin === null ? (new SettingsService($pdo))->get('general.public_origin') : $publicOrigin;
+        $origin = trim((string) $origin);
+        if ($origin === '') { throw new RuntimeException('Syndicatum public origin is not configured.'); }
+        $this->issuer = rtrim($origin, '/');
+        $this->resource = $this->issuer . '/mcp';
+    }
+
+    public function issuer() { return $this->issuer; }
+    public function resource() { return $this->resource; }
 
     public function registerClient(array $input)
     {
@@ -39,7 +51,7 @@ class ChatGptOAuthService
         $resource = trim(isset($input['resource']) ? (string) $input['resource'] : '');
         $challenge = trim(isset($input['code_challenge']) ? (string) $input['code_challenge'] : '');
         if ((isset($input['response_type']) ? $input['response_type'] : '') !== 'code' || (isset($input['code_challenge_method']) ? $input['code_challenge_method'] : '') !== 'S256'
-            || $resource !== self::RESOURCE || !preg_match('/^[A-Za-z0-9_-]{43,128}$/', $challenge)) {
+            || $resource !== $this->resource || !preg_match('/^[A-Za-z0-9_-]{43,128}$/', $challenge)) {
             throw new InvalidArgumentException('invalid_request');
         }
         $client = $this->client($clientId);
@@ -74,7 +86,7 @@ class ChatGptOAuthService
         $code = AuthService::randomToken(32);
         $this->pdo->prepare('INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, project_id, agent_id, redirect_uri, resource_uri, scope_text, code_challenge, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([hash('sha256', $code), $request['client_id'], (int) $userId, (int) $projectId, (int) $agentId,
-                $request['redirect_uri'], self::RESOURCE, $request['scope'], $request['code_challenge'], Db::now(), date('Y-m-d H:i:s', time() + 300)]);
+                $request['redirect_uri'], $this->resource, $request['scope'], $request['code_challenge'], Db::now(), date('Y-m-d H:i:s', time() + 300)]);
         return $code;
     }
 
@@ -131,7 +143,7 @@ class ChatGptOAuthService
         $statement->execute([hash('sha256', trim((string) $token)), Db::now()]);
         $row = $statement->fetch();
         if (!$row || !$row['is_active'] || $row['project_agent_status'] !== 'active' || $row['participant_status'] !== 'active' || $row['project_status'] !== 'active'
-            || !hash_equals(self::RESOURCE, $row['resource_uri'])) { return null; }
+            || !hash_equals($this->resource, $row['resource_uri'])) { return null; }
         $this->pdo->prepare('UPDATE oauth_access_tokens SET last_used_at = ? WHERE id = ?')->execute([Db::now(), $row['access_token_id']]);
         return ['project_id' => (int) $row['project_id'], 'participant_id' => (int) $row['participant_id'], 'role' => 'agent',
             'principal_user_id' => (int) $row['user_id'], 'access_token_id' => (int) $row['access_token_id'],

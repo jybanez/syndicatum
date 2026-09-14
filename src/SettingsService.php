@@ -15,6 +15,7 @@ class SettingsService
     {
         return [
             'general.installation_name' => ['section' => 'general', 'type' => 'string', 'default' => 'Syndicatum', 'max' => 120],
+            'general.public_origin' => ['section' => 'general', 'type' => 'origin', 'default' => ''],
             'general.support_url' => ['section' => 'general', 'type' => 'url', 'default' => ''],
             'messaging.max_message_bytes' => ['section' => 'messaging', 'type' => 'integer', 'default' => 24000, 'min' => 1024, 'max' => 1048576],
             'messaging.max_reply_depth' => ['section' => 'messaging', 'type' => 'integer', 'default' => 12, 'min' => 1, 'max' => 100],
@@ -231,6 +232,22 @@ class SettingsService
             return $value;
         }
         $value = trim((string) $value);
+        if ($definition['type'] === 'origin') {
+            if ($value === '' || !filter_var($value, FILTER_VALIDATE_URL)) {
+                throw new InvalidArgumentException($key . ' must be an absolute origin URL.');
+            }
+            $parts = parse_url($value);
+            $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+            $host = strtolower((string) ($parts['host'] ?? ''));
+            $loopback = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+            if (($scheme !== 'https' && !($scheme === 'http' && $loopback)) || $host === ''
+                || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
+                || !in_array((string) ($parts['path'] ?? ''), ['', '/'], true)) {
+                throw new InvalidArgumentException($key . ' must be an HTTPS origin without a path, query, fragment, or credentials.');
+            }
+            $displayHost = strpos($host, ':') !== false ? '[' . $host . ']' : $host;
+            return $scheme . '://' . $displayHost . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+        }
         $scheme = $value === '' ? '' : strtolower((string) parse_url($value, PHP_URL_SCHEME));
         $allowedSchemes = isset($definition['schemes']) ? $definition['schemes'] : ['http', 'https'];
         if ($definition['type'] === 'url' && $value !== '' && (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, $allowedSchemes, true))) {

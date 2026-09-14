@@ -120,3 +120,9 @@ Syndicatum origin (the UI shows `http://syndicatumserver.com` only as a
 placeholder), and the extension validates the server identity and advertised
 browser-companion capability before it saves the origin or starts device
 authorization.
+
+The server's MCP/OAuth issuer is likewise explicit: set **Public Syndicatum
+URL** in System Settings, or lock `general.public_origin` through the
+`SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN` environment override. Production
+origins must use HTTPS and must not include a path, query, fragment, or embedded
+credentials. Forwarded Host headers never determine OAuth token audiences.

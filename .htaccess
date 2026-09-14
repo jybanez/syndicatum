@@ -8,6 +8,8 @@ RewriteRule ^oauth/token/?$ oauth/token.php [L,QSA]
 RewriteRule ^oauth/register/?$ oauth/register.php [L,QSA]
 RewriteRule ^oauth/revoke/?$ oauth/revoke.php [L,QSA]
 RewriteRule ^mcp/?$ mcp.php [L,QSA]
+RewriteRule ^privacy/?$ privacy.php [L,QSA]
+RewriteRule ^terms/?$ terms.php [L,QSA]
 
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d

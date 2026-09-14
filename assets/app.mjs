@@ -74,7 +74,7 @@ const el = Object.fromEntries([
   "timeline-count", "refresh-button", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
   "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
-  "admin-title", "admin-list", "admin-refresh-button",
+  "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
 const panelButtons = Array.from(document.querySelectorAll("[data-panel-button]"));
@@ -327,11 +327,32 @@ function mountNavbar() {
     icon: navbarAvatarHtml(),
     iconOnly: true,
     className: "ui-button-borderless",
-    menuItems: [
-      { id: "profile", label: "Profile" },
-      ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password" }] : []),
-      ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account" }] : []),
-      { id: "signout", label: "Sign out", danger: true },
+    menuGroups: [
+      {
+        id: "account",
+        label: "Account",
+        className: "syndicatum-account-menu-group",
+        items: [
+          { id: "profile", label: "Profile" },
+          ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password" }] : []),
+          ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account" }] : []),
+        ],
+      },
+      {
+        id: "legal",
+        label: "Legal",
+        className: "syndicatum-account-menu-group",
+        items: [
+          { id: "privacy", label: "Privacy Policy" },
+          { id: "terms", label: "Terms of Service" },
+        ],
+      },
+      {
+        id: "session",
+        label: "Session",
+        className: "syndicatum-account-menu-group",
+        items: [{ id: "signout", label: "Logout", danger: true }],
+      },
     ],
   });
   state.components.navbar?.destroy();
@@ -355,6 +376,8 @@ function mountNavbar() {
       if (item?.id === "profile") openProfileModal();
       else if (item?.id === "password") openPasswordModal();
       else if (item?.id === "account-profile") openAccountProfile();
+      else if (item?.id === "privacy") location.assign("privacy");
+      else if (item?.id === "terms") location.assign("terms");
       else if (item?.id === "signout") void logout();
     },
   });
@@ -421,6 +444,7 @@ function setMobilePanel(name) {
 function showLogin(message = "") {
   state.mode = "login";
   el.app_shell.hidden = true;
+  el.public_policy_links.hidden = false;
   const returnPath = requestedReturnPath();
   const accountEnabled = Boolean(state.session?.capabilities?.account_sso || state.session?.capabilities?.pbb_account);
   const googleEnabled = Boolean(state.session?.capabilities?.google_sso);
@@ -544,6 +568,7 @@ function requestedReturnPath() {
 
 function showApplication() {
   el.app_shell.hidden = false;
+  el.public_policy_links.hidden = state.mode === "expanded";
   document.body.classList.toggle("expanded-mode", state.mode === "expanded");
   document.body.classList.toggle("legacy-mode", state.mode === "legacy");
 }
@@ -1826,6 +1851,7 @@ async function openSettings() {
     }],
     initialValues: {
       site_name: value("general.installation_name", "Syndicatum"),
+      public_origin: value("general.public_origin"),
       message_max_length: value("messaging.max_message_bytes", 24000),
       realtime_enabled: Boolean(value("realtime.enabled", false)),
       realtime_base_url: value("realtime.base_url"),
@@ -1850,7 +1876,8 @@ async function openSettings() {
     },
     rows: [
       [{ type: "text", content: "General and messaging" }],
-      [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
+      [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
+      [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
       [{ type: "divider" }],
       [{ type: "text", content: "Optional PBB Realtime integration" }],
       [{ type: "checkbox", name: "realtime_enabled", label: "Enable Realtime", disabled: locked("realtime.enabled") }],
@@ -1880,6 +1907,7 @@ async function openSettings() {
     async onSubmit(values, context) {
       const updates = {
         "general.installation_name": values.site_name,
+        "general.public_origin": values.public_origin,
         "messaging.max_message_bytes": Number(values.message_max_length),
         "realtime.enabled": Boolean(values.realtime_enabled),
         "realtime.base_url": values.realtime_base_url,

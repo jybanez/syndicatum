@@ -66,11 +66,13 @@ try {
     $suite->test('settings validate values and never return plaintext secrets', function () use ($suite, $pdo, $administrator) {
         $settings = new SettingsService($pdo);
         $settings->update([
+            'general.public_origin' => 'https://syndicatum.example.test/',
             'messaging.max_message_bytes' => 24000,
             'realtime.enabled' => true,
             'realtime.signing_secret' => ['operation' => 'replace', 'value' => 'test-signing-secret'],
         ], $administrator['id']);
         $suite->same(24000, $settings->get('messaging.max_message_bytes'));
+        $suite->same('https://syndicatum.example.test', $settings->get('general.public_origin'));
         $suite->same('test-signing-secret', $settings->get('realtime.signing_secret'));
         $public = $settings->publicSettings('integrations');
         $suite->same(null, $public['realtime.signing_secret']['value']);
@@ -96,6 +98,12 @@ try {
         $settings->update(['realtime.base_url' => 'https://gateway.example.test'], $administrator['id']);
         $suite->throws('realtime.websocket_url must use wss when realtime.base_url uses https', function () use ($settings, $administrator) {
             $settings->update(['realtime.websocket_url' => 'ws://gateway.example.test:8080/realtime'], $administrator['id']);
+        });
+        $suite->throws('general.public_origin must be an HTTPS origin without a path, query, fragment, or credentials', function () use ($settings, $administrator) {
+            $settings->update(['general.public_origin' => 'https://syndicatum.example.test/subpath'], $administrator['id']);
+        });
+        $suite->throws('general.public_origin must be an HTTPS origin without a path, query, fragment, or credentials', function () use ($settings, $administrator) {
+            $settings->update(['general.public_origin' => 'http://syndicatum.example.test'], $administrator['id']);
         });
     });
 

@@ -40,7 +40,7 @@ $oauth = new ChatGptOAuthService($pdo);
 $bearer = Api::bearerToken();
 $access = $oauth->authenticate($bearer);
 if (!$access) { $access = (new McpServiceTokenService($pdo))->authenticate($bearer); }
-if (!$access) { mcpAuthenticationRequired($id); }
+if (!$access) { mcpAuthenticationRequired($id, 'invalid_token', $oauth); }
 $name = trim((string) ($params['name'] ?? ''));
 $args = isset($params['arguments']) && is_array($params['arguments']) ? $params['arguments'] : [];
 $repository = new ProjectRepository($pdo);
@@ -52,7 +52,7 @@ try {
         'get_message' => 'messages:read', 'post_message' => 'messages:write',
         'acknowledge_message' => 'messages:acknowledge'];
     if (!isset($scopeMap[$name])) { throw new InvalidArgumentException('Unknown tool.'); }
-    if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope'); }
+    if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope', $oauth); }
     $bindingService = new DiscussionBindingIntentService($pdo);
     $bindingContext = isset($args['binding_context_id']) ? $bindingService->context($access, $args['binding_context_id']) : null;
     if ($bindingContext) { $access = $bindingContext; }
@@ -157,8 +157,8 @@ function mcpPositiveId(array $args, $name) { $id = (int) ($args[$name] ?? 0); if
 function mcpResult($id, $result) { Api::json(['jsonrpc' => '2.0', 'id' => $id, 'result' => $result]); }
 function mcpError($id, $code, $message) { Api::json(['jsonrpc' => '2.0', 'id' => $id, 'error' => ['code' => $code, 'message' => $message]], 400); }
 function mcpToolError($id, $message) { mcpResult($id, ['content' => [['type' => 'text', 'text' => $message]], 'isError' => true]); }
-function mcpAuthenticationRequired($id, $error = 'invalid_token') {
-    $challenge = 'Bearer resource_metadata="' . ChatGptOAuthService::ISSUER . '/.well-known/oauth-protected-resource", error="' . $error . '"';
+function mcpAuthenticationRequired($id, $error, ChatGptOAuthService $oauth) {
+    $challenge = 'Bearer resource_metadata="' . $oauth->issuer() . '/.well-known/oauth-protected-resource", error="' . $error . '"';
     header('WWW-Authenticate: ' . $challenge);
     mcpResult($id, ['content' => [['type' => 'text', 'text' => 'Authentication is required.']], 'isError' => true,
         '_meta' => ['mcp/www_authenticate' => [$challenge]]]);

@@ -40,7 +40,7 @@ try {
         'discussion_reference' => 'https://chatgpt.com/c/46604e19-202c-4224-bb05-d2ddf5f58c9f',
         'working_directory' => 'C:\\ignored',
     ]);
-    $oauth = new ChatGptOAuthService($pdo);
+    $oauth = new ChatGptOAuthService($pdo, 'https://syndicatum.example.test');
 
     $suite->test('ChatGPT provider can use OAuth while proactive activation remains disabled', function () use ($suite, $binding) {
         $suite->same('chatgpt', $binding['provider']);
@@ -65,13 +65,13 @@ try {
     $verifier = chatGptBase64Url(random_bytes(48));
     $challenge = chatGptBase64Url(hash('sha256', $verifier, true));
     $requestInput = ['response_type' => 'code', 'client_id' => $client['client_id'],
-        'redirect_uri' => $client['redirect_uris'][0], 'resource' => ChatGptOAuthService::RESOURCE,
+        'redirect_uri' => $client['redirect_uris'][0], 'resource' => $oauth->resource(),
         'scope' => implode(' ', ChatGptOAuthService::SCOPES), 'state' => 'opaque-state',
         'code_challenge' => $challenge, 'code_challenge_method' => 'S256'];
     $request = $oauth->authorizationRequest($requestInput);
     $code = $oauth->issueAuthorizationCode($request, $owner['id'], $project['id'], $agent['agent_id']);
     $tokenInput = ['grant_type' => 'authorization_code', 'client_id' => $client['client_id'],
-        'redirect_uri' => $client['redirect_uris'][0], 'resource' => ChatGptOAuthService::RESOURCE,
+        'redirect_uri' => $client['redirect_uris'][0], 'resource' => $oauth->resource(),
         'code' => $code, 'code_verifier' => $verifier];
     $tokens = $oauth->exchangeAuthorizationCode($tokenInput);
 
@@ -84,12 +84,12 @@ try {
     });
 
     $refreshed = $oauth->refresh(['grant_type' => 'refresh_token', 'client_id' => $client['client_id'],
-        'resource' => ChatGptOAuthService::RESOURCE, 'refresh_token' => $tokens['refresh_token']]);
+        'resource' => $oauth->resource(), 'refresh_token' => $tokens['refresh_token']]);
     $suite->test('refresh rotation revokes the previous access and refresh tokens', function () use ($suite, $oauth, $tokens, $refreshed, $client) {
         $suite->same(null, $oauth->authenticate($tokens['access_token']));
         $suite->true($oauth->authenticate($refreshed['access_token']) !== null);
         $suite->throws(function () use ($oauth, $tokens, $client) {
-            $oauth->refresh(['client_id' => $client['client_id'], 'resource' => ChatGptOAuthService::RESOURCE, 'refresh_token' => $tokens['refresh_token']]);
+            $oauth->refresh(['client_id' => $client['client_id'], 'resource' => $oauth->resource(), 'refresh_token' => $tokens['refresh_token']]);
         }, 'invalid_grant');
     });
 
