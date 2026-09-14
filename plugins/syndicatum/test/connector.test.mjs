@@ -99,7 +99,7 @@ test("an unclaimed legacy binding cannot abort the device listener", async () =>
   const logs = [];
   try {
     const connector = new DeviceConnector({
-      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://chatviewer.pbb.ph" },
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://syndicatum.wizaya.com" },
       syndicatum: {},
       bindings: [{ project_id: 1, participant_id: 1, agent_id: 1, conversation_id: "discussion-1", working_directory: null }],
       loadProfile: async () => { const error = new Error("missing profile"); error.code = "ENOENT"; throw error; },
@@ -121,10 +121,10 @@ test("claimed bindings recover missed messages into one coalesced startup wake",
   try {
     const identityClient = { isAcknowledged: async () => false, addressedUnacknowledged: async () => [newer, older] };
     const connector = new DeviceConnector({
-      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://chatviewer.pbb.ph", coalescingPollMs: 60000 },
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://syndicatum.wizaya.com", coalescingPollMs: 60000 },
       syndicatum: {},
       bindings: [{ project_id: 3, participant_id: 34, agent_id: 31, conversation_id: "discussion-1", working_directory: null }],
-      loadProfile: async () => ({ syndicatum_url: "https://chatviewer.pbb.ph", project_id: 3, participant_id: 34, token: "protected" }),
+      loadProfile: async () => ({ syndicatum_url: "https://syndicatum.wizaya.com", project_id: 3, participant_id: 34, token: "protected" }),
       identityClientFactory: () => identityClient,
       driverFactory: () => ({ activate: async item => { activations.push(String(item.id)); } }),
       log: { info() {}, error() {} },
@@ -145,13 +145,13 @@ test("a stale claimed credential cannot abort recovery for another binding", asy
   const recovered = { ...message, id: 1684, project_id: 3, project_sequence: 43, addressees: [{ participant_id: 34, reason: "direct" }] };
   try {
     const connector = new DeviceConnector({
-      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://chatviewer.pbb.ph", coalescingPollMs: 60000 },
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://syndicatum.wizaya.com", coalescingPollMs: 60000 },
       syndicatum: {},
       bindings: [
         { project_id: 3, participant_id: 32, agent_id: 29, conversation_id: "discussion-stale", working_directory: null },
         { project_id: 3, participant_id: 34, agent_id: 31, conversation_id: "discussion-helper", working_directory: null },
       ],
-      loadProfile: async profileId => ({ syndicatum_url: "https://chatviewer.pbb.ph", project_id: 3, participant_id: profileId.endsWith(".29") ? 32 : 34, token: profileId.endsWith(".29") ? "stale" : "healthy" }),
+      loadProfile: async profileId => ({ syndicatum_url: "https://syndicatum.wizaya.com", project_id: 3, participant_id: profileId.endsWith(".29") ? 32 : 34, token: profileId.endsWith(".29") ? "stale" : "healthy" }),
       identityClientFactory: options => options.token === "stale"
         ? { addressedUnacknowledged: async () => { const error = new Error("Authentication is required."); error.status = 401; throw error; } }
         : { isAcknowledged: async () => false, addressedUnacknowledged: async () => [recovered] },

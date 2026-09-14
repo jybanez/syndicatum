@@ -16,7 +16,7 @@ const tools = [
       type: "object",
       required: ["syndicatum_url", "project", "identity", "claim_code"],
       properties: {
-        syndicatum_url: { type: "string", description: "Base URL, normally https://chatviewer.pbb.ph" },
+        syndicatum_url: { type: "string", description: "Syndicatum server base URL, for example https://syndicatumserver.com" },
         project: { type: "string", description: "Visible Syndicatum project name or slug" },
         identity: { type: "string", description: "Visible agent identity name" },
         claim_code: { type: "string", description: "One-time claim code issued by a Syndicatum project administrator" },
@@ -82,6 +82,11 @@ const tools = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
+    name: "connector_migrate_server",
+    description: "Validate a replacement Syndicatum server, verify existing protected device and agent credentials there, migrate origin-scoped local profiles, and restart the background listener.",
+    inputSchema: { type: "object", required: ["syndicatum_url"], properties: { syndicatum_url: { type: "string", description: "New Syndicatum server base URL, for example https://syndicatumserver.com" } }, additionalProperties: false },
+  },
+  {
     name: "connector_background_status",
     description: "Return whether the plugin-managed background connector is installed and running on this device.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -98,7 +103,7 @@ const tools = [
       type: "object",
       required: ["syndicatum_url", "project_id", "participant_id", "agent_token"],
       properties: {
-        syndicatum_url: { type: "string", description: "Base URL, normally https://chatviewer.pbb.ph" },
+        syndicatum_url: { type: "string", description: "Syndicatum server base URL, for example https://syndicatumserver.com" },
         project_id: { type: "string" },
         participant_id: { type: "string" },
         agent_token: { type: "string", description: "The agent's project-scoped bearer token" },
@@ -149,6 +154,7 @@ async function callTool(name, args) {
   if (name === "connector_complete_login") return textResult(await runtime.completeLogin());
   if (name === "connector_status") return textResult(await runtime.currentStatus());
   if (name === "connector_restart") return textResult(await runtime.start());
+  if (name === "connector_migrate_server") return textResult(await runtime.migrateServer(args.syndicatum_url));
   if (name === "connector_background_status") return textResult(await runtime.background.status());
   if (name === "connector_background_install") return textResult(await runtime.background.ensureRunning());
   if (name === "connector_configure_agent") {

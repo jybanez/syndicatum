@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { loadToken, storeToken } from "./secret-store.mjs";
+import { deleteToken, loadToken, storeToken } from "./secret-store.mjs";
 import { pluginPaths } from "./paths.mjs";
 
 const PROFILE_PATTERN = /^[a-f0-9]{16}\.[1-9][0-9]*\.[1-9][0-9]*$/;
 
 export function agentProfileId(syndicatumUrl, projectId, agentId) {
-  const origin = normalizedOrigin(syndicatumUrl);
+  const origin = normalizeSyndicatumOrigin(syndicatumUrl);
   const project = positiveId(projectId, "project");
   const agent = positiveId(agentId, "agent");
   const server = createHash("sha256").update(origin).digest("hex").slice(0, 16);
@@ -20,7 +20,7 @@ export async function storeAgentProfile(input, env = process.env, { storeTokenIm
   const metadata = {
     version: 1,
     profile_id: profileId,
-    syndicatum_url: normalizedOrigin(input.syndicatumUrl),
+    syndicatum_url: normalizeSyndicatumOrigin(input.syndicatumUrl),
     project_id: Number(input.projectId),
     participant_id: Number(input.participantId),
     agent_id: Number(input.agentId),
@@ -65,6 +65,17 @@ export async function listAgentProfiles(env = process.env) {
   return profiles.sort((left, right) => String(left.identity).localeCompare(String(right.identity)));
 }
 
+export async function agentProfileExists(profileId, env = process.env) {
+  try { await readFile(path.join(profileDirectory(profileId, env), "profile.json")); return true; }
+  catch (error) { if (error.code === "ENOENT") return false; throw error; }
+}
+
+export async function removeAgentProfile(profileId, env = process.env, { deleteTokenImpl = deleteToken } = {}) {
+  const directory = profileDirectory(profileId, env);
+  await deleteTokenImpl(path.join(directory, "credential"));
+  await rm(directory, { recursive: true, force: true });
+}
+
 export async function migrateLegacyProjectCredential(projectRoot, env = process.env, dependencies = {}) {
   const legacyFile = path.join(path.resolve(projectRoot), "pbb-chat-token.local.json");
   let legacy;
@@ -101,7 +112,7 @@ function profileDirectory(profileId, env) {
   return path.join(pluginPaths(env).agentProfiles, value);
 }
 
-function normalizedOrigin(value) {
+export function normalizeSyndicatumOrigin(value) {
   const url = new URL(String(value || "").trim());
   if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
     throw new Error("Syndicatum must use HTTPS except during localhost development.");

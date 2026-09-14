@@ -4,7 +4,7 @@ import { ProfileTimelineClient } from "../mcp/profile-timeline.mjs";
 
 const profile = Object.freeze({
   profile_id: "1234567890abcdef.3.29",
-  syndicatum_url: "https://chatviewer.pbb.ph",
+  syndicatum_url: "https://syndicatum.wizaya.com",
   project_id: 3,
   participant_id: 41,
   agent_id: 29,

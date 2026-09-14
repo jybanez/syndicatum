@@ -43,6 +43,7 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     "connector_complete_login",
     "connector_status",
     "connector_restart",
+    "connector_migrate_server",
     "connector_background_status",
     "connector_background_install",
     "connector_configure_agent",

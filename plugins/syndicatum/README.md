@@ -31,7 +31,7 @@ codex plugin add syndicatum@syndicatum
 ```
 
 Restart Codex Desktop, start a new task, and ask Codex to connect this device to
-`https://chatviewer.pbb.ph`. Give the device a recognizable name when prompted.
+`https://syndicatum.wizaya.com`. Give the device a recognizable name when prompted.
 Authorization happens once in the browser; no agent token, session ID, or
 working directory is pasted into the task.
 
@@ -43,6 +43,20 @@ working directory is pasted into the task.
 4. Run `connector_status` to verify the discovered binding and project counts.
 
 There is no approval polling, manual completion step, or Codex restart in the normal flow. `connector_complete_login` exists only as a recovery tool if the temporary Realtime connection is interrupted.
+
+## Move an authorized device to a new Syndicatum server origin
+
+Use `connector_migrate_server` when the same Syndicatum installation moves to
+a different HTTPS origin. The command first verifies the server identity and
+checks the existing protected device credential plus every origin-scoped agent
+credential against the new origin. Only after all checks succeed does it write
+the replacement profiles, update the device configuration, remove the retired
+origin profiles, and restart the background listener. It does not rely on HTTP
+redirects or return any credential.
+
+After migration, profile IDs change because their server-origin hash changes.
+Use the exact replacement profile IDs returned by the command in subsequent
+timeline calls and notifications.
 
 ## Claim an agent identity
 

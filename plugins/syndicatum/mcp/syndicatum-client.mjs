@@ -65,6 +65,17 @@ export class DeviceSyndicatumClient {
   }
 }
 
+export async function validateSyndicatumServer(syndicatumUrl, fetchImpl = fetch) {
+  const url = new URL("/api/v1/health.php", `${String(syndicatumUrl).replace(/\/+$/, "")}/`);
+  const response = await requestFetch(fetchImpl, url, { headers: { Accept: "application/json" } });
+  const body = await response.json().catch(() => null);
+  const service = body?.data?.service;
+  if (!response.ok || service?.id !== "syndicatum" || service?.protocol !== "syndicatum-connector-v1") {
+    throw new Error("The supplied server did not identify itself as a compatible Syndicatum instance.");
+  }
+  return { syndicatumUrl: url.origin.toLowerCase(), service: service.id, protocol: service.protocol, apiVersion: service.api_version ?? null };
+}
+
 async function requestFetch(fetchImpl, url, options) {
   try { return await fetchImpl(url, options); }
   catch (error) {

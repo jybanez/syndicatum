@@ -12,6 +12,7 @@ import { DeviceSyndicatumClient, SyndicatumClient } from "./syndicatum-client.mj
 import { AuthorizationListener } from "./authorization-listener.mjs";
 import { BackgroundServiceManager } from "./background-service-manager.mjs";
 import { loadPairingState, savePairingState } from "./pairing-state.mjs";
+import { migrateSyndicatumServer } from "./server-migration.mjs";
 
 export class PluginRuntime {
   constructor(env = process.env, { manageBackground = true, background = null } = {}) { this.env = env; this.manageBackground = manageBackground; this.background = background ?? new BackgroundServiceManager({ env }); this.connector = null; this.task = null; this.lock = null; this.pairing = null; this.pairingTask = null; this.configWatcher = null; this.reloadTimer = null; this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; this.status = { state: "starting" }; }
@@ -119,6 +120,12 @@ export class PluginRuntime {
     const ready = !background?.supported || (background.running && background.ownsListener);
     const state = background?.readiness === "authorized_idle" ? "authorized_idle" : ready ? "ready" : background?.readiness === "startup_error" ? "error" : "starting";
     return { state, mode: "device", deviceId: config.deviceId, role: this.manageBackground ? "background" : this.status.role, background, pairing };
+  }
+  async migrateServer(syndicatumUrl) {
+    const migration = await migrateSyndicatumServer(syndicatumUrl, this.env);
+    const background = this.manageBackground ? await this.background.ensureRunning() : null;
+    this.status = { state: "ready", mode: "device", deviceId: migration.deviceId, background };
+    return { ...migration, background };
   }
   async startDevice(config) {
     const client = new DeviceSyndicatumClient(config); const result = await client.bindings(); const bindings = Array.isArray(result.bindings) ? result.bindings : [];
