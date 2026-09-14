@@ -70,6 +70,39 @@ test("new activity is coalesced behind one wake and only unresolved activity get
   connector.stop();
 });
 
+test("a stale unacknowledged wake cannot suppress newer notifications indefinitely", async () => {
+  const processed = new Set(), activations = [];
+  let wake = null;
+  const second = { ...message, id: 1560, project_sequence: 1560 };
+  const third = { ...message, id: 1561, project_sequence: 1561 };
+  const state = {
+    has: id => processed.has(String(id)) || Boolean(wake?.messages.some(item => String(item.id) === String(id))),
+    activeWake: () => wake ? structuredClone(wake) : null,
+    markPending: async () => {},
+    markProcessed: async item => { processed.add(String(item.id)); },
+    markWakeQueued: async (item, discussionId) => { wake = { anchor_message_id: String(item.id), discussion_id: String(discussionId || ""), high_water_sequence: item.project_sequence, messages: [structuredClone(item)], queued_at: new Date(Date.now() - 120000).toISOString() }; },
+    coalesceWake: async item => { wake.messages.push(structuredClone(item)); wake.high_water_sequence = item.project_sequence; },
+    clearWake: async items => { for (const item of items) processed.add(String(item.id)); wake = null; },
+    observeSequence: async () => {},
+  };
+  const connector = new ActivationConnector({
+    config: { participantId: "8", codexThreadId: "discussion-1", coalescingPollMs: 60000, coalescingMaxAgeMs: 60000, activationRetryLimit: 2, activationRetryBaseMs: 1000, activationRetryMaxMs: 1000 },
+    syndicatum: { isAcknowledged: async () => false, addressedUnacknowledged: async () => [third, second, message] },
+    driver: { activate: async item => { activations.push(String(item.id)); } },
+    state,
+    log: { info() {}, error() {} },
+  });
+  assert.equal((await connector.handleMessage(message, "test")).status, "notified");
+  await connector.handleMessage(second, "test");
+  await connector.handleMessage(third, "test");
+  assert.equal((await connector.reconcileWake()).status, "notified");
+  assert.deepEqual(activations, ["1559", "1561"]);
+  assert.equal(wake.anchor_message_id, "1561");
+  assert.equal(processed.has("1559"), true);
+  assert.equal(processed.has("1560"), true);
+  connector.stop();
+});
+
 test("coalesced wake state and its discussion scope survive connector restart", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-wake-state-"));
   const file = path.join(directory, "state.json");

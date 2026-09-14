@@ -124,6 +124,12 @@ Restart Codex Desktop after an upgrade so new plugin tools and skills are
 loaded. Device authorization is retained unless the device was revoked or its
 local Syndicatum data was removed.
 
+Notifications arriving while an earlier wake remains unacknowledged are briefly
+coalesced so an active task is not flooded. The coalescing window is bounded:
+after one minute, the newest unresolved message receives a follow-up wake even
+when the original anchor is still open. Older messages in that group remain in
+the authoritative Syndicatum timeline for the agent to handle.
+
 For local acceptance, invoke `connector_begin_login` with the Syndicatum URL and
 a recognizable device name. Open the returned verification URL in a browser
 where the Helper login modal opens automatically if needed, confirm the

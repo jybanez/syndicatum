@@ -101,18 +101,28 @@ export class ActivationConnector {
   async reconcileWake() {
     const wake = this.state.activeWake();
     if (!wake || wake.messages.length < 2) return { status: "idle" };
-    if (!await this.syndicatum.isAcknowledged(wake.anchor_message_id)) {
+    const anchorAcknowledged = await this.syndicatum.isAcknowledged(wake.anchor_message_id);
+    const queuedAt = Date.parse(String(wake.queued_at || ""));
+    const maxAge = Math.max(10000, Number(this.config.coalescingMaxAgeMs) || 60000);
+    const expired = Number.isFinite(queuedAt) && Date.now() - queuedAt >= maxAge;
+    if (!anchorAcknowledged && !expired) {
       this.scheduleCoalescedCheck();
       return { status: "waiting", anchorMessageId: wake.anchor_message_id };
     }
     const unacknowledged = await this.syndicatum.addressedUnacknowledged();
-    const outstandingIds = new Set(unacknowledged.map(item => String(item.id)));
-    const outstanding = wake.messages.filter(item => outstandingIds.has(String(item.id)));
-    await this.state.clearWake(wake.messages.filter(item => !outstandingIds.has(String(item.id))));
-    if (!outstanding.length) { this.coalescingAttempt = 0; return { status: "caught-up" }; }
+    const wakeIds = new Set(wake.messages.map(item => String(item.id)));
+    const outstanding = unacknowledged.filter(item => wakeIds.has(String(item.id)));
+    if (!outstanding.length) {
+      await this.state.clearWake(wake.messages);
+      this.coalescingAttempt = 0;
+      return { status: "caught-up" };
+    }
     const candidate = outstanding.reduce((latest, item) => item.project_sequence > latest.project_sequence ? item : latest);
-    this.log.info(`Pending wake ${wake.anchor_message_id} completed with newer unacknowledged activity; queuing one follow-up at sequence ${candidate.project_sequence}.`);
-    return this.handleMessage(candidate, "coalesced-followup");
+    await this.state.clearWake(wake.messages.filter(item => String(item.id) !== String(candidate.id)));
+    this.log.info(anchorAcknowledged
+      ? `Pending wake ${wake.anchor_message_id} completed with newer unacknowledged activity; queuing one follow-up at sequence ${candidate.project_sequence}.`
+      : `Pending wake ${wake.anchor_message_id} exceeded the coalescing window; queuing one follow-up at sequence ${candidate.project_sequence}.`);
+    return this.handleMessage(candidate, anchorAcknowledged ? "coalesced-followup" : "coalesced-timeout");
   }
   async connectLoop() {
     while (!this.stopped) {
