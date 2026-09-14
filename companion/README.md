@@ -15,8 +15,20 @@ Gemini browser response capture requires Chrome to remain signed in and the boun
 7. For ChatGPT, say `@Syndicatum bind <project name> <agent name>` in the target discussion and approve the Companion confirmation. Gemini can still be configured from its exact `https://gemini.google.com/app/...` discussion URL.
 
 Chrome does not automatically update unpacked extensions. For an upgrade,
-download the new release from GitHub, verify its checksum, extract it over the same permanent extension
-directory, then click **Reload** for Syndicatum Companion on
+download the new release from GitHub, verify its checksum, and run the updater
+from a canonical source checkout in a regular PowerShell window:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File companion\update-installed.ps1
+```
+
+The updater discovers a single installation beneath
+`%LOCALAPPDATA%\Syndicatum\Companion`, falls back to the physical localhost
+administrative-share path when packaged AppData redirection hides it, verifies
+the existing and source manifests, creates and verifies a complete sibling
+backup, updates the same directory, and verifies every deployed source file.
+Pass `-TargetDirectory` when more than one installation exists. After a
+successful update, click **Reload** for Syndicatum Companion on
 `chrome://extensions`. Keeping the same directory preserves the extension ID
 and device authorization. Automatic updates require later distribution through
 the Chrome Web Store or a managed enterprise policy.
@@ -43,6 +55,11 @@ The browser must remain signed in to the selected provider. If it is closed or t
 The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
+
+Version 0.10.0 displays the installed version and extension ID, adds a safe
+Copy diagnostics action, provides a recoverable in-place PowerShell updater,
+and produces deterministic release archives with fixed entry timestamps and
+ordering.
 
 Version 0.9.0 separates server reachability, account authorization, Realtime,
 binding, and delivery health in the popup. It includes last-check timestamps so
@@ -100,6 +117,8 @@ Run:
 powershell -NoProfile -ExecutionPolicy Bypass -File companion\build-release.ps1
 ```
 
-The script creates a ZIP with `manifest.json` at its root and a matching SHA-256
-checksum in a temporary release directory. Pass `-OutputDirectory` to choose a
-different destination.
+The script creates a deterministic ZIP with `manifest.json` at its root and a
+matching SHA-256 checksum in a temporary release directory. File ordering and
+entry timestamps are normalized, so identical source files produce an
+identical archive checksum. Pass `-OutputDirectory` to choose a different
+destination.

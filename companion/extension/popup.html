@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Syndicatum Companion</title><link rel="stylesheet" href="popup.css"></head>
 <body>
   <main>
-    <header><img class="mark" src="icons/syndicatum-48.png" alt=""><div><h1>Syndicatum Companion</h1><p>AI discussion delivery</p></div></header>
+    <header><img class="mark" src="icons/syndicatum-48.png" alt=""><div><h1>Syndicatum Companion</h1><p>AI discussion delivery · <span id="extension-version">v—</span></p></div></header>
     <section id="connect-view">
       <label for="base-url">Syndicatum server</label>
       <input id="base-url" type="url" placeholder="http://syndicatumserver.com" autocomplete="url" spellcheck="false">
@@ -21,7 +21,7 @@
       <p id="authorization" class="notice" hidden></p>
       <p id="binding-result" class="success" hidden></p>
       <p id="error" class="error" hidden></p>
-      <details id="diagnostics"><summary>Diagnostics</summary><dl><div><dt>Last server check</dt><dd id="last-server-check">Never</dd></div><div><dt>Last binding sync</dt><dd id="last-sync">Never</dd></div><div><dt>Last Realtime join</dt><dd id="last-realtime">Never</dd></div><div><dt>Last delivery</dt><dd id="last-delivery">Never</dd></div></dl></details>
+      <details id="diagnostics"><summary>Diagnostics</summary><dl><div><dt>Version</dt><dd id="diagnostic-version">—</dd></div><div><dt>Last server check</dt><dd id="last-server-check">Never</dd></div><div><dt>Last binding sync</dt><dd id="last-sync">Never</dd></div><div><dt>Last Realtime join</dt><dd id="last-realtime">Never</dd></div><div><dt>Last delivery</dt><dd id="last-delivery">Never</dd></div></dl><button id="copy-diagnostics" class="secondary diagnostics-button" type="button">Copy diagnostics</button><span id="copy-result" class="copy-result" role="status" aria-live="polite"></span></details>
       <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>
     </section>
     <dialog id="server-dialog">
@@ -35,6 +35,6 @@
       </form>
     </dialog>
   </main>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

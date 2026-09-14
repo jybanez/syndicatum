@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -106,4 +106,17 @@ test("classifies HTTP, schema, and transport failures using explicit evidence", 
   const transportError = new Error("Failed to fetch");
   transportError.transportFailure = true;
   assert.equal(serverFailureKind(transportError), "unreachable");
+});
+test("copies useful diagnostics without protected connection state", () => {
+  const text = companionDiagnostics({
+    status: "connected",
+    baseUrl: "https://syndicatum.example",
+    accessToken: "must-not-appear",
+    health: { overall: "connected", server: "reachable", account: "authorized", realtime: "connected", bindings: "active", delivery: "healthy", realtimeProjectCount: 2, projectCount: 2, bindingCount: 5, queuedCount: 0 },
+    lastSyncAt: "2026-09-15T00:00:00Z",
+  }, { version: "0.10.0", id: "extension-id" });
+  assert.match(text, /Version: 0\.10\.0/);
+  assert.match(text, /Realtime: connected \(2\/2\)/);
+  assert.match(text, /Bindings: active \(5\)/);
+  assert.doesNotMatch(text, /must-not-appear/);
 });

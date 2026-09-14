@@ -31,6 +31,28 @@ export function companionHealth(current = {}, runtime = {}) {
   return { overall, server, account, realtime, bindings: bindingsState, delivery, bindingCount, projectCount, queuedCount, realtimeProjectCount, error };
 }
 
+export function companionDiagnostics(data = {}, extension = {}) {
+  const health = data.health || {};
+  const value = input => input === null || input === undefined || input === "" ? "Unavailable" : String(input);
+  return [
+    "Syndicatum Companion diagnostics",
+    `Version: ${value(extension.version)}`,
+    `Extension ID: ${value(extension.id)}`,
+    `Overall: ${value(health.overall || data.status)}`,
+    `Server: ${value(health.server)}`,
+    `Address: ${value(data.baseUrl)}`,
+    `Account: ${value(health.account)}`,
+    `Realtime: ${value(health.realtime)} (${Number(health.realtimeProjectCount || 0)}/${Number(health.projectCount || 0)})`,
+    `Bindings: ${value(health.bindings)} (${Number(health.bindingCount ?? data.bindingCount ?? 0)})`,
+    `Delivery: ${value(health.delivery)}; queued=${Number(health.queuedCount ?? data.queuedCount ?? 0)}`,
+    `Last server check: ${value(data.lastServerCheckAt)}`,
+    `Last binding sync: ${value(data.lastSyncAt)}`,
+    `Last Realtime join: ${value(data.lastRealtimeAt)}`,
+    `Last delivery: ${value(data.lastDeliveryAt)}`,
+    `Error: ${value(health.error)}`,
+  ].join("\n");
+}
+
 export function normalizeBaseUrl(value) {
   const input = String(value || "").trim();
   if (!input) throw new Error("Enter the Syndicatum server URL.");

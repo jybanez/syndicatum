@@ -1,5 +1,9 @@
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery"].map(id => [id, document.getElementById(id)]));
+import { companionDiagnostics } from "./core.mjs";
+
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
+const extension = { id: chrome.runtime.id, version: chrome.runtime.getManifest().version };
+let latestStatus = null;
 
 const labels = {
   connected: "Connected", disconnected: "Disconnected", authorizing: "Authorization required", attention: "Needs attention",
@@ -28,6 +32,7 @@ function serverPermission(value) {
 }
 
 function render(data) {
+  latestStatus = data;
   const disconnected = data.status === "disconnected";
   elements["connect-view"].hidden = !disconnected;
   elements["status-view"].hidden = disconnected;
@@ -51,6 +56,7 @@ function render(data) {
   elements["last-sync"].textContent = timestamp(data.lastSyncAt);
   elements["last-realtime"].textContent = timestamp(data.lastRealtimeAt);
   elements["last-delivery"].textContent = timestamp(data.lastDeliveryAt);
+  elements["copy-result"].textContent = "";
   if (data.baseUrl) elements["base-url"].value = data.baseUrl;
 }
 
@@ -86,6 +92,15 @@ elements.connect.addEventListener("click", async () => {
 });
 elements.refresh.addEventListener("click", () => action({ type: "syndicatum.refresh" }));
 elements.disconnect.addEventListener("click", () => action({ type: "syndicatum.disconnect" }));
+elements["copy-diagnostics"].addEventListener("click", async () => {
+  if (!latestStatus) return;
+  try {
+    await navigator.clipboard.writeText(companionDiagnostics(latestStatus, extension));
+    elements["copy-result"].textContent = "Copied";
+  } catch (_error) {
+    elements["copy-result"].textContent = "Copy failed";
+  }
+});
 elements["edit-server"].addEventListener("click", () => {
   elements["new-base-url"].value = elements.server.textContent || "";
   elements["server-change-error"].hidden = true;
@@ -129,6 +144,8 @@ elements["confirm-server-change"].addEventListener("click", async () => {
   }
 });
 async function initialize() {
+  elements["extension-version"].textContent = `v${extension.version}`;
+  elements["diagnostic-version"].textContent = `${extension.version} · ${extension.id}`;
   const result = await send({ type: "syndicatum.status" }).catch(error => ({ ok: false, error: String(error) }));
   if (!result?.ok) { elements.error.hidden = false; elements.error.textContent = result?.error || "The companion request failed."; return; }
   render(result.data);

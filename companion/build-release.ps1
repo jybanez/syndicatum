@@ -30,7 +30,31 @@ if (Test-Path -LiteralPath $checksumPath) {
     Remove-Item -LiteralPath $checksumPath -Force
 }
 
-Compress-Archive -Path (Join-Path $extensionRoot '*') -DestinationPath $archivePath -CompressionLevel Optimal
+Add-Type -AssemblyName System.IO.Compression
+$fixedTimestamp = [DateTimeOffset]::Parse('2000-01-01T00:00:00Z')
+$files = @(Get-ChildItem -LiteralPath $extensionRoot -File -Recurse | ForEach-Object {
+    [pscustomobject]@{
+        FullName = $_.FullName
+        RelativePath = $_.FullName.Substring($extensionRoot.Length).TrimStart('\').Replace('\', '/')
+    }
+} | Sort-Object RelativePath)
+
+$stream = [IO.File]::Open($archivePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+try {
+    $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create, $false)
+    try {
+        foreach ($file in $files) {
+            $entry = $archive.CreateEntry($file.RelativePath, [IO.Compression.CompressionLevel]::NoCompression)
+            $entry.LastWriteTime = $fixedTimestamp
+            $input = [IO.File]::OpenRead($file.FullName)
+            try {
+                $output = $entry.Open()
+                try { $input.CopyTo($output) } finally { $output.Dispose() }
+            } finally { $input.Dispose() }
+        }
+    } finally { $archive.Dispose() }
+} finally { $stream.Dispose() }
+
 $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath $checksumPath -Value "$hash  $archiveName" -Encoding ascii
 

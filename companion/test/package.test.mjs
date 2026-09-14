@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const extensionUrl = new URL("../extension/", import.meta.url);
+const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.9.0");
+  assert.equal(manifest.version, "0.10.0");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -103,6 +104,29 @@ test("popup separates connection health and exposes timestamp diagnostics", asyn
   assert.match(background, /lastServerError/);
   assert.match(background, /lastRealtimeError/);
   assert.match(background, /lastDeliveryError/);
+});
+
+test("popup identifies its installed build and copies safe diagnostics", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
+  assert.match(html, /id="extension-version"/);
+  assert.match(html, /id="copy-diagnostics"/);
+  assert.match(popup, /chrome\.runtime\.getManifest\(\)\.version/);
+  assert.match(popup, /navigator\.clipboard\.writeText\(companionDiagnostics/);
+});
+
+test("release archives are deterministic and updates are recoverable", async () => {
+  const build = await readFile(new URL("build-release.ps1", companionUrl), "utf8");
+  const updater = await readFile(new URL("update-installed.ps1", companionUrl), "utf8");
+  assert.match(build, /2000-01-01T00:00:00Z/);
+  assert.match(build, /Sort-Object RelativePath/);
+  assert.match(build, /CompressionLevel\]::NoCompression/);
+  assert.doesNotMatch(build, /Compress-Archive/);
+  assert.match(updater, /backup-/i);
+  assert.match(updater, /Compare-FileTree/);
+  assert.match(updater, /backup was restored/i);
+  assert.match(updater, /Name -notmatch '\\\.backup-'/);
+  assert.match(updater, /ReloadRequired = \$true/);
 });
 
 test("ChatGPT adapter confirms the exact injected turn without capturing its response", async () => {

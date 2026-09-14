@@ -28,3 +28,5 @@ summary { cursor: pointer; }
 dl { margin: 8px 0 0; font-size: 12px; }
 dl div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 dt { color: #8396b4; } dd { margin: 0; text-align: right; }
+.diagnostics-button { width: auto; margin-top: 9px; padding: 7px 10px; }
+.copy-result { margin-left: 8px; color: #8fe2b7; font-size: 12px; }
