@@ -5,7 +5,13 @@ import { listAgentProfiles, publicAgentProfile } from "./agent-profile-store.mjs
 import { ProfileTimelineClient } from "./profile-timeline.mjs";
 
 const runtime = new PluginRuntime();
-await runtime.start();
+// MCP discovery must not wait for the background notification service. On a
+// fresh install that service may need to register and start an OS launcher,
+// which can take longer than Codex's MCP startup deadline. The tools remain
+// usable while the listener finishes initializing in the background.
+void runtime.start().catch(error => {
+  runtime.status = { state: "error", error: String(error?.message || error) };
+});
 const timeline = new ProfileTimelineClient();
 
 const tools = [

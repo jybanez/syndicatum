@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+
+test("MCP discovery does not block on background listener startup", async () => {
+  const source = await readFile(fileURLToPath(new URL("../mcp/server.mjs", import.meta.url)), "utf8");
+  assert.doesNotMatch(source, /const runtime = new PluginRuntime\(\);\s*await\s+runtime\.start\(\)/);
+  assert.match(source, /void\s+runtime\.start\(\)\.catch/);
+});
 
 test("MCP server initializes and exposes connector tools while unconfigured", async () => {
   const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-plugin-test-"));
