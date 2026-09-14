@@ -3,6 +3,12 @@ export const PROVIDERS = Object.freeze({
   gemini: Object.freeze({ host: "gemini.google.com", label: "Gemini" }),
 });
 
+export function serverFailureKind(error) {
+  const httpStatus = Number(error?.httpStatus);
+  if (Number.isInteger(httpStatus) && httpStatus > 0) return [401, 403].includes(httpStatus) ? "account" : "error";
+  return error?.transportFailure === true ? "unreachable" : "error";
+}
+
 export function companionHealth(current = {}, runtime = {}) {
   const bindings = Array.isArray(current.bindings) ? current.bindings : [];
   const bindingCount = bindings.length;
@@ -14,7 +20,8 @@ export function companionHealth(current = {}, runtime = {}) {
   const realtime = account !== "authorized" ? "inactive"
     : projectCount === 0 ? "idle"
       : realtimeProjectCount >= projectCount ? "connected"
-        : realtimeProjectCount > 0 ? "partial" : current.realtimeHealth || "connecting";
+        : realtimeProjectCount > 0 ? "partial"
+          : ["reconnecting", "unavailable"].includes(current.realtimeHealth) ? current.realtimeHealth : "connecting";
   const bindingsState = account !== "authorized" ? "inactive" : current.lastSyncAt ? (bindingCount ? "active" : "none") : "checking";
   const delivery = account !== "authorized" ? "inactive" : queuedCount ? "pending" : current.lastDeliveryError ? "attention" : current.lastDeliveryAt ? "healthy" : "ready";
   const error = current.lastServerError || current.lastAccountError || current.lastRealtimeError || current.lastDeliveryError || current.lastError || null;

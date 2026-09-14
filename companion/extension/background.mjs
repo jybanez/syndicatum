@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -53,7 +53,14 @@ async function api(path, options = {}) {
 async function apiAt(baseUrl, accessToken, path, options = {}) {
   const headers = { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  const response = await fetch(`${baseUrl}${path}`, { ...options, headers, redirect: "error" });
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, { ...options, headers, redirect: "error" });
+  } catch (cause) {
+    const error = new Error(String(cause?.message || cause || "Network request failed."), { cause });
+    error.transportFailure = true;
+    throw error;
+  }
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(result.message || result.code || `Syndicatum returned HTTP ${response.status}.`);
@@ -141,11 +148,10 @@ async function refreshBindings() {
     return normalized;
   } catch (error) {
     const message = String(error?.message || error);
-    const unauthorized = [401, 403].includes(Number(error?.httpStatus));
-    const networkFailure = error instanceof TypeError || /\b(fetch|network|offline|connection|dns)\b/i.test(message);
-    await save(unauthorized
+    const failureKind = serverFailureKind(error);
+    await save(failureKind === "account"
       ? { serverHealth: "reachable", accountHealth: "error", lastServerCheckAt: new Date().toISOString(), lastAccountError: message, lastError: message }
-      : { serverHealth: networkFailure ? "unreachable" : "error", lastServerCheckAt: new Date().toISOString(), lastServerError: message, lastError: message });
+      : { serverHealth: failureKind, lastServerCheckAt: new Date().toISOString(), lastServerError: message, lastError: message });
     throw error;
   }
 }

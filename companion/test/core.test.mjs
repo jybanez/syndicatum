@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -92,4 +92,18 @@ test("reports partially connected realtime projects as needing attention", () =>
   const health = companionHealth({ baseUrl: "https://syndicatum.example", accessToken: "protected", serverHealth: "reachable", lastSyncAt: "2026-09-14T00:00:00Z", bindings: [{ project_id: 2 }, { project_id: 3 }] }, { realtimeProjectCount: 1 });
   assert.equal(health.realtime, "partial");
   assert.equal(health.overall, "attention");
+});
+test("does not trust stale persisted realtime coverage after a worker restart", () => {
+  const health = companionHealth({ baseUrl: "https://syndicatum.example", accessToken: "protected", serverHealth: "reachable", lastSyncAt: "2026-09-14T00:00:00Z", realtimeHealth: "connected", bindings: [{ project_id: 2 }] }, { realtimeProjectCount: 0 });
+  assert.equal(health.realtime, "connecting");
+  assert.equal(health.realtimeProjectCount, 0);
+});
+test("classifies HTTP, schema, and transport failures using explicit evidence", () => {
+  const httpError = new Error("Database connection failed");
+  httpError.httpStatus = 500;
+  assert.equal(serverFailureKind(httpError), "error");
+  assert.equal(serverFailureKind(new TypeError("Invalid response shape")), "error");
+  const transportError = new Error("Failed to fetch");
+  transportError.transportFailure = true;
+  assert.equal(serverFailureKind(transportError), "unreachable");
 });
