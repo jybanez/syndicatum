@@ -49,13 +49,6 @@ try {
         $suite->same('', $binding['working_directory']);
     });
 
-    $suite->test('only manageable ChatGPT agents are offered for consent', function () use ($suite, $oauth, $owner, $project, $agent) {
-        $agents = $oauth->manageableChatGptAgents($owner['id']);
-        $suite->same(1, count($agents));
-        $suite->same($project['id'], (int) $agents[0]['project_id']);
-        $suite->same($agent['agent_id'], (int) $agents[0]['agent_id']);
-    });
-
     $client = $oauth->registerClient(['client_name' => 'ChatGPT test', 'redirect_uris' => ['https://chatgpt.com/aip/oauth/callback']]);
     $suite->test('dynamic registration accepts ChatGPT and rejects arbitrary HTTPS callbacks', function () use ($suite, $oauth, $client) {
         $suite->true(strpos($client['client_id'], 'syndicatum-') === 0);
@@ -69,16 +62,18 @@ try {
         'scope' => implode(' ', ChatGptOAuthService::SCOPES), 'state' => 'opaque-state',
         'code_challenge' => $challenge, 'code_challenge_method' => 'S256'];
     $request = $oauth->authorizationRequest($requestInput);
-    $code = $oauth->issueAuthorizationCode($request, $owner['id'], $project['id'], $agent['agent_id']);
+    $code = $oauth->issueAuthorizationCode($request, $owner['id']);
     $tokenInput = ['grant_type' => 'authorization_code', 'client_id' => $client['client_id'],
         'redirect_uri' => $client['redirect_uris'][0], 'resource' => $oauth->resource(),
         'code' => $code, 'code_verifier' => $verifier];
     $tokens = $oauth->exchangeAuthorizationCode($tokenInput);
 
-    $suite->test('authorization code is PKCE-bound, one-time, and project-agent scoped', function () use ($suite, $oauth, $tokens, $tokenInput, $project, $agent) {
+    $suite->test('authorization code is PKCE-bound, one-time, and account scoped', function () use ($suite, $oauth, $tokens, $tokenInput, $owner) {
         $access = $oauth->authenticate($tokens['access_token']);
-        $suite->same($project['id'], $access['project_id']);
-        $suite->same($agent['agent_id'], (int) $access['identity']['agent']['authenticated_agent_id']);
+        $suite->same($owner['id'], $access['principal_user_id']);
+        $suite->same('account', $access['identity']['kind']);
+        $suite->same(false, isset($access['project_id']));
+        $suite->same(false, isset($access['identity']['agent']));
         $suite->same(ChatGptOAuthService::SCOPES, $access['scope']);
         $suite->throws(function () use ($oauth, $tokenInput) { $oauth->exchangeAuthorizationCode($tokenInput); }, 'invalid_grant');
     });

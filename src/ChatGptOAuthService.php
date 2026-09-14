@@ -63,29 +63,14 @@ class ChatGptOAuthService
             'state' => trim((string) (isset($input['state']) ? $input['state'] : '')), 'code_challenge' => $challenge];
     }
 
-    public function manageableChatGptAgents($userId)
+    public function issueAuthorizationCode(array $request, $userId)
     {
-        $statement = $this->pdo->prepare("SELECT p.id AS project_id, p.name AS project_name, a.id AS agent_id, pa.display_name
-            FROM project_members pm JOIN projects p ON p.id = pm.project_id AND p.status = 'active'
-            JOIN project_agents pa ON pa.project_id = p.id AND pa.status = 'active'
-            JOIN chat_agents a ON a.id = pa.agent_id AND a.is_active = 1
-            WHERE pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')
-              AND LOWER(COALESCE(pa.provider, '')) = 'chatgpt'
-            ORDER BY p.name, pa.display_name, a.id");
-        $statement->execute([(int) $userId]);
-        return $statement->fetchAll();
-    }
-
-    public function issueAuthorizationCode(array $request, $userId, $projectId, $agentId)
-    {
-        $allowed = false;
-        foreach ($this->manageableChatGptAgents($userId) as $agent) {
-            if ((int) $agent['project_id'] === (int) $projectId && (int) $agent['agent_id'] === (int) $agentId) { $allowed = true; break; }
-        }
-        if (!$allowed) { throw new RuntimeException('access_denied'); }
+        $user = $this->pdo->prepare("SELECT id FROM users WHERE id = ? AND status = 'active' LIMIT 1");
+        $user->execute([(int) $userId]);
+        if (!$user->fetchColumn()) { throw new RuntimeException('access_denied'); }
         $code = AuthService::randomToken(32);
         $this->pdo->prepare('INSERT INTO oauth_authorization_codes (code_hash, client_id, user_id, project_id, agent_id, redirect_uri, resource_uri, scope_text, code_challenge, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute([hash('sha256', $code), $request['client_id'], (int) $userId, (int) $projectId, (int) $agentId,
+            ->execute([hash('sha256', $code), $request['client_id'], (int) $userId, null, null,
                 $request['redirect_uri'], $this->resource, $request['scope'], $request['code_challenge'], Db::now(), date('Y-m-d H:i:s', time() + 300)]);
         return $code;
     }
@@ -132,23 +117,15 @@ class ChatGptOAuthService
 
     public function authenticate($token)
     {
-        $statement = $this->pdo->prepare("SELECT oat.*, oat.id AS access_token_id, a.id AS authenticated_agent_id, a.project_name,
-                a.description, a.role, a.is_active, pa.status AS project_agent_status,
-                pp.id AS participant_id, pp.status AS participant_status, p.status AS project_status
-            FROM oauth_access_tokens oat JOIN chat_agents a ON a.id = oat.agent_id
-            JOIN project_agents pa ON pa.project_id = oat.project_id AND pa.agent_id = oat.agent_id
-            JOIN project_participants pp ON pp.project_id = oat.project_id AND pp.agent_id = oat.agent_id AND pp.kind = 'agent'
-            JOIN projects p ON p.id = oat.project_id
+        $statement = $this->pdo->prepare("SELECT oat.*, oat.id AS access_token_id, u.status AS user_status
+            FROM oauth_access_tokens oat JOIN users u ON u.id = oat.user_id
             WHERE oat.token_hash = ? AND oat.revoked_at IS NULL AND oat.expires_at > ? LIMIT 1");
         $statement->execute([hash('sha256', trim((string) $token)), Db::now()]);
         $row = $statement->fetch();
-        if (!$row || !$row['is_active'] || $row['project_agent_status'] !== 'active' || $row['participant_status'] !== 'active' || $row['project_status'] !== 'active'
-            || !hash_equals($this->resource, $row['resource_uri'])) { return null; }
+        if (!$row || $row['user_status'] !== 'active' || !hash_equals($this->resource, $row['resource_uri'])) { return null; }
         $this->pdo->prepare('UPDATE oauth_access_tokens SET last_used_at = ? WHERE id = ?')->execute([Db::now(), $row['access_token_id']]);
-        return ['project_id' => (int) $row['project_id'], 'participant_id' => (int) $row['participant_id'], 'role' => 'agent',
-            'principal_user_id' => (int) $row['user_id'], 'access_token_id' => (int) $row['access_token_id'],
-            'project_status' => $row['project_status'], 'scope' => preg_split('/\s+/', trim($row['scope_text'])),
-            'identity' => ['kind' => 'agent', 'agent' => array_merge($row, ['id' => (int) $row['authenticated_agent_id']])]];
+        return ['principal_user_id' => (int) $row['user_id'], 'access_token_id' => (int) $row['access_token_id'],
+            'scope' => preg_split('/\s+/', trim($row['scope_text'])), 'identity' => ['kind' => 'account']];
     }
 
     public function revoke(array $input)

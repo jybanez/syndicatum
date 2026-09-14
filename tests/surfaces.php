@@ -432,6 +432,7 @@ try {
     $suite->test('ChatGPT MCP exposes a read-only connection diagnostic', function () use ($suite, $root) {
         $source = file_get_contents($root . '/mcp.php');
         $docs = file_get_contents($root . '/docs/chatgpt-plugin.md');
+        $authorize = file_get_contents($root . '/oauth/authorize.php');
         $suite->true(strpos($source, "'diagnose_connection' => 'projects:read'") !== false, 'The diagnostic must require only project read access.');
         $suite->true(strpos($source, "'mcp_request_received' => true") !== false, 'The diagnostic must confirm that the server received the MCP call.');
         $suite->true(strpos($source, "'authentication_valid' => true") !== false, 'The diagnostic must report successful authentication.');
@@ -441,6 +442,8 @@ try {
         $suite->true(strpos($source, "'readOnlyHint' => true") !== false, 'Read tools must retain their read-only annotation.');
         $suite->true(strpos($docs, '@Syndicatum diagnose connection') !== false, 'The user-facing diagnostic prompt must be documented.');
         $suite->true(strpos($docs, 'client-side denial') !== false, 'The documentation must distinguish client-side denial from a server outage.');
+        $suite->true(strpos($authorize, 'Projects and agent identities are selected separately') !== false, 'OAuth consent must explain account-level authorization.');
+        $suite->true(strpos($authorize, 'name="agent"') === false, 'OAuth consent must not select a project agent.');
     });
 
     $suite->test('Health identifies a compatible Syndicatum connector server', function () use ($suite, $root) {

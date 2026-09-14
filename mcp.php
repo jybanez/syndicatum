@@ -56,6 +56,9 @@ try {
     $bindingService = new DiscussionBindingIntentService($pdo);
     $bindingContext = isset($args['binding_context_id']) ? $bindingService->context($access, $args['binding_context_id']) : null;
     if ($bindingContext) { $access = $bindingContext; }
+    if (!$bindingContext && !in_array($name, ['diagnose_connection', 'prepare_discussion_binding'], true)) {
+        throw new RuntimeException('DISCUSSION_BINDING_REQUIRED');
+    }
     if ($name === 'diagnose_connection') {
         $context = $bindingContext ? $repository->projectContext($access) : null;
         $agent = $bindingContext ? $access['identity']['agent'] : null;
@@ -117,7 +120,7 @@ try {
     mcpToolError($id, $e->getMessage());
 } catch (Exception $e) {
     $known = ['PROJECT_NOT_FOUND', 'PROJECT_NAME_AMBIGUOUS', 'AGENT_NAME_AMBIGUOUS', 'AGENT_PROVIDER_MISMATCH',
-        'BINDING_REQUIRES_OAUTH', 'MESSAGE_NOT_FOUND', 'PROJECT_WRITE_FORBIDDEN',
+        'BINDING_REQUIRES_OAUTH', 'DISCUSSION_BINDING_REQUIRED', 'MESSAGE_NOT_FOUND', 'PROJECT_WRITE_FORBIDDEN',
         'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', 'PROJECT_ARCHIVED', 'RATE_LIMITED'];
     mcpToolError($id, in_array($e->getMessage(), $known, true) ? $e->getMessage() : 'The Syndicatum operation could not be completed.');
 }

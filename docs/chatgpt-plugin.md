@@ -37,8 +37,7 @@ notification or exposing the private discussion itself.
 ## Identity and authorization
 
 OAuth authenticates the signed-in Syndicatum account and supplies the baseline
-grant. A ChatGPT discussion is not considered project-bound merely because that
-grant was originally authorized against an agent. Until the discussion presents
+grant. It does not select a project or agent. Until the discussion presents
 a confirmed binding context, diagnostics report Project and Agent Identity as
 Unknown and Discussion Binding as Required. The context never represents a
 connector device and it must not silently post as the authorizing human.
@@ -46,8 +45,10 @@ connector device and it must not silently post as the authorizing human.
 The authorization service must implement OAuth 2.1 authorization code with
 PKCE S256, protected-resource and authorization-server discovery, exact resource
 audience binding, short-lived access tokens, rotated refresh tokens, revocation,
-and explicit scopes. The MCP resource server validates the token, audience,
-expiry, grant status, project, agent status, and scope on every tool call.
+and explicit scopes. The MCP resource server validates the account token,
+audience, expiry, grant status, and scope on every tool call. Project and agent
+status are additionally validated from the confirmed discussion binding before
+any project timeline tool may run.
 
 Initial scopes:
 
@@ -68,7 +69,7 @@ must never expose stored credentials or project-agent tokens.
 | --- | --- | --- |
 | `diagnose_connection` | Verify MCP connectivity and whether this discussion has a successful binding context | No |
 | `prepare_discussion_binding` | Resolve an existing project and agent name, then request Companion confirmation | Confirmation only |
-| `list_projects` | Return the single project represented by the grant, using a list shape that remains extensible | No |
+| `list_projects` | Return the single project represented by the confirmed discussion binding, using a list shape that remains extensible | No |
 | `get_project` | Return project instructions, current participant, capabilities, and latest sequence | No |
 | `list_participants` | Return active human and agent participants for addressing | No |
 | `list_messages` | Read the canonical timeline with cursor and addressed/unacknowledged filters | No |
@@ -128,13 +129,13 @@ MCP binding context is the only supported ChatGPT discussion-binding path.
 | Dynamic client registration | `{SYNDICATUM_ORIGIN}/oauth/register` |
 | Token revocation | `{SYNDICATUM_ORIGIN}/oauth/revoke` |
 
-In Syndicatum, create or edit a project agent and select **ChatGPT** as its
-provider. During OAuth consent, an owner or project administrator selects one
-such active agent; the resulting grant is restricted to that agent and project.
-The agent requires its `https://chatgpt.com/.../c/...` discussion URL as a
-browser-companion target. Enabling proactive activation makes the binding
+OAuth consent authorizes ChatGPT to the signed-in user's Syndicatum account; it
+does not display or select projects or agents. In each ChatGPT discussion, the
+user then invokes `bind <project> <agent>`. The Companion confirmation is the
+explicit gate that reuses or creates the named ChatGPT agent and binds the
+active discussion URL. Enabling proactive activation makes that binding
 available only to connector devices authorized by a project member who can
-manage that agent. Responses API and Workspace Agent settings remain disabled.
+manage the agent. Responses API and Workspace Agent settings remain disabled.
 
 ## Browser companion delivery
 
@@ -158,10 +159,11 @@ providers require their own adapter without changing the Syndicatum delivery API
 
 On September 7, 2026, ChatGPT web in Developer mode passed an end-to-end
 acceptance run in Google Chrome on Windows. The run verified dynamic client
-registration, Syndicatum login and project-agent consent, OAuth token issuance,
+registration, Syndicatum login and the then-current project-agent consent, OAuth token issuance,
 project-context and timeline reads, broadcast addressee state, a direct reply
 linked to its source message, and acknowledgements without unrelated message
-mutation. Desktop, macOS, Linux, other browsers, and mobile remain separate
+mutation. The consent model was subsequently replaced by account-level OAuth
+plus explicit per-discussion binding. Desktop, macOS, Linux, other browsers, and mobile remain separate
 acceptance targets and are not inferred from this result.
 
 ## Deployment boundary

@@ -140,13 +140,13 @@ Proposed package identity: `chatgpt@syndicatum`
 - [x] Define V1 as ChatGPT web in Developer mode; keep desktop and mobile as explicit acceptance targets
 - [x] Separate shared timeline/MCP functionality from Codex-only local activation
 - [x] Select a remotely hosted Streamable HTTP MCP plugin at `/mcp`
-- [x] Design OAuth 2.1 authorization as a project-scoped grant for one managed Syndicatum agent
+- [x] Design OAuth 2.1 as an account-level grant, with project-agent authority supplied only by a confirmed per-discussion binding
 - [x] Keep Responses API and Workspace Agent activation disabled because neither continues the intended visible discussion
 - [x] Implement the provider-neutral browser companion contract, durable pending queue, startup recovery, and first ChatGPT delivery adapter
 - [ ] Complete live Chrome acceptance for device authorization, addressed notification delivery, restart recovery, and duplicate suppression
 - [ ] Add inbound assistant-response capture only after outbound delivery reliability is accepted
 - [x] Implement project timeline read, reply, and acknowledgement tools
-- [x] Verify project-agent isolation, PKCE, addressee filtering, refresh rotation, and revocation in automated tests
+- [x] Verify account OAuth, discussion-bound project-agent isolation, PKCE, addressee filtering, refresh rotation, and revocation in automated tests
 - [x] Verify discovery, dynamic registration, MCP negotiation, and authentication challenges through the public HTTPS origin
 - [x] Complete end-to-end acceptance for the claimed V1 ChatGPT web surface on Windows Chrome
 - [x] Record the verified web, Windows, and Chrome result in the compatibility matrix; keep desktop, macOS, Linux, and mobile planned

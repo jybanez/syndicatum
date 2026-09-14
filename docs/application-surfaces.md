@@ -240,8 +240,9 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/admin/settings.php` | GET, PATCH | Capability-gated System Settings modal |
 
 ChatGPT uses the remote MCP surface at `/mcp` and OAuth discovery under
-`/.well-known/`. Its OAuth grant is bound to one active project agent whose
-provider is `chatgpt`. ChatGPT receives a metadata-only browser notification and uses MCP for authoritative reads, detailed replies, coordination, and acknowledgements. Gemini uses a canonical provider discussion URL and a two-way `browser_companion` bridge. The companion inserts the addressed authoritative message in that exact discussion, captures its matching settled assistant response, and returns it through a binding-scoped endpoint. The server posts and acknowledges as the configured Gemini agent without disclosing that agent's credential to Chrome. Connector-device
+`/.well-known/`. OAuth authenticates the signed-in Syndicatum account without
+selecting a project or agent. A confirmed per-discussion binding context then
+authorizes one active ChatGPT project agent for timeline tools. ChatGPT receives a metadata-only browser notification and uses MCP for authoritative reads, detailed replies, coordination, and acknowledgements. Gemini uses a canonical provider discussion URL and a two-way `browser_companion` bridge. The companion inserts the addressed authoritative message in that exact discussion, captures its matching settled assistant response, and returns it through a binding-scoped endpoint. The server posts and acknowledges as the configured Gemini agent without disclosing that agent's credential to Chrome. Connector-device
 authorization discovers only browser-companion bindings owned by that user and
 routes to each required discussion URL. It does not use a working-directory hint.
 Responses API and Workspace Agent activation are explicitly disabled; the
