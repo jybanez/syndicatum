@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -47,9 +47,13 @@ async function recordDeliveryDiagnostic(diagnostic) {
 async function api(path, options = {}) {
   const current = await state();
   if (!current.baseUrl) throw new Error("Syndicatum is not connected.");
+  return apiAt(current.baseUrl, current.accessToken, path, options);
+}
+
+async function apiAt(baseUrl, accessToken, path, options = {}) {
   const headers = { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) };
-  if (current.accessToken) headers.Authorization = `Bearer ${current.accessToken}`;
-  const response = await fetch(`${current.baseUrl}${path}`, { ...options, headers });
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const response = await fetch(`${baseUrl}${path}`, { ...options, headers, redirect: "error" });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.message || result.code || `Syndicatum returned HTTP ${response.status}.`);
   return result.data ?? result;
@@ -110,15 +114,78 @@ async function pollAuthorization() {
   }
 }
 
-async function refreshBindings() {
+async function fetchBindingSnapshot(baseUrl, accessToken) {
+  const deviceIds = new Set();
   const providerBindings = await Promise.all(Object.keys(PROVIDERS).map(async provider => {
-    const response = await api(`/api/v1/connector-bindings.php?provider=${encodeURIComponent(provider)}`);
+    const response = await apiAt(baseUrl, accessToken, `/api/v1/connector-bindings.php?provider=${encodeURIComponent(provider)}`);
+    if (response?.device?.id) deviceIds.add(String(response.device.id));
     return bindingsFromResponse(response).map(binding => ({ ...binding, provider, conversation_id: normalizeDiscussionUrl(binding.conversation_id, provider) }));
   }));
-  const normalized = providerBindings.flat();
+  if (deviceIds.size !== 1) throw new Error("Syndicatum returned an inconsistent device identity.");
+  return { deviceId: [...deviceIds][0], bindings: providerBindings.flat() };
+}
+
+async function refreshBindings() {
+  const current = await state();
+  const snapshot = await fetchBindingSnapshot(current.baseUrl, current.accessToken);
+  if (current.deviceId && snapshot.deviceId !== String(current.deviceId)) throw new Error("Syndicatum returned a different device identity.");
+  const normalized = snapshot.bindings;
   await save({ bindings: normalized, status: "connected", lastSyncAt: new Date().toISOString(), lastError: null });
   connectRealtime(normalized);
   return normalized;
+}
+
+function closeRealtime(reason) {
+  for (const projectId of heartbeatTimers.keys()) stopHeartbeat(projectId);
+  const active = [...sockets.values()];
+  sockets.clear();
+  for (const socket of active) socket.close(1000, reason);
+}
+
+async function migrateServer(requestedBaseUrl) {
+  if (running) await running;
+  const current = await state();
+  if (!current.accessToken || !current.deviceId || !current.baseUrl) throw new Error("Connect this Companion before changing its server.");
+  const baseUrl = normalizeBaseUrl(requestedBaseUrl);
+  if (baseUrl === normalizeBaseUrl(current.baseUrl)) {
+    await validateServer(baseUrl);
+    await refreshBindings();
+    return publicStatus();
+  }
+
+  await validateServer(baseUrl);
+  const snapshot = await fetchBindingSnapshot(baseUrl, current.accessToken);
+  if (snapshot.deviceId !== String(current.deviceId)) {
+    throw new Error("The new server did not recognize the existing Companion device. No changes were made.");
+  }
+  if (bindingInventorySignature(snapshot.bindings) !== bindingInventorySignature(current.bindings || [])) {
+    throw new Error("The new server returned a different discussion binding inventory. No changes were made.");
+  }
+
+  const previous = structuredClone(current);
+  try {
+    await chrome.storage.local.set({ [STATE_KEY]: {
+      ...current,
+      baseUrl,
+      bindings: snapshot.bindings,
+      status: "connected",
+      lastSyncAt: new Date().toISOString(),
+      lastError: null,
+      lastServerMigration: { from: current.baseUrl, to: baseUrl, bindingCount: snapshot.bindings.length, completedAt: new Date().toISOString() },
+    } });
+    closeRealtime("Syndicatum server changed");
+    await start();
+    const migrated = await state();
+    if (migrated.lastError) throw new Error(migrated.lastError);
+  } catch (error) {
+    await chrome.storage.local.set({ [STATE_KEY]: previous });
+    closeRealtime("Syndicatum server migration rolled back");
+    setTimeout(() => void start(), 0);
+    throw new Error(`Server change rolled back: ${String(error?.message || error)}`);
+  }
+
+  await chrome.permissions.remove({ origins: [serverPermission(current.baseUrl)] }).catch(() => false);
+  return publicStatus();
 }
 
 async function checkBindingIntents() {
@@ -356,9 +423,7 @@ async function start() {
 
 async function disconnect() {
   const current = await state();
-  for (const projectId of heartbeatTimers.keys()) stopHeartbeat(projectId);
-  for (const socket of sockets.values()) socket.close(1000, "Disconnected");
-  sockets.clear();
+  closeRealtime("Disconnected");
   await chrome.alarms.clearAll();
   await chrome.storage.local.remove(STATE_KEY);
   if (current.baseUrl) await chrome.permissions.remove({ origins: [serverPermission(current.baseUrl)] }).catch(() => false);
@@ -366,7 +431,7 @@ async function disconnect() {
 
 async function publicStatus() {
   const current = await state();
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -374,6 +439,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
   const operation = action === "syndicatum.provider.accepted" ? markProviderAccepted(request.delivery)
     : action === "syndicatum.connect" ? beginConnection(request.baseUrl)
     : action === "syndicatum.disconnect" ? disconnect().then(publicStatus)
+    : action === "syndicatum.migrate-server" ? migrateServer(request.baseUrl)
     : action === "syndicatum.refresh" ? start().then(publicStatus)
     : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)
     : action === "syndicatum.status" ? publicStatus()

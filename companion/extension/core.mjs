@@ -110,6 +110,16 @@ export function bindingsFromResponse(value) {
   throw new Error("Syndicatum returned an invalid connector bindings response.");
 }
 
+export function bindingInventorySignature(bindings) {
+  return JSON.stringify((Array.isArray(bindings) ? bindings : []).map(binding => [
+    String(binding.provider || binding.runtime_type || ""),
+    String(binding.project_id || ""),
+    String(binding.agent_id || ""),
+    String(binding.participant_id || ""),
+    String(binding.conversation_id || ""),
+  ].join("|")).sort());
+}
+
 export function selectDeliveryTab(tabs) {
   const candidates = Array.isArray(tabs) ? tabs.filter(tab => tab && Number.isInteger(tab.id)) : [];
   return candidates.sort((left, right) => {

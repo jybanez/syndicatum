@@ -44,6 +44,14 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+Version 0.8.0 adds an edit control beside the connected server. Changing the
+server requests permission only for the proposed origin, validates its public
+Syndicatum identity, authenticates the existing protected device credential,
+and requires an exact match for the device ID and discussion-binding inventory.
+Only then does it switch the saved origin, restart delivery, and release the old
+origin permission. Any failure restores the previous state. It does not clear
+the device identity or use an HTTP redirect as a migration fallback.
+
 Version 0.7.0 requires the operator to enter a Syndicatum server, requests
 runtime permission only for that origin, and validates its public service
 identity and connector capability before saving it or beginning device

@@ -6,12 +6,28 @@ const extensionUrl = new URL("../extension/", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.7.0");
+  assert.equal(manifest.version, "0.8.0");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
-  assert.ok(!manifest.host_permissions.includes("https://chatviewer.pbb.ph/*"));
+  assert.ok(!manifest.host_permissions.includes("https://syndicatum.wizaya.com/*"));
   assert.ok(manifest.optional_host_permissions.includes("https://*/*"));
+});
+
+test("connected users can migrate servers without clearing device or binding state", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
+  const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.match(html, /id="edit-server"/);
+  assert.match(html, /Change Syndicatum server/);
+  assert.match(html, /Validate &amp; Continue/);
+  assert.match(popup, /syndicatum\.migrate-server/);
+  assert.match(background, /The new server did not recognize the existing Companion device/);
+  assert.match(background, /different discussion binding inventory/);
+  assert.match(background, /Server change rolled back/);
+  assert.ok(background.indexOf("await validateServer(baseUrl)") < background.indexOf("lastServerMigration:"));
+  assert.ok(background.indexOf("fetchBindingSnapshot(baseUrl, current.accessToken)") < background.indexOf("lastServerMigration:"));
+  assert.doesNotMatch(background.match(/async function migrateServer[\s\S]*?\n}\n/)?.[0] || "", /chrome\.storage\.local\.remove\(STATE_KEY\)/);
 });
 
 test("operator chooses and validates a Syndicatum server before authorization", async () => {

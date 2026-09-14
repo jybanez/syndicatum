@@ -12,7 +12,7 @@
     </section>
     <section id="status-view" hidden>
       <div class="row"><span>Status</span><strong id="status">Disconnected</strong></div>
-      <div class="row"><span>Server</span><strong id="server"></strong></div>
+      <div class="row"><span>Server</span><span class="server-value"><strong id="server"></strong><button id="edit-server" class="icon-button" type="button" title="Change Syndicatum server" aria-label="Change Syndicatum server"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5Zm16.7-9.8a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0l-1.6 1.6 3.5 3.5 1.5-1.7Z"/></svg></button></span></div>
       <div class="row"><span>Bindings</span><strong id="bindings">0</strong></div>
       <div class="row"><span>Pending</span><strong id="queued">0</strong></div>
       <p id="authorization" class="notice" hidden></p>
@@ -20,6 +20,16 @@
       <p id="error" class="error" hidden></p>
       <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>
     </section>
+    <dialog id="server-dialog">
+      <form method="dialog">
+        <h2>Change Syndicatum server</h2>
+        <p>The existing device and discussion bindings will be verified before anything changes.</p>
+        <label for="new-base-url">New server</label>
+        <input id="new-base-url" type="url" placeholder="http://syndicatumserver.com" autocomplete="url" spellcheck="false">
+        <p id="server-change-error" class="error" hidden></p>
+        <div class="actions"><button id="cancel-server-change" class="secondary" value="cancel" type="button">Cancel</button><button id="confirm-server-change" value="default" type="button">Validate &amp; Continue</button></div>
+      </form>
+    </dialog>
   </main>
   <script src="popup.js"></script>
 </body>

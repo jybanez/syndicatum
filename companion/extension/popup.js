@@ -1,4 +1,4 @@
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","bindings","queued","authorization","binding-result","error","refresh","disconnect"].map(id => [id, document.getElementById(id)]));
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","bindings","queued","authorization","binding-result","error","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
 
 function serverPermission(value) {
@@ -58,5 +58,42 @@ elements.connect.addEventListener("click", async () => {
 });
 elements.refresh.addEventListener("click", () => action({ type: "syndicatum.refresh" }));
 elements.disconnect.addEventListener("click", () => action({ type: "syndicatum.disconnect" }));
+elements["edit-server"].addEventListener("click", () => {
+  elements["new-base-url"].value = elements.server.textContent || "";
+  elements["server-change-error"].hidden = true;
+  elements["server-dialog"].showModal();
+  elements["new-base-url"].focus();
+  elements["new-base-url"].select();
+});
+elements["cancel-server-change"].addEventListener("click", () => elements["server-dialog"].close("cancel"));
+elements["confirm-server-change"].addEventListener("click", async () => {
+  const button = elements["confirm-server-change"];
+  const originalLabel = button.textContent;
+  elements["server-change-error"].hidden = true;
+  button.disabled = true;
+  let origin = null;
+  let previousOrigin = null;
+  try {
+    const baseUrl = elements["new-base-url"].value;
+    origin = serverPermission(baseUrl);
+    previousOrigin = serverPermission(elements.server.textContent);
+    button.textContent = "Validating…";
+    const granted = await chrome.permissions.request({ origins: [origin] });
+    if (!granted) throw new Error("Permission to connect to this Syndicatum server was not granted.");
+    const result = await send({ type: "syndicatum.migrate-server", baseUrl });
+    if (!result?.ok) {
+      if (origin !== previousOrigin) await chrome.permissions.remove({ origins: [origin] }).catch(() => false);
+      throw new Error(result?.error || "The Syndicatum server change failed.");
+    }
+    render(result.data);
+    elements["server-dialog"].close("migrated");
+  } catch (error) {
+    elements["server-change-error"].hidden = false;
+    elements["server-change-error"].textContent = String(error?.message || error);
+  } finally {
+    button.textContent = originalLabel;
+    button.disabled = false;
+  }
+});
 action({ type: "syndicatum.status" });
 setInterval(() => action({ type: "syndicatum.status" }), 2000);
