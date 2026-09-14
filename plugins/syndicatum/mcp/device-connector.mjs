@@ -27,6 +27,7 @@ export class DeviceConnector {
       const processor = new ActivationConnector({ config: childConfig, syndicatum: identityClient ?? { isAcknowledged: async () => false }, driver: this.driverFactory(childConfig), state, log: this.log });
       const key = String(binding.project_id); if (!this.processors.has(key)) this.processors.set(key, []); this.processors.get(key).push(processor);
       for (const message of [...recoveryMessages].reverse()) processor.enqueue(message, "startup-recovery");
+      if (processor.canCoalesce() && (state.activeWake()?.messages.length ?? 0) > 1) processor.scheduleCoalescedCheck();
     }
     await Promise.all([...this.processors.keys()].map(projectId => this.connectLoop(projectId)));
   }

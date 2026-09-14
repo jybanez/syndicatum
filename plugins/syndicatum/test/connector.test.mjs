@@ -127,6 +127,38 @@ test("coalesced wake state and its discussion scope survive connector restart", 
   }
 });
 
+test("device startup resumes reconciliation for a persisted coalesced wake", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-resume-wake-"));
+  const stateFile = path.join(directory, "state.json");
+  const participantState = new StateStore(`${stateFile}.participant-34`);
+  const newer = { ...message, id: 1684, project_id: 3, project_sequence: 43, addressees: [{ participant_id: 34, reason: "direct" }] };
+  const older = { ...message, id: 1683, project_id: 3, project_sequence: 42, addressees: [{ participant_id: 34, reason: "direct" }] };
+  try {
+    await participantState.load();
+    await participantState.markPending(older);
+    await participantState.markWakeQueued(older, "discussion-1");
+    await participantState.coalesceWake(newer);
+    const identityClient = { isAcknowledged: async () => false, addressedUnacknowledged: async () => [newer, older] };
+    const connector = new DeviceConnector({
+      config: { stateFile, syndicatumUrl: "https://syndicatum.wizaya.com", coalescingPollMs: 60000, coalescingMaxAgeMs: 60000 },
+      syndicatum: {},
+      bindings: [{ project_id: 3, participant_id: 34, agent_id: 31, conversation_id: "discussion-1", working_directory: null }],
+      loadProfile: async () => ({ syndicatum_url: "https://syndicatum.wizaya.com", project_id: 3, participant_id: 34, token: "protected" }),
+      identityClientFactory: () => identityClient,
+      driverFactory: () => ({ activate: async () => {} }),
+      log: { info() {}, error() {} },
+    });
+    connector.stopped = true;
+    await connector.start();
+    const processor = connector.processors.get("3")[0];
+    await processor.queue;
+    assert.notEqual(processor.coalescingTimer, null);
+    processor.stop();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("an unclaimed legacy binding cannot abort the device listener", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-unclaimed-binding-"));
   const logs = [];
