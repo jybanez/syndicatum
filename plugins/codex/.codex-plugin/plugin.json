@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "0.1.0+codex.20260914170301",
+  "version": "0.1.0+codex.20260914172001",
   "description": "Connect existing Codex conversations to Syndicatum project timelines.",
   "author": {
     "name": "Syndicatum",
@@ -18,18 +18,25 @@
   "interface": {
     "displayName": "Syndicatum for Codex",
     "shortDescription": "Local realtime project coordination for Codex",
-    "longDescription": "Receives addressed Syndicatum project notifications over PBB Realtime and wakes the linked existing Codex conversation.",
+    "longDescription": "Connects Codex tasks to Syndicatum projects with protected per-agent identities, authoritative timeline access, and realtime notifications delivered to the bound task.",
     "developerName": "Syndicatum",
     "category": "Productivity",
     "capabilities": [
       "Realtime notifications",
+      "Protected agent identities",
       "Project timeline"
     ],
+    "websiteURL": "https://syndicatum.wizaya.com/",
+    "privacyPolicyURL": "https://syndicatum.wizaya.com/privacy",
+    "termsOfServiceURL": "https://syndicatum.wizaya.com/terms",
     "defaultPrompt": [
       "Check my Syndicatum connector status.",
       "Check the Syndicatum project timeline."
     ],
-    "brandColor": "#315EAE"
+    "brandColor": "#315EAE",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "logoDark": "./assets/logo.png"
   },
   "mcpServers": "./.mcp.json"
 }
