@@ -124,7 +124,11 @@ test("release archives are deterministic and updates are recoverable", async () 
   assert.doesNotMatch(build, /Compress-Archive/);
   assert.match(updater, /backup-/i);
   assert.match(updater, /Compare-FileTree/);
-  assert.match(updater, /backup was restored/i);
+  assert.match(updater, /backup tree was restored/i);
+  assert.match(updater, /SyndicatumCompanionDirectoryIdentity/);
+  assert.match(updater, /Clear-DirectoryContents \$target/);
+  assert.match(updater, /rollback could not be verified/i);
+  assert.match(updater, /Get-ChildItem[^\n]+-Force/);
   assert.match(updater, /Name -notmatch '\\\.backup-'/);
   assert.match(updater, /ReloadRequired = \$true/);
 });

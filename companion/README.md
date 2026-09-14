@@ -14,19 +14,25 @@ Gemini browser response capture requires Chrome to remain signed in and the boun
 6. Open the companion, enter the operator-provided Syndicatum server URL, choose **Connect device**, and approve the device after the server validation succeeds.
 7. For ChatGPT, say `@Syndicatum bind <project name> <agent name>` in the target discussion and approve the Companion confirmation. Gemini can still be configured from its exact `https://gemini.google.com/app/...` discussion URL.
 
-Chrome does not automatically update unpacked extensions. For an upgrade,
-download the new release from GitHub, verify its checksum, and run the updater
-from a canonical source checkout in a regular PowerShell window:
+Chrome does not automatically update unpacked extensions. From a canonical
+source checkout, pull the intended commit and run the updater in a regular
+PowerShell window:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File companion\update-installed.ps1
 ```
 
+To deploy a downloaded release instead, verify its checksum, extract it to a
+temporary directory, and pass that directory explicitly as `-SourceDirectory`.
+The updater does not select a separately downloaded ZIP automatically.
+
 The updater discovers a single installation beneath
 `%LOCALAPPDATA%\Syndicatum\Companion`, falls back to the physical localhost
 administrative-share path when packaged AppData redirection hides it, verifies
 the existing and source manifests, creates and verifies a complete sibling
-backup, updates the same directory, and verifies every deployed source file.
+backup, replaces the same directory contents, and verifies the complete
+deployed file tree. A failed deployment clears partial new files, restores the
+exact backup tree, and verifies the rollback before reporting restoration.
 Pass `-TargetDirectory` when more than one installation exists. After a
 successful update, click **Reload** for Syndicatum Companion on
 `chrome://extensions`. Keeping the same directory preserves the extension ID

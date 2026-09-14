@@ -49,7 +49,7 @@ export function companionDiagnostics(data = {}, extension = {}) {
     `Last binding sync: ${value(data.lastSyncAt)}`,
     `Last Realtime join: ${value(data.lastRealtimeAt)}`,
     `Last delivery: ${value(data.lastDeliveryAt)}`,
-    `Error: ${value(health.error)}`,
+    `Error present: ${health.error ? "Yes" : "No"}`,
   ].join("\n");
 }
 

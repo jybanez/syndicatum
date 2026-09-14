@@ -112,11 +112,12 @@ test("copies useful diagnostics without protected connection state", () => {
     status: "connected",
     baseUrl: "https://syndicatum.example",
     accessToken: "must-not-appear",
-    health: { overall: "connected", server: "reachable", account: "authorized", realtime: "connected", bindings: "active", delivery: "healthy", realtimeProjectCount: 2, projectCount: 2, bindingCount: 5, queuedCount: 0 },
+    health: { overall: "connected", server: "reachable", account: "authorized", realtime: "connected", bindings: "active", delivery: "healthy", realtimeProjectCount: 2, projectCount: 2, bindingCount: 5, queuedCount: 0, error: "upstream-secret-must-not-appear" },
     lastSyncAt: "2026-09-15T00:00:00Z",
   }, { version: "0.10.0", id: "extension-id" });
   assert.match(text, /Version: 0\.10\.0/);
   assert.match(text, /Realtime: connected \(2\/2\)/);
   assert.match(text, /Bindings: active \(5\)/);
   assert.doesNotMatch(text, /must-not-appear/);
+  assert.match(text, /Error present: Yes/);
 });
