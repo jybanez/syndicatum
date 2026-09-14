@@ -111,6 +111,31 @@ test("Windows installation falls back to the current-user Run key when the task 
   assert.match(await readFile(manager.files.backgroundStartupLog, "utf8"), /scheduled_task/);
 });
 
+test("concurrent background installation is serialized across plugin hosts", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-startup-lock-"));
+  const sourceDirectory = path.join(localAppData, "source");
+  await mkdir(sourceDirectory, { recursive: true });
+  await writeFile(path.join(sourceDirectory, "background-service.mjs"), "", "utf8");
+  let healthy = false;
+  let installations = 0;
+  const makeManager = () => {
+    const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData }, sourceDirectory });
+    manager.status = async () => healthy
+      ? { running: true, ownsListener: true, readiness: "ready", pid: 42, metadata: await manager.desiredRuntime() }
+      : { running: false, ownsListener: false, readiness: "stopped", metadata: null };
+    manager.installRuntime = async () => { installations += 1; await new Promise(resolve => setTimeout(resolve, 25)); };
+    manager.registerWindowsLauncher = async () => {};
+    manager.startWindowsLauncher = async () => {};
+    manager.waitUntilRunning = async () => { healthy = true; return manager.status(); };
+    return manager;
+  };
+  const first = makeManager();
+  const second = makeManager();
+  const results = await Promise.all([first.ensureRunning(), second.ensureRunning()]);
+  assert.equal(installations, 1);
+  assert.ok(results.every(result => result.running && result.ownsListener));
+});
+
 test("background status distinguishes an authorized device with no usable discussion bindings", async () => {
   const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-health-"));
   const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });

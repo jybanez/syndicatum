@@ -21,9 +21,35 @@ export class BackgroundServiceManager {
   async ensureRunning() {
     if (!["win32", "darwin"].includes(this.platform)) return { supported: false, platform: this.platform, state: "not_available" };
     const current = await this.status();
-    const desired = { execPath: this.execPath, serviceEntry: this.serviceEntry, sourceDirectory: this.sourceDirectory, sourceRevision: await runtimeRevision(this.sourceDirectory) };
-    const matches = current.metadata?.execPath === desired.execPath && current.metadata?.serviceEntry === desired.serviceEntry && current.metadata?.sourceDirectory === desired.sourceDirectory && current.metadata?.sourceRevision === desired.sourceRevision;
-    if (matches && isHealthyBackground(current)) return { ...current, supported: true, installed: true };
+    const desired = await this.desiredRuntime();
+    if (this.matchesRuntime(current, desired) && isHealthyBackground(current)) return { ...current, supported: true, installed: true };
+
+    const startupLock = new ListenerLock(this.files.startupLock);
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const ownership = await startupLock.acquire();
+      if (ownership.acquired) {
+        try { return await this.ensureRunningExclusive(); }
+        finally { await startupLock.release(); }
+      }
+      const concurrent = await this.status();
+      if (this.matchesRuntime(concurrent, desired) && isHealthyBackground(concurrent)) return { ...concurrent, supported: true, installed: true };
+      await delay(100);
+    }
+    throw new Error(`Another Syndicatum plugin host did not finish background startup. See ${this.files.backgroundStartupLog} for details.`);
+  }
+
+  async desiredRuntime() {
+    return { execPath: this.execPath, serviceEntry: this.serviceEntry, sourceDirectory: this.sourceDirectory, sourceRevision: await runtimeRevision(this.sourceDirectory) };
+  }
+
+  matchesRuntime(current, desired) {
+    return current.metadata?.execPath === desired.execPath && current.metadata?.serviceEntry === desired.serviceEntry && current.metadata?.sourceDirectory === desired.sourceDirectory && current.metadata?.sourceRevision === desired.sourceRevision;
+  }
+
+  async ensureRunningExclusive() {
+    const current = await this.status();
+    const desired = await this.desiredRuntime();
+    if (this.matchesRuntime(current, desired) && isHealthyBackground(current)) return { ...current, supported: true, installed: true };
     if (current.running) await this.stop(current.pid);
     await this.installRuntime(desired);
     let startupMethod = this.platform === "win32" ? "scheduled_task" : "launch_agent";

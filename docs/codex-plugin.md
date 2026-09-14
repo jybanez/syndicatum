@@ -25,7 +25,9 @@ normalizes sender metadata onto one bounded line.
 Codex Desktop may create more than one MCP host process for its windows and
 surfaces. A device-local ownership lock allows only the background process to
 open the Realtime listener; MCP hosts remain standby so one event cannot queue
-duplicate notifications.
+duplicate notifications. A separate short-lived startup lock serializes
+background installation and launcher registration across those MCP hosts, so
+they cannot concurrently replace or start the same Scheduled Task.
 
 There is no separate installer, Windows service, polling job, tray application,
 or legacy connector runtime. The plugin copies its small background runtime into

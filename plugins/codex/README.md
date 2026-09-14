@@ -131,7 +131,9 @@ that state, the task is disabled and the installer automatically registers the
 same launcher under the current user's `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`
 key, starts it immediately, and verifies readiness again. This fallback has the
 same current-user DPAPI context and requires an interactive sign-in to start at
-boot.
+boot. A device-local startup lock serializes this installation path across Codex
+MCP hosts so concurrent host discovery cannot replace or start the same task at
+the same time.
 
 Sanitized launcher and task-start failures are written as JSON lines to
 `%LOCALAPPDATA%\\Syndicatum\\CodexPlugin\\background-startup.log`. Connector

@@ -31,6 +31,7 @@ export function pluginPaths(env = process.env, platform = process.platform) {
     log: path.join(root, "connector.log"),
     listenerLock: path.join(root, "listener.lock"),
     backgroundLock: path.join(root, "background.lock"),
+    startupLock: path.join(root, "startup.lock"),
     backgroundMetadata: path.join(root, "background.json"),
     backgroundHealth: path.join(root, "background-health.json"),
     backgroundStartupLog: path.join(root, "background-startup.log"),
