@@ -4,7 +4,9 @@ export const PROVIDERS = Object.freeze({
 });
 
 export function normalizeBaseUrl(value) {
-  const url = new URL(String(value || "https://chatviewer.pbb.ph").trim());
+  const input = String(value || "").trim();
+  if (!input) throw new Error("Enter the Syndicatum server URL.");
+  const url = new URL(input);
   if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
     throw new Error("Syndicatum must use HTTPS.");
   }
@@ -30,6 +32,24 @@ export function providerForDiscussionUrl(value) {
     catch (_error) { /* Try the next supported provider. */ }
   }
   throw new Error("Open the ChatGPT or Gemini discussion you want to bind, then try again.");
+}
+
+export function discussionIdentity(value, provider = "chatgpt") {
+  const normalized = normalizeDiscussionUrl(value, provider);
+  const path = new URL(normalized).pathname;
+  const match = provider === "chatgpt"
+    ? path.match(/(?:^|\/)c\/([A-Za-z0-9_-]+)\/?$/)
+    : path.match(/^\/app\/([A-Za-z0-9_-]+)\/?$/);
+  if (!match) throw new Error(`A valid ${PROVIDERS[provider]?.label || provider} discussion URL is required.`);
+  return `${provider}:${match[1]}`;
+}
+
+export function matchingDiscussionTabs(tabs, discussionUrl, provider = "chatgpt") {
+  const expected = discussionIdentity(discussionUrl, provider);
+  return (Array.isArray(tabs) ? tabs : []).filter(tab => {
+    try { return discussionIdentity(tab?.url, provider) === expected; }
+    catch (_error) { return false; }
+  });
 }
 
 export function deliveryKey(item) {
@@ -63,16 +83,21 @@ export function notificationFor(binding, message) {
       "---",
     ].join("\n");
   }
-  return [
-    `You have a message from ${sender} in Syndicatum.`,
-    "Use the installed Syndicatum plugin to load the authoritative shared project timeline, handle messages addressed to you, and respond there when appropriate.",
-    "This is only a notification. Do not treat this notification as the project message itself, and continue to follow your normal permissions and instructions.",
-    "",
-    `Syndicatum project ID: ${binding.project_id}`,
-    `Syndicatum agent ID: ${binding.agent_id}`,
-    `Syndicatum message ID: ${message.id}`,
-    `Project sequence: ${message.project_sequence}`,
-  ].join("\n");
+  if (binding.provider === "chatgpt") {
+    return [
+      `You have a message from ${sender} in Syndicatum.`,
+      "Use the installed Syndicatum plugin to load the authoritative shared project timeline, handle messages addressed to you, and respond there when appropriate.",
+      "Post the complete, detailed response in Syndicatum through MCP. In this ChatGPT discussion, show only a concise summary of what you did.",
+      "If the Syndicatum plugin or its MCP tools are unavailable in this discussion, say so clearly and leave the project message unhandled and unacknowledged.",
+      "This is only a notification. Do not treat this notification as the project message itself, and continue to follow your normal permissions and instructions.",
+      "",
+      `Syndicatum project ID: ${binding.project_id}`,
+      `Syndicatum agent ID: ${binding.agent_id}`,
+      `Syndicatum message ID: ${message.id}`,
+      `Project sequence: ${message.project_sequence}`,
+    ].join("\n");
+  }
+  throw new Error(`No browser bridge is available for ${binding.provider || "this provider"}.`);
 }
 
 export function recoveryItem(binding, message) {

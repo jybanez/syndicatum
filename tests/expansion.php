@@ -171,19 +171,53 @@ try {
     $suite->test('project agent claim is single use and project scoped', function () use ($suite, $pdo, $administrator, $management) {
         $project = $management->createProject($administrator['id'], ['name' => 'Agent Product']);
         $created = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Review Agent']);
+        $pendingStatus = $management->agentCredentialStatus($project['id'], $administrator['id'], $created['agent_id']);
+        $suite->same(false, $pendingStatus['has_active_token']);
+        $suite->same('pending', $pendingStatus['claim_status']);
         $claim = $management->claimAgent($project['id'], $created['agent_id'], $created['claim_code']);
         $suite->truthy((new ChatRepository($pdo))->authenticate($claim['token']));
         $suite->same(null, (new ChatRepository($pdo))->authenticateLegacy($claim['token']));
+        $claimedStatus = $management->agentCredentialStatus($project['id'], $administrator['id'], $created['agent_id']);
+        $suite->same(true, $claimedStatus['has_active_token']);
+        $suite->same('none', $claimedStatus['claim_status']);
         $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created) {
             $management->claimAgent($project['id'], $created['agent_id'], $created['claim_code']);
         });
         $expired = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Expired Agent']);
         $pdo->prepare('UPDATE chat_agents SET claim_expires_at = ? WHERE id = ?')->execute([date('Y-m-d H:i:s', time() - 60), $expired['agent_id']]);
+        $expiredStatus = $management->agentCredentialStatus($project['id'], $administrator['id'], $expired['agent_id']);
+        $suite->same(false, $expiredStatus['has_active_token']);
+        $suite->same('expired', $expiredStatus['claim_status']);
         $suite->throws('INVALID_CLAIM', function () use ($management, $project, $expired) {
             $management->claimAgent($project['id'], $expired['agent_id'], $expired['claim_code']);
         });
         $suite->throws('valid agent scope', function () use ($management, $project, $administrator) {
             $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Scope-less Agent', 'scopes' => []]);
+        });
+    });
+
+    $suite->test('project agent claim resolves visible project and identity references safely', function () use ($suite, $pdo, $administrator, $management) {
+        $project = $management->createProject($administrator['id'], ['name' => 'Visible Claim Project']);
+        $otherProject = $management->createProject($administrator['id'], ['name' => 'Other Claim Project']);
+        $created = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Visible Review Agent']);
+        $suite->throws('INVALID_CLAIM', function () use ($management, $otherProject, $created) {
+            $management->claimAgentByReference($otherProject['name'], 'Visible Review Agent', $created['claim_code']);
+        });
+        $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created) {
+            $management->claimAgentByReference($project['name'], 'Different Agent', $created['claim_code']);
+        });
+        $claim = $management->claimAgentByReference($project['name'], 'Visible Review Agent', $created['claim_code']);
+        $suite->same($project['id'], $claim['project_id']);
+        $suite->same('Visible Claim Project', $claim['project_name']);
+        $suite->same('Visible Review Agent', $claim['display_name']);
+        $suite->truthy($claim['participant_id'] > 0);
+        $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created) {
+            $management->claimAgentByReference($project['name'], 'Visible Review Agent', $created['claim_code']);
+        });
+        $expired = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Expired Visible Agent']);
+        $pdo->prepare('UPDATE chat_agents SET claim_expires_at = ? WHERE id = ?')->execute([date('Y-m-d H:i:s', time() - 60), $expired['agent_id']]);
+        $suite->throws('INVALID_CLAIM', function () use ($management, $project, $expired) {
+            $management->claimAgentByReference($project['name'], 'Expired Visible Agent', $expired['claim_code']);
         });
     });
 

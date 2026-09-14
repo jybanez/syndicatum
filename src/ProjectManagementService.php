@@ -29,10 +29,10 @@ class ProjectManagementService
         $this->pdo->beginTransaction();
         try {
             $insert = $this->pdo->prepare(
-            "INSERT INTO projects (workspace_id, owner_user_id, name, slug, description, instructions, status, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+            "INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, description, instructions, status, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
             );
-            $insert->execute([(int) $workspaceId, (int) $userId, $name, $slug,
+            $insert->execute([Db::uuidV4(), (int) $workspaceId, (int) $userId, $name, $slug,
                 isset($input['description']) ? trim((string) $input['description']) : null,
                 isset($input['instructions']) ? trim((string) $input['instructions']) : null, $now, $now]);
             $projectId = (int) $this->pdo->lastInsertId();
@@ -190,7 +190,8 @@ class ProjectManagementService
         $scopes = array_values(array_unique(array_intersect($scopes, ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write'])));
         if (empty($scopes)) { throw new InvalidArgumentException('At least one valid agent scope is required.'); }
         $claimExpiresAt = date('Y-m-d H:i:s', time() + 900);
-        $this->pdo->beginTransaction();
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
             $agent = $this->pdo->prepare(
                 "INSERT INTO chat_agents (project_name, description, claim_prefix, claim_hash, claim_secret_version, claim_expires_at, role, is_active, created_at, updated_at)
@@ -220,13 +221,13 @@ class ProjectManagementService
                 $webhook = (new AgentWebhookService($this->pdo))->configure($projectId, $agentId, $actorUserId, $webhookInput);
             }
             $this->auth->audit((int) $actorUserId, 'project.agent_created', 'agent', (string) $agentId, ['project_id' => (int) $projectId, 'scopes' => $scopes]);
-            $this->pdo->commit();
-            $result = ['agent_id' => $agentId, 'project_id' => (int) $projectId, 'display_name' => $displayName,
+            if ($ownsTransaction) { $this->pdo->commit(); }
+            $result = ['agent_id' => $agentId, 'project_id' => (int) $projectId, 'project_name' => $this->project($projectId)['name'], 'display_name' => $displayName,
                 'avatar_url' => $this->avatarUrl(isset($input['avatar_url']) ? $input['avatar_url'] : null),
                 'scopes' => $scopes, 'claim_code' => $claimCode, 'claim_expires_at' => $claimExpiresAt];
             if ($webhook && isset($webhook['signing_secret'])) { $result['webhook_signing_secret'] = $webhook['signing_secret']; }
             return $result;
-        } catch (Exception $exception) { $this->rollback(); throw $exception; }
+        } catch (Exception $exception) { if ($ownsTransaction) { $this->rollback(); } throw $exception; }
     }
 
     public function authorizeAgentManagement($projectId, $actorUserId)
@@ -256,8 +257,8 @@ class ProjectManagementService
         $agent = $this->requireProjectAgent($projectId, $agentId);
         $displayName = array_key_exists('display_name', $input) ? trim((string) $input['display_name']) : $agent['project_display_name'];
         if ($displayName === '' || strlen($displayName) > 120) { throw new InvalidArgumentException('Agent display name must contain 1 to 120 characters.'); }
-        $provider = array_key_exists('provider', $input) ? trim((string) $input['provider']) : $agent['provider'];
-        $runtimeName = array_key_exists('runtime_name', $input) ? trim((string) $input['runtime_name']) : $agent['runtime_name'];
+        $provider = array_key_exists('provider', $input) ? trim((string) $input['provider']) : (string) $agent['provider'];
+        $runtimeName = array_key_exists('runtime_name', $input) ? trim((string) $input['runtime_name']) : (string) $agent['runtime_name'];
         if (strlen($provider) > 120 || strlen($runtimeName) > 160) { throw new InvalidArgumentException('Agent provider or runtime name is too long.'); }
         $avatarUrl = array_key_exists('avatar_url', $input) ? $this->avatarUrl($input['avatar_url']) : $agent['avatar_url'];
         $this->pdo->beginTransaction();
@@ -288,8 +289,28 @@ class ProjectManagementService
             $statement->execute([substr($code, 0, 24), Db::hashToken($code), $expiresAt, Db::now(), (int) $agentId]);
             $this->auth->audit((int) $actorUserId, 'agent.credential_rotation_started', 'agent', (string) ((int) $agentId));
             $this->pdo->commit();
-            return ['agent_id' => (int) $agentId, 'claim_code' => $code, 'claim_expires_at' => $expiresAt];
+            return ['agent_id' => (int) $agentId, 'project_id' => (int) $projectId,
+                'project_name' => $this->project($projectId)['name'], 'display_name' => $this->requireProjectAgent($projectId, $agentId)['project_display_name'],
+                'claim_code' => $code, 'claim_expires_at' => $expiresAt];
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
+    }
+
+    public function agentCredentialStatus($projectId, $actorUserId, $agentId)
+    {
+        $this->requireProjectAdmin($projectId, $actorUserId);
+        $agent = $this->requireProjectAgent($projectId, $agentId);
+        $hasActiveToken = !empty($agent['token_hash']);
+        $hasClaimCode = !empty($agent['claim_hash']);
+        $claimExpiresAt = empty($agent['claim_expires_at']) ? null : $agent['claim_expires_at'];
+        $claimIsActive = $hasClaimCode && ($claimExpiresAt === null || strtotime($claimExpiresAt) > time());
+
+        return [
+            'agent_id' => (int) $agentId,
+            'has_active_token' => $hasActiveToken,
+            'claim_status' => $claimIsActive ? 'pending' : ($hasClaimCode ? 'expired' : 'none'),
+            'claim_expires_at' => $claimExpiresAt,
+            'claimed_at' => empty($agent['claimed_at']) ? null : $agent['claimed_at'],
+        ];
     }
 
     public function updateAgentStatus($projectId, $actorUserId, $agentId, $status, $revokeToken = false)
@@ -298,7 +319,7 @@ class ProjectManagementService
         $agent = $this->requireProjectAgent($projectId, $agentId);
         if ($status === null) { $status = $agent['status']; }
         if (!in_array($status, ['active', 'suspended', 'retired'], true)) { throw new InvalidArgumentException('Invalid agent status.'); }
-        $participantStatus = $status === 'active' ? 'active' : 'suspended';
+        $participantStatus = $status === 'active' ? 'active' : ($status === 'retired' ? 'removed' : 'suspended');
         $now = Db::now();
         $this->pdo->beginTransaction();
         try {
@@ -308,9 +329,37 @@ class ProjectManagementService
                 ->execute([$participantStatus, $now, (int) $projectId, (int) $agentId]);
             $sql = 'UPDATE chat_agents SET is_active = ?, updated_at = ?';
             $params = [$status === 'active' ? 1 : 0, $now];
-            if ($revokeToken) { $sql .= ', token_prefix = NULL, token_hash = NULL, token_secret_version = NULL'; }
+            if ($revokeToken) {
+                $sql .= ', token_prefix = NULL, token_hash = NULL, token_secret_version = NULL,
+                    claim_prefix = NULL, claim_hash = NULL, claim_secret_version = NULL, claim_expires_at = NULL';
+            }
             $sql .= ' WHERE id = ?'; $params[] = (int) $agentId;
             $this->pdo->prepare($sql)->execute($params);
+            if ($status === 'retired') {
+                foreach ([
+                    ['agent_activation_bindings', 'UPDATE agent_activation_bindings SET enabled = 0, updated_at = ? WHERE project_id = ? AND agent_id = ?'],
+                    ['connector_device_activation_routes', 'UPDATE connector_device_activation_routes SET enabled = 0, updated_at = ? WHERE project_id = ? AND agent_id = ?'],
+                    ['agent_notification_webhooks', 'UPDATE agent_notification_webhooks SET enabled = 0, updated_at = ? WHERE project_id = ? AND agent_id = ?'],
+                ] as $deactivation) {
+                    if (Db::tableExists($this->pdo, $deactivation[0])) {
+                        $this->pdo->prepare($deactivation[1])->execute([$now, (int) $projectId, (int) $agentId]);
+                    }
+                }
+                if (Db::tableExists($this->pdo, 'agent_webhook_deliveries')) {
+                    $this->pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'dead', last_error = 'Agent removed from project' WHERE project_id = ? AND agent_id = ? AND status IN ('queued', 'retry')")
+                        ->execute([(int) $projectId, (int) $agentId]);
+                }
+                foreach (['oauth_access_tokens', 'oauth_refresh_tokens'] as $table) {
+                    if (Db::tableExists($this->pdo, $table)) {
+                        $this->pdo->prepare('UPDATE ' . $table . ' SET revoked_at = ? WHERE project_id = ? AND agent_id = ? AND revoked_at IS NULL')
+                            ->execute([$now, (int) $projectId, (int) $agentId]);
+                    }
+                }
+                if (Db::tableExists($this->pdo, 'oauth_authorization_codes')) {
+                    $this->pdo->prepare('UPDATE oauth_authorization_codes SET consumed_at = ? WHERE project_id = ? AND agent_id = ? AND consumed_at IS NULL')
+                        ->execute([$now, (int) $projectId, (int) $agentId]);
+                }
+            }
             $this->auth->audit((int) $actorUserId, 'project.agent_status_changed', 'agent', (string) ((int) $agentId), ['project_id' => (int) $projectId, 'status' => $status, 'token_revoked' => (bool) $revokeToken]);
             $this->pdo->commit();
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
@@ -323,7 +372,12 @@ class ProjectManagementService
         $this->pdo->beginTransaction();
         try {
             $statement = $this->pdo->prepare(
-                'SELECT a.*, pa.status FROM project_agents pa JOIN chat_agents a ON a.id = pa.agent_id
+                'SELECT a.*, pa.status, pa.display_name AS agent_display_name, p.name AS project_display_name,
+                        pp.id AS participant_id
+                 FROM project_agents pa
+                 JOIN chat_agents a ON a.id = pa.agent_id
+                 JOIN projects p ON p.id = pa.project_id
+                 JOIN project_participants pp ON pp.project_id = pa.project_id AND pp.agent_id = pa.agent_id AND pp.kind = \'agent\'
                  WHERE pa.project_id = ? AND pa.agent_id = ? FOR UPDATE'
             );
             $statement->execute([(int) $projectId, (int) $agentId]);
@@ -340,8 +394,42 @@ class ProjectManagementService
             $update->execute([substr($token, 0, 24), Db::hashToken($token), $now, $now, (int) $agentId]);
             $this->insertAudit(null, 'agent.credential_claimed', 'agent', (string) ((int) $agentId), ['project_id' => (int) $projectId]);
             $this->pdo->commit();
-            return ['agent_id' => (int) $agentId, 'project_id' => (int) $projectId, 'token' => $token];
+            return ['agent_id' => (int) $agentId, 'project_id' => (int) $projectId,
+                'participant_id' => (int) $agent['participant_id'], 'project_name' => $agent['project_display_name'],
+                'display_name' => $agent['agent_display_name'], 'token' => $token, 'token_prefix' => substr($token, 0, 24)];
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
+    }
+
+    public function claimAgentByReference($projectReference, $identityReference, $claimCode)
+    {
+        $projectReference = trim((string) $projectReference);
+        $identityReference = trim((string) $identityReference);
+        $claimCode = trim((string) $claimCode);
+        if ($projectReference === '' || $identityReference === '' || $claimCode === '') {
+            throw new InvalidArgumentException('project, identity, and claim_code are required.');
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT p.id AS project_id, pa.agent_id, a.claim_hash, a.claim_expires_at
+             FROM projects p
+             JOIN project_agents pa ON pa.project_id = p.id
+             JOIN chat_agents a ON a.id = pa.agent_id
+             WHERE p.status = 'active' AND pa.status = 'active' AND a.is_active = 1
+               AND (p.name = ? OR p.slug = ?) AND pa.display_name = ?"
+        );
+        $statement->execute([$projectReference, $projectReference, $identityReference]);
+        $matches = [];
+        $claimHash = Db::hashToken($claimCode);
+        foreach ($statement->fetchAll() as $candidate) {
+            if (empty($candidate['claim_hash'])
+                || (!empty($candidate['claim_expires_at']) && strtotime($candidate['claim_expires_at']) <= time())
+                || !hash_equals($candidate['claim_hash'], $claimHash)) {
+                continue;
+            }
+            $matches[] = $candidate;
+        }
+        if (count($matches) !== 1) { throw new RuntimeException('INVALID_CLAIM'); }
+        return $this->claimAgent((int) $matches[0]['project_id'], (int) $matches[0]['agent_id'], $claimCode);
     }
 
     private function ensureMembershipAndParticipant($projectId, $userId, $role)

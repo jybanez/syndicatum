@@ -4,6 +4,8 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/SettingsService.php';
 require_once __DIR__ . '/MessageOutbox.php';
 require_once __DIR__ . '/AgentWebhookService.php';
+require_once __DIR__ . '/WorkspaceAgentTriggerService.php';
+require_once __DIR__ . '/ResponsesApiActivationService.php';
 require_once __DIR__ . '/ProjectRepository.php';
 require_once __DIR__ . '/SchemaMigrator.php';
 
@@ -790,15 +792,16 @@ class ChatRepository
         ];
     }
 
-    public function generateToken($projectName)
+    public function generateToken($projectName, $projectRef = null)
     {
         $this->ensureClaimColumns();
         $this->ensureCredentialVersionColumns();
 
-        $agentId = $this->findAgentId($projectName);
-        if ($agentId === null) {
-            throw new RuntimeException('Unknown agent: ' . $projectName);
+        $agent = $this->agentByProjectName($projectName, true);
+        if (!$agent) {
+            throw new RuntimeException('Unknown or inactive agent: ' . $projectName);
         }
+        $project = $this->credentialProjectBinding((int) $agent['id'], $projectName, $projectRef);
 
         $token = $this->makeSecret('pbbchat', $projectName);
         $prefix = substr($token, 0, 24);
@@ -809,16 +812,20 @@ class ChatRepository
                  claim_secret_version = NULL, claim_expires_at = NULL, claimed_at = ?, updated_at = ?
              WHERE id = ?'
         );
-        $statement->execute([$prefix, Db::hashToken($token), 'primary', $now, $now, $agentId]);
+        $statement->execute([$prefix, Db::hashToken($token), 'primary', $now, $now, $agent['id']]);
 
         return [
             'project_name' => $projectName,
+            'agent_name' => $projectName,
+            'syndicatum_project_id' => (int) $project['id'],
+            'syndicatum_project_name' => $project['name'],
+            'syndicatum_project_slug' => $project['slug'],
             'token_prefix' => $prefix,
             'token' => $token,
         ];
     }
 
-    public function generateClaimCode($projectName)
+    public function generateClaimCode($projectName, $projectRef = null)
     {
         $this->ensureClaimColumns();
         $this->ensureCredentialVersionColumns();
@@ -830,6 +837,7 @@ class ChatRepository
         if (!empty($agent['token_hash'])) {
             throw new RuntimeException('Agent already claimed: ' . $projectName);
         }
+        $project = $this->credentialProjectBinding((int) $agent['id'], $projectName, $projectRef);
 
         $claimCode = $this->makeSecret('pbbclaim', $projectName);
         $prefix = substr($claimCode, 0, 24);
@@ -840,6 +848,10 @@ class ChatRepository
 
         return [
             'project_name' => $projectName,
+            'agent_name' => $projectName,
+            'syndicatum_project_id' => (int) $project['id'],
+            'syndicatum_project_name' => $project['name'],
+            'syndicatum_project_slug' => $project['slug'],
             'claim_prefix' => $prefix,
             'claim_code' => $claimCode,
             'expires_at' => $expiresAt,
@@ -860,7 +872,7 @@ class ChatRepository
         return $codes;
     }
 
-    public function claimAgent($projectName, $claimCode)
+    public function claimAgent($projectName, $claimCode, $projectRef = null)
     {
         $this->ensureClaimColumns();
         $this->ensureCredentialVersionColumns();
@@ -878,6 +890,7 @@ class ChatRepository
         if (!empty($agent['token_hash'])) {
             throw new RuntimeException('Agent already claimed. Ask the operator for a token reset or provided token.');
         }
+        $project = $this->credentialProjectBinding((int) $agent['id'], $projectName, $projectRef);
         if (empty($agent['claim_hash'])) {
             throw new RuntimeException('No claim code is active for this agent. Ask the operator for a claim code.');
         }
@@ -911,6 +924,10 @@ class ChatRepository
 
         return [
             'project_name' => $projectName,
+            'agent_name' => $projectName,
+            'syndicatum_project_id' => (int) $project['id'],
+            'syndicatum_project_name' => $project['name'],
+            'syndicatum_project_slug' => $project['slug'],
             'token_prefix' => $prefix,
             'token' => $token,
         ];
@@ -1031,6 +1048,49 @@ class ChatRepository
         $row = $statement->fetch();
 
         return $row ?: null;
+    }
+
+    private function credentialProjectBinding($agentId, $agentName, $projectRef = null)
+    {
+        if (!Db::tableExists($this->pdo, 'projects') || !Db::tableExists($this->pdo, 'project_agents')) {
+            throw new RuntimeException('Project schema must be installed before agent credentials can be issued.');
+        }
+
+        $projectRef = trim((string) $projectRef);
+        $params = [(int) $agentId];
+        $where = '';
+        if ($projectRef !== '') {
+            if (ctype_digit($projectRef)) {
+                $where = ' AND p.id = ?';
+                $params[] = (int) $projectRef;
+            } else {
+                $where = ' AND (p.name = ? OR p.slug = ?)';
+                $params[] = $projectRef;
+                $params[] = $projectRef;
+            }
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT p.id, p.name, p.slug
+             FROM project_agents pa
+             JOIN projects p ON p.id = pa.project_id
+             WHERE pa.agent_id = ? AND pa.status = 'active' AND p.status = 'active'" . $where . '
+             ORDER BY p.id'
+        );
+        $statement->execute($params);
+        $projects = $statement->fetchAll();
+
+        if (empty($projects)) {
+            if ($projectRef !== '') {
+                throw new RuntimeException('Agent "' . $agentName . '" is not an active member of project "' . $projectRef . '". Add it to an existing active project before generating credentials.');
+            }
+            throw new RuntimeException('Agent "' . $agentName . '" must belong to an existing active project before credentials can be issued.');
+        }
+        if ($projectRef === '' && count($projects) > 1) {
+            throw new RuntimeException('Agent "' . $agentName . '" belongs to multiple active projects. Pass the project id, name, or slug before generating credentials.');
+        }
+
+        return $projects[0];
     }
 
     private function ensureClaimColumns()
@@ -1257,6 +1317,8 @@ class ChatRepository
             $message = (new ProjectRepository($this->pdo))->message($access, $messageId);
         }
         (new AgentWebhookService($this->pdo))->enqueueMessageCreated($projectId, $messageId, $message);
+        (new WorkspaceAgentTriggerService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
+        (new ResponsesApiActivationService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
     }
 
     private function mirrorLegacyEntryUpdate($entryId, array $agent, $previousBody, $newBody, $now)

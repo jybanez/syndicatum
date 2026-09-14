@@ -1,0 +1,16 @@
+RewriteEngine On
+AddType application/manifest+json .webmanifest
+
+RewriteRule ^\.well-known/oauth-protected-resource/?$ .well-known/oauth-protected-resource.php [L,QSA]
+RewriteRule ^\.well-known/oauth-authorization-server/?$ .well-known/oauth-authorization-server.php [L,QSA]
+RewriteRule ^oauth/authorize/?$ oauth/authorize.php [L,QSA]
+RewriteRule ^oauth/token/?$ oauth/token.php [L,QSA]
+RewriteRule ^oauth/register/?$ oauth/register.php [L,QSA]
+RewriteRule ^oauth/revoke/?$ oauth/revoke.php [L,QSA]
+RewriteRule ^mcp/?$ mcp.php [L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^(?:users|agents|audit|projects/[^/]+)/?$ index.php [L,QSA]

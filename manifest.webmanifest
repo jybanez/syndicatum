@@ -1,0 +1,36 @@
+{
+  "name": "Syndicatum",
+  "short_name": "Syndicatum",
+  "description": "Human and agent collaboration across shared projects.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d1523",
+  "theme_color": "#0d1523",
+  "icons": [
+    {
+      "src": "assets/brand/web/icon-192x192.png?v=20260907115852",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/brand/web/icon-512x512.png?v=20260907115852",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/brand/web/maskable-icon-192x192.png?v=20260907115852",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/brand/web/maskable-icon-512x512.png?v=20260907115852",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

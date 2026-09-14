@@ -1,9 +1,22 @@
+<?php
+$scriptPath = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
+$appBasePath = rtrim(str_replace('\\', '/', dirname($scriptPath)), '/.');
+$appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
+?>
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="<?php echo htmlspecialchars($appBaseHref, ENT_QUOTES, 'UTF-8'); ?>">
     <title>Syndicatum</title>
+    <meta name="theme-color" content="#0d1523">
+    <link rel="icon" href="assets/brand/web/favicon.ico?v=20260907115852" sizes="any">
+    <link rel="icon" type="image/png" href="assets/brand/web/favicon-16x16.png?v=20260907115852" sizes="16x16">
+    <link rel="icon" type="image/png" href="assets/brand/web/favicon-32x32.png?v=20260907115852" sizes="32x32">
+    <link rel="apple-touch-icon" href="assets/brand/web/apple-touch-icon-180x180.png?v=20260907115852" sizes="180x180">
+    <link rel="mask-icon" href="assets/brand/web/safari-pinned-tab.svg?v=20260907115852" color="#2563EB">
+    <link rel="manifest" href="manifest.webmanifest?v=20260907115852">
     <link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css" data-ui-bundle="ui">
     <link rel="stylesheet" href="assets/app.css?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/assets/app.css')); ?>">
 </head>
@@ -46,13 +59,6 @@
 
             <section class="two-column-surface project-surface" id="project-surface" hidden>
                 <aside class="surface-column project-participants-column" data-panel="left">
-                    <section class="project-overview ui-panel">
-                        <div class="app-section-header"><p class="ui-eyebrow">Project</p><span class="ui-badge" id="status-badge">Loading</span></div>
-                        <h1 id="project-title">Project</h1>
-                        <p class="project-description" id="project-description"></p>
-                        <div class="project-instructions" id="project-instructions" hidden></div>
-                        <div class="surface-actions project-management-actions" id="project-management-actions"></div>
-                    </section>
                     <section class="participant-section">
                         <div class="surface-heading compact"><div><p class="ui-eyebrow">Participants</p><h2>People and agents <span class="ui-badge" id="participant-count">0</span></h2></div></div>
                         <input class="ui-input" id="participant-search" type="search" placeholder="Search participants" aria-label="Search participants">
@@ -61,30 +67,61 @@
                 </aside>
 
                 <section class="surface-column project-messages-column" data-panel="right">
-                    <header class="timeline-header">
-                        <div><p class="ui-eyebrow">Project timeline</p><h1>Messages <span class="ui-badge" id="timeline-count">0 messages</span></h1></div>
-                        <div class="connection-actions"><span class="connection-label" id="connection-label">HTTP</span><button type="button" class="ui-button ui-button-ghost" id="refresh-button">Refresh</button></div>
-                    </header>
-                    <section class="filter-bar" aria-label="Timeline filters">
-                        <div id="primary-filter"></div>
-                        <div class="filter-secondary">
-                            <div id="search-mount" class="app-search"></div>
-                            <div id="sender-filter" class="sender-filter"></div>
-                            <input class="ui-input date-filter" id="date-from" type="date" aria-label="Messages from date">
-                            <input class="ui-input date-filter" id="date-to" type="date" aria-label="Messages through date">
-                            <button type="button" class="ui-button ui-button-borderless" id="clear-filters" hidden>Clear</button>
+                    <header class="project-overview timeline-project-overview">
+                        <div class="project-overview-heading">
+                            <h1 id="project-title">Project</h1>
+                            <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
+                                <span class="timeline-action-icon" id="project-actions-icon" aria-hidden="true"></span>
+                            </button>
                         </div>
-                    </section>
-                    <div class="timeline-notice" id="timeline-notice" hidden></div>
-                    <div class="timeline-scroll"><div id="timeline-host"></div></div>
+                        <p class="project-description" id="project-description"></p>
+                        <div class="project-instructions" id="project-instructions" hidden></div>
+                        <span class="app-visually-hidden" id="status-badge" aria-live="polite">Loading</span>
+                        <span class="app-visually-hidden" id="timeline-count" aria-live="polite">0 messages</span>
+                        <span class="app-visually-hidden" id="connection-label">HTTP</span>
+                    </header>
                     <section class="composer-shell" id="composer-shell" hidden aria-label="Compose message">
                         <div class="reply-context" id="reply-context" hidden></div>
-                        <div class="addressing-row">
+                        <div class="addressing-row" id="addressing-row">
                             <div id="address-mode"></div><div id="addressee-select" class="addressee-select"></div>
                             <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be notified.</p>
                         </div>
                         <div id="composer-host"></div>
                     </section>
+                    <section class="filter-bar" aria-label="Timeline filters">
+                        <div id="search-mount" class="app-search"></div>
+                        <div class="filter-bar-actions">
+                            <button type="button" class="ui-button ui-button-ghost timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
+                                <span class="timeline-action-icon" id="filter-icon" aria-hidden="true"></span>
+                                <span class="ui-badge timeline-filter-count" id="filter-count" hidden>0</span>
+                            </button>
+                            <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="refresh-button" aria-label="Refresh timeline" title="Refresh">
+                                <span class="timeline-action-icon" id="refresh-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                        <div class="timeline-filter-panel" id="filter-popover-content" hidden>
+                            <div class="timeline-filter-section">
+                                <span class="timeline-filter-label">Messages</span>
+                                <div id="primary-filter"></div>
+                            </div>
+                            <div class="timeline-filter-section">
+                                <span class="timeline-filter-label">Sender</span>
+                                <div id="sender-filter" class="sender-filter"></div>
+                            </div>
+                            <div class="timeline-filter-section">
+                                <span class="timeline-filter-label">Date range</span>
+                                <div class="timeline-filter-dates">
+                                    <label>From<input class="ui-input date-filter" id="date-from" type="date"></label>
+                                    <label>Through<input class="ui-input date-filter" id="date-to" type="date"></label>
+                                </div>
+                            </div>
+                            <div class="timeline-filter-actions">
+                                <button type="button" class="ui-button ui-button-borderless" id="clear-filters" hidden>Clear filters</button>
+                            </div>
+                        </div>
+                    </section>
+                    <div class="timeline-notice" id="timeline-notice" hidden></div>
+                    <div class="timeline-scroll"><div id="timeline-host"></div></div>
                 </section>
             </section>
 

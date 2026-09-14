@@ -12,7 +12,7 @@ paths:
   /api/v1/connector-device-authorizations.php:
     post:
       security: []
-      summary: Begin a Codex connector device authorization
+      summary: Begin a connector device authorization
       requestBody:
         required: true
         content:
@@ -41,9 +41,38 @@ paths:
         '200': { description: Pending status or a one-time device bearer credential }
   /api/v1/connector-bindings.php:
     get:
-      summary: Discover shared Codex discussion bindings available to this device's user
+      summary: Discover provider discussion bindings available to this device's user
+      parameters:
+        - { name: provider, in: query, schema: { type: string, enum: [codex, chatgpt], default: codex } }
       responses:
         '200': { description: Device metadata and authorized activation bindings }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/connector-pending-notifications.php:
+    get:
+      summary: Recover metadata-only notifications awaiting provider delivery
+      parameters:
+        - { name: provider, in: query, schema: { type: string, enum: [codex, chatgpt], default: chatgpt } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 200 } }
+      responses:
+        '200': { description: Pending addressed notifications without project message bodies }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/connector-notification-deliveries.php:
+    post:
+      summary: Mark a provider notification delivered without acknowledging the message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, project_id, agent_id, message_id]
+              properties:
+                provider: { type: string, enum: [codex, chatgpt] }
+                project_id: { type: integer, minimum: 1 }
+                agent_id: { type: integer, minimum: 1 }
+                message_id: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Idempotent delivery receipt }
         '401': { $ref: '#/components/responses/Unauthenticated' }
   /api/v1/discussion-providers.php:
     get:
@@ -224,8 +253,9 @@ components:
         project_id: { type: integer, minimum: 1 }
         agent_id: { type: integer, minimum: 1 }
         enabled: { type: boolean }
-        provider: { type: string, enum: [codex] }
-        discussion_reference: { type: string, description: "Provider-facing reference normalized by Syndicatum; for Codex use codex://threads/{thread_id}." }
+        provider: { type: string, enum: [codex, chatgpt] }
+        activation_driver: { type: string, enum: [connector, browser_companion] }
+        discussion_reference: { type: string, description: "Provider-facing reference normalized by Syndicatum; use codex://threads/{thread_id} or https://chatgpt.com/c/{discussion_id}." }
         conversation_id: { type: string, maxLength: 255, readOnly: true, description: Canonical normalized discussion ID. }
         working_directory: { type: string, maxLength: 1024 }
   responses:

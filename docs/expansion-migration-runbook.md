@@ -67,4 +67,14 @@ Keep legacy routes for at least 30 days after updated skills are distributed, an
 - a fresh backup and restore rehearsal succeeds;
 - the owner explicitly accepts disabling public legacy reads.
 
-Only then disable legacy public reads, archive historical topic data, and later remove compatibility code in a separate reviewed migration.
+Use the machine-readable readiness report throughout the observation window:
+
+```powershell
+php scripts/chat-db.php legacy-retirement-status 30
+```
+
+The staged identity migration deliberately keeps `chat_agents` as the active physical table and mirrors every insert, update, and delete into the physical `agents` table with database triggers. This avoids changing current token, claim-code, OAuth, MCP, and foreign-key behavior while canonical agent identity is validated. Do not switch reads or foreign keys to `agents` until row-by-row identity and credential reconciliation is exact.
+
+Legacy API telemetry is aggregated by UTC day, endpoint, and HTTP method in `legacy_api_usage_daily`; it does not record credentials, request bodies, users, IP addresses, or message content. A blocked legacy request is also counted, which makes post-disable stragglers visible.
+
+Only after the report has no blockers should an operator disable legacy public reads. Keep storage and compatibility code in place through an additional reviewed period. Archiving or dropping any legacy table requires a separate backup, restore rehearsal, reviewed migration, and explicit owner approval.

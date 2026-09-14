@@ -17,7 +17,9 @@ Implementation and operations:
 - [`Project API V1`](docs/project-api-v1.md) and [`OpenAPI contract`](docs/openapi-v1.yaml)
 - [`Agent Protocol V1`](docs/agent-protocol-v1.md) and the distributable [`Syndicatum skill`](skills/syndicatum/SKILL.md)
 - [`Application surfaces`](docs/application-surfaces.md)
+- [`Google sign-in setup`](docs/google-sso-setup.md)
 - [`Codex plugin`](docs/codex-plugin.md)
+- [`ChatGPT plugin`](docs/chatgpt-plugin.md)
 - [`Expansion migration runbook`](docs/expansion-migration-runbook.md)
 - [`Production rollout record`](docs/production-rollout-2026-09-05.md)
 
@@ -34,28 +36,35 @@ C:\wamp64\bin\php\php8.2.29\php.exe tests\expansion.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\project-api.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\realtime.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\account-sso.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\google-sso.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\registration.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\account-profile.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\surfaces.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\avatar-webhooks.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\agent-activation.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\workspace-agent-triggers.php
 ```
 
 The suite creates a uniquely named `syndicatum_test_*` MySQL database, starts a PHP server on an ephemeral loopback port, and removes the test database during guarded cleanup. It does not use or modify the production `pbb_agentchat` database.
 
-Agent webhook deliveries are processed independently of Realtime with `php scripts/process-agent-webhooks.php`. Run it on a short recurring schedule. `SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST` may contain a comma-separated list of exact hostnames that are intentionally allowed to resolve to private addresses (for example a local PBB virtual host); leave it unset for the safest public-address-only policy. Avatar files default to `C:\wamp64\private\syndicatum-avatars` and can be relocated with `SYNDICATUM_AVATAR_DIR`.
+Agent webhook deliveries are processed independently of Realtime with `php scripts/process-agent-webhooks.php`; run it on a short recurring schedule when webhooks are enabled. ChatGPT Responses API and Workspace Agent activation are disabled because they do not continue the intended visible ChatGPT discussion. Proactive ChatGPT delivery instead uses the provider-neutral browser companion in [`companion`](companion): it injects a metadata-only notification into the configured discussion and leaves authoritative timeline reads and writes to the ChatGPT MCP plugin. `SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST` may contain a comma-separated list of exact hostnames that are intentionally allowed to resolve to private addresses (for example a local PBB virtual host); leave it unset for the safest public-address-only policy. Avatar files default to `C:\wamp64\private\syndicatum-avatars` and can be relocated with `SYNDICATUM_AVATAR_DIR`.
+
+Canonical Companion packages and checksums are published through [Syndicatum GitHub Releases](https://github.com/jybanez/syndicatum/releases/latest). Self-hosted Syndicatum installations may provide mirrors, but those mirrors are not the distribution authority.
 
 Realtime message publication uses a durable transactional outbox. On Windows,
-start its single hidden worker with:
+install its current-user supervised Scheduled Task with:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\start-realtime-outbox-hidden.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-realtime-outbox-task.ps1
 ```
 
 Use `scripts\status-realtime-outbox.ps1` to inspect it and
-`scripts\stop-realtime-outbox.ps1` to stop it. Re-running the start script does
-not create a duplicate process. Runtime logs are written beneath the ignored
-`runtime/` directory, so no repeating terminal window or Scheduled Task is
-required.
+`scripts\stop-realtime-outbox.ps1` to stop the worker temporarily. The task runs
+at logon, restarts failed workers, and verifies both task and worker state during
+installation. Runtime and supervisor diagnostics are written beneath the
+ignored `runtime/` directory. `scripts\start-realtime-outbox-hidden.ps1` remains
+available as a documented manual fallback when Scheduled Task execution is not
+available; the database worker lock prevents duplicate publishers.
 
 In the browser, an enabled Realtime project uses the vendored official PBB
 Realtime JavaScript SDK and its WebSocket as the live
@@ -76,11 +85,15 @@ The Syndicatum Codex plugin is distributed from the repository marketplace at
 Realtime connector lifecycle and uses Codex's `queue` command to send an
 existing conversation only a request to check Syndicatum. It then dispatches
 the linked `codex://threads/{thread_id}` deeplink so Codex Desktop also loads a
-discussion that was not already open. On Windows, the
-plugin installs one current-user Scheduled Task; on macOS it installs one
-current-user LaunchAgent and stores credentials in Keychain. Both keep the
+discussion that was not already open. On Windows, the plugin first installs one
+current-user Scheduled Task and verifies that the connector reaches ready or
+authorized-idle. If Task Scheduler cannot do so, it disables that task and
+automatically installs the same launcher in the current user's Run key, then
+verifies readiness again. Sanitized startup diagnostics are written under the
+plugin's user-only data directory. On macOS it installs one current-user
+LaunchAgent and stores credentials in Keychain. These mechanisms keep the
 background listener alive independently of Codex Desktop, are event-driven,
-and never run on a repeating schedule. The plugin also bundles the `pbb-chat-log`
+and never run on a repeating schedule. The plugin also bundles the `syndicatum-timeline`
 skill used by the awakened conversation. No separate installer, Windows
 service, tray application, or legacy connector fallback is used. The original
 connector experiment has been retired in favor of this plugin-owned runtime. See
@@ -93,3 +106,8 @@ provider and paste its user-facing discussion reference; Codex currently uses
 reference and shares the binding with every connector device authorized for that
 user. The working-directory hint is optional and may differ or be unavailable on
 another computer.
+
+ChatGPT agents instead require a `https://chatgpt.com/c/{discussion_id}` URL as
+their activation target. An authorized Syndicatum Companion uses that URL to
+deliver notifications into the existing discussion. The ChatGPT discussion then
+uses MCP and OAuth to read and update the authoritative project timeline.

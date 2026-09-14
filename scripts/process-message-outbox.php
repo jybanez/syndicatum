@@ -4,6 +4,9 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/SettingsService.php';
 require_once dirname(__DIR__) . '/src/RealtimeIntegration.php';
 require_once dirname(__DIR__) . '/src/MessageOutbox.php';
+require_once dirname(__DIR__) . '/src/WorkspaceAgentTriggerService.php';
+require_once dirname(__DIR__) . '/src/ResponsesApiActivationService.php';
+require_once dirname(__DIR__) . '/src/DiscussionProviderRegistry.php';
 
 if (PHP_SAPI !== 'cli') {
     fwrite(STDERR, "This worker may only run from the command line.\n");
@@ -21,6 +24,9 @@ $pdo = Db::pdo();
 $settings = new SettingsService($pdo);
 $realtime = new RealtimeIntegration($settings);
 $outbox = new MessageOutbox($pdo);
+$chatGptActivationEnabled = !empty((new DiscussionProviderRegistry())->definition('chatgpt')['proactive_activation']);
+$workspaceAgents = $chatGptActivationEnabled ? new WorkspaceAgentTriggerService($pdo) : null;
+$responsesAgents = $chatGptActivationEnabled ? new ResponsesApiActivationService($pdo) : null;
 
 if (!$realtime->isEnabled()) {
     echo "Realtime integration is disabled; no events processed.\n";
@@ -63,11 +69,15 @@ try {
             $batch['retried']++;
         }
 
+        $disabledActivationBatch = ['processed' => 0, 'succeeded' => 0, 'retried' => 0, 'dead' => 0];
+        $workspaceBatch = $workspaceAgents ? $workspaceAgents->process($limit) : $disabledActivationBatch;
+        $responsesBatch = $responsesAgents ? $responsesAgents->process($limit) : $disabledActivationBatch;
+
         foreach ($totals as $key => $value) {
             $totals[$key] += $batch[$key];
         }
-        if (!$watch || $batch['processed'] > 0) {
-            echo json_encode($batch, JSON_UNESCAPED_SLASHES) . "\n";
+        if (!$watch || $batch['processed'] > 0 || $workspaceBatch['processed'] > 0 || $responsesBatch['processed'] > 0) {
+            echo json_encode(['realtime' => $batch, 'workspace_agents' => $workspaceBatch, 'responses_api' => $responsesBatch], JSON_UNESCAPED_SLASHES) . "\n";
             if (function_exists('flush')) { flush(); }
         }
         if ($watch) { usleep($idleMilliseconds * 1000); }

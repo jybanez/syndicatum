@@ -18,7 +18,8 @@ try {
     $body = Api::body();
     $claim = $repository->claimAgent(
         isset($body['project_name']) ? $body['project_name'] : '',
-        isset($body['claim_code']) ? $body['claim_code'] : ''
+        isset($body['claim_code']) ? $body['claim_code'] : '',
+        isset($body['project']) ? $body['project'] : (isset($body['syndicatum_project']) ? $body['syndicatum_project'] : null)
     );
 
     Api::json([

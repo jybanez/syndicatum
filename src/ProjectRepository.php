@@ -4,6 +4,8 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/SettingsService.php';
 require_once __DIR__ . '/MessageOutbox.php';
 require_once __DIR__ . '/AgentWebhookService.php';
+require_once __DIR__ . '/WorkspaceAgentTriggerService.php';
+require_once __DIR__ . '/ResponsesApiActivationService.php';
 
 class ProjectRepository
 {
@@ -22,7 +24,7 @@ class ProjectRepository
     {
         $projectId = (int) $access['project_id'];
         $project = $this->pdo->prepare(
-            'SELECT p.id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.instructions, p.status,
+            'SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.instructions, p.status,
                     p.created_at, p.updated_at, u.display_name AS owner_display_name
              FROM projects p JOIN users u ON u.id = p.owner_user_id WHERE p.id = ?'
         );
@@ -35,6 +37,7 @@ class ProjectRepository
         return [
             'project' => [
                 'id' => (int) $row['id'],
+                'public_id' => $row['public_id'],
                 'workspace_id' => (int) $row['workspace_id'],
                 'owner_user_id' => (int) $row['owner_user_id'],
                 'owner_display_name' => $row['owner_display_name'],
@@ -327,6 +330,8 @@ class ProjectRepository
                 $this->outbox->enqueueMessageCreated($projectId, $messageId, $sequence, $message);
             }
             (new AgentWebhookService($this->pdo))->enqueueMessageCreated($projectId, $messageId, $message);
+            (new WorkspaceAgentTriggerService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
+            (new ResponsesApiActivationService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
             $this->pdo->commit();
             return ['message' => $message, 'created' => true];
         } catch (PDOException $exception) {
@@ -550,7 +555,14 @@ class ProjectRepository
             }
         }
         if (!$resolved) {
-            return [];
+            $statement = $this->pdo->prepare(
+                "SELECT id FROM project_participants WHERE project_id = ? AND status = 'active' AND id <> ?"
+            );
+            $statement->execute([$projectId, $senderId]);
+            foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $participantId) {
+                $resolved[(int) $participantId] = 'broadcast';
+            }
+            return $resolved;
         }
         $ids = array_keys($resolved);
         $placeholders = implode(',', array_fill(0, count($ids), '?'));

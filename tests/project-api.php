@@ -65,8 +65,15 @@ function projectApiRequest($baseUrl, $method, $path, array $headers = [], $body 
     $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
     $headerSize = (int) curl_getinfo($handle, CURLINFO_HEADER_SIZE);
     curl_close($handle);
+    $responseHeaders = [];
+    foreach (preg_split('/\r\n|\n|\r/', trim(substr($raw, 0, $headerSize))) ?: [] as $line) {
+        $position = strpos($line, ':');
+        if ($position !== false) {
+            $responseHeaders[strtolower(trim(substr($line, 0, $position)))] = trim(substr($line, $position + 1));
+        }
+    }
     $decoded = json_decode(substr($raw, $headerSize), true);
-    return ['status' => $status, 'body' => $decoded, 'raw' => substr($raw, $headerSize)];
+    return ['status' => $status, 'headers' => $responseHeaders, 'body' => $decoded, 'raw' => substr($raw, $headerSize)];
 }
 
 function projectApiPort()
@@ -129,9 +136,9 @@ function projectApiInsertProject(PDO $pdo, $userId, $name, $slug)
     $workspace->execute([$userId]);
     $workspaceId = (int) $workspace->fetchColumn();
     $pdo->prepare(
-        "INSERT INTO projects (workspace_id, owner_user_id, name, slug, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'active', ?, ?)"
-    )->execute([$workspaceId, $userId, $name, $slug, $now, $now]);
+        "INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?)"
+    )->execute([Db::uuidV4(), $workspaceId, $userId, $name, $slug, $now, $now]);
     $projectId = (int) $pdo->lastInsertId();
     projectApiAddMember($pdo, $projectId, $userId, 'owner');
     return $projectId;
@@ -231,6 +238,63 @@ try {
     $humanHeaders = ['Cookie: syndicatum_session=' . $sessionToken, 'X-CSRF-Token: ' . $csrfToken];
     $memberHeaders = ['Cookie: syndicatum_session=' . $memberSessionToken, 'X-CSRF-Token: ' . $memberCsrfToken];
 
+    $suite->test('provider-only agent profile update does not require or overwrite an activation binding', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $agentOne, $pdo) {
+        $response = projectApiRequest($baseUrl, 'PATCH', '/api/v1/project-agents.php', $humanHeaders, [
+            'project_id' => $projectOne,
+            'agent_id' => $agentOne['agent_id'],
+            'display_name' => 'Project One Agent',
+            'provider' => 'gemini',
+            'avatar_url' => null,
+        ]);
+        $suite->same(200, $response['status']);
+        $suite->same('gemini', $response['body']['data']['provider']);
+        $suite->true(strpos($response['raw'], '<b>Deprecated</b>') === false, 'Profile update emitted a PHP deprecation warning.');
+        $statement = $pdo->prepare('SELECT COUNT(*) FROM agent_activation_bindings WHERE project_id = ? AND agent_id = ?');
+        $statement->execute([$projectOne, $agentOne['agent_id']]);
+        $suite->same(0, (int) $statement->fetchColumn(), 'A profile-only update must not create an activation binding.');
+    });
+
+    $suite->test('project administrator can remove an agent while preserving its participant history', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $secret, $pdo) {
+        $token = 'removable_agent_' . bin2hex(random_bytes(20));
+        $agent = projectApiInsertAgent($pdo, $projectOne, 'Removable Agent', $token, $secret);
+        $response = projectApiRequest($baseUrl, 'DELETE', '/api/v1/project-agents.php', $humanHeaders, [
+            'project_id' => $projectOne,
+            'agent_id' => $agent['agent_id'],
+        ]);
+        $suite->same(200, $response['status'], $response['raw']);
+        $suite->same(true, $response['body']['data']['removed']);
+        $statement = $pdo->prepare('SELECT pa.status, pp.status AS participant_status, a.is_active, a.token_hash FROM project_agents pa JOIN project_participants pp ON pp.project_id = pa.project_id AND pp.agent_id = pa.agent_id JOIN chat_agents a ON a.id = pa.agent_id WHERE pa.project_id = ? AND pa.agent_id = ?');
+        $statement->execute([$projectOne, $agent['agent_id']]);
+        $removed = $statement->fetch();
+        $suite->same('retired', $removed['status']);
+        $suite->same('removed', $removed['participant_status']);
+        $suite->same(0, (int) $removed['is_active']);
+        $suite->same(null, $removed['token_hash']);
+    });
+
+    $suite->test('project administrator can remove a human member but cannot remove the owner', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $ownerId, $pdo) {
+        $removableUserId = projectApiInsertUser($pdo, 'removable@project.test', 'Removable Human');
+        projectApiAddMember($pdo, $projectOne, $removableUserId, 'viewer');
+        $removed = projectApiRequest($baseUrl, 'DELETE', '/api/v1/project-members.php', $humanHeaders, [
+            'project_id' => $projectOne,
+            'user_id' => $removableUserId,
+        ]);
+        $suite->same(200, $removed['status'], $removed['raw']);
+        $suite->same(true, $removed['body']['data']['removed']);
+        $statement = $pdo->prepare('SELECT pm.status, pp.status AS participant_status FROM project_members pm JOIN project_participants pp ON pp.project_id = pm.project_id AND pp.user_id = pm.user_id WHERE pm.project_id = ? AND pm.user_id = ?');
+        $statement->execute([$projectOne, $removableUserId]);
+        $membership = $statement->fetch();
+        $suite->same('removed', $membership['status']);
+        $suite->same('removed', $membership['participant_status']);
+
+        $ownerRemoval = projectApiRequest($baseUrl, 'DELETE', '/api/v1/project-members.php', $humanHeaders, [
+            'project_id' => $projectOne,
+            'user_id' => $ownerId,
+        ]);
+        $suite->same(403, $ownerRemoval['status']);
+        $suite->same('OWNER_MEMBERSHIP_LOCKED', $ownerRemoval['body']['code']);
+    });
+
     $suite->test('project discovery includes owned and shared projects and normalizes participants', function () use ($suite, $baseUrl, $agentOneHeaders, $humanHeaders, $memberHeaders, $projectOne) {
         $agentProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $agentOneHeaders);
         $humanProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $humanHeaders);
@@ -240,6 +304,8 @@ try {
         $agentContext = projectApiRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectOne, $agentOneHeaders);
         $suite->same(200, $agentProjects['status']);
         $suite->same(1, count($agentProjects['body']['data']));
+        $suite->true(preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $agentProjects['body']['data'][0]['public_id']) === 1);
+        $suite->same($agentProjects['body']['data'][0]['public_id'], $agentContext['body']['data']['project']['public_id']);
         $suite->same(1, count($humanProjects['body']['data']));
         $suite->same(2, count($memberProjects['body']['data']));
         $relationships = array_values(array_unique(array_column($memberProjects['body']['data'], 'relationship')));
@@ -332,6 +398,20 @@ try {
         $event = json_decode($event, true);
         $suite->same('syndicatum.message.created', $event['type']);
         $suite->same($response['body']['data']['id'], $event['message']['id']);
+    });
+
+    $suite->test('omitted or empty addressing is normalized to a project broadcast', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne) {
+        foreach ([
+            ['body' => 'No addressing fields.'],
+            ['body' => 'Empty addressing fields.', 'broadcast' => false, 'direct_participant_ids' => [], 'mention_participant_ids' => []],
+        ] as $input) {
+            $response = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders, $input);
+            $suite->same(201, $response['status'], $response['raw']);
+            $suite->same(2, count($response['body']['data']['addressees']));
+            foreach ($response['body']['data']['addressees'] as $addressee) {
+                $suite->same('broadcast', $addressee['reason']);
+            }
+        }
     });
 
     $suite->test('newest-first cursors paginate without duplicate messages', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne) {
@@ -437,6 +517,13 @@ try {
         $response = projectApiRequest($baseUrl, 'GET', '/api/chat-context.php');
         $suite->same(410, $response['status']);
         $suite->same('LEGACY_API_DISABLED', $response['body']['code']);
+        $suite->same('true', $response['headers']['deprecation']);
+        $suite->true(strpos($response['headers']['link'], 'rel="successor-version"') !== false);
+        $usage = $pdo->query(
+            "SELECT request_count FROM legacy_api_usage_daily
+             WHERE endpoint = '/api/chat-context.php' AND method = 'GET'"
+        )->fetchColumn();
+        $suite->same(1, (int) $usage);
     });
 } finally {
     if (is_resource($server)) {

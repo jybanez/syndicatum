@@ -390,6 +390,10 @@ Syndicatum links a local user through immutable `pbb_user_id`, creates its own a
 
 Native break-glass administrator access must remain available. OAuth client secrets and any future PBB Account app-admin token must be separate credentials with separate enablement controls.
 
+### Google sign-in
+
+Google is an independent optional human identity provider. Syndicatum uses Google's authorization-code OpenID Connect flow with browser-bound state, nonce, and PKCE S256, then validates the signed ID token before creating its own local session. The local identity is keyed by Google's immutable `sub`; email is profile data and is never used to silently link an existing account. First-time Google users receive only the ordinary `user` role and a personal workspace. Native administrator recovery remains available. See [Google sign-in setup](google-sso-setup.md).
+
 ## 12. Global Administration and Settings
 
 The administration surface will provide a single tabbed **System Settings** modal backed by controlled database settings.
@@ -400,7 +404,8 @@ System Settings
 ├─ Projects and messaging
 ├─ Integrations
 │  ├─ PBB Realtime
-│  └─ PBB Account
+│  ├─ PBB Account
+│  └─ Google sign-in
 ├─ Security
 └─ Operations
 ```

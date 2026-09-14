@@ -5,20 +5,17 @@
   <main>
     <header><img class="mark" src="icons/syndicatum-48.png" alt=""><div><h1>Syndicatum Companion</h1><p>AI discussion delivery</p></div></header>
     <section id="connect-view">
-      <label for="base-url">Syndicatum URL</label>
-      <input id="base-url" type="url" value="https://chatviewer.pbb.ph" spellcheck="false">
+      <label for="base-url">Syndicatum server</label>
+      <input id="base-url" type="url" placeholder="http://syndicatumserver.com" autocomplete="url" spellcheck="false">
       <button id="connect" type="button">Connect device</button>
+      <p id="connect-error" class="error" hidden></p>
     </section>
     <section id="status-view" hidden>
       <div class="row"><span>Status</span><strong id="status">Disconnected</strong></div>
+      <div class="row"><span>Server</span><strong id="server"></strong></div>
       <div class="row"><span>Bindings</span><strong id="bindings">0</strong></div>
       <div class="row"><span>Pending</span><strong id="queued">0</strong></div>
       <p id="authorization" class="notice" hidden></p>
-      <div class="binding-box">
-        <label for="binding-code">Bind the active discussion</label>
-        <input id="binding-code" type="text" autocomplete="off" spellcheck="false" placeholder="Paste one-time binding code">
-        <button id="bind-discussion" type="button">Bind discussion</button>
-      </div>
       <p id="binding-result" class="success" hidden></p>
       <p id="error" class="error" hidden></p>
       <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>

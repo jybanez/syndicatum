@@ -8,7 +8,10 @@ try {
     if (Api::method() !== 'GET') { Api::json(['error' => true, 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET']); }
     $service = new ConnectorDeviceService(Db::pdo());
     $device = $service->authenticate(Api::bearerToken());
-    Api::json(['data' => ['device' => ['id' => $device['id'], 'display_name' => $device['display_name']], 'bindings' => $service->bindings($device)]]);
+    $provider = isset($_GET['provider']) ? (string) $_GET['provider'] : 'codex';
+    Api::json(['data' => ['device' => ['id' => $device['id'], 'display_name' => $device['display_name']], 'bindings' => $service->bindings($device, $provider)]]);
+} catch (InvalidArgumentException $exception) {
+    Api::json(['error' => true, 'code' => 'VALIDATION_FAILED', 'message' => $exception->getMessage()], 422);
 } catch (RuntimeException $exception) {
     Api::json(['error' => true, 'code' => $exception->getMessage(), 'message' => 'Connector authentication is required.'], 401);
 } catch (Exception $exception) {

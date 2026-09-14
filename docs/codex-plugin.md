@@ -28,16 +28,32 @@ open the Realtime listener; MCP hosts remain standby so one event cannot queue
 duplicate notifications.
 
 There is no separate installer, Windows service, polling job, tray application,
-or legacy connector fallback. The plugin copies its small background runtime into
-the existing user-only Syndicatum plugin data directory and registers one
-current-user Windows Scheduled Task that runs its Node entrypoint through a hidden
-PowerShell host. On macOS it registers a current-user LaunchAgent and protects the
-device credential in Keychain. Pairing persists the resolved Codex executable
-path so the LaunchAgent does not depend on an interactive shell `PATH`. Keeping
-that runtime outside Codex's cache prevents Desktop shutdown
-cleanup from treating it as an MCP child. The task is continuously event-driven rather than scheduled
-every minute. It starts immediately and at the user's next sign-in, requires no
-administrator rights, and survives Codex Desktop restarts.
+or legacy connector runtime. The plugin copies its small background runtime into
+the existing user-only Syndicatum plugin data directory. On Windows it first
+registers one current-user Scheduled Task using absolute launcher/runtime paths
+and a hidden absolute PowerShell executable. Registration alone is not success:
+the installer waits for the connector to own the listener and report ready or
+authorized-idle. If Task Scheduler cannot reach that state, the task is disabled
+and the same launcher is registered under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, started immediately, and
+verified again. This is a startup fallback for the same connector, not a legacy
+connector implementation. Both mechanisms use the same current-user DPAPI
+context and require no administrator rights.
+
+Sanitized startup failures are written to
+`%LOCALAPPDATA%\Syndicatum\CodexPlugin\background-startup.log`; connector runtime
+diagnostics remain in `connector.log`. Neither log includes device credentials.
+A second launcher exits successfully only when the lock owner has matching
+healthy status; an occupied lock without matching health is recorded as a real
+startup failure.
+
+On macOS the plugin registers a current-user LaunchAgent and protects the device
+credential in Keychain. Pairing persists the resolved Codex executable path so
+the LaunchAgent does not depend on an interactive shell `PATH`. Keeping that
+runtime outside Codex's cache prevents Desktop shutdown cleanup from treating it
+as an MCP child. The connector is continuously event-driven rather than scheduled
+every minute, starts immediately and at the user's next sign-in, and survives
+Codex Desktop restarts.
 
 ## Development installation
 
@@ -50,7 +66,7 @@ codex plugin add syndicatum@syndicatum
 ```
 
 Restart Codex and start a new task after installing or updating the plugin so
-its MCP server and bundled `pbb-chat-log` skill are loaded.
+its MCP server and bundled `syndicatum-timeline` skill are loaded.
 
 ## Install on another Windows PC or Mac
 
@@ -68,6 +84,20 @@ connect the device to `https://chatviewer.pbb.ph` and provide a recognizable
 device name such as `Office PC` or `Laptop`. Codex opens the one-time browser
 authorization page. After the user signs in and approves the matching code, the
 page closes and the plugin starts its background listener automatically.
+
+Device authorization does not claim an agent identity. After the operator
+creates the agent in its Syndicatum project, the credential modal shows the
+visible project and identity, their numeric IDs, and a one-time claim code. Ask
+Codex to claim that identity with the Syndicatum plugin. Its
+`claim_agent_profile` action uses Project API V1 and saves the bearer credential
+as a distinct locally protected agent profile outside the project and web root,
+without returning either secret. Profiles are keyed by server, project, and
+agent IDs, so multiple discussions may share one checkout safely. Codes expire
+after 15 minutes and are single-use; regenerate any code that expired or was exposed.
+The handoff modal provides separate copy actions for the raw claim code and for a
+complete agent instruction containing that code. Each successful clipboard write
+is confirmed with a toast. Credential regeneration is available from the agent
+modal's upper-right credential-actions menu.
 
 Each PC is authorized as a separate device. Discussion linking happens in
 Syndicatum, not inside the Codex task: edit the project agent, select **Codex** as
@@ -148,9 +178,16 @@ transport problem.
 
 An authorized device with no usable discussion bindings reports
 `authorized_idle`, not a listener startup failure. Invalid bindings are counted
-and skipped without preventing valid bindings from starting. Connector binding
-discovery refreshes when the background runtime starts; it requires no
-reauthorization or polling loop.
+and skipped without preventing valid bindings from starting. The background
+runtime rechecks binding metadata every 15 seconds and reloads its listener only
+when a discussion, project, participant, or directory route changed. Adding or
+editing an agent binding therefore requires neither device reauthorization nor
+a manual connector restart.
+
+Each wake-up prompt directs the target task to its bundled timeline skill and
+includes the exact non-secret profile ID for its locally protected credential.
+The task must not select another profile or a separately connected global
+Syndicatum app identity, because it may represent a different participant.
 
 `connector_background_status` reports installation, process, listener-lock
 ownership, and a reason when the listener is still starting or another process

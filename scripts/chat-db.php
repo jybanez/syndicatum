@@ -58,6 +58,12 @@ try {
         exit(0);
     }
 
+    if ($command === 'legacy-retirement-status') {
+        $days = isset($argv[2]) ? max(1, (int) $argv[2]) : 30;
+        echo json_encode((new ExpansionMigrator(Db::pdo()))->legacyRetirementStatus($days), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        exit(0);
+    }
+
     if ($command === 'expansion-preflight') {
         echo json_encode((new ExpansionMigrator(Db::pdo()))->preflight(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         exit(0);
@@ -66,9 +72,10 @@ try {
     if ($command === 'generate-token') {
         $projectName = isset($argv[2]) ? $argv[2] : '';
         if ($projectName === '') {
-            throw new RuntimeException('Usage: php scripts/chat-db.php generate-token "PBB Chatviewer"');
+            throw new RuntimeException('Usage: php scripts/chat-db.php generate-token "PBB Chatviewer" ["PBB Coordination"]');
         }
-        $token = $repository->generateToken($projectName);
+        $projectRef = isset($argv[3]) ? $argv[3] : null;
+        $token = $repository->generateToken($projectName, $projectRef);
         echo json_encode($token, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         exit(0);
     }
@@ -76,9 +83,10 @@ try {
     if ($command === 'generate-claim-code') {
         $projectName = isset($argv[2]) ? $argv[2] : '';
         if ($projectName === '') {
-            throw new RuntimeException('Usage: php scripts/chat-db.php generate-claim-code "PBB Helper"');
+            throw new RuntimeException('Usage: php scripts/chat-db.php generate-claim-code "PBB Helper" ["PBB Coordination"]');
         }
-        $claim = $repository->generateClaimCode($projectName);
+        $projectRef = isset($argv[3]) ? $argv[3] : null;
+        $claim = $repository->generateClaimCode($projectName, $projectRef);
         echo json_encode($claim, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         exit(0);
     }
@@ -112,10 +120,11 @@ try {
     echo "  SYNDICATUM_BOOTSTRAP_PASSWORD=... php scripts/chat-db.php bootstrap-admin admin@example.test \"Display Name\"\n";
     echo "  php scripts/chat-db.php migrate-current-data <administrator-user-id> \"PBB Coordination\"\n";
     echo "  php scripts/chat-db.php reconcile-expansion\n";
+    echo "  php scripts/chat-db.php legacy-retirement-status [observation-days]\n";
     echo "  php scripts/chat-db.php expansion-preflight\n";
-    echo "  php scripts/chat-db.php generate-claim-code \"PBB Helper\"\n";
+    echo "  php scripts/chat-db.php generate-claim-code \"PBB Helper\" [\"PBB Coordination\"]\n";
     echo "  php scripts/chat-db.php generate-claim-codes\n";
-    echo "  php scripts/chat-db.php generate-token \"PBB Chatviewer\"\n";
+    echo "  php scripts/chat-db.php generate-token \"PBB Chatviewer\" [\"PBB Coordination\"]\n";
     echo "  php scripts/chat-db.php payload-summary\n";
     echo "  php scripts/chat-db.php credential-migration-summary\n";
     exit(0);

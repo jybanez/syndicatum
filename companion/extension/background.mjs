@@ -1,8 +1,9 @@
-import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
+import { bindingAcceptsMessage, bindingsFromResponse, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
 const SYNC_ALARM = "syndicatum-sync";
+const BINDING_ALARM = "syndicatum-binding-intents";
 const sockets = new Map();
 const heartbeatTimers = new Map();
 let running = null;
@@ -54,8 +55,32 @@ async function api(path, options = {}) {
   return result.data ?? result;
 }
 
+async function validateServer(baseUrl) {
+  const endpoint = `${baseUrl}/api/v1/health.php`;
+  const response = await fetch(endpoint, { headers: { Accept: "application/json" }, redirect: "follow" });
+  const requested = new URL(endpoint);
+  const resolved = new URL(response.url);
+  if (resolved.origin !== requested.origin) throw new Error("Syndicatum validation redirected to a different server.");
+  const result = await response.json().catch(() => ({}));
+  const data = result?.data ?? result;
+  const service = data?.service;
+  const valid = response.ok
+    && service?.id === "syndicatum"
+    && service?.protocol === "syndicatum-connector-v1"
+    && service?.api_version === "v1"
+    && service?.capabilities?.connector_device_authorization === true;
+  if (!valid) throw new Error("This server could not be verified as a compatible Syndicatum installation.");
+  return service;
+}
+
+function serverPermission(baseUrl) {
+  const url = new URL(baseUrl);
+  return `${url.protocol}//${url.host}/*`;
+}
+
 async function beginConnection(baseUrl) {
   baseUrl = normalizeBaseUrl(baseUrl);
+  await validateServer(baseUrl);
   await save({ baseUrl, status: "authorizing", lastError: null });
   const data = await api("/api/v1/connector-device-authorizations.php", { method: "POST", body: JSON.stringify({ device_name: "Syndicatum browser companion", platform: "chrome-extension" }) });
   await save({ pending: { deviceCode: data.device_code, userCode: data.user_code, expiresAt: data.expires_at }, status: "authorizing" });
@@ -96,21 +121,45 @@ async function refreshBindings() {
   return normalized;
 }
 
-async function bindActiveDiscussion(bindingCode) {
-  const code = String(bindingCode || "").trim();
-  if (!code) throw new Error("Enter a discussion binding code.");
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.url) throw new Error("The active browser tab could not be read.");
-  const detected = providerForDiscussionUrl(tab.url);
-  const result = await api("/api/v1/connector-discussion-bindings.php", {
-    method: "POST",
-    body: JSON.stringify({ binding_code: code, provider: detected.provider, discussion_reference: detected.discussionUrl }),
+async function checkBindingIntents() {
+  const current = await state();
+  if (!current.accessToken) return;
+  const result = await api("/api/v1/connector-discussion-bindings.php");
+  const intents = Array.isArray(result?.intents) ? result.intents : [];
+  if (!intents.length) return;
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs.find(candidate => {
+    try { return providerForDiscussionUrl(candidate?.url).provider === "chatgpt"; }
+    catch (_error) { return false; }
   });
-  const bindings = await refreshBindings();
-  await recover(bindings);
-  await drain();
-  await save({ lastBindingMessage: `${PROVIDERS[detected.provider].label} discussion bound to ${result.agent_name || "the selected agent"}.`, lastError: null });
-  return publicStatus();
+  if (!tab?.id) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: intents[0] });
+  } catch (error) {
+    if (!String(error?.message || error).includes("Receiving end does not exist")) throw error;
+    await injectProviderAdapter(tab.id, "chatgpt");
+    await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: intents[0] });
+  }
+}
+
+async function resolveBindingIntent(request, sender) {
+  const action = String(request?.action || "");
+  if (!["continue", "cancel"].includes(action)) throw new Error("Invalid binding action.");
+  const body = { binding_intent_id: request.intentId, action };
+  if (action === "continue") {
+    if (!sender?.tab?.url) throw new Error("The ChatGPT discussion URL could not be read.");
+    const detected = providerForDiscussionUrl(sender.tab.url);
+    if (detected.provider !== "chatgpt") throw new Error("Open the intended ChatGPT discussion before continuing.");
+    body.discussion_reference = detected.discussionUrl;
+  }
+  const result = await api("/api/v1/connector-discussion-bindings.php", { method: "POST", body: JSON.stringify(body) });
+  if (action === "continue") {
+    const bindings = await refreshBindings();
+    await recover(bindings);
+    await save({ lastBindingMessage: `Discussion Binding: Successful — ${result.agent_name || "agent"}.`, lastError: null });
+  }
+  setTimeout(() => void checkBindingIntents(), 0);
+  return result;
 }
 
 async function recover(bindings) {
@@ -200,7 +249,8 @@ async function drain() {
 
 async function deliver(item) {
   const url = normalizeDiscussionUrl(item.conversation_id, item.provider);
-  const tabs = await chrome.tabs.query({ url: `${url}*` });
+  const providerTabs = await chrome.tabs.query({ url: `https://${PROVIDERS[item.provider].host}/*` });
+  const tabs = matchingDiscussionTabs(providerTabs, url, item.provider);
   let tab = selectDeliveryTab(tabs);
   if (!tab) tab = await chrome.tabs.create({ url, active: false });
   if (tab.status !== "complete") {
@@ -298,21 +348,25 @@ async function start() {
     await recover(bindings);
     await drain();
     await chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 5 });
+    await chrome.alarms.create(BINDING_ALARM, { periodInMinutes: 0.5 });
+    await checkBindingIntents();
   })().catch(async error => save({ lastError: String(error?.message || error) })).finally(() => { running = null; });
   return running;
 }
 
 async function disconnect() {
+  const current = await state();
   for (const projectId of heartbeatTimers.keys()) stopHeartbeat(projectId);
   for (const socket of sockets.values()) socket.close(1000, "Disconnected");
   sockets.clear();
   await chrome.alarms.clearAll();
   await chrome.storage.local.remove(STATE_KEY);
+  if (current.baseUrl) await chrome.permissions.remove({ origins: [serverPermission(current.baseUrl)] }).catch(() => false);
 }
 
 async function publicStatus() {
   const current = await state();
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || "https://chatviewer.pbb.ph", userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -321,7 +375,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     : action === "syndicatum.connect" ? beginConnection(request.baseUrl)
     : action === "syndicatum.disconnect" ? disconnect().then(publicStatus)
     : action === "syndicatum.refresh" ? start().then(publicStatus)
-    : action === "syndicatum.bind-discussion" ? bindActiveDiscussion(request.bindingCode)
+    : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)
     : action === "syndicatum.status" ? publicStatus()
     : null;
   if (!operation) return false;
@@ -330,5 +384,8 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
 });
 chrome.runtime.onInstalled.addListener(() => void start());
 chrome.runtime.onStartup.addListener(() => void start());
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === RETRY_ALARM || alarm.name === SYNC_ALARM) void start(); });
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === RETRY_ALARM || alarm.name === SYNC_ALARM) void start();
+  if (alarm.name === BINDING_ALARM) void checkBindingIntents().catch(error => save({ lastError: String(error?.message || error) }));
+});
 void start();

@@ -1,13 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Syndicatum Companion",
-  "version": "0.3.1",
-  "description": "Routes Syndicatum notifications into bound AI discussions and relays supported responses.",
+  "version": "0.7.0",
+  "description": "Routes Syndicatum notifications into bound AI discussions while keeping MCP authoritative where available.",
   "permissions": ["alarms", "scripting", "storage", "tabs"],
   "host_permissions": [
-    "https://chatviewer.pbb.ph/*",
     "https://chatgpt.com/*",
     "https://gemini.google.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.mjs",

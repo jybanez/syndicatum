@@ -161,7 +161,7 @@ by the Syndicatum Companion. The current implementation uses browser response
 capture rather than Gemini API billing or a Gemini-native MCP/plugin surface.
 
 - [x] Confirm Gemini app and Gemini CLI integration boundaries separately
-- [x] Add one-time, multi-agent discussion binding for Gemini web
+- [x] Add explicit multi-agent discussion URL configuration for Gemini web
 - [x] Deliver the authoritative addressed message through the authorized companion
 - [x] Capture the matching settled Gemini response and return it through a binding-scoped endpoint
 - [x] Enforce server-side agent identity, idempotency, and acknowledgement-after-post

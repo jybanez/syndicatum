@@ -6,21 +6,52 @@ const extensionUrl = new URL("../extension/", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.3.1");
+  assert.equal(manifest.version, "0.7.0");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
+  assert.ok(!manifest.host_permissions.includes("https://chatviewer.pbb.ph/*"));
+  assert.ok(manifest.optional_host_permissions.includes("https://*/*"));
 });
 
-test("popup offers one-time active-discussion binding", async () => {
+test("operator chooses and validates a Syndicatum server before authorization", async () => {
   const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
   const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
   const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
-  assert.match(html, /id="binding-code"/);
-  assert.match(html, /id="bind-discussion"/);
-  assert.match(popup, /syndicatum\.bind-discussion/);
+  assert.match(html, /placeholder="http:\/\/syndicatumserver\.com"/);
+  assert.doesNotMatch(html, /value="https:\/\/chatviewer\.pbb\.ph"/);
+  assert.match(popup, /chrome\.permissions\.request/);
+  assert.match(popup, /Validating…/);
+  assert.match(html, /<strong id="server"><\/strong>/);
+  assert.match(background, /syndicatum-connector-v1/);
+  assert.match(background, /verified as a compatible Syndicatum installation/);
+  assert.ok(background.indexOf("await validateServer(baseUrl)") < background.indexOf("await save({ baseUrl"));
+  assert.match(background, /chrome\.permissions\.remove/);
+});
+
+test("MCP binding intents require an in-discussion Continue or Cancel confirmation", async () => {
+  const content = await readFile(new URL("content.js", extensionUrl), "utf8");
+  const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.match(content, /Confirm Syndicatum discussion binding/);
+  assert.match(content, /data-action="continue"/);
+  assert.match(content, /data-action="cancel"/);
   assert.match(background, /connector-discussion-bindings\.php/);
-  assert.match(background, /active: true, currentWindow: true/);
+  assert.match(background, /binding_intent_id/);
+  assert.match(background, /sender\.tab\.url/);
+  assert.match(content, /Discussion binding successful/);
+  assert.match(content, /diagnose_connection using the binding_context_id/);
+  assert.match(content, /adapter\.deliver\(prompt\)/);
+  assert.match(content, /Retry status check/);
+});
+
+test("popup contains no legacy binding-code workflow", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
+  const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.doesNotMatch(html, /binding-code|bind-discussion|one-time binding code/i);
+  assert.doesNotMatch(popup, /syndicatum\.bind-discussion|bindingCode/);
+  assert.doesNotMatch(background, /syndicatum\.bind-discussion|binding_code|bindActiveDiscussion/);
+  assert.match(background, /connector-discussion-bindings\.php/);
 });
 
 test("content listener guards against duplicate programmatic injection", async () => {
@@ -42,10 +73,12 @@ test("background keeps realtime alive and stores only metadata in delivery diagn
   assert.doesNotMatch(source, /deliveryHistory[^;]*message\.body/s);
 });
 
-test("ChatGPT adapter confirms the exact injected turn", async () => {
+test("ChatGPT adapter confirms the exact injected turn without capturing its response", async () => {
   const source = await readFile(new URL("providers/chatgpt.js", extensionUrl), "utf8");
   assert.match(source, /matchingUserTurnCount/);
   assert.match(source, /new_exact_user_turn/);
+  assert.doesNotMatch(source, /waitForResponse/);
+  assert.doesNotMatch(source, /responseText: captured/);
   assert.doesNotMatch(source, /userTurnCount\(\) > before/);
 });
 
@@ -59,11 +92,13 @@ test("Gemini adapter confirms the exact injected turn", async () => {
   assert.match(source, /Gemini said/);
 });
 
-test("Gemini responses use a protected binding-scoped return path", async () => {
+test("only Gemini responses use the protected binding-scoped return path", async () => {
   const content = await readFile(new URL("content.js", extensionUrl), "utf8");
   const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
   assert.match(content, /syndicatum\.provider\.accepted/);
   assert.match(background, /connector-agent-replies\.php/);
+  assert.match(background, /item\.provider === "gemini"/);
+  assert.doesNotMatch(background, /\["chatgpt", "gemini"\]\.includes/);
   assert.match(background, /deliveryMetadata/);
   assert.doesNotMatch(background, /deliveryHistory[^;]*responseText/s);
 });

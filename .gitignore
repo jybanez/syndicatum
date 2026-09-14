@@ -1,4 +1,5 @@
-pbb-chat-token.local.json
+pbb-chat-token.local*.json
+companion/dist/
 runtime/
 output/*.sql
 .playwright-cli/

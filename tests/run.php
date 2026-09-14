@@ -478,7 +478,19 @@ try {
         $now = Db::now();
         $statement = $pdo->prepare('INSERT INTO chat_agents (project_name, description, is_active, created_at, updated_at) VALUES (?, ?, 1, ?, ?)');
         $statement->execute(['Claim Project', 'Claim API test', $now, $now]);
-        $claim = $repository->generateClaimCode('Claim Project');
+        $claimAgentId = (int) $pdo->lastInsertId();
+        $pdo->prepare('INSERT INTO users (normalized_email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+            ->execute(['claim-owner@example.test', 'Claim owner', $now, $now]);
+        $claimOwnerId = (int) $pdo->lastInsertId();
+        $pdo->prepare('INSERT INTO workspaces (owner_user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+            ->execute([$claimOwnerId, 'Claim workspace', $now, $now]);
+        $claimWorkspaceId = (int) $pdo->lastInsertId();
+        $pdo->prepare('INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            ->execute([Db::uuidV4(), $claimWorkspaceId, $claimOwnerId, 'Claim API project', 'claim-api-project', $now, $now]);
+        $claimProjectId = (int) $pdo->lastInsertId();
+        $pdo->prepare('INSERT INTO project_agents (project_id, agent_id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$claimProjectId, $claimAgentId, 'Claim Project', $now, $now]);
+        $claim = $repository->generateClaimCode('Claim Project', $claimProjectId);
         $response = httpRequest($baseUrl, 'POST', '/api/claim.php', [], [
             'project_name' => 'Claim Project',
             'claim_code' => $claim['claim_code'],

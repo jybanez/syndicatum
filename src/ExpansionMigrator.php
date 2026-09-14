@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/SettingsService.php';
 
 class ExpansionMigrator
 {
@@ -87,11 +88,11 @@ class ExpansionMigrator
         $legacyMessages = $count('SELECT COUNT(*) FROM chat_entries');
         $canonicalMessages = $count('SELECT COUNT(*) FROM messages WHERE project_id = ? AND legacy_entry_id IS NOT NULL', [$projectId]);
         $legacyRevisions = $count('SELECT COUNT(*) FROM chat_entry_revisions');
-        $canonicalRevisions = $count('SELECT COUNT(*) FROM message_revisions mr JOIN messages m ON m.id = mr.message_id WHERE m.project_id = ?', [$projectId]);
+        $canonicalRevisions = $count('SELECT COUNT(*) FROM message_revisions mr JOIN messages m ON m.id = mr.message_id WHERE m.project_id = ? AND m.legacy_entry_id IS NOT NULL', [$projectId]);
         $legacyRecipients = $count('SELECT COUNT(*) FROM chat_entry_recipients');
-        $directAddressees = $count("SELECT COUNT(*) FROM message_addressees ma JOIN messages m ON m.id = ma.message_id WHERE m.project_id = ? AND ma.reason = 'direct'", [$projectId]);
+        $directAddressees = $count("SELECT COUNT(*) FROM message_addressees ma JOIN messages m ON m.id = ma.message_id WHERE m.project_id = ? AND m.legacy_entry_id IS NOT NULL AND ma.reason = 'direct'", [$projectId]);
         $legacyAgents = $count('SELECT COUNT(*) FROM chat_agents');
-        $projectAgents = $count('SELECT COUNT(*) FROM project_agents WHERE project_id = ?', [$projectId]);
+        $projectAgents = $count('SELECT COUNT(DISTINCT agent_id) FROM project_agents');
         return [
             'project_id' => $projectId,
             'legacy' => ['agents' => $legacyAgents, 'messages' => $legacyMessages, 'revisions' => $legacyRevisions, 'recipients' => $legacyRecipients],
@@ -103,6 +104,71 @@ class ExpansionMigrator
                 'revisions' => $legacyRevisions === $canonicalRevisions,
                 'direct_recipients' => $legacyRecipients === $directAddressees,
             ],
+        ];
+    }
+
+    public function legacyRetirementStatus($observationDays = 30)
+    {
+        $observationDays = max(1, (int) $observationDays);
+        $reconciliation = $this->reconciliation();
+        $usage = ['request_count' => 0, 'first_used_at' => null, 'last_used_at' => null];
+        if (Db::tableExists($this->pdo, 'legacy_api_usage_daily')) {
+            $row = $this->pdo->query(
+                'SELECT COALESCE(SUM(request_count), 0) AS request_count,
+                        MIN(first_used_at) AS first_used_at, MAX(last_used_at) AS last_used_at
+                 FROM legacy_api_usage_daily'
+            )->fetch();
+            if ($row) {
+                $usage = [
+                    'request_count' => (int) $row['request_count'],
+                    'first_used_at' => $row['first_used_at'],
+                    'last_used_at' => $row['last_used_at'],
+                ];
+            }
+        }
+        $legacyWrite = Db::tableExists($this->pdo, 'chat_write_audit')
+            ? $this->pdo->query('SELECT MAX(created_at) FROM chat_write_audit')->fetchColumn()
+            : false;
+        $lastObserved = $usage['last_used_at'];
+        if ($legacyWrite !== false && ($lastObserved === null || strcmp((string) $legacyWrite, (string) $lastObserved) > 0)) {
+            $lastObserved = $legacyWrite;
+        }
+        $quietDays = $lastObserved === null ? 0 : max(0, (int) floor((time() - strtotime($lastObserved . ' UTC')) / 86400));
+
+        $credentials = ['previous_tokens' => 0, 'previous_claims' => 0, 'unknown_tokens' => 0, 'unknown_claims' => 0];
+        if (Db::tableExists($this->pdo, 'agents')) {
+            $credentials = $this->pdo->query(
+                "SELECT
+                    SUM(CASE WHEN is_active = 1 AND token_hash IS NOT NULL AND token_secret_version = 'previous' THEN 1 ELSE 0 END) AS previous_tokens,
+                    SUM(CASE WHEN is_active = 1 AND token_hash IS NULL AND claim_hash IS NOT NULL AND claim_secret_version = 'previous' THEN 1 ELSE 0 END) AS previous_claims,
+                    SUM(CASE WHEN is_active = 1 AND token_hash IS NOT NULL AND token_secret_version IS NULL THEN 1 ELSE 0 END) AS unknown_tokens,
+                    SUM(CASE WHEN is_active = 1 AND token_hash IS NULL AND claim_hash IS NOT NULL AND claim_secret_version IS NULL THEN 1 ELSE 0 END) AS unknown_claims
+                 FROM agents"
+            )->fetch();
+            foreach ($credentials as $key => $value) { $credentials[$key] = (int) $value; }
+        }
+
+        $settings = new SettingsService($this->pdo);
+        $legacyApiEnabled = $settings->get('operations.legacy_api_enabled') === true;
+        $reconciled = !in_array(false, $reconciliation['matches'], true);
+        $credentialsReady = array_sum($credentials) === 0;
+        $quietWindowComplete = $lastObserved !== null && $quietDays >= $observationDays;
+        $blockers = [];
+        if (!$reconciled) { $blockers[] = 'Legacy and canonical reconciliation is not exact.'; }
+        if (!$credentialsReady) { $blockers[] = 'Previous-version or unknown agent credentials remain.'; }
+        if (!$quietWindowComplete) { $blockers[] = 'The required legacy API quiet period is incomplete.'; }
+        if ($legacyApiEnabled) { $blockers[] = 'Legacy API routes are still enabled.'; }
+
+        return [
+            'observation_days_required' => $observationDays,
+            'legacy_api_enabled' => $legacyApiEnabled,
+            'usage' => $usage + ['last_observed_at' => $lastObserved, 'quiet_days' => $quietDays],
+            'credentials' => $credentials,
+            'reconciliation' => $reconciliation,
+            'ready_to_disable_api' => $reconciled && $credentialsReady && $quietWindowComplete,
+            'ready_to_drop_legacy_storage' => !$legacyApiEnabled && $reconciled && $credentialsReady && $quietWindowComplete,
+            'blockers' => $blockers,
+            'captured_at' => date(DATE_ATOM),
         ];
     }
 
@@ -144,10 +210,10 @@ class ExpansionMigrator
         $slug = $slugBase === '' ? 'pbb-coordination' : substr($slugBase, 0, 140);
         $now = Db::now();
         $statement = $this->pdo->prepare(
-            "INSERT INTO projects (workspace_id, owner_user_id, name, slug, description, status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, 'active', ?, ?)"
+            "INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, description, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)"
         );
-        $statement->execute([(int) $owner['workspace_id'], (int) $owner['id'], $projectName, $slug,
+        $statement->execute([Db::uuidV4(), (int) $owner['workspace_id'], (int) $owner['id'], $projectName, $slug,
             'Migrated transparent coordination timeline for existing Syndicatum agents.', $now, $now]);
         $projectId = (int) $this->pdo->lastInsertId();
         $this->pdo->prepare(

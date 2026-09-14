@@ -6,7 +6,7 @@ require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/AgentActivationService.php';
 require_once dirname(__DIR__) . '/src/ConnectorDeviceService.php';
-require_once dirname(__DIR__) . '/src/DiscussionBindingService.php';
+require_once dirname(__DIR__) . '/src/DiscussionBindingIntentService.php';
 require_once dirname(__DIR__) . '/src/ProjectRepository.php';
 
 class AgentActivationTests
@@ -107,7 +107,10 @@ try {
         $pending = $connector->pendingNotifications(['user_id' => $owner['id']], 'chatgpt');
         $suite->same(1, count($pending));
         $suite->same($created['message']['id'], $pending[0]['message']['id']);
-        $suite->true(!isset($pending[0]['message']['body']), 'Recovery notifications must not expose message bodies.');
+        $suite->true(!isset($pending[0]['message']['body']), 'ChatGPT recovery notifications must not expose authoritative message bodies.');
+        $suite->throws(function () use ($connector, $owner, $project, $agent, $created) {
+            $connector->submitAgentReply(['user_id' => $owner['id']], 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id'], 'Browser capture must not post as ChatGPT');
+        });
         $connector->markNotificationDelivered(['user_id' => $owner['id']], 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
         $suite->same(0, count($connector->pendingNotifications(['user_id' => $owner['id']], 'chatgpt')));
         $connector->markNotificationDelivered(['user_id' => $owner['id']], 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
@@ -182,41 +185,49 @@ try {
         });
     });
 
-    $suite->test('one-time discussion codes bind the authenticated device active tab without storing plaintext', function () use ($suite, $service, $project, $agent, $owner, $pdo) {
-        $bindingService = new DiscussionBindingService($pdo);
-        $issued = $bindingService->issue($project['id'], $agent['agent_id'], $owner['id']);
-        $suite->same('gemini', $issued['provider']);
-        $suite->true(strpos($issued['binding_code'], 'syndicatum_binding_') === 0);
-        $stored = $pdo->query('SELECT code_hash, consumed_at FROM connector_discussion_binding_codes ORDER BY id DESC LIMIT 1')->fetch();
-        $suite->same(hash('sha256', $issued['binding_code']), $stored['code_hash']);
-        $suite->same(null, $stored['consumed_at']);
-        $deviceId = Db::uuidV4();
-        $now = Db::now();
-        $pdo->prepare(
-            "INSERT INTO connector_devices
-             (id, user_id, display_name, platform, token_prefix, token_hash, created_at, last_seen_at, expires_at)
-             VALUES (?, ?, 'Test Companion', 'test', 'test', ?, ?, ?, ?)"
-        )->execute([$deviceId, $owner['id'], hash('sha256', 'device-token'), $now, $now, gmdate('Y-m-d H:i:s', time() + 3600)]);
-        $bound = $bindingService->redeem(['id' => $deviceId, 'user_id' => $owner['id']], [
-            'binding_code' => $issued['binding_code'],
-            'provider' => 'gemini',
-            'discussion_reference' => 'https://gemini.google.com/app/bound_discussion?hl=en',
-        ]);
-        $suite->same(true, $bound['enabled']);
-        $suite->same('https://gemini.google.com/app/bound_discussion', $bound['discussion_reference']);
-        $suite->throws(function () use ($bindingService, $issued, $deviceId, $owner) {
-            $bindingService->redeem(['id' => $deviceId, 'user_id' => $owner['id']], [
-                'binding_code' => $issued['binding_code'],
-                'provider' => 'gemini',
-                'discussion_reference' => 'https://gemini.google.com/app/replay_attempt',
-            ]);
-        });
-    });
-
     $suite->test('activation audit metadata does not contain the conversation id or path', function () use ($suite, $pdo) {
         $metadata = $pdo->query("SELECT metadata_json FROM administrative_audit_events WHERE action = 'project.agent_activation_configured' ORDER BY id DESC LIMIT 1")->fetchColumn();
         $suite->true(strpos($metadata, '01a06d4b') === false);
         $suite->true(strpos($metadata, 'chatviewer') === false);
+    });
+
+    $suite->test('MCP intent creates an agent only after Companion confirmation and resolves a successful context', function () use ($suite, $project, $owner, $pdo) {
+        $now = Db::now();
+        $pdo->prepare("INSERT INTO oauth_clients (client_id, client_name, redirect_uris_json, token_endpoint_auth_method, created_at, updated_at)
+            VALUES ('intent-test-client', 'Intent test', '[]', 'none', ?, ?)")->execute([$now, $now]);
+        $placeholder = (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'], ['display_name' => 'OAuth Placeholder', 'provider' => 'chatgpt']);
+        $pdo->prepare("INSERT INTO oauth_access_tokens
+            (token_hash, client_id, user_id, project_id, agent_id, resource_uri, scope_text, created_at, expires_at)
+            VALUES (?, 'intent-test-client', ?, ?, ?, 'https://chatviewer.pbb.ph/mcp', ?, ?, ?)")
+            ->execute([hash('sha256', 'intent-access'), $owner['id'], $project['id'], $placeholder['agent_id'],
+                'projects:read participants:read messages:read messages:write messages:acknowledge', $now, gmdate('Y-m-d H:i:s', time() + 3600)]);
+        $accessTokenId = (int) $pdo->lastInsertId();
+        $access = ['principal_user_id' => $owner['id'], 'access_token_id' => $accessTokenId,
+            'scope' => ['projects:read', 'participants:read', 'messages:read', 'messages:write', 'messages:acknowledge']];
+        $service = new DiscussionBindingIntentService($pdo);
+        $prepared = $service->prepare($access, 'Activation Project', 'Intent Created Agent');
+        $suite->same('create_on_confirmation', $prepared['agent']['action']);
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Intent Created Agent'")->fetchColumn());
+
+        $deviceId = Db::uuidV4();
+        $pdo->prepare("INSERT INTO connector_devices
+            (id, user_id, display_name, platform, token_prefix, token_hash, created_at, last_seen_at, expires_at)
+            VALUES (?, ?, 'Intent Companion', 'test', 'intent', ?, ?, ?, ?)")
+            ->execute([$deviceId, $owner['id'], hash('sha256', 'intent-device'), $now, $now, gmdate('Y-m-d H:i:s', time() + 3600)]);
+        $device = ['id' => $deviceId, 'user_id' => $owner['id']];
+        $suite->same(1, count($service->pending($device)));
+        $confirmed = $service->confirm($device, $prepared['intent_id'], 'https://chatgpt.com/c/intent_created_agent?model=test');
+        $suite->same('Successful', $confirmed['discussion_binding']);
+        $suite->same(true, $confirmed['enabled']);
+        $context = $service->context($access, $prepared['binding_context_id']);
+        $suite->same('Successful', $context['binding']['status']);
+        $suite->same('Intent Created Agent', $context['identity']['agent']['display_name']);
+        $suite->same(0, count($service->pending($device)));
+
+        $cancel = $service->prepare($access, 'Activation Project', 'Cancelled Agent');
+        $service->cancel($device, $cancel['intent_id']);
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Cancelled Agent'")->fetchColumn());
+        $suite->same(null, $service->context($access, $cancel['binding_context_id']));
     });
 
     exit($suite->finish());

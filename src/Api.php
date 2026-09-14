@@ -71,12 +71,38 @@ class Api
 
     public static function enforceLegacyPolicy(PDO $pdo)
     {
+        self::recordLegacyUsage($pdo);
+        header('Deprecation: true');
+        header('Link: </api/v1/projects.php>; rel="successor-version"', false);
         if (!Db::tableExists($pdo, 'system_settings')) {
             return;
         }
         require_once __DIR__ . '/SettingsService.php';
         if ((new SettingsService($pdo))->get('operations.legacy_api_enabled') !== true) {
             self::json(['error' => true, 'code' => 'LEGACY_API_DISABLED', 'message' => 'This legacy API has been retired. Use /api/v1 project routes.'], 410);
+        }
+    }
+
+    private static function recordLegacyUsage(PDO $pdo)
+    {
+        if (!Db::tableExists($pdo, 'legacy_api_usage_daily')) {
+            return;
+        }
+        $path = isset($_SERVER['SCRIPT_NAME']) ? (string) $_SERVER['SCRIPT_NAME'] : '';
+        $path = str_replace('\\', '/', $path);
+        $endpoint = substr($path === '' ? 'unknown' : $path, 0, 120);
+        $method = substr(self::method(), 0, 10);
+        $now = Db::now();
+        try {
+            $statement = $pdo->prepare(
+                'INSERT INTO legacy_api_usage_daily
+                 (usage_date, endpoint, method, request_count, first_used_at, last_used_at)
+                 VALUES (UTC_DATE(), ?, ?, 1, ?, ?)
+                 ON DUPLICATE KEY UPDATE request_count = request_count + 1, last_used_at = VALUES(last_used_at)'
+            );
+            $statement->execute([$endpoint, $method, $now, $now]);
+        } catch (Exception $ignored) {
+            // Observability must never make a compatibility request fail.
         }
     }
 

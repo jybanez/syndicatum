@@ -83,11 +83,13 @@ function surfaceRequest($baseUrl, $method, $path, array $headers = [], $body = n
 
     $headerText = substr($raw, 0, $headerSize);
     $cookies = [];
+    $setCookieHeaders = [];
     foreach (preg_split('/\r\n|\n|\r/', $headerText) as $line) {
         if (stripos($line, 'Set-Cookie:') !== 0) {
             continue;
         }
         $pair = trim(substr($line, strlen('Set-Cookie:')));
+        $setCookieHeaders[] = $pair;
         $pair = explode(';', $pair, 2)[0];
         $equals = strpos($pair, '=');
         if ($equals !== false) {
@@ -99,7 +101,7 @@ function surfaceRequest($baseUrl, $method, $path, array $headers = [], $body = n
     if ($responseBody !== '' && !is_array($decoded)) {
         throw new RuntimeException('Response was not JSON: ' . substr($responseBody, 0, 200));
     }
-    return ['status' => $status, 'body' => $decoded, 'cookies' => $cookies, 'raw' => $responseBody];
+    return ['status' => $status, 'body' => $decoded, 'cookies' => $cookies, 'set_cookie_headers' => $setCookieHeaders, 'raw' => $responseBody];
 }
 
 function surfacePort()
@@ -178,10 +180,12 @@ function surfaceSession(PDO $pdo, $userId, $token, $csrf, $accountSessionId = nu
 
 function surfaceHeaders($token, $csrf = null)
 {
-    $headers = ['Cookie: syndicatum_session=' . rawurlencode($token)];
+    $cookie = 'syndicatum_session=' . rawurlencode($token);
     if ($csrf !== null) {
-        $headers[] = 'X-CSRF-Token: ' . $csrf;
+        $cookie .= '; syndicatum_csrf=' . rawurlencode($csrf);
     }
+    $headers = ['Cookie: ' . $cookie];
+    if ($csrf !== null) { $headers[] = 'X-CSRF-Token: ' . $csrf; }
     return $headers;
 }
 
@@ -191,9 +195,9 @@ function surfaceCreateProject(PDO $pdo, $ownerId, $name)
     $workspace->execute([$ownerId]);
     $now = Db::now();
     $pdo->prepare(
-        "INSERT INTO projects (workspace_id, owner_user_id, name, slug, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'active', ?, ?)"
-    )->execute([(int) $workspace->fetchColumn(), $ownerId, $name, strtolower(str_replace(' ', '-', $name)), $now, $now]);
+        "INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?)"
+    )->execute([Db::uuidV4(), (int) $workspace->fetchColumn(), $ownerId, $name, strtolower(str_replace(' ', '-', $name)), $now, $now]);
     $projectId = (int) $pdo->lastInsertId();
     surfaceAddProjectMember($pdo, $projectId, $ownerId, 'owner');
     return $projectId;
@@ -262,10 +266,203 @@ try {
         $index = file_get_contents($root . '/index.php');
         $suite->true(strpos($source, 'function isBroadcastMessage(') !== false, 'Broadcast detection helper is missing.');
         $suite->true(strpos($source, 'entry.reason || "").toLowerCase() === "broadcast"') !== false, 'Broadcast detection must use addressee reason metadata.');
+        $suite->true(strpos($source, 'message.addressees.length === 0') !== false, 'Historical unaddressed messages must render as project broadcasts.');
+        $suite->true(strpos($source, 'chip.textContent = "Project timeline";') === false, 'Unaddressed messages must not render as a separate timeline addressing mode.');
         $suite->true(strpos($source, 'chip.textContent = "Project broadcast";') !== false, 'Broadcasts must collapse participant chips into one broadcast label.');
         $suite->true(strpos($source, 'identity.append(identityLine, renderAddresseeChips(current));') !== false, 'Message addressee chips must render under the sender identity.');
         $suite->true(strpos($source, 'footer.appendChild(chips);') === false, 'Message addressee chips must not render in the footer action row.');
         $suite->true(strpos($index, 'Everyone active in this project will be notified.') !== false, 'Composer broadcast warning must not describe broadcasts as response tagging.');
+    });
+
+    $suite->test('Message composer precedes filters and the newest-first timeline', function () use ($suite, $root) {
+        $index = file_get_contents($root . '/index.php');
+        $messagesColumn = strpos($index, 'class="surface-column project-messages-column"');
+        $overview = strpos($index, 'class="project-overview timeline-project-overview"');
+        $composer = strpos($index, 'id="composer-shell"');
+        $filters = strpos($index, 'class="filter-bar"');
+        $timeline = strpos($index, 'id="timeline-host"');
+        $suite->true($messagesColumn !== false && $overview !== false && $composer !== false && $filters !== false && $timeline !== false, 'Project message controls are missing.');
+        $suite->true($messagesColumn < $overview && $overview < $composer && $composer < $filters && $filters < $timeline, 'The project overview must replace the timeline header above the composer, filters, and timeline.');
+        $suite->same(1, substr_count($index, 'class="project-overview timeline-project-overview"'), 'The project overview must render only in the message column.');
+    });
+
+    $suite->test('Timeline search stays visible while structured filters use the Helper popover', function () use ($suite, $root) {
+        $index = file_get_contents($root . '/index.php');
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $loader = file_get_contents($root . '/vendor/pbb-helper/js/ui/ui.loader.js');
+        $search = strpos($index, 'id="search-mount"');
+        $trigger = strpos($index, 'id="filter-popover-trigger"');
+        $refresh = strpos($index, 'id="refresh-button"');
+        $panel = strpos($index, 'id="filter-popover-content"');
+        $suite->true($search !== false && $trigger !== false && $refresh !== false && $panel !== false, 'Timeline search or action markup is missing.');
+        $suite->true($search < $trigger && $trigger < $refresh && $refresh < $panel, 'Search must remain visible with adjacent filter and refresh actions.');
+        $suite->true(strpos($source, 'createPopover: await uiLoader.get("ui.popover", options)') !== false, 'Timeline filters must use the supported Helper popover factory.');
+        $suite->true(strpos($source, 'state.components.filterPopover = state.factories.createPopover') !== false, 'Timeline filters must mount through the Helper popover.');
+        $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
+        $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
+        $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.174";') !== false, 'The vendored Helper bundle must include the approved agent-icon release.');
+    });
+
+    $suite->test('Reply context cannot widen the message composer', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, 'copy.className = "reply-context-copy";') !== false, 'Reply previews need a dedicated constrained text element.');
+        $suite->true(strpos($styles, '.composer-shell { display: grid; width: 100%; max-width: 100%; min-width: 0;') !== false, 'The composer shell must be constrained to its grid column.');
+        $suite->true(strpos($styles, '.reply-context-copy { display: block; flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }') !== false, 'Long reply previews must shrink and ellipsize.');
+    });
+
+    $suite->test('Reply automatically addresses its sender and temporarily hides addressing controls', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $index = file_get_contents($root . '/index.php');
+        $suite->true(strpos($index, 'class="addressing-row" id="addressing-row"') !== false, 'The addressing controls need a stable visibility target.');
+        $suite->true(strpos($source, 'state.draft.addressees = senderId && senderId !== currentParticipantId ? [senderId] : fallbackRecipients;') !== false, 'Reply must automatically select the original sender.');
+        $suite->true(strpos($source, 'el.addressing_row.hidden = hasAutomaticReplyRecipient;') !== false, 'Automatic reply addressing must hide the redundant controls.');
+        $suite->true(strpos($source, 'function restoreNormalAddressing()') !== false, 'Cancelling or sending a reply must restore the previous addressing state.');
+    });
+
+    $suite->test('Project overview uses one upper-right action menu without status chrome', function () use ($suite, $root) {
+        $index = file_get_contents($root . '/index.php');
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($index, 'id="project-actions-trigger"') !== false, 'The project overview action-menu trigger is missing.');
+        $suite->true(strpos($index, '<p class="ui-eyebrow">Project</p>') === false, 'The redundant Project eyebrow must not render.');
+        $suite->true(strpos($index, 'class="ui-badge" id="status-badge"') === false, 'Realtime state must not render as a visible pill.');
+        $suite->true(strpos($source, 'state.components.projectActions = state.factories.createDropdown') !== false, 'Project management actions must use the supported Helper dropdown.');
+        $suite->true(strpos($source, 'helperIconHtml("actions.more-horizontal", 18)') !== false, 'The project menu must use the shared Helper icon.');
+    });
+
+    $suite->test('Project routes use public UUIDs while API state retains internal IDs', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'updateApplicationRoute("project", state.project.public_id || nextId, historyMode);') !== false, 'Project routes must prefer the public UUID.');
+        $suite->true(substr_count($source, 'project.public_id ===') >= 2, 'Initial navigation and browser history must resolve public UUID routes.');
+        $suite->true(strpos($source, 'switchProject(requestedProject.id') !== false, 'Public routes must resolve back to the authorized internal project ID.');
+    });
+
+    $suite->test('UTC message timestamps render and filter in the browser local timezone', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'function normalizeUtcTimestamp(value)') !== false, 'UTC timestamp normalization is missing.');
+        $suite->true(strpos($source, 'timezoneLessDateTime.test(normalized) ? `${normalized}Z` : normalized') !== false, 'Timezone-less database timestamps must be marked as UTC without changing explicit offsets.');
+        $suite->true(strpos($source, 'created_at: created,') !== false, 'Normalized UTC timestamps must reach the timeline.');
+        $suite->true(strpos($source, 'new Intl.DateTimeFormat(undefined') !== false, 'Displayed timestamps must use the browser locale and timezone.');
+        $suite->true(strpos($source, 'const day = localDateKey(message.created_at);') !== false, 'Date filters must compare the user-local calendar date.');
+    });
+
+    $suite->test('Composer validation uses the Helper alert dialog instead of a toast', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, '"ui.dialog.alert"') !== false, 'The Helper alert dialog must be loaded.');
+        $suite->true(strpos($source, 'uiAlert: await uiLoader.get("ui.dialog.alert", options)') !== false, 'The Helper alert factory must be resolved through the loader.');
+        $suite->true(strpos($source, 'await state.factories.uiAlert("Select at least one expected responder, or choose Broadcast."') !== false, 'Missing addressees must open an alert dialog.');
+        $suite->true(strpos($source, 'if (error.status === 422)') !== false, 'API validation failures must be handled separately from operational failures.');
+        $suite->true(strpos($source, 'title: "Message needs attention"') !== false, 'API validation alerts need a clear title.');
+        $suite->true(strpos($source, 'toast.warn("Select at least one expected responder') === false, 'Composer validation must not fall back to the low-visibility toast.');
+    });
+
+    $suite->test('Real avatars replace the colored initials fallback', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $avatarStart = strpos($source, 'function makeAvatar(');
+        $avatarEnd = strpos($source, "\n}\n", $avatarStart);
+        $suite->true($avatarStart !== false && $avatarEnd !== false, 'Avatar rendering implementation is missing.');
+        $avatar = substr($source, $avatarStart, $avatarEnd - $avatarStart);
+        $suite->true(strpos($avatar, 'if (participant.avatar_url)') !== false, 'Avatar rendering must distinguish uploaded images from fallbacks.');
+        $suite->true(strpos($avatar, 'image.addEventListener("error", () => image.replaceWith(fallback)') !== false, 'Broken avatar images must restore the initials fallback.');
+        $suite->true(strpos($avatar, '} else {') !== false && strpos($avatar, 'wrap.appendChild(fallback);') !== false, 'The filled fallback must render only when no avatar exists.');
+        $suite->true(strpos($styles, '.participant-avatar img { display: block; object-fit: cover; background: transparent; }') !== false, 'Real avatar images must render without a fallback-colored background.');
+    });
+
+    $suite->test('Human avatars do not carry a redundant kind badge', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, 'if (participant.kind === "agent")') !== false, 'Kind badges must be limited to agents.');
+        $suite->true(strpos($source, 'badge.className = "participant-kind-mark is-agent-icon"') !== false && strpos($source, 'helperIconHtml("people.agent", 11)') !== false, 'Agents must use the shared Helper robot identifier.');
+        $suite->true(strpos($source, 'badge.setAttribute("aria-label", "Agent")') !== false, 'The agent marker must retain an accessible label.');
+        $suite->true(strpos($source, 'participant.kind === "agent" ? "A" : "H"') === false, 'Human avatars must not render an H badge.');
+        $suite->true(strpos($styles, '.participant-avatar.is-human .participant-kind-mark') === false, 'Human badge styling must be removed.');
+        $suite->true(strpos($styles, '.participant-kind-mark.is-agent-icon svg') !== false, 'The shared robot marker needs compact badge styling.');
+        $suite->true(strpos(file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'), 'people.agent') !== false, 'The vendored Helper bundle must expose people.agent.');
+    });
+
+    $suite->test('Agent editing shows immediate Helper busy feedback while details load', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $start = strpos($source, 'async function openEditAgentModal(agent)');
+        $end = strpos($source, "\nfunction adminRows(", $start);
+        $suite->true($start !== false && $end !== false, 'Agent editor implementation is missing.');
+        $editor = substr($source, $start, $end - $start);
+        $overlay = strpos($editor, 'state.factories.createBusyOverlay({');
+        $firstRequest = strpos($editor, 'await request(');
+        $suite->true($overlay !== false && $firstRequest !== false && $overlay < $firstRequest, 'The busy overlay must appear before the first agent-detail request.');
+        $suite->true(strpos($editor, 'finally {') !== false && strpos($editor, 'loadingOverlay.destroy();') !== false, 'The busy overlay must always be removed.');
+        $suite->true(strpos($source, '"ui.busy.overlay"') !== false, 'The Helper busy overlay must be loaded through ui.loader.');
+        $suite->true(strpos($source, 'createBusyOverlay: await uiLoader.get("ui.busy.overlay", options)') !== false, 'The app must use the Helper busy-overlay factory.');
+    });
+
+    $suite->test('Agent forms expose Gemini browser companion configuration', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'function isBrowserCompanionProvider(provider)') !== false, 'Browser companion providers need shared form behavior.');
+        $suite->true(strpos($source, '"gemini_discussion_reference", "Gemini discussion URL"') !== false, 'Gemini discussion URL fields are missing.');
+        $suite->true(strpos($source, 'https://gemini.google.com/app/...') !== false, 'Gemini needs its canonical discussion URL example.');
+        $suite->true(strpos($source, 'The Gemini discussion must have access to the Syndicatum integration') !== false, 'Gemini outbound-only requirements must be visible to administrators.');
+    });
+
+    $suite->test('ChatGPT MCP exposes a read-only connection diagnostic', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/mcp.php');
+        $docs = file_get_contents($root . '/docs/chatgpt-plugin.md');
+        $suite->true(strpos($source, "'diagnose_connection' => 'projects:read'") !== false, 'The diagnostic must require only project read access.');
+        $suite->true(strpos($source, "'mcp_request_received' => true") !== false, 'The diagnostic must confirm that the server received the MCP call.');
+        $suite->true(strpos($source, "'authentication_valid' => true") !== false, 'The diagnostic must report successful authentication.');
+        $suite->true(strpos($source, "'project_access_valid' => \$bindingContext !== null") !== false, 'Project authorization must be reported only for a successful discussion binding.');
+        $suite->true(strpos($source, "'discussion_binding' => \$bindingContext ? 'Successful' : 'Required'") !== false, 'The diagnostic must distinguish Successful from Required discussion binding.');
+        $suite->true(strpos($source, "'prepare_discussion_binding'") !== false, 'The MCP binding preparation tool is missing.');
+        $suite->true(strpos($source, "'readOnlyHint' => true") !== false, 'Read tools must retain their read-only annotation.');
+        $suite->true(strpos($docs, '@Syndicatum diagnose connection') !== false, 'The user-facing diagnostic prompt must be documented.');
+        $suite->true(strpos($docs, 'client-side denial') !== false, 'The documentation must distinguish client-side denial from a server outage.');
+    });
+
+    $suite->test('Health identifies a compatible Syndicatum connector server', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/api/v1/health.php');
+        $suite->true(strpos($source, "'id' => 'syndicatum'") !== false, 'Health must expose the Syndicatum service identity.');
+        $suite->true(strpos($source, "'protocol' => 'syndicatum-connector-v1'") !== false, 'Health must expose the connector discovery protocol.');
+        $suite->true(strpos($source, "'connector_device_authorization' => true") !== false, 'Health must advertise device authorization capability.');
+    });
+
+    $suite->test('Project participant controls expose guarded human and agent removal actions', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'function confirmMemberRemoval(participant, managerModal)') !== false, 'Human removal confirmation is missing.');
+        $suite->true(strpos($source, 'method: "DELETE"') !== false && strpos($source, 'API.projectMembers') !== false, 'Human removal must call the project-members DELETE endpoint.');
+        $suite->true(strpos($source, 'participant.role !== "owner"') !== false, 'The owner removal action must not be presented.');
+        $suite->true(strpos($source, 'function confirmAgentRemoval(agent, editModal)') !== false, 'Agent removal confirmation is missing.');
+        $suite->true(strpos($source, 'id: "remove-agent", label: "Remove from project"') !== false, 'Agent actions must expose removal.');
+        $suite->true(substr_count(strtolower($source), 'timeline messages will remain visible.') >= 2, 'Both confirmation dialogs must explain timeline retention.');
+    });
+
+    $suite->test('Project selection shows immediate Helper busy feedback while the project loads', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $start = strpos($source, 'async function openWorkspaceProject(project, trigger)');
+        $end = strpos($source, "\nfunction modalTextField(", $start);
+        $suite->true($start !== false && $end !== false, 'The workspace project selection handler is missing.');
+        $selection = substr($source, $start, $end - $start);
+        $overlay = strpos($selection, 'state.factories.createBusyOverlay({');
+        $projectLoad = strpos($selection, 'await switchProject(project.id);');
+        $suite->true($overlay !== false && $projectLoad !== false && $overlay < $projectLoad, 'The busy overlay must appear before project loading begins.');
+        $suite->true(strpos($selection, 'trigger.disabled = true;') !== false, 'The selected project must reject duplicate clicks while loading.');
+        $suite->true(strpos($selection, 'finally {') !== false && strpos($selection, 'loadingOverlay.destroy();') !== false, 'The project-selection overlay must always be removed.');
+        $suite->true(strpos($source, 'card.addEventListener("click", () => void openWorkspaceProject(project, card));') !== false, 'Workspace project cards must use the feedback-enabled selection handler.');
+    });
+
+    $suite->test('Agent credential handoff provides inline copy actions with success feedback', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, 'helperIconHtml("actions.copy", 18)') !== false, 'Credential copy actions must use the shared Helper copy icon.');
+        $suite->true(strpos($source, 'mountCredentialCopyAction(modal, ".claim-code-copy-row", claimCode') !== false, 'The claim code needs its own copy action.');
+        $suite->true(strpos($source, 'mountCredentialCopyAction(modal, ".agent-message-copy-row", agentInstruction') !== false, 'The agent instruction needs its own copy action.');
+        $suite->true(strpos($source, 'await navigator.clipboard.writeText(value);') !== false, 'Copy actions must use the browser Clipboard API.');
+        $suite->true(strpos($source, 'state.components.toast.success(successMessage);') !== false, 'Successful copies must show a toast.');
+        $suite->true(strpos($source, 'with this one-time claim code: ${claimCode}') !== false, 'The copied agent instruction must contain the actual claim code.');
+        $suite->true(strpos($source, 'plugin tool claim_agent_profile') !== false, 'The copied agent instruction must name the local Codex claim tool.');
+        $suite->true(strpos($source, 'Do not use the ChatGPT OAuth-connected Syndicatum app') !== false, 'The copied agent instruction must distinguish the Codex claim tool from the ChatGPT OAuth app.');
+        $suite->true(strpos($source, 'Do not enter this claim code in ChatGPT or the Companion') !== false, 'ChatGPT browser delivery must not be presented as a claim-code flow.');
+        $suite->true(strpos($source, 'Do not enter this claim code in Gemini or the Companion') !== false, 'Gemini browser delivery must not be presented as a claim-code flow.');
+        $suite->true(strpos($source, 'browser delivery does not use it') !== false, 'Browser-provider handoffs must explain that claim codes are unrelated to delivery.');
+        $suite->true(strpos($styles, '.agent-credential-copy-row { display: grid;') !== false, 'Credential copy actions must remain aligned beside wrapping text.');
     });
 
     $nativePassword = 'native password one';
@@ -333,6 +530,16 @@ try {
         $suite->same(200, $normal['status']);
         $suite->same(true, $normal['body']['data']['authenticated']);
         $suite->same(true, $normal['body']['data']['user']['has_native_password']);
+        $persistentHeaders = array_values(array_filter($normal['set_cookie_headers'], function ($header) {
+            return stripos($header, AuthService::SESSION_COOKIE . '=') === 0
+                || stripos($header, AuthService::CSRF_COOKIE . '=') === 0;
+        }));
+        $suite->same(2, count($persistentHeaders), 'Authenticated use must renew both browser cookies.');
+        foreach ($persistentHeaders as $header) {
+            $suite->true(stripos($header, 'Expires=') !== false, 'Persistent cookie is missing Expires.');
+            $suite->true(preg_match('/Max-Age=([0-9]+)/i', $header, $match) === 1, 'Persistent cookie is missing Max-Age.');
+            $suite->true((int) $match[1] >= AuthService::PERSISTENT_COOKIE_LIFETIME_SECONDS - 5, 'Persistent cookie lifetime is unexpectedly short.');
+        }
         surfaceAssertCapabilities($suite, $normal['body']['capabilities'], [
             'workspace.view' => true, 'project.create' => true,
             'admin.users' => false, 'admin.agents' => false, 'admin.audit' => false, 'admin.settings' => false,
@@ -391,6 +598,13 @@ try {
         $suite->same(200, $providers['status'], $providers['raw']);
         $suite->same('codex', $providers['body']['data'][0]['code']);
         $suite->same('Codex discussion deeplink', $providers['body']['data'][0]['reference_label']);
+        $suite->same('chatgpt', $providers['body']['data'][1]['code']);
+        $suite->same(true, $providers['body']['data'][1]['proactive_activation']);
+        $suite->same('browser_companion', $providers['body']['data'][1]['activation_kind']);
+        $suite->same(false, $providers['body']['data'][1]['working_directory_supported']);
+        $suite->same('gemini', $providers['body']['data'][2]['code']);
+        $suite->same(true, $providers['body']['data'][2]['proactive_activation']);
+        $suite->same('browser_companion', $providers['body']['data'][2]['activation_kind']);
         $suite->same(200, $initial['status'], $initial['raw']);
         $suite->same(false, $initial['body']['data']['enabled']);
         $suite->same(404, $member['status']);
@@ -448,6 +662,15 @@ try {
         $suite->same($adminBefore, $pdo->query('SELECT display_name FROM users WHERE id = ' . $adminId)->fetchColumn());
         $roles = $pdo->query('SELECT COUNT(*) FROM user_system_roles ur JOIN system_roles r ON r.id = ur.role_id WHERE ur.user_id = ' . $memberId . " AND r.code = 'administrator'")->fetchColumn();
         $suite->same(0, (int) $roles);
+    });
+
+    $suite->test('Google account linking requires an authenticated human session and CSRF', function () use ($suite, $baseUrl, $tokens, $csrf) {
+        $anonymous = surfaceRequest($baseUrl, 'POST', '/api/v1/google-link.php', [], ['return_path' => '/']);
+        $missingCsrf = surfaceRequest($baseUrl, 'POST', '/api/v1/google-link.php', surfaceHeaders($tokens['member']), ['return_path' => '/']);
+        $disabled = surfaceRequest($baseUrl, 'POST', '/api/v1/google-link.php', surfaceHeaders($tokens['member'], $csrf['member']), ['return_path' => '/']);
+        $suite->same(401, $anonymous['status']);
+        $suite->same(403, $missingCsrf['status']);
+        $suite->same(409, $disabled['status']);
     });
 
     $suite->test('native password rejects bad verification, mismatch, and weak replacement without mutation', function () use ($suite, $baseUrl, $pdo, $tokens, $csrf, $memberId, $nativePassword) {

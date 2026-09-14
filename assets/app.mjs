@@ -1,5 +1,13 @@
 import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
 
+const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
+const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
+const MORE_ACTIONS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.75" fill="currentColor"></circle><circle cx="12" cy="12" r="1.75" fill="currentColor"></circle><circle cx="19" cy="12" r="1.75" fill="currentColor"></circle></svg>';
+const CLAIM_CODE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 14a4.5 4.5 0 1 1 3.9-6.75l7.35.01v3h-2v2h-3v2H11.4A4.48 4.48 0 0 1 7.5 14Zm0-3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"></path></svg>';
+const SIGNING_SECRET_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v5.6c0 4.8 3.08 9.16 7.5 10.4 4.42-1.24 7.5-5.6 7.5-10.4V5L12 2Zm0 3.23 4.5 1.8v3.57c0 3.25-1.84 6.35-4.5 7.35-2.66-1-4.5-4.1-4.5-7.35V7.03L12 5.23Z" fill="currentColor"></path></svg>';
+const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+const APP_BASE_PATH = new URL(document.baseURI).pathname.replace(/\/$/, "");
+
 const API = {
   session: "api/v1/session.php",
   projects: "api/v1/projects.php",
@@ -10,10 +18,12 @@ const API = {
   settings: "api/v1/admin/settings.php",
   integrationTest: "api/v1/admin/integration-test.php",
   profile: "api/v1/profile.php",
+  googleLink: "api/v1/google-link.php",
   password: "api/v1/password.php",
   workspace: "api/v1/workspace.php",
   manageProjects: "api/v1/manage-projects.php",
   projectInvitations: "api/v1/project-invitations.php",
+  projectMembers: "api/v1/project-members.php",
   projectAgents: "api/v1/project-agents.php",
   projectAgentWebhook: "api/v1/project-agent-webhook.php",
   projectAgentActivation: "api/v1/project-agent-activation.php",
@@ -36,7 +46,7 @@ const state = {
   participants: [],
   messages: [],
   filters: { primary: "all", q: "", sender: "", from: "", to: "" },
-  draft: { mode: "direct", addressees: [], replyTo: null, idempotencyKey: "" },
+  draft: { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
   newestCursor: "",
   hasOlder: false,
@@ -60,9 +70,10 @@ const el = Object.fromEntries([
   "workspace-profile-avatar", "workspace-profile-name", "workspace-profile-details", "workspace-name", "edit-profile-button", "change-password-button", "rename-workspace-button",
   "workspace-project-count", "project-search-mount", "workspace-project-list", "add-project-button",
   "status-badge", "project-title", "project-description", "project-instructions", "participant-count", "participant-list",
-  "participant-search", "project-management-actions", "connection-label",
+  "participant-search", "project-actions-trigger", "project-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
-  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
+  "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
+  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
   "admin-title", "admin-list", "admin-refresh-button",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
@@ -95,6 +106,13 @@ async function request(url, options = {}) {
   return payload;
 }
 
+function redirectWithBusy(context, url, message = "Opening Google sign in...") {
+  context?.clearFormError?.();
+  context?.setBusy?.(true, { message });
+  requestAnimationFrame(() => requestAnimationFrame(() => location.assign(url)));
+  return false;
+}
+
 function makeIdempotencyKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -124,6 +142,14 @@ function hashColor(value) {
   return [0, 8, 16].map((shift) => (96 + ((hash >>> shift) & 95)).toString(16).padStart(2, "0")).join("");
 }
 
+function normalizeUtcTimestamp(value) {
+  const timestamp = String(value || "").trim();
+  if (!timestamp) return "";
+  const normalized = timestamp.includes("T") ? timestamp : timestamp.replace(" ", "T");
+  const timezoneLessDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+  return timezoneLessDateTime.test(normalized) ? `${normalized}Z` : normalized;
+}
+
 function normalizeMessage(source = {}) {
   const senderSource = source.sender && typeof source.sender === "object"
     ? source.sender
@@ -144,7 +170,7 @@ function normalizeMessage(source = {}) {
       acknowledged_at: target.acknowledged_at || null,
     };
   });
-  const created = source.created_at || source.timestamp || source.message_timestamp || new Date().toISOString();
+  const created = normalizeUtcTimestamp(source.created_at || source.timestamp || source.message_timestamp) || new Date().toISOString();
   const currentParticipantId = id(state.project?.current_participant?.id || state.session?.participant?.id);
   const ownAddress = addressees.find((entry) => entry.participant_id === currentParticipantId);
   return {
@@ -152,8 +178,8 @@ function normalizeMessage(source = {}) {
     id: id(source.id ?? source.entry_uuid ?? source.db_id),
     sequence: Number(source.sequence ?? source.project_sequence ?? source.index ?? source.db_id ?? 0),
     body: String(source.body || ""),
-    created_at: created.includes("T") ? created : created.replace(" ", "T"),
-    updated_at: source.updated_at || created,
+    created_at: created,
+    updated_at: normalizeUtcTimestamp(source.updated_at) || created,
     sender: participantFrom(senderSource),
     addressees,
     reply_to: source.reply_to || source.reply || null,
@@ -170,8 +196,8 @@ function normalizeMessage(source = {}) {
 
 function isBroadcastMessage(message = {}) {
   return Array.isArray(message.addressees)
-    && message.addressees.length > 0
-    && message.addressees.every((entry) => String(entry.reason || "").toLowerCase() === "broadcast");
+    && (message.addressees.length === 0
+      || message.addressees.every((entry) => String(entry.reason || "").toLowerCase() === "broadcast"));
 }
 
 function sortAndDedupe(messages) {
@@ -184,6 +210,38 @@ function sortAndDedupe(messages) {
 
 function selectedProjectId() {
   return id(state.project?.id || state.project?.project_id);
+}
+
+function applicationPath(path = "") {
+  const suffix = String(path || "").replace(/^\/+/, "");
+  return `${APP_BASE_PATH}/${suffix}`;
+}
+
+function routeForSurface(surface, projectId = "") {
+  if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
+  if (["users", "agents", "audit"].includes(surface)) return applicationPath(surface);
+  return applicationPath();
+}
+
+function currentApplicationRoute() {
+  const pathname = location.pathname.startsWith(`${APP_BASE_PATH}/`)
+    ? location.pathname.slice(APP_BASE_PATH.length)
+    : location.pathname;
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] === "projects" && parts[1]) {
+    try { return { surface: "project", projectId: decodeURIComponent(parts[1]) }; }
+    catch (_error) { return { surface: "workspace", projectId: "" }; }
+  }
+  if (["users", "agents", "audit"].includes(parts[0])) return { surface: parts[0], projectId: "" };
+  const legacyProjectId = new URLSearchParams(location.search).get("project") || "";
+  return legacyProjectId ? { surface: "project", projectId: legacyProjectId } : { surface: "workspace", projectId: "" };
+}
+
+function updateApplicationRoute(surface, projectId = "", historyMode = "push") {
+  if (historyMode === "none") return;
+  const path = routeForSurface(surface, projectId);
+  if (`${location.pathname}${location.search}` === path) return;
+  history[historyMode === "replace" ? "replaceState" : "pushState"]({ surface, projectId }, "", path);
 }
 
 function can(permission) {
@@ -204,7 +262,12 @@ function capability(name, fallback = false) {
 
 function accountUsesNativePassword() {
   const user = state.session?.user || {};
-  return user.authentication_source !== "pbb_account" && user.auth_source !== "pbb_account" && user.has_native_password !== false;
+  return user.has_native_password !== false;
+}
+
+function usesPbbAccount() {
+  const user = state.session?.user || {};
+  return ["account", "pbb_account"].includes(String(user.authentication_source || user.auth_source || "").toLowerCase());
 }
 
 function openAccountProfile() {
@@ -215,27 +278,59 @@ function openAccountProfile() {
 
 function navbarAvatarHtml() {
   const user = participantFrom({ ...(state.session?.user || {}), kind: "human" }, "human");
-  return makeAvatar(user, "sm").outerHTML;
+  const name = user.display_name || "Account";
+  if (user.avatar_url) {
+    const image = document.createElement("img");
+    image.className = "navbar-account-avatar";
+    image.src = user.avatar_url;
+    image.alt = `${name} profile photo`;
+    image.referrerPolicy = "no-referrer";
+    return image.outerHTML;
+  }
+
+  const fallback = document.createElement("span");
+  fallback.className = "navbar-account-avatar is-initials";
+  fallback.setAttribute("aria-hidden", "true");
+  fallback.textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "?";
+  fallback.style.background = `#${user.color_seed}`;
+  return fallback.outerHTML;
+}
+
+function helperIconHtml(name, size = 14) {
+  if (!state.factories.createIcon) return "";
+  try {
+    return state.factories.createIcon(name, { size, decorative: true })?.outerHTML || "";
+  } catch (_error) {
+    return "";
+  }
 }
 
 function mountNavbar() {
   if (!state.factories.createNavbar) return;
   const items = [];
-  if (state.mode === "expanded" && capability("workspace.view", true)) items.push({ id: "workspace", label: "Workspace" });
-  if (state.surface === "project" && state.project) items.push({ id: "project", label: state.project.name });
-  if (state.mode === "expanded" && capability("admin.users")) items.push({ id: "users", label: "Users" });
-  if (state.mode === "expanded" && capability("admin.agents")) items.push({ id: "agents", label: "Agents" });
-  if (state.mode === "expanded" && capability("admin.audit")) items.push({ id: "audit", label: "Audit" });
+  if (state.mode === "expanded" && capability("workspace.view", true)) items.push({ id: "workspace", label: "Home", icon: helperIconHtml("navigation.home"), className: "ui-button-borderless" });
+  if (state.surface === "project" && state.project) items.push({ id: "project", label: state.project.name, icon: helperIconHtml("data.grid"), className: "ui-button-borderless" });
+  if (state.mode === "expanded" && capability("admin.users")) items.push({ id: "users", label: "Users", icon: helperIconHtml("people.users"), className: "ui-button-borderless" });
+  if (state.mode === "expanded" && capability("admin.agents")) items.push({ id: "agents", label: "Agents", icon: helperIconHtml("comms.radio"), className: "ui-button-borderless" });
+  if (state.mode === "expanded" && capability("admin.audit")) items.push({ id: "audit", label: "Audit", icon: helperIconHtml("time.history"), className: "ui-button-borderless" });
   const actions = [];
-  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) actions.push({ id: "settings", label: "System Settings" });
+  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) actions.push({
+    id: "settings",
+    label: "System Settings",
+    icon: helperIconHtml("actions.settings"),
+    iconOnly: true,
+    className: "ui-button-borderless",
+  });
   if (state.mode === "expanded") actions.push({
     id: "account",
     label: state.session?.user?.display_name || "Account",
     icon: navbarAvatarHtml(),
+    iconOnly: true,
+    className: "ui-button-borderless",
     menuItems: [
       { id: "profile", label: "Profile" },
       ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password" }] : []),
-      ...(!accountUsesNativePassword() ? [{ id: "account-profile", label: "Manage PBB Account" }] : []),
+      ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account" }] : []),
       { id: "signout", label: "Sign out", danger: true },
     ],
   });
@@ -243,6 +338,7 @@ function mountNavbar() {
   state.components.navbar = state.factories.createNavbar(el.navbar_host, {}, {
     brandText: "Syndicatum",
     brandSubtitle: state.surface === "project" && state.project ? state.project.name : "Human + agent collaboration",
+    brandMedia: SYNDICATUM_BRAND_ICON,
     className: "syndicatum-navbar-single-row",
     activeId: state.surface,
     items,
@@ -272,21 +368,27 @@ function makeAvatar(participant, size = "md") {
   fallback.className = "participant-avatar-fallback";
   fallback.textContent = initials;
   fallback.style.background = `#${participant.color_seed}`;
-  wrap.appendChild(fallback);
   if (participant.avatar_url) {
     const image = document.createElement("img");
     image.src = participant.avatar_url;
     image.alt = "";
     image.loading = "lazy";
     image.referrerPolicy = "no-referrer";
-    image.addEventListener("error", () => image.remove(), { once: true });
+    image.addEventListener("error", () => image.replaceWith(fallback), { once: true });
     wrap.appendChild(image);
+  } else {
+    wrap.appendChild(fallback);
   }
-  const badge = document.createElement("span");
-  badge.className = "participant-kind-mark";
-  badge.textContent = participant.kind === "agent" ? "A" : "H";
-  badge.title = participant.kind === "agent" ? "Agent" : "Human";
-  wrap.appendChild(badge);
+  if (participant.kind === "agent") {
+    const badge = document.createElement("span");
+    badge.className = "participant-kind-mark is-agent-icon";
+    const agentIcon = helperIconHtml("people.agent", 11);
+    if (agentIcon) badge.innerHTML = agentIcon;
+    else badge.textContent = "A";
+    badge.title = "Agent";
+    badge.setAttribute("aria-label", "Agent");
+    wrap.appendChild(badge);
+  }
   return wrap;
 }
 
@@ -321,34 +423,118 @@ function showLogin(message = "") {
   el.app_shell.hidden = true;
   const returnPath = requestedReturnPath();
   const accountEnabled = Boolean(state.session?.capabilities?.account_sso || state.session?.capabilities?.pbb_account);
+  const googleEnabled = Boolean(state.session?.capabilities?.google_sso);
+  const extraActions = [];
+  if (googleEnabled) extraActions.push({
+    id: "google",
+    label: "Sign in with Google",
+    ariaLabel: "Sign in with Google",
+    icon: GOOGLE_SIGN_IN_ICON,
+    className: "syndicatum-google-button",
+    variant: "ghost",
+    closeOnClick: false,
+    onClick(_values, context) {
+      const url = returnPath ? `auth/google.php?return=${encodeURIComponent(returnPath)}` : "auth/google.php";
+      return redirectWithBusy(context, url);
+    },
+  });
+  if (accountEnabled) extraActions.push({
+    id: "pbb-account",
+    label: "Continue with PBB Account",
+    variant: "ghost",
+    closeOnClick: false,
+    onClick() {
+      location.assign(returnPath ? `auth/account.php?return=${encodeURIComponent(returnPath)}` : "auth/account.php");
+      return false;
+    },
+  });
   const options = {
     title: "Welcome to Syndicatum",
+    className: "syndicatum-login-modal",
+    size: accountEnabled && googleEnabled ? "md" : "sm",
     message: message || "Sign in to collaborate with the humans and agents in your projects.",
+    mediaUrl: "assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852",
+    mediaAlt: "Syndicatum",
+    backgroundTone: "none",
     identifierKind: "username",
     identifierLabel: "Email or username",
     identifierPlaceholder: "Enter email or username",
     fields: { identifier: "identity", password: "password" },
     submitLabel: "Sign in",
+    cancelLabel: state.session?.capabilities?.self_registration === false ? "Cancel" : "Register",
     busyMessage: "Signing in...",
     closeOnBackdrop: false,
     closeOnEscape: false,
     showCloseButton: false,
     extraActionsPlacement: "start",
-    extraActions: accountEnabled ? [{
-      id: "pbb-account",
-      label: "Continue with PBB Account",
-      variant: "ghost",
-      closeOnClick: false,
-      onClick() {
-        location.assign(returnPath ? `auth/account.php?return=${encodeURIComponent(returnPath)}` : "auth/account.php");
-        return false;
-      },
-    }] : [],
+    extraActions,
     onSubmit: submitLogin,
+    onClose(event = {}) {
+      const shouldRegister = (event.reason === "cancel" || event.actionId === "cancel") && state.session?.capabilities?.self_registration !== false;
+      state.components.login = null;
+      if (shouldRegister) openRegistrationModal();
+    },
   };
   if (state.components.login) state.components.login.update(options);
   else state.components.login = state.factories.createLoginFormModal(options);
   if (!state.components.login.getState().open) state.components.login.open();
+}
+
+function openRegistrationModal() {
+  const googleEnabled = Boolean(state.session?.capabilities?.google_sso);
+  const returnPath = requestedReturnPath();
+  const extraActions = googleEnabled ? [{
+    id: "google",
+    label: "Continue with Google",
+    ariaLabel: "Continue with Google",
+    icon: GOOGLE_SIGN_IN_ICON,
+    className: "syndicatum-google-button",
+    variant: "ghost",
+    closeOnClick: false,
+    onClick(_values, context) {
+      const url = returnPath ? `auth/google.php?return=${encodeURIComponent(returnPath)}` : "auth/google.php";
+      return redirectWithBusy(context, url);
+    },
+  }] : [];
+  const modal = state.factories.createFormModal({
+    title: "Create your Syndicatum account",
+    size: googleEnabled ? "md" : "sm",
+    submitLabel: "Register",
+    cancelLabel: "Back to sign in",
+    busyMessage: "Creating your account...",
+    extraActionsPlacement: "start",
+    extraActions,
+    rows: [
+      [{ type: "text", content: "Create a standard human account and your personal workspace." }],
+      [{ type: "input", name: "display_name", label: "Display name", autocomplete: "name", required: true }],
+      [{ type: "input", input: "email", name: "email", label: "Email address", autocomplete: "email", required: true }],
+      [{ type: "input", name: "username", label: "Username", autocomplete: "username", required: true }],
+      [{ type: "input", input: "password", name: "password", label: "Password", autocomplete: "new-password", required: true, help: "Use at least 12 characters." }],
+      [{ type: "input", input: "password", name: "password_confirmation", label: "Confirm password", autocomplete: "new-password", required: true }],
+    ],
+    async onSubmit(values, context) {
+      try {
+        const payload = await request(API.session, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "register", ...values }),
+        });
+        state.session = unwrap(payload) || {};
+        const refreshed = await request(API.session);
+        state.session = { ...(unwrap(refreshed) || {}), capabilities: refreshed?.capabilities || unwrap(refreshed)?.capabilities || {} };
+        state.mode = "expanded";
+        await loadExpanded();
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+    onClose(event = {}) {
+      if (event.reason === "cancel" || event.actionId === "cancel") showLogin();
+    },
+  });
+  modal.open();
 }
 
 function requestedReturnPath() {
@@ -373,17 +559,29 @@ function renderProjectHeader() {
   const instructions = project.instructions || project.operating_instructions || "";
   el.project_instructions.textContent = instructions;
   el.project_instructions.hidden = !instructions;
-  el.project_management_actions.replaceChildren();
+  state.components.projectActions?.destroy?.();
+  state.components.projectActions = null;
+  const actions = [];
   if (state.mode === "expanded" && (can("project.manage") || can("project.admin"))) {
-    const edit = actionButton("Edit project", () => openEditProjectModal());
-    edit.className = "ui-button ui-button-quiet";
-    el.project_management_actions.append(edit);
+    actions.push({ id: "edit", label: "Edit project" });
   }
   if (state.mode === "expanded" && can("members.manage")) {
-    const invite = actionButton("Invite member", () => openInviteMemberModal()); invite.className = "ui-button ui-button-quiet"; el.project_management_actions.append(invite);
+    actions.push({ id: "invite", label: "Invite member" });
   }
   if (state.mode === "expanded" && can("agents.manage")) {
-    const addAgent = actionButton("Add agent", () => openAddAgentModal()); addAgent.className = "ui-button ui-button-quiet"; el.project_management_actions.append(addAgent);
+    actions.push({ id: "add-agent", label: "Add agent" });
+  }
+  el.project_actions_trigger.hidden = actions.length === 0;
+  if (actions.length) {
+    state.components.projectActions = state.factories.createDropdown(el.project_actions_trigger, actions, {
+      align: "right",
+      ariaLabel: "Project actions",
+      onSelect(item) {
+        if (item.id === "edit") openEditProjectModal();
+        if (item.id === "invite") openInviteMemberModal();
+        if (item.id === "add-agent") openAddAgentModal();
+      },
+    });
   }
   renderIdentity();
 }
@@ -423,20 +621,49 @@ function renderParticipants() {
       edit.setAttribute("aria-label", `Edit ${participant.display_name}`);
       edit.addEventListener("click", () => openEditAgentModal(participant));
       row.appendChild(edit);
+    } else if (participant.kind === "human" && participant.role !== "owner" && can("members.manage")
+      && participant.id !== id(state.project?.current_participant?.id)) {
+      const manage = document.createElement("button");
+      manage.type = "button";
+      manage.className = "ui-button ui-button-borderless participant-edit";
+      manage.textContent = "Manage";
+      manage.setAttribute("aria-label", `Manage ${participant.display_name}`);
+      manage.addEventListener("click", () => openManageMemberModal(participant));
+      row.appendChild(manage);
     }
     el.participant_list.appendChild(row);
   }
 }
 
 function renderFilters() {
-  const hasFilters = state.filters.primary !== "all" || state.filters.q || state.filters.sender || state.filters.from || state.filters.to;
-  el.clear_filters.hidden = !hasFilters;
+  const activeCount = [
+    state.filters.primary !== "all",
+    Boolean(state.filters.sender),
+    Boolean(state.filters.from),
+    Boolean(state.filters.to),
+  ].filter(Boolean).length;
+  el.clear_filters.hidden = activeCount === 0;
+  el.filter_count.hidden = activeCount === 0;
+  el.filter_count.textContent = String(activeCount);
+  el.filter_popover_trigger.classList.toggle("is-active", activeCount > 0);
+  el.filter_popover_trigger.setAttribute("aria-label", activeCount
+    ? `Timeline filters, ${activeCount} active`
+    : "Timeline filters");
   renderParticipants();
 }
 
 function formatDate(value) {
-  const date = new Date(value);
+  const date = new Date(normalizeUtcTimestamp(value));
   return Number.isNaN(date.getTime()) ? String(value || "") : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function localDateKey(value) {
+  const date = new Date(normalizeUtcTimestamp(value));
+  if (Number.isNaN(date.getTime())) return String(value || "").slice(0, 10);
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function replyPreview(message) {
@@ -457,11 +684,6 @@ function renderAddresseeChips(message) {
     chip.className = "addressee-chip is-broadcast";
     chip.textContent = "Project broadcast";
     chip.title = "Broadcast to the project";
-    chips.appendChild(chip);
-  } else if (!message.addressees.length) {
-    const chip = document.createElement("span");
-    chip.className = "addressee-chip";
-    chip.textContent = "Project timeline";
     chips.appendChild(chip);
   } else {
     message.addressees.slice(0, 5).forEach((entry) => {
@@ -690,8 +912,7 @@ function showWorkspaceSurface({ historyMode = "push" } = {}) {
   setSurface("workspace");
   renderWorkspace();
   setMobilePanel("left");
-  if (historyMode === "push") history.pushState(null, "", location.pathname);
-  else if (historyMode === "replace") history.replaceState(null, "", location.pathname);
+  updateApplicationRoute("workspace", "", historyMode);
 }
 
 function renderWorkspace() {
@@ -700,7 +921,9 @@ function renderWorkspace() {
   el.workspace_profile_avatar.replaceChildren(makeAvatar(human));
   el.workspace_profile_name.textContent = human.display_name;
   el.workspace_profile_details.replaceChildren();
-  [["Email", user.email], ["Username", user.username], ["Authentication", user.authentication_source || user.auth_source || (user.pbb_user_id ? "PBB Account" : "Native")]].forEach(([term, value]) => {
+  const authentication = user.authentication_source || user.auth_source || (user.pbb_user_id ? "account" : "native");
+  const authenticationLabel = authentication === "google" ? "Google" : (["account", "pbb_account"].includes(authentication) ? "PBB Account" : "Native");
+  [["Email", user.email], ["Username", user.username], ["Authentication", authenticationLabel]].forEach(([term, value]) => {
     if (!value) return;
     const dt = document.createElement("dt"); dt.textContent = term;
     const dd = document.createElement("dd"); dd.textContent = value;
@@ -729,9 +952,28 @@ function renderWorkspace() {
     const meta = document.createElement("span"); meta.className = "project-card-meta";
     meta.textContent = [project.role, project.status, project.participant_count != null ? `${project.participant_count} participants` : "", project.last_activity_at ? `Active ${formatDate(project.last_activity_at)}` : ""].filter(Boolean).join(" · ");
     card.append(top, description, meta);
-    card.addEventListener("click", () => void switchProject(project.id).catch(handleLoadError));
+    card.addEventListener("click", () => void openWorkspaceProject(project, card));
     el.workspace_project_list.append(card);
   });
+}
+
+async function openWorkspaceProject(project, trigger) {
+  if (trigger.disabled) return;
+  trigger.disabled = true;
+  const loadingOverlay = state.factories.createBusyOverlay({
+    text: `Opening ${project.name}...`,
+    visible: true,
+    fullscreen: true,
+    ariaLabel: `Opening ${project.name}`,
+  });
+  try {
+    await switchProject(project.id);
+  } catch (error) {
+    handleLoadError(error);
+  } finally {
+    trigger.disabled = false;
+    loadingOverlay.destroy();
+  }
 }
 
 function modalTextField(name, label, options = {}) { return { type: "input", name, label, ...options }; }
@@ -755,8 +997,34 @@ async function uploadAvatar(file, { kind, projectId = "", agentId = "" } = {}) {
 
 function openProfileModal() {
   const user = state.session?.user || {};
+  const googleEnabled = capability("google_sso");
+  const googleLinked = Boolean(user.google_linked);
+  const googleActions = googleEnabled ? [{
+    id: "google-link",
+    label: googleLinked ? "Refresh Google profile" : "Link Google account",
+    variant: "ghost",
+    closeOnClick: false,
+    async onClick(_values, context) {
+      context.setBusy(true, { message: googleLinked ? "Refreshing Google profile..." : "Opening Google account linking..." });
+      try {
+        const returnPath = `${location.pathname}${location.search}`;
+        const result = unwrap(await request(API.googleLink, {
+          method: "POST",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ return_path: returnPath }),
+        }));
+        if (!result?.authorization_url) throw new Error("Google did not return an authorization URL.");
+        return redirectWithBusy(context, result.authorization_url, googleLinked ? "Refreshing Google profile..." : "Opening Google account linking...");
+      } catch (error) {
+        context.setBusy(false);
+        context.setFormError(error.message);
+      }
+      return false;
+    },
+  }] : [];
   state.factories.createFormModal({
-    title: "Edit Profile", submitLabel: "Save profile", initialValues: { display_name: user.display_name || "", avatar: null },
+    title: "Edit Profile", size: googleEnabled ? "md" : "sm", submitLabel: "Save profile", initialValues: { display_name: user.display_name || "", avatar: null },
+    extraActionsPlacement: "start", extraActions: googleActions,
     rows: [[{ type: "avatar", name: "avatar", label: "Profile photo", accept: "image/jpeg,image/png,image/webp", previewUrl: user.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }], [modalTextField("display_name", "Display name", { required: true })]],
     async onSubmit(values, context) {
       try { const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "human" }) : user.avatar_url; const result = unwrap(await request(API.profile, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ display_name: values.display_name, avatar_url: avatarUrl || null }) })); state.session.user = result.user || result; renderWorkspace(); mountNavbar(); state.components.toast.success("Profile updated."); return true; }
@@ -817,12 +1085,119 @@ function showCredentialResult(title, label, value, expiresAt) {
 
 function showAgentCredentialResult(result) {
   const rows = [];
-  if (result.claim_code) rows.push([{ type: "text", content: `Claim code: ${result.claim_code}` }]);
+  let claimCode = "";
+  let agentInstruction = "";
+  if (result.claim_code) {
+    const projectName = result.project_name || state.project?.name || "";
+    const agent = state.participants.find((entry) => entry.kind === "agent" && id(entry.agent_id || entry.id) === id(result.agent_id));
+    const identity = result.display_name || agent?.display_name || "";
+    const provider = String(result.provider || agent?.provider || "codex").toLowerCase();
+    claimCode = String(result.claim_code);
+    if (provider === "codex") {
+      agentInstruction = `In Codex Desktop, use the installed local Syndicatum plugin tool claim_agent_profile to claim the “${identity}” identity in “${projectName}” at ${window.location.origin} with this one-time claim code: ${claimCode}. Do not use the ChatGPT OAuth-connected Syndicatum app for this claim.`;
+    } else if (provider === "chatgpt") {
+      agentInstruction = "This ChatGPT agent uses Syndicatum OAuth for project identity and the browser companion for delivery. Do not enter this claim code in ChatGPT or the Companion; browser delivery does not use it. Keep it only for a separate direct API integration that explicitly supports Syndicatum agent claiming.";
+    } else if (provider === "gemini") {
+      agentInstruction = "This Gemini agent uses the browser companion for delivery. Do not enter this claim code in Gemini or the Companion; browser delivery does not use it. Keep it only for a separate Syndicatum integration that explicitly supports agent-profile claiming. Gemini still needs that integration to load and respond to the authoritative project timeline.";
+    } else {
+      agentInstruction = `Use this one-time claim code only with a Syndicatum integration that explicitly supports agent-profile claiming for the “${identity}” identity in “${projectName}”: ${claimCode}.`;
+    }
+    rows.push([{ type: "text", content: `Project: ${projectName}` }]);
+    rows.push([{ type: "text", content: `Project ID: ${result.project_id || selectedProjectId()}` }]);
+    rows.push([{ type: "text", content: `Identity: ${identity}` }]);
+    rows.push([{ type: "text", content: `Agent ID: ${result.agent_id}` }]);
+    rows.push([{ type: "text", className: "agent-credential-copy-row claim-code-copy-row", content: `Claim code: ${claimCode}` }]);
+    rows.push([{ type: "text", className: "agent-credential-copy-row agent-message-copy-row", content: `${provider === "codex" ? "Ask the agent" : "Provider setup"}: ${agentInstruction}` }]);
+  }
   const webhookSecret = result.webhook_signing_secret || result.signing_secret;
   if (webhookSecret) rows.push([{ type: "text", content: `Webhook signing secret: ${webhookSecret}` }]);
   if (result.claim_expires_at) rows.push([{ type: "text", content: `Claim expires ${formatDate(result.claim_expires_at)}` }]);
   if (!rows.length) return;
-  state.factories.createFormModal({ title: "Agent credentials", submitLabel: "Done", context: { badge: "Shown once", summary: "Copy these credentials now. Syndicatum will not show the secrets again." }, rows, async onSubmit() { return true; } }).open();
+  const modal = state.factories.createFormModal({ title: "Agent credentials", size: "lg", submitLabel: "Done", context: { badge: "Shown once", summary: "Copy this handoff now. The claim code expires after 15 minutes and will not be shown again." }, rows, async onSubmit() { return true; } });
+  if (claimCode) {
+    mountCredentialCopyAction(modal, ".claim-code-copy-row", claimCode, "Copy claim code", "Claim code copied.");
+    mountCredentialCopyAction(modal, ".agent-message-copy-row", agentInstruction, "Copy agent message", "Agent message copied.");
+  }
+  modal.open();
+}
+
+function mountCredentialCopyAction(modal, selector, value, label, successMessage) {
+  const row = modal.refs.rows.querySelector(selector);
+  if (!row) return;
+  const text = document.createElement("span");
+  text.className = "agent-credential-copy-text";
+  text.textContent = row.textContent;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "ui-button ui-button-borderless agent-credential-copy-action";
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  button.innerHTML = helperIconHtml("actions.copy", 18);
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    modal.clearFormError();
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+      await navigator.clipboard.writeText(value);
+      state.components.toast.success(successMessage);
+    } catch (_error) {
+      modal.setFormError("Copy failed. Select the text and copy it manually.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+  row.replaceChildren(text, button);
+}
+
+function agentCredentialStatusText(credential = {}, provider = "") {
+  const expires = credential.claim_expires_at ? formatDate(credential.claim_expires_at) : "";
+  if (credential.claim_status === "pending") {
+    if (isBrowserCompanionProvider(provider) && !credential.has_active_token) {
+      return `Optional direct API credential unclaimed · claim code expires ${expires}`;
+    }
+    return credential.has_active_token
+      ? `Connected · replacement claim code expires ${expires}`
+      : `Awaiting claim · claim code expires ${expires}`;
+  }
+  if (credential.claim_status === "expired") {
+    return credential.has_active_token
+      ? `Connected · replacement claim code expired ${expires}`
+      : `Unclaimed · claim code expired ${expires}`;
+  }
+  return credential.has_active_token
+    ? `Connected${credential.claimed_at ? ` · claimed ${formatDate(credential.claimed_at)}` : ""}`
+    : "Unclaimed · no active claim code";
+}
+
+function confirmAgentClaimGeneration(agentId, credential, onGenerated = null, provider = "codex") {
+  const replacement = Boolean(credential.has_active_token);
+  const confirmation = state.factories.createFormModal({
+    title: replacement ? "Generate replacement claim code?" : "Generate new claim code?",
+    size: "sm",
+    submitLabel: replacement ? "Generate replacement" : "Generate claim code",
+    submitVariant: "danger",
+    context: { badge: "Security action", summary: replacement ? "The current agent token remains valid until the replacement code is claimed." : "Any previously issued claim code will stop working immediately." },
+    rows: [[{ type: "text", content: "The new claim code expires after 15 minutes and will be shown only once." }]],
+    async onSubmit(_values, context) {
+      try {
+        const result = unwrap(await request(API.projectAgents, {
+          method: "PATCH",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, rotate: true }),
+        })) || {};
+        credential.claim_status = "pending";
+        credential.claim_expires_at = result.claim_expires_at || null;
+        onGenerated?.(credential);
+        setTimeout(() => showAgentCredentialResult({ ...result, provider }), 0);
+        state.components.toast.success("A new agent claim code was generated.");
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  confirmation.open();
 }
 
 function openInviteMemberModal() {
@@ -835,10 +1210,143 @@ function openInviteMemberModal() {
   }}).open();
 }
 
+async function refreshActiveParticipants(removedParticipantId = "") {
+  if (removedParticipantId && state.filters.sender === id(removedParticipantId)) {
+    state.filters.sender = "";
+  }
+  const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`));
+  state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind));
+  rebuildParticipantControls();
+  if (removedParticipantId) await reloadForFilters();
+}
+
+function confirmMemberRemoval(participant, managerModal) {
+  const confirmation = state.factories.createFormModal({
+    title: `Remove ${participant.display_name}?`,
+    size: "sm",
+    submitLabel: "Remove from project",
+    submitVariant: "danger",
+    context: { badge: "Access removal", summary: "Their existing timeline messages will remain visible." },
+    rows: [[{ type: "text", content: "They will immediately lose access to this project and stop receiving project notifications." }]],
+    async onSubmit(_values, context) {
+      try {
+        await request(API.projectMembers, {
+          method: "DELETE",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), user_id: participant.identity_id }),
+        });
+        await refreshActiveParticipants(participant.id);
+        managerModal?.destroy?.();
+        state.components.toast.success(`${participant.display_name} was removed from the project.`);
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  confirmation.open();
+}
+
+function openManageMemberModal(participant) {
+  let modal = null;
+  modal = state.factories.createFormModal({
+    title: `Manage ${participant.display_name}`,
+    size: "sm",
+    submitLabel: "Save member",
+    initialValues: { role: participant.role || "member" },
+    headerActions: [{
+      id: "remove-member",
+      label: "Remove from project",
+      icon: REMOVE_ICON,
+      ariaLabel: `Remove ${participant.display_name} from project`,
+      variant: "ghost",
+      onClick() {
+        setTimeout(() => confirmMemberRemoval(participant, modal), 0);
+        return false;
+      },
+    }],
+    rows: [[{ type: "select", name: "role", label: "Project role", required: true, options: [
+      { value: "member", label: "Member" },
+      { value: "viewer", label: "Viewer" },
+      { value: "admin", label: "Administrator" },
+    ] }]],
+    async onSubmit(values, context) {
+      try {
+        await request(API.projectMembers, {
+          method: "PATCH",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), user_id: participant.identity_id, role: values.role }),
+        });
+        await refreshActiveParticipants();
+        state.components.toast.success("Project member updated.");
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  modal.open();
+}
+
+function confirmAgentRemoval(agent, editModal) {
+  const confirmation = state.factories.createFormModal({
+    title: `Remove ${agent.display_name}?`,
+    size: "sm",
+    submitLabel: "Remove agent",
+    submitVariant: "danger",
+    context: { badge: "Permanent access removal", summary: "Existing timeline messages will remain visible." },
+    rows: [[{ type: "text", content: "The agent will stop receiving notifications. Its tokens, pending claim codes, browser routes, activation, and webhook will be revoked or disabled." }]],
+    async onSubmit(_values, context) {
+      try {
+        await request(API.projectAgents, {
+          method: "DELETE",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agent.identity_id }),
+        });
+        await refreshActiveParticipants(agent.id);
+        editModal?.destroy?.();
+        state.components.toast.success(`${agent.display_name} was removed from the project.`);
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  confirmation.open();
+}
+
 async function loadDiscussionProviders() {
   const providers = unwrap(await request(API.discussionProviders));
   if (!Array.isArray(providers) || !providers.length) throw new Error("No discussion providers are currently available.");
   return providers;
+}
+
+function normalizeAgentProviderValues(values, providers) {
+  const provider = providers.find(item => item.code === values.provider);
+  if (provider && !provider.proactive_activation) {
+    values.activation_enabled = false;
+    values.discussion_reference = "";
+    values.working_directory = "";
+  }
+  return values;
+}
+
+function isBrowserCompanionProvider(provider) {
+  return ["chatgpt", "gemini"].includes(String(provider || ""));
+}
+
+function agentDiscussionReference(values) {
+  if (values.provider === "chatgpt") return values.chatgpt_discussion_reference;
+  if (values.provider === "gemini") return values.gemini_discussion_reference;
+  return values.discussion_reference;
+}
+
+function requireBrowserDiscussionReference(values, reference) {
+  if (!isBrowserCompanionProvider(values.provider) || String(reference || "").trim()) return;
+  throw new Error(`A ${values.provider === "gemini" ? "Gemini" : "ChatGPT"} discussion URL is required.`);
 }
 
 async function openAddAgentModal() {
@@ -846,19 +1354,23 @@ async function openAddAgentModal() {
   try { providers = await loadDiscussionProviders(); }
   catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
   const provider = providers[0];
-  state.factories.createFormModal({ title: "Add Agent", size: "lg", submitLabel: "Create agent", initialValues: { avatar: null, provider: provider.code, activation_enabled: false, webhook_enabled: false }, rows: [
+  state.factories.createFormModal({ title: "Add Agent", size: "lg", submitLabel: "Create agent", initialValues: { avatar: null, provider: provider.code, activation_enabled: false, responses_model: "gpt-5.6-terra", webhook_enabled: false }, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true })],
     [{ type: "textarea", name: "description", label: "Description" }],
-    [{ type: "divider" }], [{ type: "text", content: "Activation connector" }],
+    [{ type: "divider" }], [{ type: "text", content: "Provider connection" }],
     [{ type: "select", name: "provider", label: "Provider", required: true, options: providers.map(item => ({ value: item.code, label: item.display_name })) }],
-    [{ type: "checkbox", name: "activation_enabled", label: "Enable conversation notifications" }],
-    [modalTextField("discussion_reference", provider.reference_label, { placeholder: provider.reference_placeholder, help: provider.reference_help })],
-    [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help })],
+    [{ type: "checkbox", name: "activation_enabled", label: "Enable proactive agent activation" }],
+    [modalTextField("discussion_reference", "Codex discussion deeplink", { placeholder: "codex://threads/01abc...", help: "In Codex, use Copy deeplink.", visibleWhen: { provider: "codex" } })],
+    [modalTextField("chatgpt_discussion_reference", "ChatGPT discussion URL", { input: "url", placeholder: "https://chatgpt.com/c/...", help: "Required. The browser companion delivers notifications to this existing discussion.", visibleWhen: { provider: "chatgpt" } })],
+    [modalTextField("gemini_discussion_reference", "Gemini discussion URL", { input: "url", placeholder: "https://gemini.google.com/app/...", help: "Required. The browser companion delivers notifications to this existing discussion.", visibleWhen: { provider: "gemini" } })],
+    [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help, visibleWhen: { provider: "codex" } })],
+    [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
+    [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
     [{ type: "divider" }], [{ type: "text", content: "Optional notification webhook" }],
     [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }], [modalTextField("webhook_url", "Webhook URL", { input: "url", placeholder: "https://agent.example/hooks/syndicatum" })],
   ], async onSubmit(values, context) {
-    try { if (values.activation_enabled && !String(values.discussion_reference || "").trim()) throw new Error("A discussion reference is required when conversation notifications are enabled."); if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); setTimeout(() => showAgentCredentialResult(result), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
+    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
 }
@@ -902,57 +1414,117 @@ function confirmSigningSecretRotation(agentId, values, currentWebhook) {
 
 async function openEditAgentModal(agent) {
   const agentId = agent.identity_id;
+  const loadingOverlay = state.factories.createBusyOverlay({
+    text: `Loading ${agent.display_name}...`,
+    visible: true,
+    fullscreen: true,
+    ariaLabel: `Loading ${agent.display_name}`,
+  });
+  try {
   let webhook = agent.webhook || {};
   let activation = agent.activation || {};
+  let credential = {};
   let providers = [];
   try { webhook = unwrap(await request(`${API.projectAgentWebhook}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
   catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Webhook settings unavailable" }); return; } }
   try { activation = unwrap(await request(`${API.projectAgentActivation}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
   catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Activation settings unavailable" }); return; } }
+  try { credential = unwrap(await request(`${API.projectAgents}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
+  catch (error) { state.components.toast.warn(error.message, { title: "Credential status unavailable" }); return; }
   try { providers = await loadDiscussionProviders(); }
   catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
   const provider = providers.find(item => item.code === activation.provider) || providers[0];
-  state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
+  let credentialMenu = null;
+  let editModal = null;
+  const updateCredentialStatus = () => {
+    const status = editModal?.refs?.rows?.querySelector(".agent-credential-status");
+    if (status) status.textContent = agentCredentialStatusText(credential, provider.code);
+  };
+  editModal = state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
     display_name: agent.display_name, avatar: null,
-    provider: provider.code, activation_enabled: Boolean(activation.enabled), discussion_reference: activation.discussion_reference || "", working_directory: activation.working_directory || "",
+    provider: provider.code, activation_enabled: Boolean(activation.enabled), discussion_reference: provider.code === "codex" ? (activation.discussion_reference || "") : "", chatgpt_discussion_reference: provider.code === "chatgpt" ? (activation.discussion_reference || "") : "", gemini_discussion_reference: provider.code === "gemini" ? (activation.discussion_reference || "") : "", working_directory: activation.working_directory || "",
+    responses_api_key: "", responses_model: activation.responses_model || "gpt-5.6-terra",
     webhook_enabled: Boolean(webhook.enabled), webhook_url: webhook.endpoint_url || webhook.url || "",
-  }, extraActionsPlacement: "start", extraActions: [{
-    id: "rotate-webhook-secret",
-    label: "Generate new signing secret",
-    variant: "default",
-    className: "ui-button-warning agent-secret-warning-action",
-    onClick(values, context) {
-      if (!String(values.webhook_url || "").trim()) {
-        context.setFormError("Enter a webhook URL before generating a signing secret.");
-        return false;
-      }
-      setTimeout(() => confirmSigningSecretRotation(agentId, values, webhook), 0);
-      return false;
-    },
-  }], rows: [
+  }, headerActions: [{
+    id: "agent-credential-actions",
+    label: "Credential actions",
+    icon: MORE_ACTIONS_ICON,
+    iconOnly: true,
+    ariaLabel: "Credential actions",
+    variant: "ghost",
+    closeOnClick: false,
+    onClick() { return false; },
+  }], onOpen({ headerActions }) {
+    const trigger = headerActions.querySelector('[aria-label="Credential actions"]');
+    if (!trigger) return;
+    credentialMenu?.destroy?.();
+    const credentialActions = [
+      { id: "generate-claim-code", label: credential.has_active_token ? "Generate replacement claim code" : "Generate new claim code", icon: CLAIM_CODE_ICON },
+      { id: "rotate-webhook-secret", label: "Generate new signing secret", icon: SIGNING_SECRET_ICON },
+      { id: "remove-agent", label: "Remove from project", icon: REMOVE_ICON },
+    ];
+    credentialMenu = state.factories.createDropdown(trigger, credentialActions, {
+      align: "right",
+      ariaLabel: "Agent credential actions",
+      onSelect(item) {
+        editModal.clearFormError();
+        if (item.id === "remove-agent") {
+          setTimeout(() => confirmAgentRemoval(agent, editModal), 0);
+          return;
+        }
+        if (item.id === "generate-claim-code") {
+          setTimeout(() => confirmAgentClaimGeneration(agentId, credential, updateCredentialStatus, provider.code), 0);
+          return;
+        }
+        const values = editModal.getValues();
+        if (!String(values.webhook_url || "").trim()) {
+          editModal.setFormError("Enter a webhook URL before generating a signing secret.");
+          return;
+        }
+        setTimeout(() => confirmSigningSecretRotation(agentId, values, webhook), 0);
+      },
+    });
+  }, onClose() {
+    credentialMenu?.destroy?.();
+    credentialMenu = null;
+  }, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", previewUrl: agent.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true })],
-    [{ type: "divider" }], [{ type: "text", content: "Activation connector" }],
+    [{ type: "divider" }], [{ type: "text", content: "Agent credentials" }],
+    [{ type: "text", className: "agent-credential-status", content: agentCredentialStatusText(credential, provider.code) }],
+    [{ type: "text", content: "ChatGPT uses MCP/OAuth for its project identity and device authorization for browser delivery. Claiming the separate direct API credential is optional.", visibleWhen: { provider: "chatgpt" } }],
+    [{ type: "divider" }], [{ type: "text", content: "Provider connection" }],
     [{ type: "select", name: "provider", label: "Provider", required: true, options: providers.map(item => ({ value: item.code, label: item.display_name })) }],
-    [{ type: "checkbox", name: "activation_enabled", label: "Enable conversation notifications" }],
-    [modalTextField("discussion_reference", provider.reference_label, { placeholder: provider.reference_placeholder, help: provider.reference_help })],
-    [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help })],
+    [{ type: "checkbox", name: "activation_enabled", label: "Enable proactive agent activation" }],
+    [modalTextField("discussion_reference", "Codex discussion deeplink", { placeholder: "codex://threads/01abc...", help: "In Codex, use Copy deeplink.", visibleWhen: { provider: "codex" } })],
+    [modalTextField("chatgpt_discussion_reference", "ChatGPT discussion URL", { input: "url", placeholder: "https://chatgpt.com/c/...", help: "Required. The browser companion delivers notifications to this existing discussion.", visibleWhen: { provider: "chatgpt" } })],
+    [modalTextField("gemini_discussion_reference", "Gemini discussion URL", { input: "url", placeholder: "https://gemini.google.com/app/...", help: "Required. The browser companion delivers notifications to this existing discussion.", visibleWhen: { provider: "gemini" } })],
+    [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help, visibleWhen: { provider: "codex" } })],
+    [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
+    [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
     [{ type: "divider" }], [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }],
     [modalTextField("webhook_url", "Webhook URL", { input: "url" })],
   ], async onSubmit(values, context) {
     try {
-      if (values.activation_enabled && !String(values.discussion_reference || "").trim()) throw new Error("A discussion reference is required when conversation notifications are enabled.");
+      normalizeAgentProviderValues(values, providers);
+      const reference = agentDiscussionReference(values);
+      if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled.");
+      requireBrowserDiscussionReference(values, reference);
       if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled.");
       const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId(), agentId }) : agent.avatar_url;
-      await request(API.projectAgents, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name, avatar_url: avatarUrl || null }) });
-      await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), provider: values.provider, discussion_reference: values.discussion_reference, working_directory: values.working_directory }) });
+      await request(API.projectAgents, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name, provider: values.provider, avatar_url: avatarUrl || null }) });
+      await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) });
       let webhookResult = {};
       if (values.webhook_enabled || String(values.webhook_url || "").trim() || webhook.endpoint_url) webhookResult = unwrap(await request(API.projectAgentWebhook, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, endpoint_url: values.webhook_url, enabled: Boolean(values.webhook_enabled) }) })) || {};
       setTimeout(() => showAgentCredentialResult(webhookResult), 0);
       const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); state.components.toast.success("Agent updated."); return true;
     }
     catch (error) { context.setFormError(error.message); return false; }
-  }}).open();
+  }});
+  editModal.open();
+  } finally {
+    loadingOverlay.destroy();
+  }
 }
 
 function adminRows(payload, kind) {
@@ -961,9 +1533,10 @@ function adminRows(payload, kind) {
   return Array.isArray(rows) ? rows : [];
 }
 
-async function showAdminSurface(kind) {
+async function showAdminSurface(kind, { historyMode = "push" } = {}) {
   if (!capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
+  updateApplicationRoute(kind, "", historyMode);
   el.admin_title.textContent = kind[0].toUpperCase() + kind.slice(1);
   el.admin_list.replaceChildren(); const loading = document.createElement("p"); loading.textContent = "Loading…"; el.admin_list.append(loading);
   const endpoint = { users: API.adminUsers, agents: API.adminAgents, audit: API.adminAudit }[kind];
@@ -991,7 +1564,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.oldestCursor = "";
   state.newestCursor = "";
   state.hasOlder = false;
-  state.draft = { mode: "direct", addressees: [], replyTo: null, idempotencyKey: "" };
+  state.draft = { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
   state.components.timeline?.destroy();
   state.components.timeline = null;
   el.timeline_host.replaceChildren();
@@ -1019,8 +1592,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.filters.sender = "";
   setSurface("project");
   setMobilePanel("right");
-  if (historyMode === "push") history.pushState(null, "", `${location.pathname}?project=${encodeURIComponent(nextId)}`);
-  else if (historyMode === "replace") history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(nextId)}`);
+  updateApplicationRoute("project", state.project.public_id || nextId, historyMode);
   renderProjectHeader();
   rebuildParticipantControls();
   renderComposerControls();
@@ -1059,9 +1631,7 @@ function renderComposerControls() {
     searchable: false, clearable: false, ariaLabel: "Addressing mode", selected: state.draft.mode,
     onChange(value) {
       state.draft.mode = value === "broadcast" ? "broadcast" : "direct";
-      const broadcast = state.draft.mode === "broadcast";
-      el.addressee_select.hidden = broadcast;
-      el.broadcast_warning.hidden = !broadcast;
+      syncAddressingControls();
     },
   });
   state.components.composer?.destroy();
@@ -1072,11 +1642,49 @@ function renderComposerControls() {
     maxLength: Number(state.project?.message_max_length || 24000),
     onSend: sendMessage,
   });
+  syncAddressingControls();
   renderReplyContext();
 }
 
+function syncAddressingControls() {
+  const hasAutomaticReplyRecipient = Boolean(state.draft.replyTo && state.draft.addressees.length);
+  const broadcast = state.draft.mode === "broadcast";
+  el.addressing_row.hidden = hasAutomaticReplyRecipient;
+  el.addressee_select.hidden = broadcast;
+  el.broadcast_warning.hidden = hasAutomaticReplyRecipient || !broadcast;
+}
+
+function restoreNormalAddressing() {
+  const previous = state.draft.preReplyAddressing;
+  state.draft.replyTo = null;
+  state.draft.preReplyAddressing = null;
+  if (previous) {
+    state.draft.mode = previous.mode;
+    state.draft.addressees = [...previous.addressees];
+    state.components.addressMode?.setValue(state.draft.mode);
+    state.components.addresseeSelect?.setValue(state.draft.addressees);
+  }
+  syncAddressingControls();
+}
+
 function setReply(message) {
+  if (!state.draft.replyTo) {
+    state.draft.preReplyAddressing = {
+      mode: state.draft.mode,
+      addressees: [...state.draft.addressees],
+    };
+  }
   state.draft.replyTo = message;
+  const currentParticipantId = id(state.project?.current_participant?.id);
+  const senderId = id(message.sender?.id);
+  const fallbackRecipients = (message.addressees || [])
+    .map((entry) => id(entry.participant_id))
+    .filter((participantId) => participantId && participantId !== currentParticipantId);
+  state.draft.mode = "direct";
+  state.draft.addressees = senderId && senderId !== currentParticipantId ? [senderId] : fallbackRecipients;
+  state.components.addressMode?.setValue("direct");
+  state.components.addresseeSelect?.setValue(state.draft.addressees);
+  syncAddressingControls();
   renderReplyContext();
   state.components.composer?.focus();
 }
@@ -1086,14 +1694,20 @@ function renderReplyContext() {
   if (!state.draft.replyTo) { el.reply_context.hidden = true; return; }
   el.reply_context.hidden = false;
   const copy = document.createElement("span");
+  copy.className = "reply-context-copy";
   copy.textContent = `Replying to ${state.draft.replyTo.sender.display_name}: ${state.draft.replyTo.body.slice(0, 160)}`;
-  const cancel = actionButton("Cancel reply", () => { state.draft.replyTo = null; renderReplyContext(); });
+  const cancel = actionButton("Cancel reply", () => { restoreNormalAddressing(); renderReplyContext(); });
   el.reply_context.append(copy, cancel);
 }
 
 async function sendMessage({ text }) {
   if (state.draft.mode === "direct" && !state.draft.addressees.length) {
-    state.components.toast.warn("Select at least one expected responder, or choose Broadcast.", { title: "Addressees required" });
+    await state.factories.uiAlert("Select at least one expected responder, or choose Broadcast.", {
+      title: "Addressees required",
+      variant: "warning",
+      description: "Review the message addressing before sending.",
+    });
+    state.components.composer.focus();
     return;
   }
   if (!state.draft.idempotencyKey) state.draft.idempotencyKey = makeIdempotencyKey();
@@ -1116,11 +1730,18 @@ async function sendMessage({ text }) {
       renderTimeline("prepend", [message]);
     }
     state.components.composer.clear();
-    state.draft.replyTo = null;
     state.draft.idempotencyKey = "";
+    restoreNormalAddressing();
     renderReplyContext();
   } catch (error) {
-    state.components.toast.warn(error.message, { title: "Message not sent" });
+    if (error.status === 422) {
+      await state.factories.uiAlert(error.message || "Review the message and try again.", {
+        title: "Message needs attention",
+        variant: "warning",
+      });
+    } else {
+      state.components.toast.warn(error.message, { title: "Message not sent" });
+    }
   } finally {
     state.components.composer.setBusy(false);
     state.components.composer.focus();
@@ -1206,6 +1827,11 @@ async function openSettings() {
       account_profile_url: value("account.profile_url"),
       account_client_secret: "",
       native_login_enabled: Boolean(value("account.native_login_enabled", true)),
+      self_registration_enabled: Boolean(value("security.self_registration_enabled", true)),
+      google_enabled: Boolean(value("google.enabled", false)),
+      google_client_id: value("google.client_id"),
+      google_callback_url: value("google.callback_url") || new URL("auth/google-callback.php", document.baseURI).href,
+      google_client_secret: "",
     },
     rows: [
       [{ type: "text", content: "General and messaging" }],
@@ -1226,6 +1852,15 @@ async function openSettings() {
       [{ type: "input", input: "url", name: "account_base_url", label: "PBB Account base URL", disabled: locked("account.base_url") }, { type: "input", name: "account_client_id", label: "OAuth client ID", disabled: locked("account.client_id") }],
       [{ type: "input", input: "url", name: "account_profile_url", label: "Account management URL", disabled: locked("account.profile_url") }],
       [{ type: "input", input: "password", name: "account_client_secret", label: "Replace OAuth client secret", disabled: locked("account.client_secret"), placeholder: configured("account.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+      [{ type: "divider" }],
+      [{ type: "text", content: "Optional Google sign-in" }],
+      [{ type: "checkbox", name: "google_enabled", label: "Enable Google sign-in", disabled: locked("google.enabled") }],
+      [{ type: "input", name: "google_client_id", label: "Google OAuth client ID", disabled: locked("google.client_id") }],
+      [{ type: "input", input: "url", name: "google_callback_url", label: "Authorized redirect URI", disabled: locked("google.callback_url") }],
+      [{ type: "input", input: "password", name: "google_client_secret", label: "Replace Google client secret", disabled: locked("google.client_secret"), placeholder: configured("google.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+      [{ type: "divider" }],
+      [{ type: "text", content: "Human account registration" }],
+      [{ type: "checkbox", name: "self_registration_enabled", label: "Allow people to register from the login form", disabled: locked("security.self_registration_enabled") }],
     ],
     async onSubmit(values, context) {
       const updates = {
@@ -1243,11 +1878,16 @@ async function openSettings() {
         "account.client_id": values.account_client_id,
         "account.profile_url": values.account_profile_url,
         "account.native_login_enabled": Boolean(values.native_login_enabled),
+        "security.self_registration_enabled": Boolean(values.self_registration_enabled),
+        "google.enabled": Boolean(values.google_enabled),
+        "google.client_id": values.google_client_id,
+        "google.callback_url": values.google_callback_url,
       };
       Object.keys(updates).forEach((key) => { if (locked(key)) delete updates[key]; });
       if (values.realtime_signing_secret) updates["realtime.signing_secret"] = { operation: "replace", value: values.realtime_signing_secret };
       if (values.realtime_backend_ingress_secret) updates["realtime.backend_ingress_secret"] = { operation: "replace", value: values.realtime_backend_ingress_secret };
       if (values.account_client_secret) updates["account.client_secret"] = { operation: "replace", value: values.account_client_secret };
+      if (values.google_client_secret) updates["google.client_secret"] = { operation: "replace", value: values.google_client_secret };
       try {
         await request(API.settings, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ settings: updates }) });
         state.components.toast.success("System settings saved.");
@@ -1275,10 +1915,18 @@ async function loadExpanded() {
     showApplication(); showWorkspaceSurface({ historyMode: "replace" });
     return;
   }
-  const requested = new URLSearchParams(location.search).get("project");
+  const requestedRoute = currentApplicationRoute();
   showApplication();
-  if (requested && state.projects.some((project) => project.id === requested)) await switchProject(requested, { initial: true, historyMode: "replace" });
-  else showWorkspaceSurface({ historyMode: "replace" });
+  const requestedProject = requestedRoute.surface === "project"
+    ? state.projects.find((project) => project.public_id === requestedRoute.projectId || project.id === requestedRoute.projectId)
+    : null;
+  if (requestedProject) {
+    await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
+  } else if (["users", "agents", "audit"].includes(requestedRoute.surface) && capability(`admin.${requestedRoute.surface}`)) {
+    await showAdminSurface(requestedRoute.surface, { historyMode: "replace" });
+  } else {
+    showWorkspaceSurface({ historyMode: "replace" });
+  }
 }
 
 async function loadLegacy() {
@@ -1301,19 +1949,30 @@ async function loadLegacy() {
 
 async function checkSession() {
   try {
+    const query = new URLSearchParams(location.search);
+    const googleLinked = query.get("google_linked") === "1";
+    const googleLinkError = query.get("google_link_error") || "";
+    const googleSsoFailed = query.get("google_sso_error") === "1";
     const payload = await request(API.session);
     const session = { ...(unwrap(payload) || {}), capabilities: payload?.capabilities || unwrap(payload)?.capabilities || {} };
     if (session.setup_required) return loadLegacy();
     state.session = session;
     if (session.authenticated === false || !session.user) {
-      const ssoFailed = new URLSearchParams(location.search).get("account_sso_error") === "1";
-      showLogin(ssoFailed ? "PBB Account sign in could not be completed. You can try again or use native sign in." : "");
+      const accountFailed = query.get("account_sso_error") === "1";
+      const googleFailed = googleSsoFailed;
+      showLogin(accountFailed ? "PBB Account sign in could not be completed. You can try again or use native sign in."
+        : (googleFailed ? "Google sign in could not be completed. You can try again or use another sign-in method." : ""));
       return;
     }
     const returnPath = requestedReturnPath();
     if (returnPath) { location.replace(returnPath); return; }
     state.mode = "expanded";
     await loadExpanded();
+    if (googleLinked) state.components.toast.success("Your Google account is linked and its profile photo is synchronized.");
+    else if (googleLinkError) state.components.toast.error(
+      googleLinkError.includes("already_linked") ? "That Google account is already linked." : "Google linking expired. Please try again."
+    );
+    else if (googleSsoFailed) state.components.toast.error("Google authentication could not be completed. Please try again.");
   } catch (error) {
     if (error.status === 401) { state.session = error.payload?.data || error.payload || {}; showLogin(); return; }
     if (error.status === 404 || error.status === 503 || error.payload?.setup_required) { await loadLegacy(); return; }
@@ -1363,7 +2022,7 @@ function messageMatchesFilters(message) {
   const ownId = id(state.project?.current_participant?.id);
   if (state.filters.sender && message.sender.id !== state.filters.sender) return false;
   if (state.filters.q && !message.body.toLocaleLowerCase().includes(state.filters.q.toLocaleLowerCase())) return false;
-  const day = String(message.created_at || "").slice(0, 10);
+  const day = localDateKey(message.created_at);
   if (state.filters.from && day < state.filters.from) return false;
   if (state.filters.to && day > state.filters.to) return false;
   const addressed = message.addressees.some((entry) => entry.participant_id === ownId);
@@ -1491,20 +2150,28 @@ function startPolling() {
 async function bootstrap() {
   uiLoader.setPreferBundles(true);
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover"];
   await uiLoader.loadMany(names, options);
   state.factories = {
     createNavbar: await uiLoader.get("ui.navbar", options),
+    createIcon: (await uiLoader.get("ui.icons", options))?.createIcon,
     createSearchField: await uiLoader.get("ui.search", options),
     createTimeline: await uiLoader.get("ui.timeline", options),
     createToastStack: await uiLoader.get("ui.toast", options),
+    createBusyOverlay: await uiLoader.get("ui.busy.overlay", options),
     createSelect: await uiLoader.get("ui.select", options),
     createToggleGroup: await uiLoader.get("ui.toggle.group", options),
     createChatComposer: await uiLoader.get("ui.chat.composer", options),
     createFormModal: await uiLoader.get("ui.form.modal", options),
     createLoginFormModal: await uiLoader.get("ui.form.modal.login", options),
+    uiAlert: await uiLoader.get("ui.dialog.alert", options),
+    createDropdown: await uiLoader.get("ui.dropdown", options),
+    createPopover: await uiLoader.get("ui.popover", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
+  el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
+  el.filter_icon.innerHTML = helperIconHtml("data.filter", 18);
+  el.refresh_icon.innerHTML = helperIconHtml("actions.refresh", 18);
   const search = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search this project", clearText: "Clear", inputClass: "ui-input",
     onChange(value) { state.filters.q = value.trim(); scheduleFilterReload(); },
@@ -1525,14 +2192,26 @@ async function bootstrap() {
     ],
     onChange(payload) { state.filters.primary = payload.value || "all"; void reloadForFilters(); },
   });
+  state.components.filterPopover = state.factories.createPopover(el.filter_popover_trigger, {
+    placement: "bottom-end",
+    panelRole: "dialog",
+    ariaLabel: "Timeline filters",
+    className: "syndicatum-filter-popover",
+    initialFocus: "first",
+    content(host) {
+      el.filter_popover_content.hidden = false;
+      host.appendChild(el.filter_popover_content);
+      return el.filter_popover_content;
+    },
+    onOpenChange(open) { el.filter_popover_trigger.classList.toggle("is-open", open); },
+  });
   el.date_from.addEventListener("change", () => { state.filters.from = el.date_from.value; void reloadForFilters(); });
   el.date_to.addEventListener("change", () => { state.filters.to = el.date_to.value; void reloadForFilters(); });
   el.clear_filters.addEventListener("click", () => {
-    state.filters = { primary: "all", q: "", sender: "", from: "", to: "" };
+    state.filters = { ...state.filters, primary: "all", sender: "", from: "", to: "" };
     el.date_from.value = ""; el.date_to.value = "";
     state.components.primaryFilter.setPressed("all", true);
     state.components.senderSelect?.setValue(null);
-    search.setValue("");
     void reloadForFilters();
   });
   el.refresh_button.addEventListener("click", () => void reloadForFilters());
@@ -1541,13 +2220,21 @@ async function bootstrap() {
   el.rename_workspace_button.addEventListener("click", openRenameWorkspaceModal);
   el.add_project_button.addEventListener("click", openAddProjectModal);
   el.participant_search.addEventListener("input", () => { state.participantSearch = el.participant_search.value.trim(); renderParticipants(); });
-  el.admin_refresh_button.addEventListener("click", () => void showAdminSurface(state.adminKind));
+  el.admin_refresh_button.addEventListener("click", () => void showAdminSurface(state.adminKind, { historyMode: "none" }));
   panelButtons.forEach((button) => button.addEventListener("click", () => setMobilePanel(button.dataset.panelButton || "left")));
   addEventListener("popstate", () => {
     if (state.mode !== "expanded") return;
-    const project = new URLSearchParams(location.search).get("project");
-    if (project) void switchProject(project, { initial: true, historyMode: "none" }).catch(handleLoadError);
-    else showWorkspaceSurface({ historyMode: "none" });
+    const route = currentApplicationRoute();
+    const routeProject = route.surface === "project"
+      ? state.projects.find((project) => project.public_id === route.projectId || project.id === route.projectId)
+      : null;
+    if (routeProject) {
+      void switchProject(routeProject.id, { initial: true, historyMode: "none" }).catch(handleLoadError);
+    } else if (["users", "agents", "audit"].includes(route.surface) && capability(`admin.${route.surface}`)) {
+      void showAdminSurface(route.surface, { historyMode: "none" });
+    } else {
+      showWorkspaceSurface({ historyMode: "none" });
+    }
   });
   await checkSession();
   if (state.mode === "legacy" && !state.realtimeSocket) startPolling();

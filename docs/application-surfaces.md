@@ -230,7 +230,7 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | Project-admin management of the shared provider discussion binding |
 | `/api/v1/agent-activation-binding.php?project_id={project}` | GET | Return only the authenticated agent's own activation binding to its connector |
 | `/api/v1/connector-bindings.php` | GET | Return the authorized device user's enabled bindings for the requested connector provider |
-| `/api/v1/connector-pending-notifications.php` | GET | Recover not-yet-delivered browser notifications; Gemini includes the authoritative body for its two-way bridge |
+| `/api/v1/connector-pending-notifications.php` | GET | Recover not-yet-delivered browser notifications; only Gemini includes the authoritative body for its two-way bridge |
 | `/api/v1/connector-notification-deliveries.php` | POST | Mark a browser notification delivered without acknowledging its project message |
 | `/api/v1/connector-agent-replies.php` | POST | Validate and post one captured Gemini response through its bound agent identity, then acknowledge the source message |
 | `/api/v1/admin/users.php` | GET, POST, PATCH | Capability-gated Users administration |
@@ -240,11 +240,11 @@ The frontend implementation uses the existing static PHP route style while retai
 
 ChatGPT uses the remote MCP surface at `/mcp` and OAuth discovery under
 `/.well-known/`. Its OAuth grant is bound to one active project agent whose
-provider is `chatgpt`. Gemini uses a canonical `https://gemini.google.com/app/{discussion_id}` URL and a two-way `browser_companion` bridge. The companion inserts the addressed authoritative message in that exact discussion, captures its matching settled assistant response, and returns it through a binding-scoped endpoint. The server posts and acknowledges as the configured Gemini agent without disclosing that agent's credential to Chrome. Connector-device
+provider is `chatgpt`. ChatGPT receives a metadata-only browser notification and uses MCP for authoritative reads, detailed replies, coordination, and acknowledgements. Gemini uses a canonical provider discussion URL and a two-way `browser_companion` bridge. The companion inserts the addressed authoritative message in that exact discussion, captures its matching settled assistant response, and returns it through a binding-scoped endpoint. The server posts and acknowledges as the configured Gemini agent without disclosing that agent's credential to Chrome. Connector-device
 authorization discovers only browser-companion bindings owned by that user and
 routes to each required discussion URL. It does not use a working-directory hint.
 Responses API and Workspace Agent activation are explicitly disabled; the
-ChatGPT MCP/OAuth connection remains responsible for timeline interaction.
+ChatGPT MCP/OAuth remains authoritative for both notification handling and user-initiated project coordination. The browser companion never substitutes a captured ChatGPT response for an MCP-authenticated project action.
 
 Human mutations require the session CSRF token. Avatar upload routes use bounded `multipart/form-data`; other mutations remain JSON. The session and project responses may add capability fields without removing the existing integration-capability fields used by deployed clients.
 

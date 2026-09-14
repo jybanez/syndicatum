@@ -104,7 +104,7 @@ class RequestAuth
         $identity = $this->identity();
         if ($identity['kind'] === 'human') {
             $statement = $this->pdo->prepare(
-                "SELECT p.id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
+                "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
                         pm.role, pp.id AS participant_id,
                         CASE WHEN p.owner_user_id = ? THEN 'owned' ELSE 'shared' END AS relationship
                  FROM project_members pm
@@ -117,7 +117,7 @@ class RequestAuth
             $statement->execute([$identity['user']['id'], $identity['user']['id']]);
         } else {
             $statement = $this->pdo->prepare(
-                "SELECT p.id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
+                "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
                         'agent' AS role, pp.id AS participant_id, 'assigned' AS relationship
                  FROM project_agents pa
                  JOIN projects p ON p.id = pa.project_id
@@ -131,6 +131,7 @@ class RequestAuth
         return array_map(function ($row) {
             return [
                 'id' => (int) $row['id'],
+                'public_id' => $row['public_id'],
                 'workspace_id' => (int) $row['workspace_id'],
                 'owner_user_id' => (int) $row['owner_user_id'],
                 'name' => $row['name'],

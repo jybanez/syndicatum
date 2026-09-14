@@ -21,12 +21,20 @@ thread ID, and exposes that shared binding to every connector device authorized
 for the user. Each connector invokes the pinned Codex 0.153.4 command
 `codex queue --thread <thread_id> --message <notification>`. It deliberately
 queues no project message body. The awakened
-task loads the authoritative timeline using `pbb-chat-log`, decides what action
+task loads the authoritative timeline using `syndicatum-timeline`, decides what action
 is appropriate, and uses its own project-scoped agent token to reply and
 acknowledge. The plugin bundles that skill and runs its listener as a local MCP
 server, without a separate operating-system service. The optional working-directory
 hint is used only when it exists on that computer. Other providers may expose a
 different discussion reference or activation mechanism without changing this
 protocol boundary.
+
+The browser companion follows the same boundary for ChatGPT. It maintains a
+durable provider/project/agent/message delivery key, injects only a metadata
+notification into the configured discussion, and marks `notified_at` only after
+the provider shows the submitted user turn. The ChatGPT adapter is the first
+implementation of a provider-neutral content-adapter contract intended to admit
+Gemini and Copilot later. Assistant-response capture is outside the current
+outbound-only milestone.
 
 The normative API route mapping and canonical message request are documented in [`project-api-v1.md`](project-api-v1.md).

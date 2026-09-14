@@ -8,6 +8,17 @@
 
 The worktree now includes the additive migration framework and reconciliation tooling; native human authentication and self-service password change; personal workspaces; projects, memberships, invitations, agents, and unified participants; the canonical project message API; project isolation and credential controls; the fixed-navbar Workspace, Project, and Administration surfaces; the single virtualized timeline; database-backed global settings; global administration APIs; optional PBB Realtime and PBB Account integrations; and provider-neutral agent instructions.
 
+The 2026-09-13 surface synchronization also records the current project UUID
+routes, revocation-based persistent browser sessions, project-overview header,
+top composer, icon-based filter popover and refresh action, automatic reply
+addressing, browser-local timestamps, Helper alert validation, avatar fallback
+and agent-badge rules, immediate busy feedback for project selection and agent
+editing, and copyable one-time credential handoffs. ChatGPT remains interactive
+through MCP/OAuth; its required discussion URL is reference-only, while Responses
+API and Workspace Agent activation are disabled. The Codex Windows connector now
+verifies readiness and automatically uses a current-user Run-key startup fallback
+with sanitized diagnostics when Task Scheduler cannot launch it.
+
 The backup-first production rollout was completed on 2026-09-05 and is recorded in [`production-rollout-2026-09-05.md`](production-rollout-2026-09-05.md). The following items intentionally remain follow-up work:
 
 - Move active agents to Project API V1 before disabling the transitional legacy endpoints. Existing topics remain readable only through that compatibility surface until removal is explicitly approved.
@@ -234,9 +245,10 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 ## 12. Single Project Timeline UI
 
 - [x] Open projects from the Workspace project list
+- [x] Show immediate busy feedback and prevent duplicate project selection while loading
 - [x] Replace the project selector in the navbar with current-project context
 - [x] Use a two-column full-height Project surface with independent scrolling
-- [x] Keep project details and participants in the left column
+- [x] Keep participants in the left column and project overview/actions above the right-column composer
 - [x] Keep filters, timeline, and composer in the right column
 - [ ] Drive Edit Project, Invite Member, Manage Members, Add/Manage Agents, Transfer Ownership, and Archive/Restore actions from project permissions
 - [x] Keep one canonical newest-first project timeline
@@ -247,12 +259,16 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Add Unacknowledged filter
 - [x] Add Sender filter
 - [x] Add Date range and search filters
+- [x] Keep search visible and move structured filters into an icon-triggered Helper popover beside refresh
 - [x] Add reply context and jump-to-message behavior
+- [x] Automatically address replies to the original sender and restore normal addressing after cancel/send
 - [x] Add addressee indicators without implying privacy
 - [x] Add acknowledge controls for current-participant addressees
 - [x] Add visible revision history
 - [ ] Add pinned project messages
 - [x] Add project description and operating instructions
+- [x] Render UTC message dates and filter boundaries in the user's browser-local timezone
+- [x] Use Helper alert dialogs for composer validation that requires user action
 - [ ] Add empty, loading, disconnected, and recovery states
 - [x] Add narrow-screen Participants and Timeline panel switching
 - [x] Select Timeline automatically after opening a project on narrow screens
@@ -276,6 +292,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 ## 14. User and Agent Avatars
 
 - [x] Add user and agent display names
+- [x] Render uploaded avatars without the fallback fill, omit redundant human badges, and retain an accessible agent robot badge
 - [ ] Replace user `avatar_url` input with authenticated avatar upload/replace/delete endpoints
 - [ ] Replace agent `avatar_url` input with project-authorized avatar upload/replace/delete endpoints
 - [ ] Return server-generated `avatar_url` values as read-only profile media references
@@ -394,6 +411,18 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Implement Account-aware logout and session invalidation
 - [ ] Keep native break-glass administrator access
 - [ ] Keep native login functional when Account integration is disabled
+
+## 17A. Optional Google Sign-In
+
+- [x] Add authorization-code login with state, nonce, and PKCE S256
+- [x] Validate Google's ID-token signature and security claims
+- [x] Bind local users to Google's immutable subject identifier
+- [x] Reject automatic linking when an email is already registered
+- [x] Provision first-time users with only the ordinary user role and personal workspace
+- [x] Add masked/write-only Google client-secret settings
+- [x] Offer Google sign-in in the main login, account-creation, and connector-authorization modals
+- [x] Add an authenticated, deliberate workflow for linking Google to an existing user
+- [ ] Exercise the callback against a production Google OAuth client over public HTTPS
 - [ ] Add disabled, enabled, linking, suspended-account, logout, outage, and recovery tests
 
 ## 18. Agent Protocol and Skill Packages
@@ -451,7 +480,8 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Ensure no migrated agent becomes a global administrator
 - [ ] Publish updated skill files before changing legacy endpoint behavior
 - [ ] Map legacy APIs to the default project during transition
-- [ ] Add deprecation responses and telemetry
+- [x] Add aggregate legacy-route telemetry and a machine-readable retirement readiness report
+- [x] Add deprecation and successor-version response headers before disabling legacy routes
 - [ ] Disable legacy public reads after active clients migrate
 - [ ] Remove compatibility routes only after explicit acceptance
 

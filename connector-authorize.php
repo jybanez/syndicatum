@@ -37,10 +37,10 @@ function connectorEscape($value) { return htmlspecialchars((string) $value, ENT_
 <script type="module" src="assets/connector-authorize.mjs?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/assets/connector-authorize.mjs')); ?>"></script>
 <?php else: ?>
 <main class="login-shell"><section class="login-card ui-panel"><p class="ui-eyebrow">Syndicatum connector</p><h1 class="ui-title">Authorize this device</h1>
-<?php if ($approved && !$notificationFailed): ?><p id="authorization-complete">This device is now authorized for <?php echo connectorEscape($user['display_name']); ?>. Returning you to Codex&hellip;</p><script>window.close();setTimeout(function(){document.getElementById('authorization-complete').textContent='Authorization complete. You may close this tab and return to Codex.';},500);</script>
-<?php elseif ($approved): ?><p>This device is authorized, but the live completion signal could not be delivered. Return to Codex and use the connector login recovery action to complete the one-time credential exchange.</p>
+<?php if ($approved && !$notificationFailed): ?><p id="authorization-complete">This device is now authorized for <?php echo connectorEscape($user['display_name']); ?>. Returning you to the requesting connector&hellip;</p><script>window.close();setTimeout(function(){document.getElementById('authorization-complete').textContent='Authorization complete. You may close this tab and return to the connector that requested access.';},500);</script>
+<?php elseif ($approved): ?><p>This device is authorized, but the live completion signal could not be delivered. Return to the requesting connector and use its recovery or refresh action to complete the one-time credential exchange.</p>
 <?php elseif ($error || !$request): ?><p class="form-error"><?php echo connectorEscape($error ?: 'The authorization code is missing.'); ?></p>
-<?php else: ?><p><strong><?php echo connectorEscape($request['device_name']); ?></strong> is requesting permission to receive addressed Syndicatum notifications for your configured Codex agents.</p>
+<?php else: ?><p><strong><?php echo connectorEscape($request['device_name']); ?></strong> is requesting permission to receive addressed Syndicatum notifications for your configured agents.</p>
 <p>Code: <strong><?php echo connectorEscape($code); ?></strong></p><form method="post"><input type="hidden" name="code" value="<?php echo connectorEscape($code); ?>"><input type="hidden" name="csrf" value="<?php echo connectorEscape(isset($_COOKIE[AuthService::CSRF_COOKIE]) ? $_COOKIE[AuthService::CSRF_COOKIE] : ''); ?>"><button class="ui-button ui-button-primary" type="submit">Authorize device</button></form>
 <?php endif; ?></section></main>
 <?php endif; ?>

@@ -8,6 +8,8 @@ class AuthService
 {
     const SESSION_COOKIE = 'syndicatum_session';
     const CSRF_COOKIE = 'syndicatum_csrf';
+    const PERSISTENT_SESSION_EXPIRES_AT = '9999-12-31 23:59:59';
+    const PERSISTENT_COOKIE_LIFETIME_SECONDS = 34560000;
 
     private $pdo;
 
@@ -47,23 +49,77 @@ class AuthService
         return ['user' => $this->publicUser((int) $user['id']), 'session' => $session];
     }
 
-    public function createSession($userId, $accountSessionId = null)
+    public function register(array $input)
+    {
+        $email = strtolower(trim(isset($input['email']) ? (string) $input['email'] : ''));
+        $username = strtolower(trim(isset($input['username']) ? (string) $input['username'] : ''));
+        $displayName = trim(isset($input['display_name']) ? (string) $input['display_name'] : '');
+        $password = isset($input['password']) ? (string) $input['password'] : '';
+        $confirmation = isset($input['password_confirmation']) ? (string) $input['password_confirmation'] : '';
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 191) {
+            throw new InvalidArgumentException('Enter a valid email address.');
+        }
+        if (!preg_match('/^[a-z0-9._-]{3,80}$/', $username)) {
+            throw new InvalidArgumentException('Username must be 3–80 characters using letters, numbers, dots, underscores, or hyphens.');
+        }
+        if ($displayName === '' || strlen($displayName) > 120) {
+            throw new InvalidArgumentException('Display name is required and must not exceed 120 characters.');
+        }
+        if (strlen($password) < 12) {
+            throw new InvalidArgumentException('Password must be at least 12 characters.');
+        }
+        if (!hash_equals($password, $confirmation)) {
+            throw new InvalidArgumentException('Password confirmation does not match.');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $collision = $this->pdo->prepare('SELECT id FROM users WHERE normalized_email = ? OR username = ? LIMIT 1 FOR UPDATE');
+            $collision->execute([$email, $username]);
+            if ($collision->fetchColumn() !== false) {
+                throw new InvalidArgumentException('That email address or username is already registered.');
+            }
+            $now = Db::now();
+            $insert = $this->pdo->prepare(
+                "INSERT INTO users (normalized_email, username, password_hash, display_name, status, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, 'active', ?, ?)"
+            );
+            $insert->execute([$email, $username, password_hash($password, PASSWORD_DEFAULT), $displayName, $now, $now]);
+            $userId = (int) $this->pdo->lastInsertId();
+            $this->pdo->prepare("INSERT INTO user_system_roles (user_id, role_id, granted_by_user_id, created_at)
+                SELECT ?, id, NULL, ? FROM system_roles WHERE code = 'user'")->execute([$userId, $now]);
+            $this->pdo->prepare('INSERT INTO workspaces (owner_user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+                ->execute([$userId, $displayName . "'s workspace", $now, $now]);
+            $session = $this->createSession($userId);
+            $this->pdo->commit();
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            if ($exception instanceof PDOException && (string) $exception->getCode() === '23000') {
+                throw new InvalidArgumentException('That email address or username is already registered.');
+            }
+            throw $exception;
+        }
+        $this->audit($userId, 'auth.registration_succeeded', 'user', (string) $userId);
+        return ['user' => $this->publicUser($userId), 'session' => $session];
+    }
+
+    public function createSession($userId, $accountSessionId = null, $authProvider = null)
     {
         $token = self::randomToken(32);
         $csrf = self::randomToken(32);
         $now = Db::now();
-        $sessionHours = Db::tableExists($this->pdo, 'system_settings') ? (int) (new SettingsService($this->pdo))->get('security.session_hours') : 12;
-        $expires = date('Y-m-d H:i:s', time() + (max(1, $sessionHours) * 60 * 60));
+        $expires = self::PERSISTENT_SESSION_EXPIRES_AT;
         $statement = $this->pdo->prepare(
             'INSERT INTO syndicatum_sessions
-             (user_id, token_hash, csrf_token_hash, account_session_id, ip_address, user_agent, created_at, last_seen_at, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             (user_id, token_hash, csrf_token_hash, account_session_id, auth_provider, ip_address, user_agent, created_at, last_seen_at, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $statement->execute([
             $userId,
             hash('sha256', $token),
             hash('sha256', $csrf),
             $accountSessionId,
+            $authProvider === null ? ($accountSessionId === null ? 'native' : 'account') : substr((string) $authProvider, 0, 40),
             self::ipAddress(),
             self::userAgent(),
             $now,
@@ -76,6 +132,7 @@ class AuthService
 
     public function currentUser($token = null)
     {
+        $usingBrowserCookie = $token === null;
         if ($token === null) {
             $token = isset($_COOKIE[self::SESSION_COOKIE]) ? $_COOKIE[self::SESSION_COOKIE] : '';
         }
@@ -85,25 +142,31 @@ class AuthService
         }
 
         $statement = $this->pdo->prepare(
-            "SELECT s.id AS session_id, s.csrf_token_hash, s.expires_at, s.account_session_id, u.*
+            "SELECT s.id AS session_id, s.csrf_token_hash, s.expires_at, s.account_session_id, s.auth_provider, u.*
              FROM syndicatum_sessions s
              JOIN users u ON u.id = s.user_id
-             WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?
+             WHERE s.token_hash = ? AND s.revoked_at IS NULL
                AND u.status = 'active' AND u.deleted_at IS NULL
              LIMIT 1"
         );
-        $statement->execute([hash('sha256', $token), Db::now()]);
+        $statement->execute([hash('sha256', $token)]);
         $row = $statement->fetch();
         if (!$row) {
             return null;
         }
 
-        $touch = $this->pdo->prepare('UPDATE syndicatum_sessions SET last_seen_at = ? WHERE id = ?');
-        $touch->execute([Db::now(), $row['session_id']]);
+        $touch = $this->pdo->prepare('UPDATE syndicatum_sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?');
+        $touch->execute([Db::now(), self::PERSISTENT_SESSION_EXPIRES_AT, $row['session_id']]);
+        if ($usingBrowserCookie && !headers_sent()) {
+            self::refreshSessionCookies($token, $row['csrf_token_hash']);
+        }
         $user = $this->publicUser((int) $row['id']);
         $user['session_id'] = (int) $row['session_id'];
         $user['csrf_token_hash'] = $row['csrf_token_hash'];
-        $user['auth_source'] = $row['account_session_id'] === null ? 'native' : 'account';
+        $provider = isset($row['auth_provider']) && $row['auth_provider'] !== '' ? $row['auth_provider'] : 'native';
+        // Preserve compatibility with sessions created before auth_provider was introduced.
+        if ($provider === 'native' && $row['account_session_id'] !== null) { $provider = 'account'; }
+        $user['auth_source'] = $provider;
         $user['account_session_id'] = $row['account_session_id'];
         return $user;
     }
@@ -197,17 +260,17 @@ class AuthService
         $newSessionToken = self::randomToken(32);
         $newCsrfToken = self::randomToken(32);
         $now = Db::now();
-        $expires = date('Y-m-d H:i:s', time() + ($this->sessionHours() * 60 * 60));
+        $expires = self::PERSISTENT_SESSION_EXPIRES_AT;
 
         $this->pdo->beginTransaction();
         try {
             $session = $this->pdo->prepare(
                 'SELECT s.id, s.user_id, u.password_hash
                  FROM syndicatum_sessions s JOIN users u ON u.id = s.user_id
-                 WHERE s.id = ? AND s.user_id = ? AND s.revoked_at IS NULL AND s.expires_at > ?
+                 WHERE s.id = ? AND s.user_id = ? AND s.revoked_at IS NULL
                    AND u.status = \'active\' AND u.deleted_at IS NULL FOR UPDATE'
             );
-            $session->execute([(int) $user['session_id'], (int) $user['id'], $now]);
+            $session->execute([(int) $user['session_id'], (int) $user['id']]);
             $row = $session->fetch();
             if (!$row) {
                 throw new RuntimeException('AUTHENTICATION_REQUIRED');
@@ -300,7 +363,7 @@ class AuthService
     public function publicUser($userId)
     {
         $statement = $this->pdo->prepare(
-            'SELECT u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.pbb_user_id, u.status,
+            'SELECT u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.pbb_user_id, u.google_subject, u.status,
                     CASE WHEN u.password_hash IS NULL OR u.password_hash = \'\' THEN 0 ELSE 1 END AS has_native_password,
                     w.id AS workspace_id, w.name AS workspace_name
              FROM users u LEFT JOIN workspaces w ON w.owner_user_id = u.id WHERE u.id = ?'
@@ -321,6 +384,7 @@ class AuthService
             'display_name' => $user['display_name'],
             'avatar_url' => $user['avatar_url'],
             'pbb_user_id' => $user['pbb_user_id'],
+            'google_linked' => trim((string) $user['google_subject']) !== '',
             'status' => $user['status'],
             'has_native_password' => (bool) $user['has_native_password'],
             'workspace' => $user['workspace_id'] ? ['id' => (int) $user['workspace_id'], 'name' => $user['workspace_name']] : null,
@@ -352,8 +416,9 @@ class AuthService
     public static function setSessionCookies(array $session)
     {
         $secure = self::isSecureRequest();
-        self::setCookieCompat(self::SESSION_COOKIE, $session['token'], strtotime($session['expires_at']), true, $secure);
-        self::setCookieCompat(self::CSRF_COOKIE, $session['csrf_token'], strtotime($session['expires_at']), false, $secure);
+        $expires = time() + self::PERSISTENT_COOKIE_LIFETIME_SECONDS;
+        self::setCookieCompat(self::SESSION_COOKIE, $session['token'], $expires, true, $secure);
+        self::setCookieCompat(self::CSRF_COOKIE, $session['csrf_token'], $expires, false, $secure);
     }
 
     public static function clearSessionCookies()
@@ -376,18 +441,12 @@ class AuthService
         return rtrim(strtr(base64_encode($random), '+/', '-_'), '=');
     }
 
-    private function sessionHours()
-    {
-        $hours = Db::tableExists($this->pdo, 'system_settings')
-            ? (int) (new SettingsService($this->pdo))->get('security.session_hours')
-            : 12;
-        return max(1, $hours);
-    }
-
     private static function setCookieCompat($name, $value, $expires, $httpOnly, $secure)
     {
+        $maxAge = max(0, (int) $expires - time());
         $cookie = rawurlencode($name) . '=' . rawurlencode($value)
             . '; Path=/; Expires=' . gmdate('D, d M Y H:i:s T', $expires)
+            . '; Max-Age=' . $maxAge
             . '; SameSite=Lax';
         if ($secure) {
             $cookie .= '; Secure';
@@ -396,6 +455,17 @@ class AuthService
             $cookie .= '; HttpOnly';
         }
         header('Set-Cookie: ' . $cookie, false);
+    }
+
+    private static function refreshSessionCookies($sessionToken, $csrfTokenHash)
+    {
+        $secure = self::isSecureRequest();
+        $expires = time() + self::PERSISTENT_COOKIE_LIFETIME_SECONDS;
+        self::setCookieCompat(self::SESSION_COOKIE, $sessionToken, $expires, true, $secure);
+        $csrfToken = isset($_COOKIE[self::CSRF_COOKIE]) ? trim((string) $_COOKIE[self::CSRF_COOKIE]) : '';
+        if ($csrfToken !== '' && hash_equals((string) $csrfTokenHash, hash('sha256', $csrfToken))) {
+            self::setCookieCompat(self::CSRF_COOKIE, $csrfToken, $expires, false, $secure);
+        }
     }
 
     private static function isSecureRequest()

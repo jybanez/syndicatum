@@ -7,7 +7,7 @@ without a cross-origin module dependency.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `c6a460dfad400367fe39bd850e1255ae11c79999`
+- Pinned commit: `cf52953927f3526965556c4542f8c48218d03aee`
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
@@ -30,7 +30,8 @@ This first implementation uses the helper library for:
 - helper-managed daily activity chart rendering,
 - helper-managed empty states,
 - helper-managed toast notifications,
-- helper-managed shared icon rendering via `ui.icons`.
+- helper-managed shared icon rendering via `ui.icons`,
+- accessible anchored filter panels via `ui.popover`.
 
 The current upstream helper line also includes newer primitives that should be preferred during the DB-backed refactor:
 

@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/SettingsService.php';
 require_once dirname(__DIR__) . '/src/AccountIntegration.php';
+require_once dirname(__DIR__) . '/src/GoogleIntegration.php';
 
 $redirect = '/';
 try {
@@ -26,6 +27,7 @@ try {
     $auth->logout();
     AuthService::clearSessionCookies();
     AccountIntegration::clearAttemptCookie();
+    GoogleIntegration::clearAttemptCookie();
 
     $settings = new SettingsService($pdo);
     $account = new AccountIntegration($pdo, $settings, $auth);
@@ -37,6 +39,7 @@ try {
     // fails. Account logout is an optional continuation, not a prerequisite.
     AuthService::clearSessionCookies();
     AccountIntegration::clearAttemptCookie();
+    GoogleIntegration::clearAttemptCookie();
     $redirect = '/';
 }
 

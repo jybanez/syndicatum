@@ -1,10 +1,19 @@
 import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
 
+const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
+
 async function request(url, options = {}) {
   const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...options });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || payload?.error?.message || `Request failed with status ${response.status}`);
-  return payload?.data ?? payload ?? {};
+  return payload ?? {};
+}
+
+function redirectWithBusy(context, url) {
+  context?.clearFormError?.();
+  context?.setBusy?.(true, { message: "Opening Google sign in..." });
+  requestAnimationFrame(() => requestAnimationFrame(() => location.assign(url)));
+  return false;
 }
 
 uiLoader.setPreferBundles(true);
@@ -14,10 +23,38 @@ const createLoginFormModal = await uiLoader.get("ui.form.modal.login", options);
 const session = await request("api/v1/session.php");
 const capabilities = session.capabilities || {};
 const returnPath = `${location.pathname}${location.search}`;
+const extraActions = [];
+if (capabilities.google_sso) extraActions.push({
+  id: "google",
+  label: "Sign in with Google",
+  ariaLabel: "Sign in with Google",
+  icon: GOOGLE_SIGN_IN_ICON,
+  className: "syndicatum-google-button",
+  variant: "ghost",
+  closeOnClick: false,
+  onClick(_values, context) {
+    return redirectWithBusy(context, `auth/google.php?return=${encodeURIComponent(returnPath)}`);
+  },
+});
+if (capabilities.account_sso || capabilities.pbb_account) extraActions.push({
+  id: "pbb-account",
+  label: "Continue with PBB Account",
+  variant: "ghost",
+  closeOnClick: false,
+  onClick() {
+    location.assign(`auth/account.php?return=${encodeURIComponent(returnPath)}`);
+    return false;
+  },
+});
 
 const modal = createLoginFormModal({
   title: "Sign in to Syndicatum",
-  message: "Sign in to review this Codex device authorization request.",
+  className: "syndicatum-login-modal",
+  size: (capabilities.account_sso || capabilities.pbb_account) && capabilities.google_sso ? "md" : "sm",
+  message: "Sign in to review this connector device authorization request.",
+  mediaUrl: "assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852",
+  mediaAlt: "Syndicatum",
+  backgroundTone: "none",
   identifierKind: "username",
   identifierLabel: "Email or username",
   identifierPlaceholder: "Enter email or username",
@@ -28,16 +65,7 @@ const modal = createLoginFormModal({
   closeOnEscape: false,
   showCloseButton: false,
   extraActionsPlacement: "start",
-  extraActions: capabilities.account_sso || capabilities.pbb_account ? [{
-    id: "pbb-account",
-    label: "Continue with PBB Account",
-    variant: "ghost",
-    closeOnClick: false,
-    onClick() {
-      location.assign(`auth/account.php?return=${encodeURIComponent(returnPath)}`);
-      return false;
-    },
-  }] : [],
+  extraActions,
   async onSubmit(values, context) {
     try {
       await request("api/v1/session.php", {

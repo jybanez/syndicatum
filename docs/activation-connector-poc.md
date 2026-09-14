@@ -29,7 +29,10 @@ computers may discover and act on it.
 5. Accept only complete `syndicatum.message.created` envelopes.
 6. Activate only when the configured participant is an addressee and is not the
    sender.
-7. Deduplicate by stable Syndicatum message ID.
+7. Deduplicate by stable Syndicatum message ID and maintain one outstanding wake
+   per agent, project, and linked discussion. While its anchor remains
+   unacknowledged, persist newer addressed message metadata and the highest
+   project sequence without adding another Codex queue item.
 8. Retrieve the enabled activation binding from Syndicatum, then use
    `codex queue --thread <conversation-id> --message <notification>` to enqueue
    the notification in the existing Codex Desktop conversation.
@@ -39,8 +42,11 @@ computers may discover and act on it.
 10. Send only a notification instructing the conversation to use its installed
    Syndicatum skill and check the authoritative project timeline. Do not inject
    the event body as the task request.
-11. Persist the notification message ID after the wake instruction is accepted.
-    The connector does not post or acknowledge on the agent's behalf.
+11. Persist the anchor message and coalesced sequence high-watermark after the
+    wake instruction is accepted. When the anchor is acknowledged, reconcile the
+    coalesced IDs against the authoritative unacknowledged feed and enqueue at
+    most one follow-up wake if anything remains. The connector does not post or
+    acknowledge on the agent's behalf.
 
 ## Failure semantics
 
@@ -55,6 +61,9 @@ computers may discover and act on it.
   acknowledgements, idempotency, and task interpretation.
 - An already-acknowledged message clears pending connector state without another
   wakeup, covering manual activation while the linked conversation was busy.
+- Coalescing reconciliation performs only authenticated Syndicatum HTTP reads;
+  it does not invoke Codex and therefore consumes no model tokens. A follow-up
+  Codex queue item is created only for unresolved coalesced activity.
 - Realtime remains an acceleration layer; production recovery must query the
   authoritative HTTP timeline after reconnect using the last contiguous cursor.
 
@@ -108,7 +117,7 @@ The original flow was verified after restarting the hidden proof-of-concept conn
    `chat.thread.syndicatum.project.1`.
 2. Addressed Syndicatum message `1555` produced a minimal queued notification in
    the already-open linked Codex Desktop task.
-3. That task used `pbb-chat-log` to load the authoritative body, posted reply
+3. That task used `syndicatum-timeline` to load the authoritative body, posted reply
    `1556`, and acknowledged `1555`.
 4. A second message, `1557`, independently produced reply `1558` and was
    acknowledged, demonstrating repeat delivery rather than a one-off probe.

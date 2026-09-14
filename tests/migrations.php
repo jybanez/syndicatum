@@ -89,9 +89,11 @@ try {
     $pdo->prepare('INSERT INTO workspaces (owner_user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
         ->execute([$userId, 'Owner workspace', $now, $now]);
     $workspaceId = (int) $pdo->lastInsertId();
-    $pdo->prepare('INSERT INTO projects (workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-        ->execute([$workspaceId, $userId, 'Foundation project', 'foundation', $now, $now]);
+    $pdo->prepare('INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        ->execute([Db::uuidV4(), $workspaceId, $userId, 'Foundation project', 'foundation', $now, $now]);
     $projectId = (int) $pdo->lastInsertId();
+    $projectPublicId = $pdo->query('SELECT public_id FROM projects WHERE id = ' . $projectId)->fetchColumn();
+    $suite->assertTrue(preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $projectPublicId) === 1, 'Project public ID is not a UUIDv4.');
     $pdo->prepare("INSERT INTO project_members (project_id, user_id, role, status, created_at, updated_at) VALUES (?, ?, 'owner', 'active', ?, ?)")
         ->execute([$projectId, $userId, $now, $now]);
 
@@ -105,6 +107,30 @@ try {
         ->execute([$projectId, $userId, $now, $now]);
     $pdo->prepare("INSERT INTO project_participants (project_id, kind, agent_id, status, created_at, updated_at) VALUES (?, 'agent', ?, 'active', ?, ?)")
         ->execute([$projectId, $agentId, $now, $now]);
+
+    $suite->test('legacy agent writes stay synchronized with the canonical agent mirror', function () use ($suite, $pdo, $agentId, $tokenHash, $now) {
+        $statement = $pdo->prepare('SELECT token_hash FROM agents WHERE id = ?');
+        $statement->execute([$agentId]);
+        $suite->assertSame($tokenHash, $statement->fetchColumn());
+
+        $pdo->prepare('UPDATE chat_agents SET description = ?, updated_at = ? WHERE id = ?')
+            ->execute(['Mirrored update', $now, $agentId]);
+        $statement = $pdo->prepare('SELECT description FROM agents WHERE id = ?');
+        $statement->execute([$agentId]);
+        $suite->assertSame('Mirrored update', $statement->fetchColumn());
+
+        $pdo->prepare("INSERT INTO chat_agents (project_name, role, is_active, created_at, updated_at) VALUES (?, 'agent', 1, ?, ?)")
+            ->execute(['Disposable mirror agent', $now, $now]);
+        $disposableId = (int) $pdo->lastInsertId();
+        $statement = $pdo->prepare('SELECT project_name FROM agents WHERE id = ?');
+        $statement->execute([$disposableId]);
+        $suite->assertSame('Disposable mirror agent', $statement->fetchColumn());
+
+        $pdo->prepare('DELETE FROM chat_agents WHERE id = ?')->execute([$disposableId]);
+        $statement = $pdo->prepare('SELECT COUNT(*) FROM agents WHERE id = ?');
+        $statement->execute([$disposableId]);
+        $suite->assertSame(0, (int) $statement->fetchColumn());
+    });
 
     $suite->test('project membership and agent identities produce unified participants', function () use ($suite, $pdo, $projectId) {
         $rows = $pdo->query('SELECT kind, user_id, agent_id FROM project_participants WHERE project_id = ' . $projectId . ' ORDER BY kind')->fetchAll();
@@ -120,8 +146,8 @@ try {
                 ->execute([$userId, 'Duplicate workspace', $now, $now]);
         });
 
-        $pdo->prepare('INSERT INTO projects (workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-            ->execute([$workspaceId, $userId, 'Second project', 'second', $now, $now]);
+        $pdo->prepare('INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            ->execute([Db::uuidV4(), $workspaceId, $userId, 'Second project', 'second', $now, $now]);
         $otherProjectId = (int) $pdo->lastInsertId();
         $suite->assertDatabaseRejects(function () use ($pdo, $otherProjectId, $agentId, $now) {
             $pdo->prepare('INSERT INTO project_agents (project_id, agent_id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
@@ -132,8 +158,8 @@ try {
             ->execute(['other@example.test', 'Other owner', $now, $now]);
         $otherUserId = (int) $pdo->lastInsertId();
         $suite->assertDatabaseRejects(function () use ($pdo, $workspaceId, $otherUserId, $now) {
-            $pdo->prepare('INSERT INTO projects (workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-                ->execute([$workspaceId, $otherUserId, 'Mismatched owner', 'mismatched-owner', $now, $now]);
+            $pdo->prepare('INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                ->execute([Db::uuidV4(), $workspaceId, $otherUserId, 'Mismatched owner', 'mismatched-owner', $now, $now]);
         });
     });
 
@@ -152,8 +178,8 @@ try {
 
         $pdo->prepare(
             "INSERT INTO agent_activation_bindings
-             (agent_id, project_id, runtime_type, conversation_id, working_directory, enabled, created_by_user_id, created_at, updated_at)
-             VALUES (?, ?, 'codex', ?, ?, 1, ?, ?, ?)"
+             (agent_id, project_id, runtime_type, activation_driver, conversation_id, working_directory, enabled, created_by_user_id, created_at, updated_at)
+             VALUES (?, ?, 'codex', 'connector', ?, ?, 1, ?, ?, ?)"
         )->execute([$agentId, $projectId, 'thread-1', 'C:\\project', $userId, $now, $now]);
         $bindings = $service->bindings($device);
         $suite->assertSame(1, count($bindings));

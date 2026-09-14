@@ -18,14 +18,14 @@ class AdminService
     {
         $rows = $this->pdo->query(
             "SELECT u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.status,
-                    u.pbb_user_id, u.created_at, u.updated_at, w.id AS workspace_id, w.name AS workspace_name,
+                    u.pbb_user_id, u.google_subject, u.created_at, u.updated_at, w.id AS workspace_id, w.name AS workspace_name,
                     GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS role_codes
              FROM users u
              LEFT JOIN workspaces w ON w.owner_user_id = u.id
              LEFT JOIN user_system_roles ur ON ur.user_id = u.id
              LEFT JOIN system_roles r ON r.id = ur.role_id
              GROUP BY u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.status,
-                      u.pbb_user_id, u.created_at, u.updated_at, w.id, w.name
+                      u.pbb_user_id, u.google_subject, u.created_at, u.updated_at, w.id, w.name
              ORDER BY u.display_name, u.id"
         )->fetchAll();
         return array_map([$this, 'normalizeUserRow'], $rows);
@@ -250,7 +250,9 @@ class AdminService
         return [
             'id' => (int) $row['id'], 'email' => $row['normalized_email'], 'username' => $row['username'],
             'display_name' => $row['display_name'], 'avatar_url' => $row['avatar_url'], 'status' => $row['status'],
-            'pbb_user_id' => $row['pbb_user_id'], 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at'],
+            'pbb_user_id' => $row['pbb_user_id'],
+            'authentication_source' => $row['google_subject'] !== null ? 'google' : ($row['pbb_user_id'] !== null ? 'account' : 'native'),
+            'created_at' => $row['created_at'], 'updated_at' => $row['updated_at'],
             'workspace' => $row['workspace_id'] ? ['id' => (int) $row['workspace_id'], 'name' => $row['workspace_name']] : null,
             'system_roles' => $row['role_codes'] ? explode(',', $row['role_codes']) : [],
         ];

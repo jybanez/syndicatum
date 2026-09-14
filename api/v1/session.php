@@ -22,7 +22,9 @@ try {
             'data' => $user ? ['authenticated' => true, 'user' => $user, 'csrf_token' => isset($_COOKIE[AuthService::CSRF_COOKIE]) ? $_COOKIE[AuthService::CSRF_COOKIE] : null] : ['authenticated' => false],
             'capabilities' => [
                 'native_login' => (bool) $settings->get('account.native_login_enabled'),
+                'self_registration' => (bool) $settings->get('security.self_registration_enabled'),
                 'account_sso' => (bool) $settings->get('account.enabled'),
+                'google_sso' => (bool) $settings->get('google.enabled'),
                 'account_profile_url' => (string) $settings->get('account.profile_url'),
                 'realtime' => (bool) $settings->get('realtime.enabled'),
                 'workspace.view' => (bool) $user,
@@ -37,6 +39,22 @@ try {
 
     if ($method === 'POST') {
         $body = Api::body();
+        $action = isset($body['action']) ? trim((string) $body['action']) : 'login';
+        if ($action === 'register') {
+            $settings = new SettingsService($pdo);
+            if (!$settings->get('security.self_registration_enabled')) {
+                Api::json(['error' => true, 'code' => 'registration_disabled', 'message' => 'New account registration is not available.'], 403);
+            }
+            $email = isset($body['email']) ? strtolower(trim((string) $body['email'])) : '';
+            $limiter = new RateLimiter($pdo);
+            $limiter->hit('registration', $email . '|' . (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 5, 900, 1800);
+            $result = $auth->register($body);
+            AuthService::setSessionCookies($result['session']);
+            Api::json(['data' => ['authenticated' => true, 'user' => $result['user'], 'csrf_token' => $result['session']['csrf_token']]], 201);
+        }
+        if ($action !== 'login') {
+            throw new InvalidArgumentException('Unsupported session action.');
+        }
         $identity = isset($body['identity']) ? trim((string) $body['identity']) : '';
         $limiter = new RateLimiter($pdo);
         $limiter->hit('login', strtolower($identity) . '|' . (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 8, 300, 900);
