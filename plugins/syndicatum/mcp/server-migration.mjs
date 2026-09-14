@@ -5,6 +5,8 @@ import {
   loadAgentProfile,
   normalizeSyndicatumOrigin,
   removeAgentProfile,
+  removeAgentProfileAlias,
+  storeAgentProfileAlias,
   storeAgentProfile,
 } from "./agent-profile-store.mjs";
 import { loadConfig, saveDeviceConfig } from "./config.mjs";
@@ -17,6 +19,8 @@ export async function migrateSyndicatumServer(syndicatumUrl, env = process.env, 
   const loadProfileImpl = dependencies.loadProfileImpl ?? loadAgentProfile;
   const storeProfileImpl = dependencies.storeProfileImpl ?? storeAgentProfile;
   const removeProfileImpl = dependencies.removeProfileImpl ?? removeAgentProfile;
+  const storeProfileAliasImpl = dependencies.storeProfileAliasImpl ?? storeAgentProfileAlias;
+  const removeProfileAliasImpl = dependencies.removeProfileAliasImpl ?? removeAgentProfileAlias;
   const profileExistsImpl = dependencies.profileExistsImpl ?? agentProfileExists;
   const validateServerImpl = dependencies.validateServerImpl ?? validateSyndicatumServer;
   const deviceClientFactory = dependencies.deviceClientFactory ?? (config => new DeviceSyndicatumClient(config));
@@ -53,6 +57,7 @@ export async function migrateSyndicatumServer(syndicatumUrl, env = process.env, 
   }
 
   const created = [];
+  const aliases = [];
   try {
     for (const migration of migrations) {
       const stored = await storeProfileImpl({
@@ -68,6 +73,10 @@ export async function migrateSyndicatumServer(syndicatumUrl, env = process.env, 
       }, env);
       created.push(stored.profile_id);
     }
+    for (const migration of migrations) {
+      await storeProfileAliasImpl(migration.source.profile_id, migration.targetProfileId, env);
+      aliases.push(migration.source.profile_id);
+    }
     await saveDeviceConfigImpl({
       syndicatumUrl: targetOrigin,
       deviceId: config.deviceId,
@@ -75,6 +84,7 @@ export async function migrateSyndicatumServer(syndicatumUrl, env = process.env, 
       codexPath: config.codexPath,
     }, env);
   } catch (error) {
+    for (const profileId of aliases.reverse()) await removeProfileAliasImpl(profileId, env).catch(() => {});
     for (const profileId of created.reverse()) await removeProfileImpl(profileId, env).catch(() => {});
     throw error;
   }

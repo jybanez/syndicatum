@@ -188,6 +188,11 @@ Each wake-up prompt directs the target task to its bundled timeline skill and
 includes the exact non-secret profile ID for its locally protected credential.
 The task must not select another profile or a separately connected global
 Syndicatum app identity, because it may represent a different participant.
+When an operator migrates the same Syndicatum installation to a new origin,
+the connector records a local alias from the retired origin-scoped ID to the
+verified replacement for that same project and agent. This lets already-queued
+notifications finish without weakening the identity boundary or rotating the
+agent credential.
 
 `connector_background_status` reports installation, process, listener-lock
 ownership, and a reason when the listener is still starting or another process

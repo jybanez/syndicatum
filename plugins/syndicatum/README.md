@@ -56,7 +56,10 @@ redirects or return any credential.
 
 After migration, profile IDs change because their server-origin hash changes.
 Use the exact replacement profile IDs returned by the command in subsequent
-timeline calls and notifications.
+timeline calls and notifications. The migration also records a local,
+non-secret alias from each retired profile ID to its verified replacement so
+notifications already queued in open Codex tasks remain usable. The alias does
+not permit selecting another project or agent identity.
 
 ## Claim an agent identity
 

@@ -21,6 +21,7 @@ export function pluginPaths(env = process.env, platform = process.platform) {
   return {
     root,
     agentProfiles: path.join(root, "agent-identities"),
+    profileAliases: path.join(root, "agent-profile-aliases.json"),
     config: path.join(root, "connector.config.json"),
     credential: path.join(root, "credential"),
     pendingCredential: path.join(root, "pending-login-credential"),

@@ -22,13 +22,14 @@ test("server migration validates credentials before changing origin-scoped profi
     profileExistsImpl: async () => false,
     agentClientFactory: config => ({ validateBinding: async () => { calls.push(["agent", config.syndicatumUrl, config.token]); } }),
     storeProfileImpl: async input => { calls.push(["store", input.syndicatumUrl, input.token]); return { profile_id: agentProfileId(input.syndicatumUrl, input.projectId, input.agentId) }; },
+    storeProfileAliasImpl: async (previous, target) => { calls.push(["alias", previous, target]); },
     saveDeviceConfigImpl: async input => { calls.push(["config", input.syndicatumUrl, input.token]); },
     removeProfileImpl: async profileId => { removed.push(profileId); },
   });
   assert.equal(result.state, "ready");
   assert.equal(result.migratedProfiles[0].previousProfileId, sourceProfile.profile_id);
   assert.equal(result.migratedProfiles[0].profileId, agentProfileId(newUrl, 2, 33));
-  assert.deepEqual(calls.map(item => item[0]), ["server", "device", "agent", "store", "config"]);
+  assert.deepEqual(calls.map(item => item[0]), ["server", "device", "agent", "store", "alias", "config"]);
   assert.deepEqual(removed, [sourceProfile.profile_id]);
 });
 
@@ -43,6 +44,7 @@ test("server migration makes no local changes when target authentication fails",
     profileExistsImpl: async () => false,
     agentClientFactory: () => ({ validateBinding: async () => { throw new Error("Authentication is required."); } }),
     storeProfileImpl: async () => { stored = true; },
+    storeProfileAliasImpl: async () => {},
     saveDeviceConfigImpl: async () => { saved = true; },
     removeProfileImpl: async () => { removed = true; },
   }), /Authentication is required/);
@@ -57,6 +59,7 @@ test("server migration rolls back newly written profiles when config persistence
     listProfilesImpl: async () => [sourceProfile], loadProfileImpl: async () => sourceProfile,
     profileExistsImpl: async () => false, agentClientFactory: () => ({ validateBinding: async () => {} }),
     storeProfileImpl: async () => ({ profile_id: targetProfileId }),
+    storeProfileAliasImpl: async () => {}, removeProfileAliasImpl: async () => {},
     saveDeviceConfigImpl: async () => { throw new Error("disk full"); },
     removeProfileImpl: async profileId => { removed.push(profileId); },
   }), /disk full/);

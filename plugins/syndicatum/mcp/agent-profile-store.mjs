@@ -36,17 +36,58 @@ export async function storeAgentProfile(input, env = process.env, { storeTokenIm
 }
 
 export async function loadAgentProfile(profileId, env = process.env, { loadTokenImpl = loadToken } = {}) {
-  const directory = profileDirectory(profileId, env);
+  const resolvedProfileId = await resolveAgentProfileId(profileId, env);
+  const directory = profileDirectory(resolvedProfileId, env);
   const metadata = JSON.parse(await readFile(path.join(directory, "profile.json"), "utf8"));
-  if (metadata.profile_id !== profileId || agentProfileId(metadata.syndicatum_url, metadata.project_id, metadata.agent_id) !== profileId) {
+  if (metadata.profile_id !== resolvedProfileId || agentProfileId(metadata.syndicatum_url, metadata.project_id, metadata.agent_id) !== resolvedProfileId) {
     throw new Error("The Syndicatum agent profile metadata is invalid.");
   }
   // The background launcher exposes the device credential through this legacy
   // environment variable. A claimed agent profile must never inherit it:
   // every profile has its own protected credential and identity boundary.
   const profileEnv = { ...env, SYNDICATUM_AGENT_TOKEN: "" };
-  const token = await loadTokenImpl(path.join(directory, "credential"), profileEnv, { profileId });
+  const token = await loadTokenImpl(path.join(directory, "credential"), profileEnv, { profileId: resolvedProfileId });
   return Object.freeze({ ...metadata, token });
+}
+
+export async function storeAgentProfileAlias(previousProfileId, profileId, env = process.env) {
+  const previous = validProfileId(previousProfileId);
+  const target = validProfileId(profileId);
+  if (previous === target) return;
+  if (profileIdentity(previous) !== profileIdentity(target)) {
+    throw new Error("A Syndicatum profile alias must preserve the project and agent identity.");
+  }
+  if (!await agentProfileExists(target, env)) throw new Error("The target Syndicatum agent profile does not exist.");
+  const aliases = await readProfileAliases(env);
+  for (const [alias, value] of Object.entries(aliases)) {
+    if (value === previous) aliases[alias] = target;
+  }
+  aliases[previous] = target;
+  await writeJsonAtomic(pluginPaths(env).profileAliases, { version: 1, aliases });
+}
+
+export async function removeAgentProfileAlias(previousProfileId, env = process.env) {
+  const previous = validProfileId(previousProfileId);
+  const aliases = await readProfileAliases(env);
+  if (!(previous in aliases)) return;
+  delete aliases[previous];
+  await writeJsonAtomic(pluginPaths(env).profileAliases, { version: 1, aliases });
+}
+
+export async function resolveAgentProfileId(profileId, env = process.env) {
+  let current = validProfileId(profileId);
+  const aliases = await readProfileAliases(env);
+  const visited = new Set();
+  while (aliases[current]) {
+    if (visited.has(current)) throw new Error("The Syndicatum agent profile alias chain is invalid.");
+    visited.add(current);
+    const target = validProfileId(aliases[current]);
+    if (profileIdentity(current) !== profileIdentity(target)) {
+      throw new Error("The Syndicatum agent profile alias changes identity.");
+    }
+    current = target;
+  }
+  return current;
 }
 
 export async function listAgentProfiles(env = process.env) {
@@ -107,9 +148,30 @@ export function publicAgentProfile(profile) {
 }
 
 function profileDirectory(profileId, env) {
+  const value = validProfileId(profileId);
+  return path.join(pluginPaths(env).agentProfiles, value);
+}
+
+function validProfileId(profileId) {
   const value = String(profileId || "").trim();
   if (!PROFILE_PATTERN.test(value)) throw new Error("The Syndicatum profile ID is invalid.");
-  return path.join(pluginPaths(env).agentProfiles, value);
+  return value;
+}
+
+function profileIdentity(profileId) {
+  return validProfileId(profileId).split(".").slice(1).join(".");
+}
+
+async function readProfileAliases(env) {
+  let document;
+  try { document = JSON.parse(await readFile(pluginPaths(env).profileAliases, "utf8")); }
+  catch (error) { if (error.code === "ENOENT") return {}; throw error; }
+  if (document?.version !== 1 || !document.aliases || typeof document.aliases !== "object" || Array.isArray(document.aliases)) {
+    throw new Error("The Syndicatum agent profile alias registry is invalid.");
+  }
+  const aliases = {};
+  for (const [previous, target] of Object.entries(document.aliases)) aliases[validProfileId(previous)] = validProfileId(target);
+  return aliases;
 }
 
 export function normalizeSyndicatumOrigin(value) {
