@@ -1619,6 +1619,21 @@ function rebuildParticipantControls() {
   renderParticipants();
 }
 
+async function refreshParticipants(projectGeneration = state.generation) {
+  if (state.mode !== "expanded" || projectGeneration !== state.generation || !selectedProjectId()) return;
+  const participantsPayload = await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`, {
+    signal: state.abortController?.signal,
+  });
+  if (projectGeneration !== state.generation) return;
+  const currentParticipantId = id(state.project?.current_participant?.id);
+  state.participants = (unwrap(participantsPayload) || []).map((participant) => participantFrom(participant, participant.kind));
+  state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
+    || state.project.current_participant;
+  const activeIds = new Set(state.participants.map((participant) => participant.id));
+  state.draft.addressees = state.draft.addressees.filter((participantId) => activeIds.has(participantId));
+  rebuildParticipantControls();
+}
+
 function renderComposerControls() {
   const writable = state.mode === "expanded" && can("messages.write");
   el.composer_shell.hidden = !writable;
@@ -2100,6 +2115,10 @@ async function connectRealtime(projectGeneration = state.generation) {
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) {
         receiveRealtimeMessage(envelope.payload.message);
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.participants.changed") {
+        void refreshParticipants(projectGeneration).catch(handleLoadError);
       }
     };
     client = new sdk.RealtimeSocketClient({
@@ -2141,7 +2160,7 @@ function scheduleRealtimeReconnect(projectGeneration) {
 function startPolling() {
   clearTimeout(state.pollingTimer);
   const tick = async () => {
-    try { await loadMessages("newer"); } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
+    try { await Promise.all([loadMessages("newer"), refreshParticipants()]); } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
     finally { state.pollingTimer = setTimeout(tick, 15000); }
   };
   state.pollingTimer = setTimeout(tick, 15000);

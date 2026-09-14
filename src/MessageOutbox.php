@@ -5,6 +5,7 @@ require_once __DIR__ . '/Db.php';
 class MessageOutbox
 {
     const EVENT_MESSAGE_CREATED = 'syndicatum.message.created';
+    const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
 
     private $pdo;
 
@@ -44,6 +45,43 @@ class MessageOutbox
             (int) $messageId,
             self::EVENT_MESSAGE_CREATED,
             (int) $projectSequence,
+            $payloadJson,
+            $now,
+            $now,
+        ]);
+
+        return $this->findById((int) $this->pdo->lastInsertId());
+    }
+
+    /**
+     * Notify connected project surfaces that their authoritative participant
+     * directory must be reloaded. Call this inside the participant mutation.
+     */
+    public function enqueueParticipantsChanged($projectId, $change)
+    {
+        $eventUuid = self::uuidV4();
+        $payload = [
+            'event_id' => $eventUuid,
+            'type' => self::EVENT_PARTICIPANTS_CHANGED,
+            'project_id' => (int) $projectId,
+            'change' => trim((string) $change),
+        ];
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payloadJson === false) {
+            throw new RuntimeException('Unable to encode the participant outbox event.');
+        }
+
+        $statement = $this->pdo->prepare(
+            'INSERT INTO message_events_outbox
+             (event_uuid, project_id, message_id, event_type, project_sequence, payload_json,
+              attempt_count, available_at, created_at)
+             VALUES (?, ?, NULL, ?, NULL, ?, 0, ?, ?)'
+        );
+        $now = Db::now();
+        $statement->execute([
+            $eventUuid,
+            (int) $projectId,
+            self::EVENT_PARTICIPANTS_CHANGED,
             $payloadJson,
             $now,
             $now,

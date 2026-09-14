@@ -229,6 +229,15 @@ try {
         $suite->same(null, $pdo->query('SELECT notified_at FROM message_addressees WHERE message_id = 8 AND participant_id = 21')->fetchColumn(),
             'Publishing a shared Realtime event must not claim recipient-specific notification delivery.');
     });
+
+    $suite->test('outbox stores participant directory invalidation events', function () use ($suite, $pdo) {
+        $event = (new MessageOutbox($pdo))->enqueueParticipantsChanged(3, 'agent_created');
+        $payload = json_decode($event['payload_json'], true);
+        $suite->same(MessageOutbox::EVENT_PARTICIPANTS_CHANGED, $event['event_type']);
+        $suite->same(null, $event['message_id']);
+        $suite->same('agent_created', $payload['change']);
+        $suite->same(3, $payload['project_id']);
+    });
 } catch (PDOException $exception) {
     echo 'SKIP  outbox database test: ' . $exception->getMessage() . "\n";
 } finally {

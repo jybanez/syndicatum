@@ -261,6 +261,13 @@ try {
         $suite->true(is_file($root . '/vendor/pbb-realtime/js/sdk/index.js'), 'The same-origin PBB Realtime SDK is missing.');
     });
 
+    $suite->test('Participant directory refreshes for remote creation events and polling fallback', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'envelope.type === "syndicatum.participants.changed"') !== false, 'Realtime participant changes must be handled.');
+        $suite->true(strpos($source, 'async function refreshParticipants(') !== false, 'The participant reload helper is missing.');
+        $suite->true(strpos($source, 'Promise.all([loadMessages("newer"), refreshParticipants()])') !== false, 'Polling fallback must refresh participants.');
+    });
+
     $suite->test('Broadcast messages render as broadcasts instead of mass tags', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $index = file_get_contents($root . '/index.php');

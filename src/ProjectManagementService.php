@@ -4,16 +4,22 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/AvatarService.php';
 require_once __DIR__ . '/AgentWebhookService.php';
+require_once __DIR__ . '/SettingsService.php';
+require_once __DIR__ . '/MessageOutbox.php';
 
 class ProjectManagementService
 {
     private $pdo;
     private $auth;
+    private $settings;
+    private $outbox;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
         $this->auth = new AuthService($pdo);
+        $this->settings = new SettingsService($pdo);
+        $this->outbox = new MessageOutbox($pdo);
     }
 
     public function createProject($userId, array $input)
@@ -154,6 +160,7 @@ class ProjectManagementService
             $this->pdo->prepare("UPDATE project_invitations SET status = 'accepted', accepted_by_user_id = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
                 ->execute([(int) $userId, Db::now(), $invitation['id']]);
             $this->auth->audit((int) $userId, 'project.invitation_accepted', 'project_invitation', (string) $invitation['id']);
+            $this->enqueueParticipantsChanged((int) $invitation['project_id'], 'human_joined');
             $this->pdo->commit();
             return $this->project((int) $invitation['project_id']);
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
@@ -221,6 +228,7 @@ class ProjectManagementService
                 $webhook = (new AgentWebhookService($this->pdo))->configure($projectId, $agentId, $actorUserId, $webhookInput);
             }
             $this->auth->audit((int) $actorUserId, 'project.agent_created', 'agent', (string) $agentId, ['project_id' => (int) $projectId, 'scopes' => $scopes]);
+            $this->enqueueParticipantsChanged((int) $projectId, 'agent_created');
             if ($ownsTransaction) { $this->pdo->commit(); }
             $result = ['agent_id' => $agentId, 'project_id' => (int) $projectId, 'project_name' => $this->project($projectId)['name'], 'display_name' => $displayName,
                 'avatar_url' => $this->avatarUrl(isset($input['avatar_url']) ? $input['avatar_url'] : null),
@@ -495,6 +503,13 @@ class ProjectManagementService
     }
 
     private function rollback() { if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); } }
+
+    private function enqueueParticipantsChanged($projectId, $change)
+    {
+        if ($this->settings->get('realtime.enabled') === true) {
+            $this->outbox->enqueueParticipantsChanged((int) $projectId, $change);
+        }
+    }
 
     private function insertAudit($actorUserId, $action, $subjectType, $subjectId, array $metadata)
     {

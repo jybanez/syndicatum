@@ -264,9 +264,13 @@ Webhook controls never expose the stored secret. Create/rotation responses retur
 When a project's Realtime capability is enabled, its open Project surface uses
 the same-origin vendored PBB Realtime JavaScript SDK and does
 not periodically poll for newer timeline messages. Complete message events are
-applied directly to the timeline. A disconnected socket is retried with bounded
-exponential backoff, and a successful rejoin performs one HTTP synchronization
-to recover any sequence gap. Initial history, explicit refreshes, filter
+applied directly to the timeline. Participant creation events cause the open
+project to reload its authoritative active-participant directory, including
+agents created by remote discussion binding and humans joining through
+invitations. A disconnected socket is retried with bounded exponential backoff,
+and a successful rejoin performs one HTTP synchronization to recover any
+sequence gap. The non-Realtime fallback refreshes participants with its message
+poll. Initial history, explicit refreshes, filter
 changes, and older-page requests remain HTTP operations. The 15-second newer-
 message poll runs only when Realtime is disabled.
 

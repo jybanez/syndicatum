@@ -216,9 +216,16 @@ try {
             ->execute([$deviceId, $owner['id'], hash('sha256', 'intent-device'), $now, $now, gmdate('Y-m-d H:i:s', time() + 3600)]);
         $device = ['id' => $deviceId, 'user_id' => $owner['id']];
         $suite->same(1, count($service->pending($device)));
+        $pdo->prepare('INSERT INTO system_settings (setting_key, value_json, updated_at) VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE value_json = VALUES(value_json), updated_at = VALUES(updated_at)')
+            ->execute(['realtime.enabled', 'true', Db::now()]);
         $confirmed = $service->confirm($device, $prepared['intent_id'], 'https://chatgpt.com/c/intent_created_agent?model=test');
         $suite->same('Successful', $confirmed['discussion_binding']);
         $suite->same(true, $confirmed['enabled']);
+        $participantEvent = $pdo->query("SELECT event_type, payload_json FROM message_events_outbox
+            WHERE event_type = 'syndicatum.participants.changed' ORDER BY id DESC LIMIT 1")->fetch();
+        $suite->same(MessageOutbox::EVENT_PARTICIPANTS_CHANGED, $participantEvent['event_type']);
+        $suite->same('agent_created', json_decode($participantEvent['payload_json'], true)['change']);
         $context = $service->context($access, $prepared['binding_context_id']);
         $suite->same('Successful', $context['binding']['status']);
         $suite->same('Intent Created Agent', $context['identity']['agent']['display_name']);
