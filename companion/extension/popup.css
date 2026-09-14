@@ -9,6 +9,10 @@ input, button { box-sizing: border-box; border-radius: 8px; border: 1px solid #4
 input { width: 100%; margin-bottom: 10px; } button { cursor: pointer; background: #234b87; font-weight: 650; }
 #connect { width: 100%; }.row { display: flex; justify-content: space-between; border-bottom: 1px solid #263853; padding: 8px 0; }.row span { color: #9fb1cc; }
 .row strong { max-width: 230px; overflow-wrap: anywhere; text-align: right; }
+.health-value::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #8290a6; vertical-align: 1px; }
+.health-value[data-state="connected"]::before,.health-value[data-state="reachable"]::before,.health-value[data-state="authorized"]::before,.health-value[data-state="active"]::before,.health-value[data-state="healthy"]::before,.health-value[data-state="ready"]::before { background: #43d98b; }
+.health-value[data-state="attention"]::before,.health-value[data-state="authorizing"]::before,.health-value[data-state="checking"]::before,.health-value[data-state="connecting"]::before,.health-value[data-state="reconnecting"]::before,.health-value[data-state="partial"]::before,.health-value[data-state="pending"]::before { background: #f3b64c; }
+.health-value[data-state="unreachable"]::before,.health-value[data-state="error"]::before,.health-value[data-state="unavailable"]::before { background: #ff647c; }
 .server-value { display: flex; align-items: center; justify-content: flex-end; gap: 7px; max-width: 245px; }
 .icon-button { display: inline-grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 5px; background: transparent; border-color: #405477; }
 .icon-button svg { width: 16px; height: 16px; fill: currentColor; }
@@ -19,3 +23,8 @@ dialog::backdrop { background: rgb(2 8 18 / 72%); }
 dialog h2 { margin: 0 0 7px; font-size: 16px; }
 dialog p { margin: 0 0 14px; color: #b7c7df; }
 dialog .error { color: #ffc4cf; }
+details { margin-top: 12px; color: #b7c7df; }
+summary { cursor: pointer; }
+dl { margin: 8px 0 0; font-size: 12px; }
+dl div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+dt { color: #8396b4; } dd { margin: 0; text-align: right; }

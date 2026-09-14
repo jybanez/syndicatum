@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -69,3 +69,27 @@ test("binding inventory comparison ignores order but detects routing changes", (
 test("prefers an active matching discussion tab", () => assert.equal(selectDeliveryTab([{ id: 1, lastAccessed: 20 }, { id: 2, active: true, lastAccessed: 10 }]).id, 2));
 test("otherwise prefers a live recently accessed discussion tab", () => assert.equal(selectDeliveryTab([{ id: 1, discarded: true, lastAccessed: 30 }, { id: 2, discarded: false, lastAccessed: 20 }, { id: 3, discarded: false, lastAccessed: 10 }]).id, 2));
 test("handles an empty matching tab list", () => assert.equal(selectDeliveryTab([]), null));
+test("reports independent server, account, realtime, binding, and delivery health", () => {
+  const health = companionHealth({
+    baseUrl: "https://syndicatum.example",
+    accessToken: "protected",
+    serverHealth: "reachable",
+    accountHealth: "authorized",
+    realtimeHealth: "connected",
+    lastSyncAt: "2026-09-14T00:00:00Z",
+    bindings: [{ project_id: 2 }, { project_id: 2 }, { project_id: 3 }],
+    queue: { pending: {} },
+  }, { realtimeProjectCount: 2 });
+  assert.deepEqual(health, { overall: "connected", server: "reachable", account: "authorized", realtime: "connected", bindings: "active", delivery: "pending", bindingCount: 3, projectCount: 2, queuedCount: 1, realtimeProjectCount: 2, error: null });
+});
+test("does not present a server failure as healthy overall", () => {
+  const health = companionHealth({ baseUrl: "https://syndicatum.example", accessToken: "protected", serverHealth: "unreachable", lastServerError: "Failed to fetch" });
+  assert.equal(health.overall, "attention");
+  assert.equal(health.server, "unreachable");
+  assert.equal(health.error, "Failed to fetch");
+});
+test("reports partially connected realtime projects as needing attention", () => {
+  const health = companionHealth({ baseUrl: "https://syndicatum.example", accessToken: "protected", serverHealth: "reachable", lastSyncAt: "2026-09-14T00:00:00Z", bindings: [{ project_id: 2 }, { project_id: 3 }] }, { realtimeProjectCount: 1 });
+  assert.equal(health.realtime, "partial");
+  assert.equal(health.overall, "attention");
+});

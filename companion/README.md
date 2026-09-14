@@ -44,6 +44,10 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+Version 0.9.0 separates server reachability, account authorization, Realtime,
+binding, and delivery health in the popup. It includes last-check timestamps so
+a healthy connection cannot be shown beside an unexplained stale fetch error.
+
 Version 0.8.1 persists the requested server migration before Chrome displays
 its optional-origin permission prompt. Because Chrome may close the extension
 popup while that prompt is open, the background worker resumes the validated

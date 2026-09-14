@@ -6,7 +6,7 @@ const extensionUrl = new URL("../extension/", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.8.1");
+  assert.equal(manifest.version, "0.9.0");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -91,6 +91,18 @@ test("background keeps realtime alive and stores only metadata in delivery diagn
   assert.match(source, /setInterval\(sendHealth, 20000\)/);
   assert.match(source, /deliveryHistory/);
   assert.doesNotMatch(source, /deliveryHistory[^;]*message\.body/s);
+});
+
+test("popup separates connection health and exposes timestamp diagnostics", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
+  const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  for (const id of ["server-health", "account-health", "realtime-health", "bindings-health", "delivery-health", "last-server-check", "last-sync", "last-realtime", "last-delivery"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(popup, /health\.overall/);
+  assert.match(background, /companionHealth/);
+  assert.match(background, /lastServerError/);
+  assert.match(background, /lastRealtimeError/);
+  assert.match(background, /lastDeliveryError/);
 });
 
 test("ChatGPT adapter confirms the exact injected turn without capturing its response", async () => {

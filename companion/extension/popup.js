@@ -1,5 +1,23 @@
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","bindings","queued","authorization","binding-result","error","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change"].map(id => [id, document.getElementById(id)]));
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
+
+const labels = {
+  connected: "Connected", disconnected: "Disconnected", authorizing: "Authorization required", attention: "Needs attention",
+  reachable: "Reachable", unreachable: "Unreachable", checking: "Checking", not_configured: "Not configured",
+  authorized: "Authorized", error: "Error", inactive: "Inactive", idle: "Idle", connecting: "Connecting", reconnecting: "Reconnecting", unavailable: "Unavailable", partial: "Partially connected",
+  active: "Active", none: "None", pending: "Pending", healthy: "Healthy", ready: "Ready",
+};
+
+function showHealth(element, value, suffix = "") {
+  element.textContent = `${labels[value] || value || "Unknown"}${suffix}`;
+  element.dataset.state = value || "unknown";
+}
+
+function timestamp(value) {
+  if (!value) return "Never";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "Unavailable" : parsed.toLocaleString();
+}
 
 function serverPermission(value) {
   const url = new URL(String(value || "").trim());
@@ -13,16 +31,26 @@ function render(data) {
   const disconnected = data.status === "disconnected";
   elements["connect-view"].hidden = !disconnected;
   elements["status-view"].hidden = disconnected;
-  elements.status.textContent = data.status === "authorizing" ? "Authorization required" : data.status === "connected" ? "Connected" : "Disconnected";
+  const health = data.health || {};
+  showHealth(elements.status, health.overall || data.status);
+  showHealth(elements["server-health"], health.server || "checking");
+  showHealth(elements["account-health"], health.account || "disconnected");
+  const realtimeSuffix = health.projectCount ? ` (${health.realtimeProjectCount || 0}/${health.projectCount})` : "";
+  showHealth(elements["realtime-health"], health.realtime || "inactive", realtimeSuffix);
+  showHealth(elements["bindings-health"], health.bindings || "checking", ` (${health.bindingCount ?? data.bindingCount ?? 0})`);
+  const deliverySuffix = health.queuedCount ? ` (${health.queuedCount})` : "";
+  showHealth(elements["delivery-health"], health.delivery || "ready", deliverySuffix);
   elements.server.textContent = data.baseUrl || "";
-  elements.bindings.textContent = String(data.bindingCount || 0);
-  elements.queued.textContent = String(data.queuedCount || 0);
   elements.authorization.hidden = !data.userCode;
   elements.authorization.textContent = data.userCode ? `Approve the opened Syndicatum page. Code: ${data.userCode}` : "";
   elements["binding-result"].hidden = !data.lastBindingMessage;
   elements["binding-result"].textContent = data.lastBindingMessage || "";
-  elements.error.hidden = !data.lastError;
-  elements.error.textContent = data.lastError || "";
+  elements.error.hidden = !health.error;
+  elements.error.textContent = health.error || "";
+  elements["last-server-check"].textContent = timestamp(data.lastServerCheckAt);
+  elements["last-sync"].textContent = timestamp(data.lastSyncAt);
+  elements["last-realtime"].textContent = timestamp(data.lastRealtimeAt);
+  elements["last-delivery"].textContent = timestamp(data.lastDeliveryAt);
   if (data.baseUrl) elements["base-url"].value = data.baseUrl;
 }
 

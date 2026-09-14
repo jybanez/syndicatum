@@ -11,13 +11,17 @@
       <p id="connect-error" class="error" hidden></p>
     </section>
     <section id="status-view" hidden>
-      <div class="row"><span>Status</span><strong id="status">Disconnected</strong></div>
-      <div class="row"><span>Server</span><span class="server-value"><strong id="server"></strong><button id="edit-server" class="icon-button" type="button" title="Change Syndicatum server" aria-label="Change Syndicatum server"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5Zm16.7-9.8a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0l-1.6 1.6 3.5 3.5 1.5-1.7Z"/></svg></button></span></div>
-      <div class="row"><span>Bindings</span><strong id="bindings">0</strong></div>
-      <div class="row"><span>Pending</span><strong id="queued">0</strong></div>
+      <div class="row"><span>Overall</span><strong id="status" class="health-value">Disconnected</strong></div>
+      <div class="row"><span>Server</span><strong id="server-health" class="health-value">Checking</strong></div>
+      <div class="row server-row"><span>Address</span><span class="server-value"><strong id="server"></strong><button id="edit-server" class="icon-button" type="button" title="Change Syndicatum server" aria-label="Change Syndicatum server"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5Zm16.7-9.8a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0l-1.6 1.6 3.5 3.5 1.5-1.7Z"/></svg></button></span></div>
+      <div class="row"><span>Account</span><strong id="account-health" class="health-value">Disconnected</strong></div>
+      <div class="row"><span>Realtime</span><strong id="realtime-health" class="health-value">Inactive</strong></div>
+      <div class="row"><span>Bindings</span><strong id="bindings-health" class="health-value">0</strong></div>
+      <div class="row"><span>Delivery</span><strong id="delivery-health" class="health-value">Ready</strong></div>
       <p id="authorization" class="notice" hidden></p>
       <p id="binding-result" class="success" hidden></p>
       <p id="error" class="error" hidden></p>
+      <details id="diagnostics"><summary>Diagnostics</summary><dl><div><dt>Last server check</dt><dd id="last-server-check">Never</dd></div><div><dt>Last binding sync</dt><dd id="last-sync">Never</dd></div><div><dt>Last Realtime join</dt><dd id="last-realtime">Never</dd></div><div><dt>Last delivery</dt><dd id="last-delivery">Never</dd></div></dl></details>
       <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>
     </section>
     <dialog id="server-dialog">

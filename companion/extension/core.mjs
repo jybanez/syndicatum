@@ -3,6 +3,27 @@ export const PROVIDERS = Object.freeze({
   gemini: Object.freeze({ host: "gemini.google.com", label: "Gemini" }),
 });
 
+export function companionHealth(current = {}, runtime = {}) {
+  const bindings = Array.isArray(current.bindings) ? current.bindings : [];
+  const bindingCount = bindings.length;
+  const projectCount = new Set(bindings.map(binding => String(binding.project_id))).size;
+  const queuedCount = Object.keys(current.queue || {}).length;
+  const realtimeProjectCount = Number(runtime.realtimeProjectCount || 0);
+  const account = current.pending?.deviceCode ? "authorizing" : current.accessToken ? (current.accountHealth || "authorized") : "disconnected";
+  const server = !current.baseUrl ? "not_configured" : current.serverHealth || (current.lastSyncAt ? "reachable" : "checking");
+  const realtime = account !== "authorized" ? "inactive"
+    : projectCount === 0 ? "idle"
+      : realtimeProjectCount >= projectCount ? "connected"
+        : realtimeProjectCount > 0 ? "partial" : current.realtimeHealth || "connecting";
+  const bindingsState = account !== "authorized" ? "inactive" : current.lastSyncAt ? (bindingCount ? "active" : "none") : "checking";
+  const delivery = account !== "authorized" ? "inactive" : queuedCount ? "pending" : current.lastDeliveryError ? "attention" : current.lastDeliveryAt ? "healthy" : "ready";
+  const error = current.lastServerError || current.lastAccountError || current.lastRealtimeError || current.lastDeliveryError || current.lastError || null;
+  const overall = account === "disconnected" ? "disconnected"
+    : account === "authorizing" ? "authorizing"
+      : error || [server, account, realtime, delivery].some(value => ["unreachable", "error", "unavailable", "partial", "attention"].includes(value)) ? "attention" : "connected";
+  return { overall, server, account, realtime, bindings: bindingsState, delivery, bindingCount, projectCount, queuedCount, realtimeProjectCount, error };
+}
+
 export function normalizeBaseUrl(value) {
   const input = String(value || "").trim();
   if (!input) throw new Error("Enter the Syndicatum server URL.");

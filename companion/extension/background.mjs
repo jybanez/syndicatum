@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -55,7 +55,11 @@ async function apiAt(baseUrl, accessToken, path, options = {}) {
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   const response = await fetch(`${baseUrl}${path}`, { ...options, headers, redirect: "error" });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || result.code || `Syndicatum returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    const error = new Error(result.message || result.code || `Syndicatum returned HTTP ${response.status}.`);
+    error.httpStatus = response.status;
+    throw error;
+  }
   return result.data ?? result;
 }
 
@@ -85,7 +89,7 @@ function serverPermission(baseUrl) {
 async function beginConnection(baseUrl) {
   baseUrl = normalizeBaseUrl(baseUrl);
   await validateServer(baseUrl);
-  await save({ baseUrl, status: "authorizing", lastError: null });
+  await save({ baseUrl, status: "authorizing", serverHealth: "reachable", accountHealth: "authorizing", lastServerCheckAt: new Date().toISOString(), lastServerError: null, lastAccountError: null, lastError: null });
   const data = await api("/api/v1/connector-device-authorizations.php", { method: "POST", body: JSON.stringify({ device_name: "Syndicatum browser companion", platform: "chrome-extension" }) });
   await save({ pending: { deviceCode: data.device_code, userCode: data.user_code, expiresAt: data.expires_at }, status: "authorizing" });
   await chrome.tabs.create({ url: new URL(data.verification_uri, `${baseUrl}/`).href, active: true });
@@ -101,14 +105,14 @@ async function pollAuthorization() {
   try {
     const result = await api("/api/v1/connector-device-token.php", { method: "POST", body: JSON.stringify({ device_code: current.pending.deviceCode }) });
     if (result.status === "authorized") {
-      await save({ accessToken: result.access_token, deviceId: result.device_id, tokenExpiresAt: result.expires_at, pending: null, status: "connected", lastError: null });
+      await save({ accessToken: result.access_token, deviceId: result.device_id, tokenExpiresAt: result.expires_at, pending: null, status: "connected", accountHealth: "authorized", lastAccountError: null, lastError: null });
       setTimeout(() => void start(), 0);
     } else {
       setTimeout(() => void pollAuthorization(), 3000);
       await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 0.5 });
     }
   } catch (error) {
-    await save({ lastError: String(error?.message || error) });
+    await save({ accountHealth: "authorizing", lastAccountError: String(error?.message || error), lastError: String(error?.message || error) });
     setTimeout(() => void pollAuthorization(), 5000);
     await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 0.5 });
   }
@@ -127,12 +131,23 @@ async function fetchBindingSnapshot(baseUrl, accessToken) {
 
 async function refreshBindings() {
   const current = await state();
-  const snapshot = await fetchBindingSnapshot(current.baseUrl, current.accessToken);
-  if (current.deviceId && snapshot.deviceId !== String(current.deviceId)) throw new Error("Syndicatum returned a different device identity.");
-  const normalized = snapshot.bindings;
-  await save({ bindings: normalized, status: "connected", lastSyncAt: new Date().toISOString(), lastError: null });
-  connectRealtime(normalized);
-  return normalized;
+  try {
+    const snapshot = await fetchBindingSnapshot(current.baseUrl, current.accessToken);
+    if (current.deviceId && snapshot.deviceId !== String(current.deviceId)) throw new Error("Syndicatum returned a different device identity.");
+    const normalized = snapshot.bindings;
+    const projectCount = new Set(normalized.map(binding => String(binding.project_id))).size;
+    await save({ bindings: normalized, status: "connected", serverHealth: "reachable", accountHealth: "authorized", realtimeHealth: projectCount ? "connecting" : "idle", lastServerCheckAt: new Date().toISOString(), lastSyncAt: new Date().toISOString(), lastServerError: null, lastAccountError: null, lastError: null });
+    connectRealtime(normalized);
+    return normalized;
+  } catch (error) {
+    const message = String(error?.message || error);
+    const unauthorized = [401, 403].includes(Number(error?.httpStatus));
+    const networkFailure = error instanceof TypeError || /\b(fetch|network|offline|connection|dns)\b/i.test(message);
+    await save(unauthorized
+      ? { serverHealth: "reachable", accountHealth: "error", lastServerCheckAt: new Date().toISOString(), lastAccountError: message, lastError: message }
+      : { serverHealth: networkFailure ? "unreachable" : "error", lastServerCheckAt: new Date().toISOString(), lastServerError: message, lastError: message });
+    throw error;
+  }
 }
 
 function closeRealtime(reason) {
@@ -324,7 +339,7 @@ async function drain() {
         const queue = { ...(latest.queue || {}) }; delete queue[key];
         const delivered = { ...(latest.delivered || {}), [key]: new Date().toISOString() };
         const entries = Object.entries(delivered).slice(-1000);
-        await save({ queue, delivered: Object.fromEntries(entries), lastDeliveryAt: delivered[key], lastError: null });
+        await save({ queue, delivered: Object.fromEntries(entries), lastDeliveryAt: delivered[key], lastDeliveryError: null, lastError: null });
         await recordDeliveryDiagnostic({
           key,
           provider: item.provider,
@@ -342,7 +357,8 @@ async function drain() {
         const latest = await state();
         const queue = { ...(latest.queue || {}) };
         if (queue[key]) queue[key] = { ...queue[key], attempts: Number(queue[key].attempts || 0) + 1, lastError: String(error?.message || error) };
-        await save({ queue, lastError: `Delivery pending: ${String(error?.message || error)}` });
+        const deliveryError = `Delivery pending: ${String(error?.message || error)}`;
+        await save({ queue, lastDeliveryError: deliveryError, lastError: deliveryError });
         await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 1 });
         return;
       }
@@ -424,6 +440,7 @@ async function connectProject(projectId) {
       if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("room.join") && !joined) {
         joined = true;
         startHeartbeat(projectId, socket);
+        await save({ realtimeHealth: "connected", lastRealtimeAt: new Date().toISOString(), lastRealtimeError: null });
         return;
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) {
@@ -437,10 +454,18 @@ async function connectProject(projectId) {
       if (sockets.get(projectId) !== socket) return;
       stopHeartbeat(projectId);
       sockets.delete(projectId);
+      void save({ realtimeHealth: "reconnecting" });
       setTimeout(() => void start(), 1000);
     };
-    socket.onerror = () => socket.close();
-  } catch (error) { await save({ lastError: `Realtime unavailable: ${String(error?.message || error)}` }); }
+    socket.onerror = () => {
+      const realtimeError = "Realtime connection failed; reconnecting.";
+      void save({ realtimeHealth: "unavailable", lastRealtimeError: realtimeError, lastError: realtimeError });
+      socket.close();
+    };
+  } catch (error) {
+    const realtimeError = `Realtime unavailable: ${String(error?.message || error)}`;
+    await save({ realtimeHealth: "unavailable", lastRealtimeError: realtimeError, lastError: realtimeError });
+  }
 }
 
 async function start() {
@@ -468,7 +493,8 @@ async function disconnect() {
 
 async function publicStatus() {
   const current = await state();
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: current.bindings?.length || 0, queuedCount: Object.keys(current.queue || {}).length, realtimeProjectCount: heartbeatTimers.size, lastSyncAt: current.lastSyncAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
+  const health = companionHealth(current, { realtimeProjectCount: heartbeatTimers.size });
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
