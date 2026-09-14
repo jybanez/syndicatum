@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "connector": {
+    "syndicatum_codex": {
       "command": "node",
       "args": ["./mcp/server.mjs"],
       "cwd": ".",

@@ -1,4 +1,4 @@
-# Syndicatum Codex plugin
+# Syndicatum for Codex plugin
 
 ## Runtime model
 
@@ -62,7 +62,7 @@ From a Codex CLI that can access this checkout:
 
 ```text
 codex plugin marketplace add <syndicatum-repository-root>
-codex plugin add syndicatum@syndicatum
+codex plugin add codex@syndicatum
 ```
 
 Restart Codex and start a new task after installing or updating the plugin so
@@ -76,7 +76,7 @@ repository or running a separate installer:
 
 ```text
 codex plugin marketplace add jybanez/syndicatum --ref main
-codex plugin add syndicatum@syndicatum
+codex plugin add codex@syndicatum
 ```
 
 After installation, restart Codex Desktop and begin a new task. Ask Codex to
@@ -117,12 +117,26 @@ Upgrades use the registered Git marketplace:
 
 ```text
 codex plugin marketplace upgrade syndicatum
-codex plugin add syndicatum@syndicatum
+codex plugin add codex@syndicatum
 ```
 
-Restart Codex Desktop after an upgrade so new plugin tools and skills are
-loaded. Device authorization is retained unless the device was revoked or its
-local Syndicatum data was removed.
+Fully exit Codex Desktop, then run the following from PowerShell or Terminal so
+the retired MCP cache is no longer held open:
+
+```text
+codex plugin remove syndicatum@syndicatum
+```
+
+Restart Codex Desktop and begin a new task so the renamed MCP server and bundled
+skill are loaded. Device authorization is retained unless the device was revoked
+or its local Syndicatum data was removed.
+
+The local package is displayed as **Syndicatum for Codex** and registers its MCP
+server under `syndicatum_codex`. The distinct identity prevents Codex from
+collapsing it with the hosted, account-scoped **Syndicatum** app. The retired
+`syndicatum@syndicatum` package must not remain installed beside
+`codex@syndicatum`; removing the retired package does not remove the protected
+device or agent data under the Syndicatum CodexPlugin data directory.
 
 Notifications arriving while an earlier wake remains unacknowledged are briefly
 coalesced so an active task is not flooded. The coalescing window is bounded:

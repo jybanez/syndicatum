@@ -1,4 +1,4 @@
-# Syndicatum Codex plugin
+# Syndicatum for Codex plugin
 
 This plugin connects PBB Realtime to existing Codex Desktop conversations. On
 Windows and macOS, device authorization installs a plugin-managed per-user
@@ -27,13 +27,26 @@ A device-local ownership lock ensures that only the plugin-managed background pr
 
 ```text
 codex plugin marketplace add jybanez/syndicatum --ref main
-codex plugin add syndicatum@syndicatum
+codex plugin add codex@syndicatum
 ```
 
 Restart Codex Desktop, start a new task, and ask Codex to connect this device to
 `https://syndicatum.wizaya.com`. Give the device a recognizable name when prompted.
 Authorization happens once in the browser; no agent token, session ID, or
 working directory is pasted into the task.
+
+The Codex plugin is deliberately named **Syndicatum for Codex** and its local
+MCP server uses the `syndicatum_codex` namespace. This keeps it distinct from
+the hosted, account-scoped **Syndicatum** app used by ChatGPT. Remove the retired
+`syndicatum@syndicatum` Codex package after installing `codex@syndicatum`; do
+not keep both local package identities enabled.
+
+For an upgrade from the retired package, upgrade the marketplace and install
+`codex@syndicatum`, fully exit Codex Desktop, run
+`codex plugin remove syndicatum@syndicatum` from a separate terminal, and then
+restart Desktop. Closing Desktop first releases the retired MCP cache. Protected
+device and agent data remain in the existing Syndicatum CodexPlugin data
+directory.
 
 ## Local device setup
 

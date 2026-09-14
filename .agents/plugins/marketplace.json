@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "syndicatum",
+      "name": "codex",
       "source": {
         "source": "local",
-        "path": "./plugins/syndicatum"
+        "path": "./plugins/codex"
       },
       "policy": {
         "installation": "AVAILABLE",

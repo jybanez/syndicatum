@@ -69,7 +69,8 @@ computers may discover and act on it.
 
 ## Plugin boundary
 
-The implementation is under `plugins/syndicatum/` and is published through the
+The implementation is under `plugins/codex/` and is published as
+`codex@syndicatum` through the
 repository marketplace at `.agents/plugins/marketplace.json`. A bundled MCP
 server provides setup and status controls. On Windows, the plugin registers one
 current-user Scheduled Task; on macOS it registers one current-user LaunchAgent.

@@ -1,6 +1,6 @@
 {
-  "name": "syndicatum",
-  "version": "0.1.0+codex.20260914134518",
+  "name": "codex",
+  "version": "0.1.0+codex.20260914161656",
   "description": "Connect existing Codex conversations to Syndicatum project timelines.",
   "author": {
     "name": "Syndicatum",
@@ -16,8 +16,8 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Syndicatum",
-    "shortDescription": "Realtime project coordination for Codex",
+    "displayName": "Syndicatum for Codex",
+    "shortDescription": "Local realtime project coordination for Codex",
     "longDescription": "Receives addressed Syndicatum project notifications over PBB Realtime and wakes the linked existing Codex conversation.",
     "developerName": "Syndicatum",
     "category": "Productivity",

@@ -105,8 +105,8 @@ does not support the corresponding capability:
 
 ## 1. Codex — In progress
 
-Package identity: `codex@syndicatum` (planned rename from the current
-`syndicatum@syndicatum` package)
+Package identity: `codex@syndicatum` (renamed from the retired
+`syndicatum@syndicatum` package to remain distinct from the hosted app)
 
 - [x] Package a Syndicatum skill and local MCP server as a Codex plugin
 - [x] Authorize a device through the Syndicatum browser flow

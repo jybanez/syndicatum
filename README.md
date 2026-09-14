@@ -80,7 +80,7 @@ such as `https://realtime.pbb.ph` derives
 insecure `ws://` override is rejected while the base uses HTTPS, and the browser
 does not repeatedly retry a mixed-content configuration.
 
-The Syndicatum Codex plugin is distributed from the repository marketplace at
+The **Syndicatum for Codex** plugin (`codex@syndicatum`) is distributed from the repository marketplace at
 `.agents/plugins/marketplace.json`. Its bundled local MCP server owns the PBB
 Realtime connector lifecycle and uses Codex's `queue` command to send an
 existing conversation only a request to check Syndicatum. It then dispatches
