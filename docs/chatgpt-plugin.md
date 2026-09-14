@@ -177,3 +177,10 @@ management, monitoring, rate limiting, and a verified domain. The MCP endpoint
 and authorization endpoints derive their canonical issuer/resource URLs from
 explicit production configuration; forwarded host headers are not trusted as
 the authority for token audiences or OAuth redirects.
+
+When creating the ChatGPT app entry, upload the canonical transparent PNG at
+`assets/brand/png/color/syndicatum-128.png`. It is the approved standard-color
+master for app-sized use and is below ChatGPT's 10 KB creation-form limit.
+ChatGPT currently exposes no post-creation icon editor, so a missing or incorrect
+icon must be corrected while recreating an otherwise incomplete app entry—not
+by substituting another brand asset after OAuth or discussion binding is live.
