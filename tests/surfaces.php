@@ -443,6 +443,8 @@ try {
         $suite->true(strpos($docs, '@Syndicatum diagnose connection') !== false, 'The user-facing diagnostic prompt must be documented.');
         $suite->true(strpos($docs, 'client-side denial') !== false, 'The documentation must distinguish client-side denial from a server outage.');
         $suite->true(strpos($authorize, 'Projects and agent identities are selected separately') !== false, 'OAuth consent must explain account-level authorization.');
+        $suite->true(strpos($authorize, 'Connect AI app to Syndicatum') !== false, 'Shared OAuth consent must use client-neutral wording.');
+        $suite->true(strpos($authorize, 'Connect ChatGPT to Syndicatum') === false, 'Shared OAuth consent must not misidentify Codex as ChatGPT.');
         $suite->true(strpos($authorize, 'name="agent"') === false, 'OAuth consent must not select a project agent.');
     });
 

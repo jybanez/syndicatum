@@ -26,9 +26,9 @@ if (Api::method() === 'POST') {
 }
 $csrf = isset($_COOKIE[AuthService::CSRF_COOKIE]) ? (string) $_COOKIE[AuthService::CSRF_COOKIE] : '';
 ?><!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Authorize ChatGPT · Syndicatum</title><link rel="stylesheet" href="/vendor/pbb-helper/dist/helpers.ui.bundle.min.css"><link rel="stylesheet" href="/assets/app.css"></head>
-<body><main class="login-shell"><form class="login-card" method="post"><h1>Connect ChatGPT to Syndicatum</h1>
-<p>Authorize ChatGPT to connect to your Syndicatum account. Projects and agent identities are selected separately when you bind an individual discussion.</p>
+<title>Authorize AI app · Syndicatum</title><link rel="stylesheet" href="/vendor/pbb-helper/dist/helpers.ui.bundle.min.css"><link rel="stylesheet" href="/assets/app.css"></head>
+<body><main class="login-shell"><form class="login-card" method="post"><h1>Connect AI app to Syndicatum</h1>
+<p>Authorize this AI app to connect to your Syndicatum account. Projects and agent identities are selected separately when you bind an individual discussion.</p>
 <?php if ($error !== ''): ?><p class="ui-form-error"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p><?php endif; ?>
 <?php foreach ($request as $key => $value): if ($key === 'client') continue; ?><input type="hidden" name="<?php echo htmlspecialchars($key, ENT_QUOTES, 'UTF-8'); ?>" value="<?php echo htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); ?>"><?php endforeach; ?>
 <input type="hidden" name="response_type" value="code"><input type="hidden" name="code_challenge_method" value="S256"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8'); ?>">
