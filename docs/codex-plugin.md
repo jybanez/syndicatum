@@ -228,6 +228,14 @@ ownership, and a reason when the listener is still starting or another process
 owns it. Logs include the emitting PID and runtime role. `connector_background_install` repairs the registration, updates the
 launcher to the active plugin build, and starts it immediately.
 
+On Windows, managed runtime data lives at
+`%USERPROFILE%\\.syndicatum\\codex-plugin`, outside `AppData`. This prevents
+MSIX/AppData virtualization from giving Codex and its external Scheduled Task or
+Run-key process different filesystem views. An existing
+`%LOCALAPPDATA%\\Syndicatum\\CodexPlugin` directory is copied once to the new
+location, preserving protected profiles and delivery state without reading
+credential contents.
+
 Network failures retain a safe category (`dns`, `tls`, `timeout`, or `network`),
 the destination hostname, and retryability instead of collapsing every failure
 to `fetch failed`. Credentials and authorization codes are excluded.

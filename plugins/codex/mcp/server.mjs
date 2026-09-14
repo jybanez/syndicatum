@@ -3,6 +3,12 @@ import { PluginRuntime } from "./runtime.mjs";
 import { claimAgentProfile } from "./profile-claim.mjs";
 import { listAgentProfiles, publicAgentProfile } from "./agent-profile-store.mjs";
 import { ProfileTimelineClient } from "./profile-timeline.mjs";
+import { migrateLegacyWindowsPluginData } from "./paths.mjs";
+
+// Codex can run as a packaged Windows app whose AppData writes are visible only
+// inside the package. Move existing data once to a user-profile path that the
+// external Scheduled Task and Run-key launcher can also access.
+await migrateLegacyWindowsPluginData();
 
 const runtime = new PluginRuntime();
 // MCP discovery must not wait for the background notification service. On a

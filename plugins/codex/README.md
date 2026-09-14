@@ -113,8 +113,8 @@ and a user service adapter are implemented.
 
 ## Background lifecycle
 
-The plugin copies its small background runtime into the existing user-only plugin
-data directory, registers one current-user Windows Scheduled Task, and starts it
+The plugin copies its small background runtime into a user-only plugin data
+directory, registers one current-user Windows Scheduled Task, and starts it
 through a hidden PowerShell host. Keeping the runtime outside Codex's plugin
 cache prevents Codex shutdown cleanup from treating it as an MCP child. The task
 runs continuously rather than on a polling schedule. It requires neither
@@ -135,8 +135,12 @@ boot. A device-local startup lock serializes this installation path across Codex
 MCP hosts so concurrent host discovery cannot replace or start the same task at
 the same time.
 
-Sanitized launcher and task-start failures are written as JSON lines to
-`%LOCALAPPDATA%\\Syndicatum\\CodexPlugin\\background-startup.log`. Connector
+On Windows, that data directory is `%USERPROFILE%\\.syndicatum\\codex-plugin`,
+which is outside `AppData` so packaged Codex processes and external Windows
+startup processes share the same filesystem view. Existing data under
+`%LOCALAPPDATA%\\Syndicatum\\CodexPlugin` is migrated once without exposing
+credentials. Sanitized launcher and task-start failures are written as JSON
+lines to `background-startup.log` there. Connector
 runtime diagnostics remain in `connector.log`; neither log records the device
 credential. A second launcher exits successfully only when the lock owner has a
 matching healthy status. An occupied lock without matching health uses a distinct
