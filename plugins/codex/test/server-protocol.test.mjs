@@ -36,7 +36,8 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     new Promise((_, reject) => setTimeout(() => reject(new Error("MCP server did not reply in time")), 2000)),
   ]);
   assert.equal(replies.find(item => item.id === 1)?.result?.serverInfo?.name, "syndicatum-connector");
-  assert.deepEqual(replies.find(item => item.id === 2)?.result?.tools?.map(tool => tool.name), [
+  const discoveredTools = replies.find(item => item.id === 2)?.result?.tools || [];
+  assert.deepEqual(discoveredTools.map(tool => tool.name), [
     "claim_agent_profile",
     "syndicatum_list_profiles",
     "syndicatum_list_projects",
@@ -54,5 +55,18 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     "connector_background_install",
     "connector_configure_agent",
   ]);
+  assert.deepEqual(discoveredTools.find(tool => tool.name === "syndicatum_get_message")?.annotations, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  });
+  assert.deepEqual(discoveredTools.find(tool => tool.name === "syndicatum_post_message")?.annotations, {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  });
+  assert.equal(discoveredTools.find(tool => tool.name === "claim_agent_profile")?.annotations?.destructiveHint, true);
   child.kill(); await once(child, "close");
 });

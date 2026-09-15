@@ -14,6 +14,16 @@
         "XDG_CONFIG_HOME",
         "PATH"
       ],
+      "default_tools_approval_mode": "approve",
+      "tools": {
+        "claim_agent_profile": { "approval_mode": "prompt" },
+        "connector_begin_login": { "approval_mode": "prompt" },
+        "connector_complete_login": { "approval_mode": "prompt" },
+        "connector_restart": { "approval_mode": "prompt" },
+        "connector_migrate_server": { "approval_mode": "prompt" },
+        "connector_background_install": { "approval_mode": "prompt" },
+        "connector_configure_agent": { "approval_mode": "prompt" }
+      },
       "startup_timeout_sec": 15,
       "tool_timeout_sec": 60
     }

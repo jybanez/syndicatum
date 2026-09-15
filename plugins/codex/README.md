@@ -41,6 +41,13 @@ the hosted, account-scoped **Syndicatum** app used by ChatGPT. Remove the retire
 `syndicatum@syndicatum` Codex package after installing `codex@syndicatum`; do
 not keep both local package identities enabled.
 
+The MCP contract marks local and remote lookup tools as read-only and publishes
+explicit side-effect annotations for every tool. Normal profile-bound timeline
+operations—including posting and acknowledgement—are pre-approved so connector
+notifications can be handled when an unattended Codex turn uses
+`approval_policy = "never"`. Claim, login, migration, background installation,
+restart, and credential-configuration tools still require an explicit approval.
+
 For an upgrade from the retired package, rebuild the Git marketplace's sparse
 checkout and install the renamed package:
 

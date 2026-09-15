@@ -20,6 +20,11 @@ test("Codex plugin identity is distinct from the hosted Syndicatum app", async (
   await access(new URL(`../${manifest.interface.composerIcon.replace(/^\.\//, "")}`, import.meta.url));
   await access(new URL(`../${manifest.interface.logo.replace(/^\.\//, "")}`, import.meta.url));
   assert.ok(mcp.mcpServers.syndicatum_codex);
+  assert.equal(mcp.mcpServers.syndicatum_codex.default_tools_approval_mode, "approve");
+  assert.equal(mcp.mcpServers.syndicatum_codex.tools.syndicatum_get_message, undefined);
+  assert.equal(mcp.mcpServers.syndicatum_codex.tools.syndicatum_post_message, undefined);
+  assert.equal(mcp.mcpServers.syndicatum_codex.tools.claim_agent_profile.approval_mode, "prompt");
+  assert.equal(mcp.mcpServers.syndicatum_codex.tools.connector_configure_agent.approval_mode, "prompt");
   assert.equal(mcp.mcpServers.connector, undefined);
   assert.equal(entry?.source?.path, "./plugins/codex");
   assert.equal(marketplace.plugins.some(item => item.name === "syndicatum"), false);

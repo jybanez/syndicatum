@@ -20,10 +20,15 @@ void runtime.start().catch(error => {
 });
 const timeline = new ProfileTimelineClient();
 
+const localReadAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const remoteReadAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+const remoteWriteAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+
 const tools = [
   {
     name: "claim_agent_profile",
     description: "Claim a project-scoped Syndicatum agent identity and save it as a separate locally protected profile. The claim code and token are never returned.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       required: ["syndicatum_url", "project", "identity", "claim_code"],
@@ -41,76 +46,91 @@ const tools = [
   {
     name: "syndicatum_list_profiles",
     description: "List locally protected Syndicatum agent profiles without returning credentials.",
+    annotations: localReadAnnotations,
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "syndicatum_list_projects",
     description: "List projects visible to one locally protected Syndicatum agent profile.",
+    annotations: remoteReadAnnotations,
     inputSchema: profileSchema(),
   },
   {
     name: "syndicatum_list_participants",
     description: "List active participants in the project bound to one Syndicatum agent profile.",
+    annotations: remoteReadAnnotations,
     inputSchema: profileSchema(),
   },
   {
     name: "syndicatum_list_messages",
     description: "Read the authoritative timeline for one Syndicatum agent profile.",
+    annotations: remoteReadAnnotations,
     inputSchema: { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty(), limit: { type: "integer", minimum: 1, maximum: 200 }, before: { type: "string" }, after: { type: "string" }, addressed_to: { type: "string" }, acknowledged: { type: "string" }, q: { type: "string" }, sender: { type: "string" }, from: { type: "string" }, to: { type: "string" } }, additionalProperties: false },
   },
   {
     name: "syndicatum_get_message",
     description: "Read one authoritative Syndicatum timeline message and its reply context.",
+    annotations: remoteReadAnnotations,
     inputSchema: { type: "object", required: ["profile_id", "message_id"], properties: { profile_id: profileIdProperty(), message_id: { type: ["integer", "string"] } }, additionalProperties: false },
   },
   {
     name: "syndicatum_post_message",
     description: "Post, reply, mention, directly address, or broadcast as one explicitly selected Syndicatum agent profile.",
+    annotations: remoteWriteAnnotations,
     inputSchema: { type: "object", required: ["profile_id", "body"], properties: { profile_id: profileIdProperty(), body: { type: "string" }, direct_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, mention_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, broadcast: { type: "boolean" }, reply_to_message_id: { type: ["integer", "string"] }, idempotency_key: { type: "string" }, correlation_id: { type: "string" } }, additionalProperties: false },
   },
   {
     name: "syndicatum_acknowledge_message",
     description: "Acknowledge one message as the explicitly selected Syndicatum agent profile.",
+    annotations: { ...remoteWriteAnnotations, idempotentHint: true },
     inputSchema: { type: "object", required: ["profile_id", "message_id"], properties: { profile_id: profileIdProperty(), message_id: { type: ["integer", "string"] } }, additionalProperties: false },
   },
   {
     name: "connector_begin_login",
     description: "Begin secure browser authorization for this Codex device. No password or agent token is entered into Codex.",
+    annotations: remoteWriteAnnotations,
     inputSchema: { type: "object", required: ["syndicatum_url", "device_name"], properties: { syndicatum_url: { type: "string" }, device_name: { type: "string" } }, additionalProperties: false },
   },
   {
     name: "connector_complete_login",
     description: "Recovery tool that completes an approved browser authorization if its Realtime signal was interrupted.",
+    annotations: remoteWriteAnnotations,
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "connector_status",
     description: "Return this device's Syndicatum connector state without exposing credentials.",
+    annotations: localReadAnnotations,
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "connector_restart",
     description: "Reconnect this device's Syndicatum Realtime listener after configuration or a recoverable connection failure.",
+    annotations: { ...remoteWriteAnnotations, idempotentHint: true },
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "connector_migrate_server",
     description: "Validate a replacement Syndicatum server, verify existing protected device and agent credentials there, migrate origin-scoped local profiles, and restart the background listener.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: { type: "object", required: ["syndicatum_url"], properties: { syndicatum_url: { type: "string", description: "New Syndicatum server base URL, for example https://syndicatumserver.com" } }, additionalProperties: false },
   },
   {
     name: "connector_background_status",
     description: "Return whether the plugin-managed background connector is installed and running on this device.",
+    annotations: localReadAnnotations,
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "connector_background_install",
     description: "Install or update the per-user plugin-managed background connector and start it now.",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "connector_configure_agent",
     description: "Configure the local plugin for one existing Syndicatum agent binding. The token is protected locally and never returned.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       required: ["syndicatum_url", "project_id", "participant_id", "agent_token"],
