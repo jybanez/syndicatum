@@ -108,15 +108,18 @@ web app, Project API V1, MCP, and supported agent integrations.
 source-tree CI job for migrations, Project API/OpenAPI, OAuth, activation,
 and portable Codex/Companion adapter checks. Its YAML parsed locally
 and the component suites passed locally. The first clean-checkout GitHub run
-failed on a strict-MySQL test-fixture omission; the corrected
-[run 35136584116](https://github.com/jybanez/syndicatum/actions/runs/35136584116)
-passed at commit `7ec5b0bb048d3b207f4911c5cc761a5da6ad9bbb`.
+failed on a strict-MySQL test-fixture omission. The corrected workflow's
+[run 35139295763](https://github.com/jybanez/syndicatum/actions/runs/35139295763)
+passed at commit `3221582836a9ace83b26854a6281ae53880b5701`, asserted
+MySQL 8.4.11 with `STRICT_TRANS_TABLES`, and retained revision-bound test logs
+as a GitHub Actions artifact for 30 days.
 No immutable release artifact has been recorded. The job does not yet cover the full PHP/JavaScript,
 documentation, migration, packaging, and security release matrix below.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
-check. Portable fixture results must remain labeled separately from installed
-client evidence; one successful ad hoc workflow run is not enough. The required
+check. The candidate job is not yet a required check. Portable fixture results
+must remain labeled separately from installed client evidence; one successful
+ad hoc workflow run is not enough. The required
 release path must test at least one database mode/configuration representative
 of the supported production deployment, including strict SQL behavior; permissive
 local defaults alone are insufficient.
