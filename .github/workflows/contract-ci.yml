@@ -46,13 +46,32 @@ jobs:
           php -l mcp.php
           php -l src/McpServiceTokenService.php
           php -l tests/project-api.php
+          php -l tests/ci-database-mode.php
+      - name: Identify tested revision and database mode
+        run: |
+          set -euo pipefail
+          mkdir -p ci-evidence
+          printf 'repository=%s\ncommit=%s\nrun_id=%s\nrun_attempt=%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            > ci-evidence/revision.txt
+          php tests/ci-database-mode.php | tee ci-evidence/database-mode.txt
       - name: Check migrations and server-side coordination contract
         run: |
-          php tests/migrations.php
-          php tests/agent-activation.php
-          php tests/chatgpt-oauth.php
-          python tests/openapi-message-contract.py --php php
+          set -euo pipefail
+          php tests/migrations.php | tee ci-evidence/migrations.txt
+          php tests/agent-activation.php | tee ci-evidence/agent-activation.txt
+          php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
+          python tests/openapi-message-contract.py --php php | tee ci-evidence/openapi-message-contract.txt
       - name: Check portable Codex and Companion adapter contracts
         run: |
-          node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs
-          node --test companion/test/package.test.mjs
+          set -euo pipefail
+          node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs | tee ci-evidence/codex-portable.txt
+          node --test companion/test/package.test.mjs | tee ci-evidence/companion-portable.txt
+      - name: Retain source-contract test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-contract-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: warn
+          retention-days: 30

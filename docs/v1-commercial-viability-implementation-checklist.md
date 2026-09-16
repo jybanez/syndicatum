@@ -109,14 +109,17 @@ source-tree CI job for migrations, Project API/OpenAPI, OAuth, activation,
 and portable Codex/Companion adapter checks. Its YAML parsed locally
 and the component suites passed locally. The first clean-checkout GitHub run
 failed on a strict-MySQL test-fixture omission; the corrected
-[run 35136415275](https://github.com/jybanez/syndicatum/actions/runs/35136415275)
-passed at commit `90a016bdb0b397f010d8f676805193bd88a9456d`.
+[run 35136584116](https://github.com/jybanez/syndicatum/actions/runs/35136584116)
+passed at commit `7ec5b0bb048d3b207f4911c5cc761a5da6ad9bbb`.
 No immutable release artifact has been recorded. The job does not yet cover the full PHP/JavaScript,
 documentation, migration, packaging, and security release matrix below.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
 check. Portable fixture results must remain labeled separately from installed
-client evidence; one successful ad hoc workflow run is not enough.
+client evidence; one successful ad hoc workflow run is not enough. The required
+release path must test at least one database mode/configuration representative
+of the supported production deployment, including strict SQL behavior; permissive
+local defaults alone are insufficient.
 
 - [x] Select `AGPL-3.0-only`, publish the canonical license text, and document
       the open-core boundary. Legal review and the third-party license inventory
