@@ -12,7 +12,7 @@ try {
         $access = $auth->projectAccess($projectId, 'messages:read');
         (new RateLimiter($pdo))->hit('messages.read', $projectId . ':' . $access['participant_id'], 600, 60, 60);
         Api::json($repository->messagePage($access, [
-            'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 100,
+            'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 50,
             'before' => isset($_GET['before']) ? trim((string) $_GET['before']) : '',
             'after' => isset($_GET['after']) ? trim((string) $_GET['after']) : '',
             'sender' => isset($_GET['sender']) ? trim((string) $_GET['sender']) : '',

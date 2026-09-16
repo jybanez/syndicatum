@@ -70,6 +70,55 @@ class DiscussionBindingIntentService
         ];
     }
 
+    public function prepareInteractiveContext(array $oauthAccess, $projectName, $agentName)
+    {
+        $userId = (int) ($oauthAccess['principal_user_id'] ?? 0);
+        $accessTokenId = (int) ($oauthAccess['access_token_id'] ?? 0);
+        $projectName = trim((string) $projectName);
+        $agentName = trim((string) $agentName);
+        if ($userId < 1 || $accessTokenId < 1) { throw new RuntimeException('BINDING_REQUIRES_OAUTH'); }
+        if ($projectName === '' || $agentName === '' || strlen($agentName) > 120) {
+            throw new InvalidArgumentException('project_name and agent_name are required; agent_name may contain at most 120 characters.');
+        }
+
+        $statement = $this->pdo->prepare("SELECT p.id AS project_id, p.name AS project_name, pa.agent_id, pa.display_name
+            FROM projects p
+            JOIN project_members pm ON pm.project_id = p.id
+            JOIN project_agents pa ON pa.project_id = p.id
+            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')
+              AND pa.status = 'active' AND pa.provider = 'chatgpt'
+              AND LOWER(p.name) = LOWER(?) AND LOWER(pa.display_name) = LOWER(?)");
+        $statement->execute([$userId, $projectName, $agentName]);
+        $matches = $statement->fetchAll();
+        if (!$matches) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
+        if (count($matches) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
+        $match = $matches[0];
+
+        $intentId = $this->uuid();
+        $contextToken = 'syndicatum_context_' . AuthService::randomToken(32);
+        $now = Db::now();
+        $expires = gmdate('Y-m-d H:i:s', time() + 900);
+        $this->pdo->prepare("INSERT INTO connector_discussion_binding_intents
+            (id, context_token_hash, oauth_access_token_id, created_by_user_id, project_id, requested_agent_id,
+             requested_agent_name, provider, status, confirmed_agent_id, created_at, expires_at, resolved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'chatgpt', 'confirmed', ?, ?, ?, ?)")
+            ->execute([$intentId, hash('sha256', $contextToken), $accessTokenId, $userId,
+                (int) $match['project_id'], (int) $match['agent_id'], $match['display_name'],
+                (int) $match['agent_id'], $now, $expires, $now]);
+        $this->auth->audit($userId, 'mcp.interactive_context_issued', 'agent', (string) $match['agent_id'], [
+            'project_id' => (int) $match['project_id'], 'intent_id' => $intentId, 'expires_at' => $expires,
+        ]);
+        return [
+            'binding_context_id' => $contextToken,
+            'context_type' => 'interactive',
+            'status' => 'active',
+            'project' => ['id' => (int) $match['project_id'], 'name' => $match['project_name']],
+            'agent' => ['id' => (int) $match['agent_id'], 'name' => $match['display_name']],
+            'expires_at' => gmdate('c', strtotime($expires)),
+            'next_step' => 'Retain binding_context_id for this interaction. This short-lived context does not create or modify a Companion discussion binding.',
+        ];
+    }
+
     public function pending(array $device)
     {
         $statement = $this->pdo->prepare("SELECT i.id, i.project_id, p.name AS project_name, i.requested_agent_id,
@@ -159,8 +208,9 @@ class DiscussionBindingIntentService
             JOIN chat_agents a ON a.id = i.confirmed_agent_id
             JOIN project_participants pp ON pp.project_id = i.project_id AND pp.agent_id = i.confirmed_agent_id AND pp.kind = 'agent'
             WHERE i.context_token_hash = ? AND i.created_by_user_id = ?
-              AND i.status = 'confirmed' LIMIT 1");
-        $statement->execute([hash('sha256', $token), (int) ($oauthAccess['principal_user_id'] ?? 0)]);
+              AND i.status = 'confirmed'
+              AND (i.discussion_reference IS NOT NULL OR i.expires_at > ?) LIMIT 1");
+        $statement->execute([hash('sha256', $token), (int) ($oauthAccess['principal_user_id'] ?? 0), Db::now()]);
         $row = $statement->fetch();
         if (!$row) { return null; }
         return ['project_id' => (int) $row['project_id'], 'participant_id' => (int) $row['participant_id'],
@@ -169,7 +219,8 @@ class DiscussionBindingIntentService
                 'authenticated_agent_id' => (int) $row['confirmed_agent_id'],
                 'display_name' => $row['agent_name'], 'is_active' => $row['is_active'],
                 'project_agent_status' => $row['project_agent_status'], 'participant_status' => $row['participant_status']]],
-            'binding' => ['status' => 'Successful', 'intent_id' => $row['id'], 'discussion_reference' => $row['discussion_reference']],
+            'binding' => ['status' => 'Successful', 'type' => $row['discussion_reference'] === null ? 'interactive' : 'discussion',
+                'intent_id' => $row['id'], 'discussion_reference' => $row['discussion_reference']],
         ];
     }
 

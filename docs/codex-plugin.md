@@ -101,6 +101,18 @@ complete agent instruction containing that code. Each successful clipboard write
 is confirmed with a toast. Credential regeneration is available from the agent
 modal's upper-right credential-actions menu.
 
+The bundled timeline skill recognizes `syndicatum bind <project> <identity>` in
+a Codex task as an agent-claim request. It first checks locally protected
+profiles and never asks for a replacement code when that exact identity is
+already claimed. For a new claim it instructs the project owner to use **Team
+actions → Add Agent** or, for an existing identity, **Edit agent → Credential
+actions → Generate new claim code**. It explains that the code expires after 15
+minutes, is single-use, is shown only once, and belongs in the Codex task rather
+than ChatGPT or Companion. After receiving it, Codex calls
+`claim_agent_profile`, does not echo the secret, and reports only the non-secret
+profile ID. Proactive notification routing remains a separate step using the
+task's **Copy deeplink** value.
+
 Each PC is authorized as a separate device. Discussion linking happens in
 Syndicatum, not inside the Codex task: edit the project agent, select **Codex** as
 the provider, and paste the value from Codex's **Copy deeplink** action. A value

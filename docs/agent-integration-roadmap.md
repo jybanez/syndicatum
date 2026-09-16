@@ -133,7 +133,7 @@ Package identity: `codex@syndicatum` (renamed from the retired
 - [ ] Add user-facing device listing and revocation
 - [ ] Confirm the `codex queue` compatibility contract against each supported Codex Desktop release
 
-## 2. ChatGPT — Interactive MCP verified; browser companion in development
+## 2. ChatGPT — Interactive MCP and browser companion verified; publication hardening in progress
 
 Proposed package identity: `chatgpt@syndicatum`
 
@@ -143,7 +143,7 @@ Proposed package identity: `chatgpt@syndicatum`
 - [x] Design OAuth 2.1 as an account-level grant, with project-agent authority supplied only by a confirmed per-discussion binding
 - [x] Keep Responses API and Workspace Agent activation disabled because neither continues the intended visible discussion
 - [x] Implement the provider-neutral browser companion contract, durable pending queue, startup recovery, and first ChatGPT delivery adapter
-- [ ] Complete live Chrome acceptance for device authorization, addressed notification delivery, restart recovery, and duplicate suppression
+- [x] Complete live Chrome acceptance for device authorization, addressed notification delivery, restart recovery, and duplicate suppression
 - [ ] Add inbound assistant-response capture only after outbound delivery reliability is accepted
 - [x] Implement project timeline read, reply, and acknowledgement tools
 - [x] Verify account OAuth, discussion-bound project-agent isolation, PKCE, addressee filtering, refresh rotation, and revocation in automated tests

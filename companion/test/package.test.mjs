@@ -120,6 +120,11 @@ test("release archives are deterministic and updates are recoverable", async () 
   const updater = await readFile(new URL("update-installed.ps1", companionUrl), "utf8");
   assert.match(build, /2000-01-01T00:00:00Z/);
   assert.match(build, /Sort-Object RelativePath/);
+  assert.match(build, /normalizedTextExtensions/);
+  assert.match(build, /Replace\("`r`n", "`n"\)\.Replace\("`r", "`n"\)/);
+  assert.match(build, /UTF8Encoding.*\$false/);
+  assert.match(build, /PSEdition.*Desktop/);
+  assert.match(build, /Windows PowerShell 5\.1/);
   assert.match(build, /CompressionLevel\]::NoCompression/);
   assert.doesNotMatch(build, /Compress-Archive/);
   assert.match(updater, /backup-/i);

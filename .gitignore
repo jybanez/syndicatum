@@ -1,4 +1,7 @@
 pbb-chat-token.local*.json
+.env
+.env.*
+!.env.example
 companion/dist/
 runtime/
 output/*.sql

@@ -1,0 +1,38 @@
+ARG PHP_IMAGE=php:8.2-apache-bookworm
+FROM ${PHP_IMAGE}
+
+ENV APACHE_DOCUMENT_ROOT=/var/www/html \
+    SYNDICATUM_AVATAR_DIR=/var/lib/syndicatum/avatars
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libcurl4-openssl-dev \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libonig-dev \
+        libpng-dev \
+        libwebp-dev; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
+    docker-php-ext-install -j"$(nproc)" curl gd mbstring opcache pdo_mysql; \
+    a2enmod headers rewrite; \
+    rm -rf /var/lib/apt/lists/*
+
+COPY docker/apache-syndicatum.conf /etc/apache2/conf-available/syndicatum.conf
+COPY docker/php-production.ini /usr/local/etc/php/conf.d/zz-syndicatum-production.ini
+RUN a2enconf syndicatum
+
+WORKDIR /var/www/html
+COPY --chown=www-data:www-data . /var/www/html
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/syndicatum-entrypoint
+COPY --chmod=755 docker/worker-loop.sh /usr/local/bin/syndicatum-worker
+
+RUN set -eux; \
+    mkdir -p /var/lib/syndicatum/avatars /var/www/html/runtime; \
+    chown -R www-data:www-data /var/lib/syndicatum /var/www/html/runtime
+
+EXPOSE 80
+
+ENTRYPOINT ["syndicatum-entrypoint"]
+CMD ["apache2-foreground"]

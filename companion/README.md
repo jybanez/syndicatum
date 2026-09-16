@@ -120,11 +120,13 @@ Run the core contract tests with `node --test companion/test/*.test.mjs`.
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File companion\build-release.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File companion\build-release.ps1
 ```
 
 The script creates a deterministic ZIP with `manifest.json` at its root and a
 matching SHA-256 checksum in a temporary release directory. File ordering and
-entry timestamps are normalized, so identical source files produce an
-identical archive checksum. Pass `-OutputDirectory` to choose a different
-destination.
+entry timestamps are normalized, and packaged text files use UTF-8 without a
+byte-order mark and LF line endings. Canonical artifacts must be built with
+Windows PowerShell 5.1 (`powershell.exe`); the script refuses PowerShell 7
+because its newer .NET ZIP implementation writes different container metadata.
+Pass `-OutputDirectory` to choose a different destination.

@@ -1,0 +1,58 @@
+name: V1 contract candidate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: curl, gd, mbstring, pdo_mysql
+          coverage: none
+        env:
+          fail-fast: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install OpenAPI validator dependencies
+        run: python -m pip install 'PyYAML==6.0.3' 'jsonschema==4.26.0'
+      - name: Check PHP syntax
+        run: |
+          php -l mcp.php
+          php -l src/McpServiceTokenService.php
+          php -l tests/project-api.php
+      - name: Check migrations and server-side coordination contract
+        run: |
+          php tests/migrations.php
+          php tests/agent-activation.php
+          php tests/chatgpt-oauth.php
+          python tests/openapi-message-contract.py --php php
+      - name: Check portable Codex and Companion adapter contracts
+        run: |
+          node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs
+          node --test companion/test/package.test.mjs

@@ -34,6 +34,12 @@ coordinate it in Syndicatum; the agent lists the relevant participants and posts
 the detailed strategy through `post_message`, without requiring a browser
 notification or exposing the private discussion itself.
 
+For a client or reviewer without the Companion, the user can explicitly name an
+existing project and ChatGPT agent through `prepare_interactive_context`. The
+signed-in user must be an owner or administrator of that project. The returned
+context expires after 15 minutes and does not create an agent, save a discussion
+URL, enable notifications, or alter a Companion binding.
+
 ## Identity and authorization
 
 OAuth authenticates the signed-in Syndicatum account and supplies the baseline
@@ -57,6 +63,7 @@ Initial scopes:
 - `messages:read`
 - `messages:write`
 - `messages:acknowledge`
+- `offline_access` (permits rotated refresh-token use without keeping the user at the browser)
 
 Authorization codes, access tokens, and refresh tokens are high-entropy opaque
 values stored only as irreversible SHA-256 digests. OAuth responses,
@@ -69,6 +76,7 @@ must never expose stored credentials or project-agent tokens.
 | --- | --- | --- |
 | `diagnose_connection` | Verify MCP connectivity and whether this discussion has a successful binding context | No |
 | `prepare_discussion_binding` | Resolve an existing project and agent name, then request Companion confirmation | Confirmation only |
+| `prepare_interactive_context` | Select an existing authorized ChatGPT agent for a 15-minute MCP-only interaction | Short-lived context record only |
 | `list_projects` | Return the single project represented by the confirmed discussion binding, using a list shape that remains extensible | No |
 | `get_project` | Return project instructions, current participant, capabilities, and latest sequence | No |
 | `list_participants` | Return active human and agent participants for addressing | No |
@@ -128,6 +136,9 @@ MCP binding context is the only supported ChatGPT discussion-binding path.
 | Token | `{SYNDICATUM_ORIGIN}/oauth/token` |
 | Dynamic client registration | `{SYNDICATUM_ORIGIN}/oauth/register` |
 | Token revocation | `{SYNDICATUM_ORIGIN}/oauth/revoke` |
+| Support | `{SYNDICATUM_ORIGIN}/support` |
+| Privacy policy | `{SYNDICATUM_ORIGIN}/privacy` |
+| Terms of service | `{SYNDICATUM_ORIGIN}/terms` |
 
 OAuth consent authorizes ChatGPT to the signed-in user's Syndicatum account; it
 does not display or select projects or agents. In each ChatGPT discussion, the
@@ -173,7 +184,11 @@ configure one canonical MCP/OAuth origin as **Public Syndicatum URL** in System
 Settings (or lock it with `SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN`); the hosted instance uses
 `https://syndicatum.wizaya.com`, while self-hosted operators use their own origin.
 Public plugin submission additionally requires durable secret
-management, monitoring, rate limiting, and a verified domain. The MCP endpoint
+management, monitoring, rate limiting, and a verified domain. MCP calls are
+rate-limited per bearer credential, unauthenticated MCP traffic and token
+requests are rate-limited per source address, authorization attempts are
+rate-limited per signed-in account and source address, and missing or invalid MCP credentials return an HTTP 401 Bearer
+challenge. The MCP endpoint
 and authorization endpoints derive their canonical issuer/resource URLs from
 explicit production configuration; forwarded host headers are not trusted as
 the authority for token audiences or OAuth redirects.

@@ -174,9 +174,12 @@ try {
         $suite->same('Gemini browser response', $reply['message']['body']);
         $suite->same($created['message']['id'], $reply['message']['reply_to_message_id']);
         $suite->same($geminiBindings[0]['participant_id'], $reply['message']['sender']['participant_id']);
-        $duplicate = $connector->submitAgentReply(['user_id' => $owner['id']], 'gemini', $project['id'], $agent['agent_id'], $created['message']['id'], 'A duplicate body must not replace the first reply');
+        $duplicate = $connector->submitAgentReply(['user_id' => $owner['id']], 'gemini', $project['id'], $agent['agent_id'], $created['message']['id'], 'Gemini browser response');
         $suite->same(false, $duplicate['created']);
         $suite->same($reply['message']['id'], $duplicate['message']['id']);
+        $suite->throws(function () use ($connector, $owner, $project, $agent, $created) {
+            $connector->submitAgentReply(['user_id' => $owner['id']], 'gemini', $project['id'], $agent['agent_id'], $created['message']['id'], 'A changed response must be rejected');
+        });
         $suite->same(0, count($connector->pendingNotifications(['user_id' => $owner['id']], 'gemini')));
         $acknowledged = $pdo->query('SELECT acknowledged_at FROM message_addressees WHERE message_id = ' . (int) $created['message']['id'] . ' AND participant_id = ' . (int) $geminiBindings[0]['participant_id'])->fetchColumn();
         $suite->true($acknowledged !== false && $acknowledged !== null, 'The originating message must be acknowledged only after the reply is posted.');
@@ -205,6 +208,21 @@ try {
         $access = ['principal_user_id' => $owner['id'], 'access_token_id' => $accessTokenId,
             'scope' => ['projects:read', 'participants:read', 'messages:read', 'messages:write', 'messages:acknowledge']];
         $service = new DiscussionBindingIntentService($pdo);
+        $activationCount = (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn();
+        $interactive = $service->prepareInteractiveContext($access, 'Activation Project', 'OAuth Placeholder');
+        $suite->same('interactive', $interactive['context_type']);
+        $suite->same('OAuth Placeholder', $interactive['agent']['name']);
+        $suite->same($activationCount, (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn());
+        $interactiveContext = $service->context($access, $interactive['binding_context_id']);
+        $suite->same('interactive', $interactiveContext['binding']['type']);
+        $suite->same(null, $interactiveContext['binding']['discussion_reference']);
+        $pdo->prepare("UPDATE connector_discussion_binding_intents SET expires_at = DATE_SUB(?, INTERVAL 1 SECOND) WHERE id = ?")
+            ->execute([Db::now(), $interactiveContext['binding']['intent_id']]);
+        $suite->same(null, $service->context($access, $interactive['binding_context_id']));
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, 'Activation Project', 'Missing Agent');
+        }, 'INTERACTIVE_CONTEXT_NOT_FOUND');
+
         $prepared = $service->prepare($access, 'Activation Project', 'Intent Created Agent');
         $suite->same('create_on_confirmation', $prepared['agent']['action']);
         $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Intent Created Agent'")->fetchColumn());

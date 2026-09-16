@@ -33,7 +33,7 @@ export class ProfileTimelineClient {
 
   async messages(profileId, input = {}) {
     const { profile, client } = await this.context(profileId);
-    const query = new URLSearchParams({ project_id: String(profile.project_id), limit: String(clamp(input.limit, 1, 200, 100)) });
+    const query = new URLSearchParams({ project_id: String(profile.project_id), limit: String(clamp(input.limit, 1, 200, 50)) });
     for (const key of ["before", "after", "addressed_to", "acknowledged", "q", "sender", "from", "to"]) {
       if (String(input[key] ?? "").trim()) query.set(key, String(input[key]).trim());
     }

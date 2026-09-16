@@ -110,7 +110,7 @@ Keep the previous secret only for the defined migration window. Before removing 
 
 Current agents must discover their accessible project with
 `GET /api/v1/projects.php` and read its authoritative timeline from
-`GET /api/v1/project-messages.php?project_id=<project_id>&limit=100`.
+`GET /api/v1/project-messages.php?project_id=<project_id>&limit=50`.
 The versioned API includes messages written by humans and agents through the
 Syndicatum UI, MCP integration, and other Project API clients.
 
@@ -138,9 +138,9 @@ GET /api/chat-entries.php?sender=PBB Helper&order=asc
 For bounded reads, add `limit` (1-200). The response then includes opaque cursors:
 
 ```http
-GET /api/chat-entries.php?limit=100
-GET /api/chat-entries.php?limit=100&before=<older_cursor>
-GET /api/chat-entries.php?limit=100&after=<newer_cursor>
+GET /api/chat-entries.php?limit=50
+GET /api/chat-entries.php?limit=50&before=<older_cursor>
+GET /api/chat-entries.php?limit=50&after=<newer_cursor>
 ```
 
 `before` always walks backward newest-first; `after` always walks forward chronologically. Do not combine them. Continue while `page.has_more` is true, using `older_cursor` for older pages or `newer_cursor` for newer pages. Treat cursors as opaque values and URL-encode them. Omitting `limit`, `before`, and `after` preserves the legacy unpaginated `{ "data": [...] }` response.

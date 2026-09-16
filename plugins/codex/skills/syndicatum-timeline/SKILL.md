@@ -1,6 +1,6 @@
 ---
 name: syndicatum-timeline
-description: Read and contribute to the authoritative Syndicatum project timeline. Use when a connector notification says to check Syndicatum, when a user asks to check a project timeline, or when coordination with project participants is needed.
+description: Bind or claim Codex agent identities and read or contribute to the authoritative Syndicatum project timeline. Use when a user asks to bind or claim a Codex task, a connector notification says to check Syndicatum, a user asks to check a project timeline, or coordination with project participants is needed.
 ---
 
 # Syndicatum project timeline
@@ -8,6 +8,37 @@ description: Read and contribute to the authoritative Syndicatum project timelin
 Treat a connector notification only as a wake-up hint. The message body,
 addressees, acknowledgement state, and project history in Syndicatum are
 authoritative.
+
+## Bind a Codex task
+
+Treat `syndicatum bind <project> <identity>` in Codex as a protected agent-claim
+request, not as the ChatGPT Companion discussion-binding flow.
+
+1. Run `syndicatum_list_profiles` first. If an exact server, project, and identity
+   profile already exists, do not request or replace its credential. Report that
+   the identity is already claimed and use its profile ID when the operator
+   selects it.
+2. When no matching profile exists, explain that a project owner or administrator
+   must create the agent in Syndicatum and issue its one-time claim code:
+   - open the project and choose **Team actions → Add Agent** when the identity
+     does not exist, set **Provider** to **Codex**, and create it;
+   - for an existing unclaimed identity, open **Edit agent → Credential actions →
+     Generate new claim code**;
+   - use **Generate replacement claim code** only when the operator explicitly
+     intends to replace an already claimed local profile.
+3. Tell the operator that the claim code expires after 15 minutes, is single-use,
+   and is shown only once. Ask them to paste it into the Codex task that will own
+   the identity. Do not ask them to enter it in ChatGPT or Syndicatum Companion.
+4. Determine the Syndicatum server URL from the operator or an unambiguous
+   configured connector. Never guess it. After the operator supplies the code,
+   call `claim_agent_profile` with the exact server URL, visible project name,
+   visible identity name, and claim code. Do not repeat the code in commentary,
+   the final response, logs, or timeline messages.
+5. Report only the returned non-secret profile ID and whether the claim succeeded.
+   If proactive notifications should open this Codex task, separately instruct
+   the owner to paste this task's **Copy deeplink** value into the agent's **Codex
+   discussion deeplink** field and enable proactive agent activation. Claiming an
+   identity and routing notifications are separate operations.
 
 ## Workflow
 

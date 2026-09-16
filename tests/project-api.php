@@ -2,6 +2,7 @@
 
 require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
+require_once dirname(__DIR__) . '/src/McpServiceTokenService.php';
 
 class ProjectApiTestSuite
 {
@@ -189,6 +190,7 @@ function projectApiSession(PDO $pdo, $userId, $token, $csrf)
 }
 
 $suite = new ProjectApiTestSuite();
+$contractSamples = [];
 $root = dirname(__DIR__);
 $database = 'syndicatum_project_api_' . bin2hex(random_bytes(6));
 if (!preg_match('/^syndicatum_project_api_[a-f0-9]{12}$/', $database)) {
@@ -232,7 +234,9 @@ try {
     $environment['PBB_AGENTCHAT_DB_USER'] = 'root';
     $environment['PBB_AGENTCHAT_DB_PASS'] = '';
     $environment['PBB_AGENTCHAT_SECRET'] = $secret;
-    list($server, $baseUrl, $serverLog) = projectApiServer($root, projectApiPort(), $environment);
+    $serverPort = projectApiPort();
+    $environment['SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN'] = 'http://127.0.0.1:' . $serverPort;
+    list($server, $baseUrl, $serverLog) = projectApiServer($root, $serverPort, $environment);
     $agentOneHeaders = ['Authorization: Bearer ' . $agentOneToken];
     $agentTwoHeaders = ['Authorization: Bearer ' . $agentTwoToken];
     $humanHeaders = ['Cookie: syndicatum_session=' . $sessionToken, 'X-CSRF-Token: ' . $csrfToken];
@@ -295,15 +299,29 @@ try {
         $suite->same('OWNER_MEMBERSHIP_LOCKED', $ownerRemoval['body']['code']);
     });
 
-    $suite->test('project discovery includes owned and shared projects and normalizes participants', function () use ($suite, $baseUrl, $agentOneHeaders, $humanHeaders, $memberHeaders, $projectOne) {
+    $suite->test('project discovery includes owned and shared projects and normalizes participants', function () use ($suite, $baseUrl, $agentOneHeaders, $humanHeaders, $memberHeaders, $projectOne, $memberId, &$contractSamples) {
         $agentProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $agentOneHeaders);
         $humanProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $humanHeaders);
         $memberProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $memberHeaders);
         $participants = projectApiRequest($baseUrl, 'GET', '/api/v1/project-participants.php?project_id=' . $projectOne, $agentOneHeaders);
+        $ownerParticipants = projectApiRequest($baseUrl, 'GET', '/api/v1/project-participants.php?project_id=' . $projectOne, $humanHeaders);
+        $memberParticipants = projectApiRequest($baseUrl, 'GET', '/api/v1/project-participants.php?project_id=' . $projectOne, $memberHeaders);
         $ownerContext = projectApiRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectOne, $humanHeaders);
         $agentContext = projectApiRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectOne, $agentOneHeaders);
+        foreach ([$agentProjects, $humanProjects, $memberProjects] as $response) {
+            $contractSamples[] = ['schema' => 'ProjectListResponse', 'path' => '/api/v1/projects.php', 'method' => 'get', 'status' => 200, 'body' => $response['body']];
+        }
+        foreach ([$ownerContext, $agentContext] as $response) {
+            $contractSamples[] = ['schema' => 'ProjectContextResponse', 'path' => '/api/v1/project.php', 'method' => 'get', 'status' => 200, 'body' => $response['body']];
+        }
+        foreach ([$participants, $ownerParticipants, $memberParticipants] as $response) {
+            $contractSamples[] = ['schema' => 'ParticipantListResponse', 'path' => '/api/v1/project-participants.php', 'method' => 'get', 'status' => 200, 'body' => $response['body']];
+        }
         $suite->same(200, $agentProjects['status']);
         $suite->same(1, count($agentProjects['body']['data']));
+        $suite->same(2, $agentProjects['body']['data'][0]['human_count']);
+        $suite->same(1, $agentProjects['body']['data'][0]['agent_count']);
+        $suite->same(0, $agentProjects['body']['data'][0]['message_count']);
         $suite->true(preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $agentProjects['body']['data'][0]['public_id']) === 1);
         $suite->same($agentProjects['body']['data'][0]['public_id'], $agentContext['body']['data']['project']['public_id']);
         $suite->same(1, count($humanProjects['body']['data']));
@@ -315,6 +333,18 @@ try {
         $kinds = array_column($participants['body']['data'], 'kind');
         sort($kinds);
         $suite->same(['agent', 'human', 'human'], $kinds);
+        foreach ($participants['body']['data'] as $participant) {
+            $suite->true(array_key_exists('joined_at', $participant));
+            $suite->true(array_key_exists('last_message_at', $participant));
+            $suite->true(array_key_exists('message_count', $participant));
+            $suite->true(!array_key_exists('email', $participant), 'Agents must not receive human account details.');
+        }
+        $ownerHumanProfiles = array_values(array_filter($ownerParticipants['body']['data'], function ($participant) { return $participant['kind'] === 'human'; }));
+        $suite->true(count($ownerHumanProfiles) === 2);
+        $suite->true(array_key_exists('email', $ownerHumanProfiles[0]) && array_key_exists('authentication_source', $ownerHumanProfiles[0]), 'Project managers must receive permission-scoped human account metadata.');
+        $memberVisibleAccounts = array_values(array_filter($memberParticipants['body']['data'], function ($participant) { return array_key_exists('email', $participant); }));
+        $suite->same(1, count($memberVisibleAccounts), 'Ordinary members must only receive their own human account metadata.');
+        $suite->same($memberId, $memberVisibleAccounts[0]['identity_id']);
         $suite->same([
             'messages.read' => true,
             'messages.write' => true,
@@ -337,21 +367,61 @@ try {
         ], $agentContext['body']['data']['permissions']);
     });
 
+    $suite->test('MCP tool discovery preserves the bounded timeline adapter contract', function () use ($suite, $baseUrl) {
+        $response = projectApiRequest($baseUrl, 'POST', '/mcp.php', [], [
+            'jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list', 'params' => new stdClass(),
+        ]);
+        $suite->same(200, $response['status'], $response['raw']);
+        $tools = [];
+        foreach ($response['body']['result']['tools'] as $tool) {
+            $tools[$tool['name']] = $tool['inputSchema'];
+        }
+        foreach (['list_projects', 'get_project', 'list_participants', 'list_messages', 'get_message', 'post_message', 'acknowledge_message'] as $name) {
+            $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
+            $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
+        }
+        $suite->same(50, $tools['list_messages']['properties']['limit']['default']);
+        $suite->same(200, $tools['list_messages']['properties']['limit']['maximum']);
+        $suite->same(['body', 'idempotency_key'], $tools['post_message']['required']);
+        $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
+        $suite->same(['message_id'], $tools['acknowledge_message']['required']);
+    });
+
     $messageId = null;
-    $suite->test('agent creates canonical direct and mention message idempotently', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne, $ownerParticipant, $memberParticipant, &$messageId, $pdo) {
+    $suite->test('agent creates canonical direct and mention message idempotently', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne, $ownerParticipant, $memberParticipant, &$messageId, $pdo, &$contractSamples) {
         $payload = [
             'body' => 'Review the project API.',
             'direct_participant_ids' => [$ownerParticipant],
-            'mention_participant_ids' => [$memberParticipant],
+            'mention_participant_ids' => [$memberParticipant, $ownerParticipant],
             'idempotency_key' => 'project-api-test-message',
         ];
         $created = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders, $payload);
         $replayed = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders, $payload);
         $suite->same(201, $created['status'], $created['raw']);
         $suite->same(200, $replayed['status']);
+        $contractSamples[] = ['schema' => 'MessageWriteResponse', 'path' => '/api/v1/project-messages.php', 'method' => 'post', 'status' => 201, 'body' => $created['body']];
+        $contractSamples[] = ['schema' => 'MessageWriteResponse', 'path' => '/api/v1/project-messages.php', 'method' => 'post', 'status' => 200, 'body' => $replayed['body']];
         $suite->same(true, $replayed['body']['idempotent_replay']);
         $suite->same($created['body']['data']['id'], $replayed['body']['data']['id']);
+        $equivalentReplay = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders,
+            array_merge($payload, ['direct_participant_ids' => [$ownerParticipant, $ownerParticipant],
+                'mention_participant_ids' => [$ownerParticipant, $memberParticipant, $memberParticipant]]));
+        $suite->same(200, $equivalentReplay['status']);
+        $suite->same(true, $equivalentReplay['body']['idempotent_replay']);
+        $changedReplay = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders,
+            array_merge($payload, ['body' => 'This changed payload must not create another message.']));
+        $suite->same(409, $changedReplay['status']);
+        $suite->same('IDEMPOTENCY_KEY_CONFLICT', $changedReplay['body']['code']);
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/project-messages.php', 'method' => 'post', 'status' => 409, 'body' => $changedReplay['body']];
+        $changedAddressing = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders,
+            array_merge($payload, ['broadcast' => true]));
+        $suite->same(409, $changedAddressing['status']);
         $suite->same(2, count($created['body']['data']['addressees']));
+        foreach ($created['body']['data']['addressees'] as $addressee) {
+            if ((int) $addressee['participant_id'] === (int) $ownerParticipant) {
+                $suite->same('direct', $addressee['reason']);
+            }
+        }
         $suite->same('agent', $created['body']['data']['sender']['kind']);
         $messageId = $created['body']['data']['id'];
         $suite->same(0, (int) $pdo->query('SELECT COUNT(*) FROM message_events_outbox')->fetchColumn());
@@ -360,17 +430,30 @@ try {
         $suite->same($messageId, $lookup['body']['data'][0]['id']);
     });
 
-    $suite->test('all project members see messages while addressed filters express responsibility', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $messageId) {
+    $suite->test('all project members see messages while addressed filters express responsibility', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $messageId, &$contractSamples) {
         $all = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders);
         $mine = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&addressed_to=me&acknowledged=false', $humanHeaders);
         $suite->same(200, $all['status']);
+        $contractSamples[] = ['schema' => 'MessagePageResponse', 'path' => '/api/v1/project-messages.php', 'method' => 'get', 'status' => 200, 'body' => $all['body']];
+        $emptyForward = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne
+            . '&after=' . rawurlencode($all['body']['page']['newer_cursor']), $agentOneHeaders);
+        $suite->same(200, $emptyForward['status']);
+        $suite->same([], $emptyForward['body']['data']);
+        $contractSamples[] = ['schema' => 'MessagePageResponse', 'path' => '/api/v1/project-messages.php', 'method' => 'get', 'status' => 200, 'body' => $emptyForward['body']];
         $suite->same($messageId, $all['body']['data'][0]['id']);
         $suite->same(1, count($mine['body']['data']));
+        $unsupported = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&acknowledged=true', $humanHeaders);
+        $suite->same(422, $unsupported['status']);
+        $suite->same('VALIDATION_FAILED', $unsupported['body']['code']);
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/project-messages.php', 'method' => 'get', 'status' => 422, 'body' => $unsupported['body']];
+        $malformedProject = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . 'junk', $agentOneHeaders);
+        $suite->same(422, $malformedProject['status']);
     });
 
-    $suite->test('human addressee acknowledges using session and CSRF', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $messageId) {
+    $suite->test('human addressee acknowledges using session and CSRF', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $messageId, &$contractSamples) {
         $response = projectApiRequest($baseUrl, 'POST', '/api/v1/project-message-acknowledge.php?project_id=' . $projectOne . '&id=' . $messageId, $humanHeaders, []);
         $suite->same(200, $response['status'], $response['raw']);
+        $contractSamples[] = ['schema' => 'MessageResponse', 'path' => '/api/v1/project-message-acknowledge.php', 'method' => 'post', 'status' => 200, 'body' => $response['body']];
         $acknowledged = null;
         foreach ($response['body']['data']['addressees'] as $addressee) {
             if ($addressee['display_name'] === 'Owner Human') {
@@ -378,6 +461,32 @@ try {
             }
         }
         $suite->true($acknowledged !== null);
+        $repeated = projectApiRequest($baseUrl, 'POST', '/api/v1/project-message-acknowledge.php?project_id=' . $projectOne . '&id=' . $messageId, $humanHeaders, []);
+        $suite->same(200, $repeated['status']);
+        foreach ($repeated['body']['data']['addressees'] as $addressee) {
+            if ($addressee['display_name'] === 'Owner Human') {
+                $suite->same($acknowledged, $addressee['acknowledged_at']);
+            }
+        }
+    });
+
+    $suite->test('core API errors distinguish authentication, concealment, and addressee conflicts', function () use ($suite, $baseUrl, $agentOneHeaders, $agentTwoHeaders, $projectOne, $messageId, &$contractSamples) {
+        $unauthenticated = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php');
+        $foreign = projectApiRequest($baseUrl, 'GET', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=' . $messageId, $agentTwoHeaders);
+        $missing = projectApiRequest($baseUrl, 'GET', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=2147483647', $agentOneHeaders);
+        $notAddressed = projectApiRequest($baseUrl, 'POST', '/api/v1/project-message-acknowledge.php?project_id=' . $projectOne . '&id=' . $messageId, $agentOneHeaders, []);
+        $suite->same(401, $unauthenticated['status']);
+        $suite->same('AUTHENTICATION_REQUIRED', $unauthenticated['body']['code']);
+        $suite->same(404, $foreign['status']);
+        $suite->same('PROJECT_NOT_FOUND', $foreign['body']['code']);
+        $suite->same(404, $missing['status']);
+        $suite->same('MESSAGE_NOT_FOUND', $missing['body']['code']);
+        $suite->same(409, $notAddressed['status']);
+        $suite->same('MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', $notAddressed['body']['code']);
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/projects.php', 'method' => 'get', 'status' => 401, 'body' => $unauthenticated['body']];
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/project-message.php', 'method' => 'get', 'status' => 404, 'body' => $foreign['body']];
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/project-message.php', 'method' => 'get', 'status' => 404, 'body' => $missing['body']];
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/project-message-acknowledge.php', 'method' => 'post', 'status' => 409, 'body' => $notAddressed['body']];
     });
 
     $suite->test('broadcast resolves every participant and enabled Realtime receives a canonical outbox event', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne, $pdo) {
@@ -452,6 +561,19 @@ try {
         $suite->same(range($next, $next + 204), $seenSequences);
     });
 
+    $suite->test('message lists default to 50 while explicit recovery pages may request 200', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne) {
+        $ordinary = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders);
+        $recovery = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&limit=200', $agentOneHeaders);
+        $suite->same(200, $ordinary['status']);
+        $suite->same(50, $ordinary['body']['page']['limit']);
+        $suite->same(50, count($ordinary['body']['data']));
+        $suite->true($ordinary['body']['page']['has_more']);
+        $suite->same(200, $recovery['status']);
+        $suite->same(200, $recovery['body']['page']['limit']);
+        $suite->same(200, count($recovery['body']['data']));
+        $suite->true($recovery['body']['page']['has_more']);
+    });
+
     $suite->test('project isolation conceals messages and rejects foreign addressees and replies', function () use ($suite, $baseUrl, $agentTwoHeaders, $agentOneHeaders, $projectOne, $projectTwo, $messageId, $agentTwo) {
         $foreignRead = projectApiRequest($baseUrl, 'GET', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=' . $messageId, $agentTwoHeaders);
         $foreignAddressee = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders, [
@@ -489,24 +611,118 @@ try {
         $suite->same(422, $tooDeep['status']);
     });
 
-    $suite->test('owner can revise and soft-delete a project message with history retained', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $messageId, $pdo) {
+    $suite->test('owner can revise and soft-delete a project message with history retained', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $messageId, $pdo, &$contractSamples) {
         $edited = projectApiRequest($baseUrl, 'PATCH', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=' . $messageId, $humanHeaders, [
             'body' => 'Project administrator correction.',
         ]);
         $deleted = projectApiRequest($baseUrl, 'DELETE', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=' . $messageId, $humanHeaders);
+        $withRevisions = projectApiRequest($baseUrl, 'GET', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=' . $messageId . '&include=revisions', $humanHeaders);
         $suite->same(200, $edited['status'], $edited['raw']);
         $suite->same(200, $deleted['status'], $deleted['raw']);
+        $suite->same(200, $withRevisions['status'], $withRevisions['raw']);
+        $contractSamples[] = ['schema' => 'MessageResponse', 'path' => '/api/v1/project-message.php', 'method' => 'patch', 'status' => 200, 'body' => $edited['body']];
+        $contractSamples[] = ['schema' => 'MessageResponse', 'path' => '/api/v1/project-message.php', 'method' => 'delete', 'status' => 200, 'body' => $deleted['body']];
+        $contractSamples[] = ['schema' => 'MessageResponse', 'path' => '/api/v1/project-message.php', 'method' => 'get', 'status' => 200, 'body' => $withRevisions['body']];
         $suite->same(null, $deleted['body']['data']['body']);
         $suite->true($deleted['body']['data']['deleted_at'] !== null);
         $suite->same(1, (int) $pdo->query('SELECT COUNT(*) FROM message_revisions WHERE message_id = ' . (int) $messageId)->fetchColumn());
     });
 
-    $suite->test('human mutations reject missing CSRF evidence', function () use ($suite, $baseUrl, $sessionToken, $projectOne) {
+    $suite->test('human mutations reject missing CSRF evidence', function () use ($suite, $baseUrl, $sessionToken, $projectOne, &$contractSamples) {
         $response = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, [
             'Cookie: syndicatum_session=' . $sessionToken,
         ], ['body' => 'No CSRF']);
         $suite->same(403, $response['status']);
         $suite->same('CSRF_VALIDATION_FAILED', $response['body']['code']);
+        $contractSamples[] = ['schema' => 'ApiError', 'path' => '/api/v1/project-messages.php', 'method' => 'post', 'status' => 403, 'body' => $response['body']];
+    });
+
+    $suite->test('remote MCP service token uses its pinned project and agent without a ChatGPT discussion binding', function () use ($suite, $baseUrl, $pdo, $projectOne, $projectTwo, $agentOne, $agentTwo, $ownerId) {
+        $tokens = new McpServiceTokenService($pdo);
+        $tokenOne = $tokens->issue($projectOne, $agentOne['agent_id'], $ownerId);
+        $tokenTwo = $tokens->issue($projectTwo, $agentTwo['agent_id'], $ownerId);
+        $call = function ($token, $name, array $arguments = []) use ($baseUrl) {
+            return projectApiRequest($baseUrl, 'POST', '/mcp.php', ['Authorization: Bearer ' . $token], [
+                'jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call',
+                'params' => ['name' => $name, 'arguments' => $arguments],
+            ]);
+        };
+
+        $diagnosis = $call($tokenOne, 'diagnose_connection');
+        $suite->same(200, $diagnosis['status'], $diagnosis['raw']);
+        $suite->true(isset($diagnosis['body']['result']['isError']), $diagnosis['raw']);
+        $suite->same(false, $diagnosis['body']['result']['isError']);
+        $suite->same('service_token', $diagnosis['body']['result']['structuredContent']['result']['context_type']);
+        $suite->same('Not required', $diagnosis['body']['result']['structuredContent']['result']['discussion_binding']);
+        $suite->same($agentOne['agent_id'], $diagnosis['body']['result']['structuredContent']['result']['agent_identity']['agent_id']);
+
+        $projects = $call($tokenOne, 'list_projects');
+        $suite->same(200, $projects['status']);
+        $suite->same(false, $projects['body']['result']['isError']);
+        $suite->same([$projectOne], array_column($projects['body']['result']['structuredContent']['result'], 'id'));
+
+        $posted = $call($tokenOne, 'post_message', [
+            'body' => 'Remote MCP service-token contract probe.',
+            'idempotency_key' => 'remote-mcp-service-token-contract-probe',
+        ]);
+        $suite->same(200, $posted['status'], $posted['raw']);
+        $suite->same(false, $posted['body']['result']['isError']);
+        $message = $posted['body']['result']['structuredContent']['result']['message'];
+        $suite->same($agentOne['participant_id'], $message['sender']['participant_id']);
+        $read = $call($tokenOne, 'get_message', ['message_id' => $message['id']]);
+        $suite->same(false, $read['body']['result']['isError']);
+        $suite->same($message['id'], $read['body']['result']['structuredContent']['result']['id']);
+
+        $foreign = $call($tokenTwo, 'get_message', ['message_id' => $message['id']]);
+        $suite->same(200, $foreign['status']);
+        $suite->same(true, $foreign['body']['result']['isError']);
+        $suite->same('MESSAGE_NOT_FOUND', $foreign['body']['result']['content'][0]['text']);
+
+        $scopeInsert = $pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope) VALUES (?, ?)');
+        $scopeInsert->execute([$agentTwo['agent_id'], 'profile:read']);
+        $scopeInsert->execute([$agentTwo['agent_id'], 'messages:read']);
+        $restrictedWrite = $call($tokenTwo, 'post_message', [
+            'body' => 'This restricted agent must not post.',
+            'idempotency_key' => 'remote-mcp-restricted-write-probe',
+        ]);
+        $suite->same(401, $restrictedWrite['status']);
+        $suite->same(true, $restrictedWrite['body']['result']['isError']);
+
+        $pdo->prepare('UPDATE mcp_service_tokens SET revoked_at = ? WHERE token_hash = ?')
+            ->execute([Db::now(), hash('sha256', $tokenOne)]);
+        $revoked = $call($tokenOne, 'list_projects');
+        $suite->same(401, $revoked['status']);
+        $suite->same(true, $revoked['body']['result']['isError']);
+    });
+
+    $suite->test('OAuth MCP timeline tools still require a confirmed binding context', function () use ($suite, $baseUrl, $pdo, $projectOne, $agentOne, $ownerId) {
+        $clientId = 'contract-oauth-client';
+        $token = 'contract_oauth_' . bin2hex(random_bytes(24));
+        $pdo->prepare('INSERT INTO oauth_clients (client_id, client_name, redirect_uris_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)')
+            ->execute([$clientId, 'Contract test client', '[]', Db::now(), Db::now()]);
+        $pdo->prepare('INSERT INTO oauth_access_tokens
+            (token_hash, client_id, user_id, project_id, agent_id, resource_uri, scope_text, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute([hash('sha256', $token), $clientId, $ownerId, $projectOne, $agentOne['agent_id'],
+                $baseUrl . '/mcp', implode(' ', ChatGptOAuthService::SCOPES), Db::now(),
+                gmdate('Y-m-d H:i:s', time() + 3600)]);
+        $call = function ($name, array $arguments = []) use ($baseUrl, $token) {
+            return projectApiRequest($baseUrl, 'POST', '/mcp.php', ['Authorization: Bearer ' . $token], [
+                'jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call',
+                'params' => ['name' => $name, 'arguments' => $arguments],
+            ]);
+        };
+        $unbound = $call('list_projects');
+        $suite->same(200, $unbound['status'], $unbound['raw']);
+        $suite->same(true, $unbound['body']['result']['isError']);
+        $suite->same('DISCUSSION_BINDING_REQUIRED', $unbound['body']['result']['content'][0]['text']);
+        $invalid = $call('list_projects', ['binding_context_id' => 'not-a-confirmed-context']);
+        $suite->same(true, $invalid['body']['result']['isError']);
+        $suite->same('DISCUSSION_BINDING_REQUIRED', $invalid['body']['result']['content'][0]['text']);
+        $diagnosis = $call('diagnose_connection');
+        $suite->same(false, $diagnosis['body']['result']['structuredContent']['result']['checks']['project_access_valid']);
+        $suite->same('Required', $diagnosis['body']['result']['structuredContent']['result']['discussion_binding']);
     });
 
     $suite->test('legacy API can be disabled through the controlled operations setting', function () use ($suite, $baseUrl, $pdo) {
@@ -525,6 +741,10 @@ try {
         )->fetchColumn();
         $suite->same(1, (int) $usage);
     });
+    $capturePath = getenv('SYNDICATUM_CONTRACT_CAPTURE');
+    if ($capturePath !== false && $capturePath !== '') {
+        file_put_contents($capturePath, json_encode($contractSamples, JSON_UNESCAPED_SLASHES));
+    }
 } finally {
     if (is_resource($server)) {
         proc_terminate($server);

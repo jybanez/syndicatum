@@ -189,12 +189,16 @@ Do not lock in detailed pricing before the pilots. Paid value should come from
 coordination operations, hosted deployment, governance and audit, reliability,
 and support—not model execution, message volume, or token resale.
 
-An open-core path remains plausible:
+The accepted V1 licensing direction is documented in
+[`v1-licensing-open-core-proposal.md`](v1-licensing-open-core-proposal.md):
 
-- **Open/free:** server, protocol, core APIs, basic collaboration, and standard
+- **AGPL-3.0-only:** the complete, useful self-hosted V1, including the server,
+  protocol, core APIs, responsibility surfaces, baseline health, and standard
   agent access.
-- **Paid later:** hosted operations, advanced governance/audit, enterprise
-  identity, compliance, retention, high availability, and support.
+- **Paid initially:** managed hosting, implementation, migration, reliability,
+  integrations, and support.
+- **Paid later when validated:** advanced governance/audit, enterprise identity,
+  compliance, retention, high availability, and fleet operations.
 
 ## Explicitly deferred from V1
 

@@ -7,6 +7,7 @@ require_once __DIR__ . '/SettingsService.php';
 class ChatGptOAuthService
 {
     const SCOPES = ['projects:read', 'participants:read', 'messages:read', 'messages:write', 'messages:acknowledge'];
+    const OAUTH_SCOPES = ['projects:read', 'participants:read', 'messages:read', 'messages:write', 'messages:acknowledge', 'offline_access'];
 
     private $pdo;
     private $issuer;
@@ -181,8 +182,8 @@ class ChatGptOAuthService
     private function normalizeScope($scope)
     {
         $requested = preg_split('/\s+/', trim((string) $scope), -1, PREG_SPLIT_NO_EMPTY);
-        if (!$requested) { $requested = self::SCOPES; }
-        $result = array_values(array_unique(array_intersect($requested, self::SCOPES)));
+        if (!$requested) { $requested = self::OAUTH_SCOPES; }
+        $result = array_values(array_unique(array_intersect($requested, self::OAUTH_SCOPES)));
         if (!$result || count($result) !== count(array_unique($requested))) { throw new InvalidArgumentException('invalid_scope'); }
         return implode(' ', $result);
     }

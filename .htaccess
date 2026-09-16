@@ -1,6 +1,15 @@
 RewriteEngine On
 AddType application/manifest+json .webmanifest
 
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Content-Security-Policy "frame-ancestors 'self'"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+</IfModule>
+
 RewriteRule ^\.well-known/oauth-protected-resource/?$ .well-known/oauth-protected-resource.php [L,QSA]
 RewriteRule ^\.well-known/oauth-authorization-server/?$ .well-known/oauth-authorization-server.php [L,QSA]
 RewriteRule ^oauth/authorize/?$ oauth/authorize.php [L,QSA]
@@ -10,6 +19,8 @@ RewriteRule ^oauth/revoke/?$ oauth/revoke.php [L,QSA]
 RewriteRule ^mcp/?$ mcp.php [L,QSA]
 RewriteRule ^privacy/?$ privacy.php [L,QSA]
 RewriteRule ^terms/?$ terms.php [L,QSA]
+RewriteRule ^support/?$ support.php [L,QSA]
+RewriteRule ^license/?$ license.php [L,QSA]
 
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
