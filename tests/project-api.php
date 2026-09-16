@@ -678,9 +678,9 @@ try {
         $suite->same(true, $foreign['body']['result']['isError']);
         $suite->same('MESSAGE_NOT_FOUND', $foreign['body']['result']['content'][0]['text']);
 
-        $scopeInsert = $pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope) VALUES (?, ?)');
-        $scopeInsert->execute([$agentTwo['agent_id'], 'profile:read']);
-        $scopeInsert->execute([$agentTwo['agent_id'], 'messages:read']);
+        $scopeInsert = $pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope, created_at) VALUES (?, ?, ?)');
+        $scopeInsert->execute([$agentTwo['agent_id'], 'profile:read', Db::now()]);
+        $scopeInsert->execute([$agentTwo['agent_id'], 'messages:read', Db::now()]);
         $restrictedWrite = $call($tokenTwo, 'post_message', [
             'body' => 'This restricted agent must not post.',
             'idempotency_key' => 'remote-mcp-restricted-write-probe',
