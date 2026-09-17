@@ -5,7 +5,7 @@ dispositioned. This table is a release-gate record, not a claim of practical
 exploitability. Source secret/dependency scan results are tracked separately in
 [`v1-security-inventory-2026-09-18.md`](v1-security-inventory-2026-09-18.md).
 
-**Evidence baseline:** [PR CI run 35255907969](https://github.com/jybanez/syndicatum/actions/runs/35255907969)
+**Evidence baseline:** [PR CI run 35259335422](https://github.com/jybanez/syndicatum/actions/runs/35259335422)
 on the archived MySQL 5.7.44 candidate. The Docker acceptance artifact retains
 `image-security-findings.tsv` with package, installed version, scanner-listed
 fix version, CVE, and severity. The next CI revision also records the scanner
@@ -102,7 +102,7 @@ the master can be made non-root remain open.
 
 ## HIGH findings and decision policy
 
-The same CI inventory contains 92 HIGH application-image and 97 HIGH
+The same CI inventory contains 87 HIGH application-image and 97 HIGH
 database-image package/CVE findings. Release relevance has not yet been
 determined; **none is silently accepted**. Triage each finding against runtime
 reachability, a compatible fix, and the selected MySQL baseline. Record every
@@ -115,10 +115,12 @@ approved owner exception.
 Of the database HIGH rows, the exact CI inventory attributes 57 to the bundled
 `gosu` binary, 32 to Oracle Linux packages, and 8 to Python packages. This is
 an attribution queue, not a release disposition. The application inventory
-contains five HIGH rows for the `curl` command-line package and another five
-for its shared library. An APT dry run showed the CLI can be purged without
-removing the library; the candidate Dockerfile now removes it, pending a new
-image scan and acceptance run.
+previously contained five HIGH rows for the `curl` command-line package and
+another five for its shared library. An APT dry run showed the CLI could be
+purged without removing the library; the Dockerfile now removes it. CI run
+35259335422 passed acceptance and the CLI rows fell to zero, reducing
+application HIGH findings from 92 to 87. The five `libcurl4` HIGH findings
+remain for applicability/fix review.
 
 The first `v1.0.0-rc.N` may be marked **internal/test only** to validate the
 release process, but must not be presented as production-ready while critical

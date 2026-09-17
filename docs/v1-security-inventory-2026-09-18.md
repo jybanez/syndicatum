@@ -59,6 +59,14 @@ passed. This is a reduction in scanner findings, not a cleared security gate.
 The remaining application critical findings include Perl packages; a local APT
 dry run showed that purging them would remove Apache, so they cannot be treated
 as disposable build-only dependencies without changing the web-server image.
+The later [PR CI run 35259335422](https://github.com/jybanez/syndicatum/actions/runs/35259335422)
+passed after removing the unused `curl` command-line package: the application
+image has 15 critical, 87 high, and 146 medium findings, while the database
+image remains at 4 critical, 97 high, and 88 medium. The `curl` package's five
+HIGH rows disappeared; the PHP-required `libcurl4` library remains. This run
+also recorded Apache/MySQL runtime process capabilities and absence of Apache
+CGI/Perl modules and `libperl` linkage. These findings improve triage evidence,
+but do not by themselves establish exploitability or release acceptance.
 The [security acceptance table](v1-security-acceptance-table.md) records all
 19 current CRITICAL package/CVE findings as open and defines the remaining
 HIGH-finding triage queue. No finding is accepted by this inventory alone.
