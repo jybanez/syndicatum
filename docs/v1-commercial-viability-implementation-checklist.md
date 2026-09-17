@@ -117,8 +117,9 @@ web app, Project API V1, MCP, and supported agent integrations.
 ### P0.4 Release trust
 
 **Current progress:** `.github/workflows/contract-ci.yml` is a candidate
-source-tree CI job for migrations, Project API/OpenAPI, OAuth, activation,
-portable Codex/Companion adapter checks, and isolated Docker lifecycle
+source-tree CI job for tracked PHP/JavaScript syntax, migrations,
+Project API/OpenAPI, OAuth, activation, portable Codex/Companion adapter
+checks, and isolated Docker lifecycle
 acceptance. [Run 35228305400](https://github.com/jybanez/syndicatum/actions/runs/35228305400)
 passed both jobs at commit `32882f4794fcf0c7b35ff14b55d2be0a418435f3`;
 the Docker job verified MySQL 5.7.44 with `STRICT_TRANS_TABLES` before application
