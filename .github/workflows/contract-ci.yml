@@ -159,6 +159,52 @@ jobs:
         run: |
           set -euo pipefail
           pwsh -NoProfile -File ./release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
+      - name: Identify the exact acceptance images
+        id: acceptance-images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t app_images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' |
+            grep -E '^syndicatum-acceptance-[a-f0-9]{12}-app:acceptance$' || true)
+          mapfile -t db_images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' |
+            grep -E '^syndicatum-acceptance-[a-f0-9]{12}-db:acceptance$' || true)
+          test "${#app_images[@]}" -eq 1
+          test "${#db_images[@]}" -eq 1
+          printf 'app=%s\ndb=%s\n' "${app_images[0]}" "${db_images[0]}" >> "$GITHUB_OUTPUT"
+      - name: Inventory built application image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.acceptance-images.outputs.app }}
+          scanners: vuln
+          format: json
+          output: application-image-scan.json
+          exit-code: '0'
+      - name: Inventory built database image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.acceptance-images.outputs.db }}
+          scanners: vuln
+          format: json
+          output: database-image-scan.json
+          exit-code: '0'
+      - name: Retain image counts without raw reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          for component in application database; do
+            report="${component}-image-scan.json"
+            test -s "$report"
+            result_count="$(jq '.Results | length' "$report")"
+            test "$result_count" -gt 0
+            critical="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' "$report")"
+            high="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "HIGH")] | length' "$report")"
+            medium="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' "$report")"
+            printf '%s_image_results=%s\n%s_critical=%s\n%s_high=%s\n%s_medium=%s\n' \
+              "$component" "$result_count" "$component" "$critical" "$component" "$high" "$component" "$medium" \
+              | tee -a image-security-summary.txt
+          done
       - name: Retain Docker source-tree acceptance log
         if: always()
         uses: actions/upload-artifact@v6
@@ -166,6 +212,7 @@ jobs:
           name: docker-source-acceptance-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             docker-acceptance.log
+            image-security-summary.txt
             release-candidate/*.tar.gz
             release-candidate/*.sha256
           if-no-files-found: warn
