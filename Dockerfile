@@ -8,6 +8,12 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        libcurl4 \
+        libfreetype6 \
+        libjpeg62-turbo \
+        libonig5 \
+        libpng16-16 \
+        libwebp7 \
         libcurl4-openssl-dev \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
@@ -17,6 +23,13 @@ RUN set -eux; \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
     docker-php-ext-install -j"$(nproc)" curl gd mbstring opcache pdo_mysql; \
     a2enmod headers rewrite; \
+    apt-get purge -y --auto-remove \
+        libcurl4-openssl-dev \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libonig-dev \
+        libpng-dev \
+        libwebp-dev; \
     rm -rf /var/lib/apt/lists/*
 
 COPY docker/apache-syndicatum.conf /etc/apache2/conf-available/syndicatum.conf
