@@ -45,6 +45,12 @@ not by the intended PHP runtime. The candidate Dockerfile now explicitly
 keeps runtime libraries and purges build-only development packages after
 compilation. The next Docker acceptance and image scan must show whether this
 reduces findings without breaking startup, PHP extensions, or backup/restore.
+The first purge passed [PR CI run 35255117748](https://github.com/jybanez/syndicatum/actions/runs/35255117748),
+but only reduced the application image to 16 critical and 281 high findings;
+`linux-libc-dev` still accounts for 190 high findings. A local APT dry run
+showed that purging that package would also remove compiler/header packages,
+not the explicitly kept runtime libraries. The candidate purge now includes
+`linux-libc-dev`, subject to a fresh Docker acceptance and image scan.
 Before an external production-readiness claim, review the built images and
 the terminal MySQL baseline, establish a severity policy, and obtain the
 planned legal and security review.
