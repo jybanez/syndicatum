@@ -186,6 +186,11 @@ local defaults alone are insufficient.
 - [x] Apply and read back V1 tag protection. Rulesets `23612219` and
       `23612208` are active with the approved pattern, rules, and bypass lists;
       see the [policy record](v1-tag-protection-proposal.md).
+- [x] Draft the first RC-specific release notes at
+      [`docs/releases/v1.0.0-rc.1.md`](releases/v1.0.0-rc.1.md), with the
+      clean-install-only boundary, candidate runtime/schema head, exact source
+      package versions, and open acceptance/security limitations. These notes
+      are not a published release or a completed release gate.
 - [ ] Produce and verify the first real RC evidence chain: exact protected-main
       commit, immutable tag, required CI run, archive/hash, published release,
       and downloaded-artifact acceptance on the declared baseline.

@@ -12,7 +12,10 @@ downloaded published archive and retains the result as CI evidence.
 Before creating a tag, review and merge the candidate through the protected
 pull-request path. Add `docs/releases/<tag>.md` to that reviewed commit, with:
 
-- the exact application tag/commit and candidate status (not production approval);
+- the exact application tag and candidate status (not production approval);
+  the producing/verifying workflow writes the exact commit to its published
+  `release-provenance.txt` asset, because a tracked note cannot contain the
+  hash of its own commit;
 - the supported clean-install-only Docker baseline and installation procedure;
 - the migration head, configuration/secret changes, backup/restore notes, and
   known limitations;
