@@ -59,6 +59,9 @@ passed. This is a reduction in scanner findings, not a cleared security gate.
 The remaining application critical findings include Perl packages; a local APT
 dry run showed that purging them would remove Apache, so they cannot be treated
 as disposable build-only dependencies without changing the web-server image.
+The [security acceptance table](v1-security-acceptance-table.md) records all
+19 current CRITICAL package/CVE findings as open and defines the remaining
+HIGH-finding triage queue. No finding is accepted by this inventory alone.
 
 Before an external production-readiness claim, review the built images and
 the terminal MySQL baseline, establish a severity policy, and obtain the

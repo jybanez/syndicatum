@@ -221,6 +221,10 @@ local defaults alone are insufficient.
 - [ ] Review the security and deployment-hardening implications of using the
       terminal MySQL 5.7.44 release before any external production-readiness
       claim; keep this separate from functional compatibility on 5.7.44.
+- [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
+      for every CRITICAL and release-relevant HIGH container finding, including
+      runtime exposure, compatible fix, mitigation, residual risk, and explicit
+      acceptance. A green inventory scan is not security-gate evidence.
 - [ ] Produce immutable release artifacts with checksums.
 - [ ] Publish release notes and migration notes for each release.
 - [ ] Test clean installation of `v1.0.0` from its published artifact, not only
