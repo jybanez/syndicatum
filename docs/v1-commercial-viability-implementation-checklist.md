@@ -150,7 +150,9 @@ local defaults alone are insufficient.
 - [x] Select `AGPL-3.0-only`, publish the canonical license text, and document
       the open-core boundary. Legal review and the third-party license inventory
       remain release-gate work.
-- [ ] Define the V1 versioning policy.
+- [ ] Define and review the V1 versioning policy. A
+      [candidate policy](v1-release-policy.md) now separates application,
+      protocol, and installed-client versions; release review remains open.
 - [ ] Define a repeatable release and rollback process.
 - [ ] Add continuous integration for PHP, JavaScript, documentation contracts,
       migrations, and packaging.
