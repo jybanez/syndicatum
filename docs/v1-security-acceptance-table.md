@@ -19,8 +19,14 @@ Apache had one UID 0 master and UID 33 workers; MySQL's running server was
 UID 999, and the worker service was separately verified as non-root UID 33.
 Thus the Dockerfile `USER` heuristic does not describe MySQL's steady-state
 server privilege, but the Apache master does remain privileged. The Compose
-stack uses `no-new-privileges:true`; capabilities, writable mounts, and
-reachable ports still require review before accepting the runtime finding.
+stack uses `no-new-privileges:true`. In `compose.yaml`, the database has no
+published host port and attaches only to the `internal: true` backend network;
+the application publishes port 80 to host loopback by default (the bind
+address is configurable), and the worker publishes no port. The database
+volume is writable at `/var/lib/mysql`, and the app/worker share a writable
+avatar volume at `/var/lib/syndicatum/avatars`. No explicit capability drop or
+read-only root filesystem is configured. Effective capabilities and whether
+the Apache root master is necessary throughout steady state remain open.
 
 ## CRITICAL findings
 
