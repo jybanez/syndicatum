@@ -48,10 +48,15 @@ remains the release gate.
 
 1. Cut an RC from a reviewed commit on protected `main`; the two required V1
    checks must pass for that exact revision. Publish a checksummed artifact
-   from the tag, then independently verify the downloaded hash.
+   from the tag, then independently verify the downloaded hash. An RC may be
+   used for internal release-process testing while security triage remains
+   open only if its notes explicitly say **non-production / not approved for
+   external or design-partner use**; this does not close the security gate.
 2. Install that artifact on a clean supported environment. Verify runtime
    identity, exact MySQL 5.7.44 strict-mode baseline, migrations, health,
    backup/restore, and the supported client/coordination acceptance matrix.
+   Rerun the security inventory on the exact published RC artifact/images;
+   branch-candidate scan results alone do not establish release security.
 3. First `v1.0.0` supports a fresh Docker installation on the declared runtime
    and database baseline only. The current internal Syndicatum deployment is
    not a prior supported commercial release; an in-place upgrade from it is

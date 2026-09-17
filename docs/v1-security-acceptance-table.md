@@ -108,3 +108,8 @@ release process, but must not be presented as production-ready while critical
 findings are unreviewed. The table is complete only when every CRITICAL and
 release-relevant HIGH row has evidence-backed disposition and an identified
 accepting authority. Green inventory CI alone does not satisfy this gate.
+Before external/design-partner approval, rerun the scan on the exact published
+RC artifact/images and reconcile every finding against this table; a branch
+candidate's scan is not a substitute. Keep the selected MySQL 5.7.44 baseline
+unless a specific applicable, reachable, unmitigated finding forces an owner
+decision.
