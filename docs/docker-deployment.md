@@ -9,6 +9,12 @@ An earlier MySQL 8.4 source-tree lifecycle passed locally on 2026-09-16; see
 promotion remains pending because that run used a different database baseline
 and built the working tree, not an immutable release artifact.
 
+The selected MySQL 5.7.44 baseline passed an isolated source-tree lifecycle on
+a clean GitHub Actions runner on 2026-09-17; see
+[`docker-acceptance-2026-09-17.md`](docker-acceptance-2026-09-17.md). Release
+promotion remains pending because the run did not install a published,
+immutable release artifact or resolve the production security review.
+
 This runbook describes the candidate self-hosted Docker deployment for
 Syndicatum. It is an operator procedure, not a substitute for tested backups,
 TLS termination, host hardening, monitoring, or an organization-specific
@@ -38,8 +44,9 @@ risk before promoting this candidate path for external production use.
 The Docker acceptance harness builds project-unique images and starts the
 database first. It verifies the running server reports MySQL 5.7.44 with
 strict SQL mode before allowing the application to start or run migrations.
-The full 5.7.44 lifecycle acceptance remains open until that preflight and
-the subsequent install, health, backup, and restore checks complete.
+The 5.7.44 source-tree lifecycle acceptance passed, including the preflight,
+install, health, backup, and restore checks. Repeat acceptance against the
+published release artifact before declaring this a supported path.
 
 The `worker` service runs both existing background processors in a bounded
 loop: agent webhook delivery and the optional Realtime message outbox. The

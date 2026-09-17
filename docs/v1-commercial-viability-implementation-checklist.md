@@ -40,12 +40,12 @@ estimates, and the clean-install acceptance plan remain to be assigned.
 ### P0.2 Repeatable production deployment
 
 **Database baseline:** MySQL 5.7.44 is the owner-selected V1 compatibility
-target. Strict-mode CI has passed on that version, but the isolated Docker
-install and backup/restore rehearsal have not completed on 5.7.44. The earlier
+target. Strict-mode CI and the isolated Docker source-tree install and
+backup/restore rehearsal have passed on that version; see
+[`docker-acceptance-2026-09-17.md`](docker-acceptance-2026-09-17.md). The earlier
 8.4 acceptance run is historical candidate evidence, not V1 baseline proof.
-The acceptance harness now builds project-unique images and asserts the
-running database version and strict SQL mode before application startup;
-this preflight itself still needs a completed 5.7.44 run.
+The acceptance harness builds project-unique images and asserts the running
+database version and strict SQL mode before application startup.
 The final 5.7 release is a legacy stabilization choice, not a claim that the
 database receives current upstream security fixes or that external production
 deployment is approved.
@@ -60,11 +60,11 @@ deployment is approved.
 - [x] Provide controlled, ordered, and repeatable database migrations.
 - [x] Document upgrade and rollback procedures.
 - [x] Provide backup and restore procedures.
-- [ ] Test backup restoration into a clean MySQL 5.7.44 environment.
-      Historical evidence: `docs/docker-acceptance-2026-09-16.md` records an
-      isolated MySQL 8.4 source-tree build, database mutation, logical backup,
-      restore, and probe verification. It does not satisfy the selected baseline
-      or published-release-artifact acceptance.
+- [x] Test backup restoration into a clean MySQL 5.7.44 environment.
+      [`docker-acceptance-2026-09-17.md`](docker-acceptance-2026-09-17.md)
+      records an isolated source-tree build, database mutation, logical backup,
+      restore, and probe verification on the selected baseline. Published
+      release-artifact acceptance remains open.
 - [ ] Expose health states that distinguish application, database,
       authentication, binding, Realtime, queue, and activation delivery health.
 - [x] Document routine operation and incident-recovery commands.
@@ -118,14 +118,15 @@ web app, Project API V1, MCP, and supported agent integrations.
 
 **Current progress:** `.github/workflows/contract-ci.yml` is a candidate
 source-tree CI job for migrations, Project API/OpenAPI, OAuth, activation,
-and portable Codex/Companion adapter checks. The earlier MySQL 8.4 run is
-historical candidate evidence only. After the owner chose the existing 5.7
-series, [run 35223834414](https://github.com/jybanez/syndicatum/actions/runs/35223834414)
-passed at commit `deb706db5cf52dec67ab0b531acea2b58eaeeb39`, asserted
-MySQL 5.7.44 with `STRICT_TRANS_TABLES`, and retained revision-bound test logs
-as a GitHub Actions artifact for 30 days. This is source-contract CI evidence,
-not Docker or immutable-release-artifact acceptance. The local development
-server is also MySQL 5.7.44 but currently uses non-strict SQL mode; its
+portable Codex/Companion adapter checks, and isolated Docker lifecycle
+acceptance. [Run 35228305400](https://github.com/jybanez/syndicatum/actions/runs/35228305400)
+passed both jobs at commit `32882f4794fcf0c7b35ff14b55d2be0a418435f3`;
+the Docker job verified MySQL 5.7.44 with `STRICT_TRANS_TABLES` before application
+startup, then migrations, health, reachability, logical backup, mutation,
+restore, and cleanup. Revision-bound logs are retained as GitHub Actions
+artifacts for 30 days. This is source-tree evidence, not immutable-release-
+artifact acceptance; the earlier MySQL 8.4 run is historical only. The local
+development server is also MySQL 5.7.44 but currently uses non-strict SQL mode; its
 configuration is not interchangeable with the strict candidate baseline.
 No immutable release artifact has been recorded. The job does not yet cover the full PHP/JavaScript,
 documentation, migration, packaging, and security release matrix below.
