@@ -1,7 +1,7 @@
 # V1 cross-provider contract and evidence matrix — provisional
 
 **As of:** 2026-09-17
-**Baseline:** commit `0031cc719ab16459f8d20ddcab76fc1d56c285d2` plus the commercial-viability branch changes. This is a **source-tree candidate**, not a tagged, immutable, installed release.
+**Baseline:** commercial-viability branch commit `be55a40` (including source-tree Docker acceptance at `32882f4794fcf0c7b35ff14b55d2be0a418435f3`). This is a **source-tree candidate**, not a tagged, immutable, installed release.
 **Purpose:** make P0.7 acceptance measurable while the normative V1 coordination contract is frozen. This matrix does not itself certify any integration or close the Phase 0 release gate.
 
 ## Evidence labels
@@ -45,4 +45,8 @@ outcomes for failure and recovery scenarios.
 4. Repeat a broadcast and negative cross-project/unbound/revoked identity case. Interrupt one client, recover delivery, and verify the same canonical outcome without duplicate posts or premature acknowledgements.
 5. Record exact outcomes and known limitations per surface. Until then, P0.7 and the Phase 0 cross-provider gate remain open.
 
-The 2026-09-16 [Docker acceptance record](docker-acceptance-2026-09-16.md) proves clean source-tree startup, migrations, health, and backup/restore. It explicitly does **not** prove an immutable-release install, provider handoff, upgrade, or rollback.
+The 2026-09-17 [Docker acceptance record](docker-acceptance-2026-09-17.md)
+proves clean source-tree startup, migrations, health, and backup/restore on the
+selected MySQL 5.7.44 strict-mode baseline. It explicitly does **not** prove an
+immutable-release install, provider handoff, upgrade, or rollback. The earlier
+[MySQL 8.4 record](docker-acceptance-2026-09-16.md) is historical only for V1.
