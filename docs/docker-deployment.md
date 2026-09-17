@@ -14,6 +14,10 @@ a clean GitHub Actions runner on 2026-09-17; see
 [`docker-acceptance-2026-09-17.md`](docker-acceptance-2026-09-17.md). Release
 promotion remains pending because the run did not install a published,
 immutable release artifact or resolve the production security review.
+The same record includes a later checksummed archive rehearsal: CI built an
+archive from one exact commit, verified its hash, unpacked it separately, and
+repeated the Docker lifecycle from the unpacked files. This is still a
+candidate artifact, not a tagged, published release.
 
 This runbook describes the candidate self-hosted Docker deployment for
 Syndicatum. It is an operator procedure, not a substitute for tested backups,

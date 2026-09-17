@@ -68,3 +68,5 @@ proves clean source-tree startup, migrations, health, and backup/restore on the
 selected MySQL 5.7.44 strict-mode baseline. It explicitly does **not** prove an
 immutable-release install, provider handoff, upgrade, or rollback. The earlier
 [MySQL 8.4 record](docker-acceptance-2026-09-16.md) is historical only for V1.
+The same 2026-09-17 record includes a checksummed, unpacked candidate-archive
+rehearsal; it is not a tagged published release or an installed-provider test.

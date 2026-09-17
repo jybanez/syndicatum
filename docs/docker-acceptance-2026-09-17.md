@@ -34,9 +34,30 @@ The job logged `Docker acceptance passed: clean start, migrations, health,
 reachability, backup, and restore.` The project-scoped database and avatar
 volumes were removed at the end of the run.
 
+## Checksummed archive rehearsal
+
+The later [workflow run 35230102059](https://github.com/jybanez/syndicatum/actions/runs/35230102059)
+passed both required jobs at commit
+`a0538b60ba583d9d48998c4b7f91eeb0322e32f8`. CI created a `git archive`
+tarball for exactly that commit, wrote and checked its SHA-256 manifest,
+unpacked it in a separate directory, and ran the Docker acceptance harness
+from the unpacked copy. The Docker log again confirmed MySQL 5.7.44 with
+`STRICT_TRANS_TABLES`, 25 migrations, health/reachability, logical backup,
+deliberate mutation, restore/probe verification, and project-scoped cleanup.
+
+- Candidate archive: `syndicatum-a0538b60ba583d9d48998c4b7f91eeb0322e32f8.tar.gz`
+- SHA-256: `ccd9a6344981073b1a76e088fbe98c5ecb1163572476ce0fd9563c1970f85728`
+- Retained Actions artifact: `docker-source-acceptance-a0538b60ba583d9d48998c4b7f91eeb0322e32f8-1`
+
+The downloaded archive hash was independently checked against the retained
+manifest. This improves packaging/install evidence but remains a time-limited
+CI candidate artifact, not a tagged, published V1 release. Upgrade, rollback,
+and external production acceptance are still unproven.
+
 ## Still required before release promotion
 
-- build and test an immutable release artifact rather than source checkout;
+- publish and test a tagged immutable release artifact rather than only a
+  time-limited CI candidate archive;
 - exercise documented upgrade and file-plus-database rollback procedures;
 - complete production proxy/TLS, off-host backup retention, monitoring, and
   supported integration acceptance; and

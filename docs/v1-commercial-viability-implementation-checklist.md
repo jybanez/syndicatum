@@ -128,8 +128,13 @@ artifacts for 30 days. This is source-tree evidence, not immutable-release-
 artifact acceptance; the earlier MySQL 8.4 run is historical only. The local
 development server is also MySQL 5.7.44 but currently uses non-strict SQL mode; its
 configuration is not interchangeable with the strict candidate baseline.
-No immutable release artifact has been recorded. The job does not yet cover the full PHP/JavaScript,
-documentation, migration, packaging, and security release matrix below.
+[Run 35230102059](https://github.com/jybanez/syndicatum/actions/runs/35230102059)
+also passed after CI packaged exact commit `a0538b6` as a checksummed archive,
+unpacked it, and repeated Docker acceptance from that copy; see the
+[archive rehearsal record](docker-acceptance-2026-09-17.md#checksummed-archive-rehearsal).
+No tagged, published immutable V1 release artifact has been recorded. The job
+does not yet cover the full PHP/JavaScript, documentation, migration, packaging,
+and security release matrix below.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
 check. GitHub branch protection on `main` now requires pull requests and the
