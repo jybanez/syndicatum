@@ -51,6 +51,15 @@ but only reduced the application image to 16 critical and 281 high findings;
 showed that purging that package would also remove compiler/header packages,
 not the explicitly kept runtime libraries. The candidate purge now includes
 `linux-libc-dev`, subject to a fresh Docker acceptance and image scan.
+The expanded purge passed [PR CI run 35255907969](https://github.com/jybanez/syndicatum/actions/runs/35255907969):
+the application image dropped to 15 critical, 92 high, and 160 medium
+findings, while the database image remained at 4 critical and 97 high.
+Functional clean-install, health, migrations, backup, and restore checks still
+passed. This is a reduction in scanner findings, not a cleared security gate.
+The remaining application critical findings include Perl packages; a local APT
+dry run showed that purging them would remove Apache, so they cannot be treated
+as disposable build-only dependencies without changing the web-server image.
+
 Before an external production-readiness claim, review the built images and
 the terminal MySQL baseline, establish a severity policy, and obtain the
 planned legal and security review.

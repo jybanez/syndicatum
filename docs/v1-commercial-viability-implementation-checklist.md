@@ -151,8 +151,15 @@ dependency vulnerabilities, secrets, and configuration findings. It retains
 revision-bound counts and non-secret finding identifiers, not raw secret matches. A detected secret
 fails the job; vulnerability and configuration counts remain informational
 until findings are triaged and an enforceable policy is agreed. This is not a
-PHP/JavaScript static-code security audit, container-image review, third-party
-license inventory, or security sign-off.
+PHP/JavaScript static-code security audit, completed container-image review,
+third-party license inventory, or security sign-off.
+The Docker acceptance job now inventories both built images after exercising
+the archived candidate. [Run 35255907969](https://github.com/jybanez/syndicatum/actions/runs/35255907969)
+passed clean-install/backup-restore and reported 15 critical / 92 high
+application-image findings and 4 critical / 97 high database-image findings
+after removal of inherited build headers. Package/CVE/fix-version evidence is
+retained for triage; image findings remain informational rather than an
+enforced V1 severity policy. See the [security inventory](v1-security-inventory-2026-09-18.md).
 The proposed `.github/workflows/release-rc.yml` path requires an annotated
 `v1.0.0-rc.N` tag on protected `main` with reviewed release notes, reruns the
 source and Docker checks at the tag, publishes their checksummed archive as a
