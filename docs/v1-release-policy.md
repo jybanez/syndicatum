@@ -11,12 +11,14 @@ remains the release gate.
   Use `-rc.N` for pre-release candidates; an RC is not production approval.
 - Publish exactly one source archive and SHA-256 manifest for the tagged commit.
   Record the full Git commit, tag, archive hash, migration head, declared
-  database/runtime baseline, and V1 coordination-contract revision in release
-  notes. A tag must not be moved after publication; corrections require a new
-  candidate or patch version.
+  database/runtime baseline, V1 coordination-contract revision, and producing
+  and verifying CI workflow/run identities in release notes. A tag must not be
+  moved after publication; corrections require a new candidate or patch version.
 - Codex plugin and browser Companion versions have separate package identities.
-  Release notes must list the exact compatible package versions; an application
-  tag does not silently version or certify those installed clients.
+  Release notes must list the exact package versions tested during installed-
+  client acceptance. State a wider compatibility range only when separate
+  contract/tests support it; an application tag does not silently version or
+  certify those clients.
 - The project API path `/api/v1/` is a protocol major version, not an
   application build number. The candidate coordination contract has its own
   revision until its observable semantics are reviewed and frozen.
@@ -29,15 +31,18 @@ remains the release gate.
 - **Minor:** adds backward-compatible optional fields, endpoints, capabilities,
   or UI features. Existing V1 clients must continue to work without adopting
   the addition. Optional transports require explicit capability detection.
-- **Major or explicitly versioned migration:** removes or renames public fields,
-  tightens required inputs, broadens authorization, changes ID/cursor meaning,
-  acknowledgement semantics, or canonical message interpretation. Do not ship
-  such a change under an existing `/api/v1/` contract without a documented
-  migration and compatibility window.
-- Database schema changes are not automatically wire-contract changes, but
-  migration checksums are immutable once released. A change that prevents
-  rollback to the previous supported application version must be called out as
-  an upgrade boundary and tested with database backup/restore.
+- **Breaking public-contract change:** removes or renames public fields, adds
+  required inputs, changes ID/cursor, acknowledgement, or canonical-message
+  meaning, or materially changes existing authorization semantics. Existing
+  principals must not gain access by default without an explicit security and
+  compatibility review. A new optional capability can be minor if old scopes
+  keep exactly their prior meaning. Do not silently redefine `/api/v1/`;
+  introduce an appropriate versioned boundary and migration window.
+- **Database migration:** may ship in a patch or minor release when externally
+  observable V1 semantics remain compatible. Released migration checksums are
+  immutable. Irreversible schema boundaries must be documented and tested with
+  file-plus-database recovery; internal migration numbering does not determine
+  the public application/API major version.
 
 ## Promotion and recovery
 
@@ -47,15 +52,23 @@ remains the release gate.
 2. Install that artifact on a clean supported environment. Verify runtime
    identity, exact MySQL 5.7.44 strict-mode baseline, migrations, health,
    backup/restore, and the supported client/coordination acceptance matrix.
-3. Rehearse upgrade from a named supported previous application state. Preserve
-   an off-host database backup and matching file/configuration snapshot.
+3. For subsequent releases, rehearse upgrade from the immediately previous
+   supported application release. For first `v1.0.0`, identify the actual
+   deployed pre-V1 Syndicatum baseline by revision, schema state, and operating
+   configuration, then rehearse the in-place migration if it will be offered.
+   If a deployment class supports clean install only, state that explicitly
+   before release rather than calling the internal baseline a prior published
+   release. Preserve an off-host database backup and matching file/configuration
+   snapshot for every supported in-place path.
 4. Rehearse a failed-upgrade recovery. Restore files and database together when
    schema changes make application-only rollback unsafe; do not edit applied
    migration checksums or promise reverse migrations that do not exist.
 5. Publish stable `v1.0.0` only after release, security, legal, and installed-
    client gates close. Keep the release notes, checksums, migration notes, and
    known limitations with the tag. A failed RC is replaced by a new RC tag,
-   never overwritten.
+   never overwritten. Never silently promote an RC by moving or reusing its
+   tag; stable identity must be published under its own tag and verified
+   artifact provenance.
 
 The existing [Docker runbook](docker-deployment.md) supplies operator commands.
 The [2026-09-17 acceptance record](docker-acceptance-2026-09-17.md) proves a
