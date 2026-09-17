@@ -35,9 +35,16 @@ The first image scan in [PR CI run 35253824628](https://github.com/jybanez/syndi
 passed technically and reported 17 critical, 286 high, and 1261 medium
 application-image findings, plus 4 critical, 97 high, and 88 medium
 database-image findings. These are finding counts, not unique CVE counts or
-evidence of exploitability. The next CI revision retains a vulnerability-only
+evidence of exploitability. CI now retains a vulnerability-only
 package/version/fix/CVE inventory for triage; it still does not upload raw
 secret-scan reports.
+The retained inventory from [PR CI run 35254483121](https://github.com/jybanez/syndicatum/actions/runs/35254483121)
+shows 190 high findings attached to the application image's
+`linux-libc-dev` package. That package is used during extension compilation,
+not by the intended PHP runtime. The candidate Dockerfile now explicitly
+keeps runtime libraries and purges build-only development packages after
+compilation. The next Docker acceptance and image scan must show whether this
+reduces findings without breaking startup, PHP extensions, or backup/restore.
 Before an external production-readiness claim, review the built images and
 the terminal MySQL baseline, establish a severity policy, and obtain the
 planned legal and security review.
