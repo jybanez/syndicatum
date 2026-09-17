@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // This is a CI environment assertion, not a general application health check.
-// The supported V1 Docker baseline is MySQL 8.4 with strict SQL behavior.
+// V1 baseline candidate: the existing MySQL 5.7.44 deployment, with strict SQL.
 $pdo = new PDO(
     'mysql:host=127.0.0.1;charset=utf8mb4',
     'root',
@@ -21,8 +21,8 @@ $version = (string) $row['version'];
 $sqlMode = (string) $row['sql_mode'];
 $modes = array_map('trim', explode(',', $sqlMode));
 
-if (!preg_match('/^8\.4(?:\.|-)/', $version)) {
-    throw new RuntimeException('CI must use the supported MySQL 8.4 series; got ' . $version . '.');
+if (!preg_match('/^5\.7\.44(?:$|[.-])/', $version)) {
+    throw new RuntimeException('CI must use the selected MySQL 5.7.44 baseline; got ' . $version . '.');
 }
 if (!in_array('STRICT_TRANS_TABLES', $modes, true)
     && !in_array('STRICT_ALL_TABLES', $modes, true)) {

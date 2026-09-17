@@ -112,7 +112,9 @@ failed on a strict-MySQL test-fixture omission. The corrected workflow's
 [run 35139295763](https://github.com/jybanez/syndicatum/actions/runs/35139295763)
 passed at commit `3221582836a9ace83b26854a6281ae53880b5701`, asserted
 MySQL 8.4.11 with `STRICT_TRANS_TABLES`, and retained revision-bound test logs
-as a GitHub Actions artifact for 30 days.
+as a GitHub Actions artifact for 30 days. This is historical candidate evidence,
+not acceptance for the owner-selected MySQL 5.7.44 baseline; CI and release
+acceptance must be rerun on 5.7.44.
 No immutable release artifact has been recorded. The job does not yet cover the full PHP/JavaScript,
 documentation, migration, packaging, and security release matrix below.
 CI acceptance requires a clean checkout of the exact candidate release commit,
