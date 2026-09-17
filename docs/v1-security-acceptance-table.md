@@ -7,15 +7,14 @@ exploitability. Source secret/dependency scan results are tracked separately in
 
 **Evidence baseline:** [PR CI run 35259335422](https://github.com/jybanez/syndicatum/actions/runs/35259335422)
 on the archived MySQL 5.7.44 candidate. The Docker acceptance artifact retains
-`image-security-findings.tsv` with package, installed version, scanner-listed
-fix version, CVE, and severity. The next CI revision also records the scanner
-target path and package type so bundled-binary findings can be attributed.
-This table records its 19 CRITICAL package/CVE
+`image-security-findings.tsv` with scanner target, package type, package,
+installed version, scanner-listed fix version, CVE, and severity. This table
+records its 19 CRITICAL package/CVE
 findings individually. A blank scanner fix version means **not listed by the
 scanner**, not proof that no fix exists. All applicability and residual-risk
 judgments remain open until checked against the running image and advisory.
-The process probe passed in [PR CI run 35258886273](https://github.com/jybanez/syndicatum/actions/runs/35258886273):
-Apache had one UID 0 master (`CapEff=00000000a80425fb`) and UID 33 workers
+The process probe passed in [PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225):
+Apache had one UID 0 master (`CapEff=00000000000004c0`) and UID 33 workers
 (zero effective capabilities); MySQL's running server was UID 999 with zero
 effective capabilities, and the worker service was separately verified as
 non-root UID 33. All probed processes had `NoNewPrivs=1`. The same run found
@@ -27,10 +26,13 @@ published host port and attaches only to the `internal: true` backend network;
 the application publishes port 80 to host loopback by default (the bind
 address is configurable), and the worker publishes no port. The database
 volume is writable at `/var/lib/mysql`, and the app/worker share a writable
-avatar volume at `/var/lib/syndicatum/avatars`. No explicit capability drop or
-read-only root filesystem is configured. The Apache root master retains
-effective capabilities in steady state; whether each is necessary and whether
-the master can be made non-root remain open.
+avatar volume at `/var/lib/syndicatum/avatars`. The application now drops all
+default capabilities and adds only `NET_BIND_SERVICE`, `SETGID`, and `SETUID`;
+the root master's effective set fell from `00000000a80425fb` in run
+35258886273 to `00000000000004c0` without breaking clean install or restore.
+No read-only root filesystem is configured. Whether the master can be made
+non-root and whether the three retained capabilities can be reduced further
+remain open.
 
 ## CRITICAL findings
 
@@ -51,10 +53,10 @@ the master can be made non-root remain open.
 | CVE-2026-42496 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
 | CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
 | CVE-2023-45853 | CRITICAL | app / `zlib1g` | Debian says affected MiniZip code is not built into this Bookworm binary | Not applicable to this binary per Debian | Verify package lineage; obtain independent review | Proposed N/A; no compensating control claimed | Review pending |
-| CVE-2023-24538 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.8 / 1.20.3 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
-| CVE-2023-24540 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.9 / 1.20.4 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
-| CVE-2024-24790 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `net/netip` symbols not yet checked in exact CI binary | Scanner lists Go 1.21.11 / 1.22.4 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
-| CVE-2025-68121 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `crypto/tls` symbols not yet checked in exact CI binary | Scanner lists newer Go versions | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
+| CVE-2023-24538 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `html/template` symbols | Scanner lists Go 1.19.8 / 1.20.3 | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
+| CVE-2023-24540 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `html/template` symbols | Scanner lists Go 1.19.9 / 1.20.4 | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
+| CVE-2024-24790 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `net/netip` symbols | Scanner lists Go 1.21.11 / 1.22.4 | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
+| CVE-2025-68121 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `crypto/tls` symbols | Scanner lists newer Go versions | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
 
 ## Advisory and source-path triage notes
 
@@ -102,11 +104,22 @@ the master can be made non-root remain open.
   [`html/template` whitespace escaping (CVE-2023-24540)](https://pkg.go.dev/vuln/GO-2023-1752),
   [`net/netip` address classification (CVE-2024-24790)](https://pkg.go.dev/vuln/GO-2024-2887),
   and [`crypto/tls` session resumption with mutated configuration (CVE-2025-68121)](https://pkg.go.dev/vuln/GO-2026-4337).
-  These are provisionally unlikely in a user-switch-and-exec helper, but
-  binary symbol/call-path evidence from the exact CI image is needed before
-  marking any of them not applicable. The [gosu maintainer's security policy](https://github.com/tianon/gosu/blob/master/SECURITY.md)
+  `govulncheck` v1.7.0 in binary mode against the extracted `gosu` found no
+  vulnerable symbols for these four advisories. This supports proposed N/A
+  dispositions, pending independent review and repeat on the exact published
+  image. The [gosu maintainer's security policy](https://github.com/tianon/gosu/blob/master/SECURITY.md)
   specifically recommends `govulncheck` for this distinction rather than
-  assuming every vulnerable Go standard-library package is invoked.
+  assuming every vulnerable Go standard-library package is invoked. The same
+  run *did* report ten other symbol-level vulnerabilities, including runc
+  library and Go `os/exec` findings. Those require separate applicability
+  review; the four proposed N/A rows do not clear the database security gate.
+  Reproduction command: `go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 -mode binary /audit/gosu`
+  against the extracted binary hash above. Its
+  additional open review queue is runc
+  `GO-2026-5761`, `GO-2025-4098`, `GO-2024-3110`, `GO-2023-1683`,
+  `GO-2023-1682`, `GO-2023-1627`, `GO-2022-0452` and Go standard library
+  `GO-2026-4602`, `GO-2025-3956`, `GO-2023-1840`. Binary symbol presence
+  does not by itself prove the advisory's exploit conditions in `gosu`.
 
 ## HIGH findings and decision policy
 
