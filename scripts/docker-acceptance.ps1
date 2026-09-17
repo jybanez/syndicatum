@@ -272,6 +272,11 @@ try {
         $databaseProcesses -notmatch 'mysqld:[1-9][0-9]*') {
         throw "Unexpected runtime process privileges. Apache: $appProcesses; MySQL: $databaseProcesses"
     }
+    if ($appProcesses -notmatch '(?m)^apache2:0:CapEff=00000000000004c0:NoNewPrivs=1\r?$' -or
+        $appProcesses -notmatch '(?m)^apache2:[1-9][0-9]*:CapEff=0000000000000000:NoNewPrivs=1\r?$' -or
+        $databaseProcesses -notmatch '(?m)^mysqld:[1-9][0-9]*:CapEff=0000000000000000:NoNewPrivs=1\r?$') {
+        throw "Runtime capability or no-new-privileges regression. Apache: $appProcesses; MySQL: $databaseProcesses"
+    }
     Write-Host "Apache processes: $appProcesses"
     Write-Host "MySQL processes: $databaseProcesses"
     $appArchitecture = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'dpkg', '--print-architecture') -Capture).Trim()
