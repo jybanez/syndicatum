@@ -106,24 +106,17 @@ class RequestAuth
             $statement = $this->pdo->prepare(
                 "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
                         pm.role, pp.id AS participant_id,
-                        COALESCE(pc.human_count, 0) AS human_count,
-                        COALESCE(pc.agent_count, 0) AS agent_count,
-                        COALESCE(mc.message_count, 0) AS message_count,
+                        (SELECT COUNT(*) FROM project_participants counted
+                         WHERE counted.project_id = p.id AND counted.kind = 'human' AND counted.status = 'active') AS human_count,
+                        (SELECT COUNT(*) FROM project_participants counted
+                         WHERE counted.project_id = p.id AND counted.kind = 'agent' AND counted.status = 'active') AS agent_count,
+                        (SELECT COUNT(*) FROM messages counted
+                         WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count,
                         CASE WHEN p.owner_user_id = ? THEN 'owned' ELSE 'shared' END AS relationship
                  FROM project_members pm
                  JOIN projects p ON p.id = pm.project_id
                  JOIN project_participants pp ON pp.project_id = p.id AND pp.user_id = pm.user_id
                     AND pp.kind = 'human' AND pp.status = 'active'
-                 LEFT JOIN (
-                    SELECT project_id,
-                           SUM(CASE WHEN kind = 'human' AND status = 'active' THEN 1 ELSE 0 END) AS human_count,
-                           SUM(CASE WHEN kind = 'agent' AND status = 'active' THEN 1 ELSE 0 END) AS agent_count
-                    FROM project_participants GROUP BY project_id
-                 ) pc ON pc.project_id = p.id
-                 LEFT JOIN (
-                    SELECT project_id, COUNT(*) AS message_count
-                    FROM messages WHERE deleted_at IS NULL GROUP BY project_id
-                 ) mc ON mc.project_id = p.id
                  WHERE pm.user_id = ? AND pm.status = 'active'
                  ORDER BY p.name, p.id"
             );
@@ -132,23 +125,16 @@ class RequestAuth
             $statement = $this->pdo->prepare(
                 "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
                         'agent' AS role, pp.id AS participant_id, 'assigned' AS relationship,
-                        COALESCE(pc.human_count, 0) AS human_count,
-                        COALESCE(pc.agent_count, 0) AS agent_count,
-                        COALESCE(mc.message_count, 0) AS message_count
+                        (SELECT COUNT(*) FROM project_participants counted
+                         WHERE counted.project_id = p.id AND counted.kind = 'human' AND counted.status = 'active') AS human_count,
+                        (SELECT COUNT(*) FROM project_participants counted
+                         WHERE counted.project_id = p.id AND counted.kind = 'agent' AND counted.status = 'active') AS agent_count,
+                        (SELECT COUNT(*) FROM messages counted
+                         WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count
                  FROM project_agents pa
                  JOIN projects p ON p.id = pa.project_id
                  JOIN project_participants pp ON pp.project_id = p.id AND pp.agent_id = pa.agent_id
                     AND pp.kind = 'agent' AND pp.status = 'active'
-                 LEFT JOIN (
-                    SELECT project_id,
-                           SUM(CASE WHEN kind = 'human' AND status = 'active' THEN 1 ELSE 0 END) AS human_count,
-                           SUM(CASE WHEN kind = 'agent' AND status = 'active' THEN 1 ELSE 0 END) AS agent_count
-                    FROM project_participants GROUP BY project_id
-                 ) pc ON pc.project_id = p.id
-                 LEFT JOIN (
-                    SELECT project_id, COUNT(*) AS message_count
-                    FROM messages WHERE deleted_at IS NULL GROUP BY project_id
-                 ) mc ON mc.project_id = p.id
                  WHERE pa.agent_id = ? AND pa.status = 'active' ORDER BY p.name, p.id"
             );
             $statement->execute([(int) $identity['agent']['id']]);
