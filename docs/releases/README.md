@@ -4,7 +4,8 @@ The `V1 release candidate` workflow accepts an annotated `v1.0.0-rc.N` tag
 whose commit is on protected `main`. It reruns source-contract and isolated
 MySQL 5.7.44 Docker acceptance on that tagged commit, then publishes the
 **same** archive and SHA-256 manifest retained by the Docker job. It also
-publishes a provenance file naming the tag, commit, CI run, and archive hash,
+publishes a provenance file naming the tag, commit, CI run, archive hash,
+migration head, runtime/database baseline, and candidate contract-document hash,
 and downloads the release assets to verify the published checksum. It then
 performs a second isolated clean-install/backup/restore lifecycle from that
 downloaded published archive and retains the result as CI evidence.

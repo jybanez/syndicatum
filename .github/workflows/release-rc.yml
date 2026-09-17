@@ -58,14 +58,20 @@ jobs:
           test -f "$checksum"
           (cd "$(dirname "$archive")" && sha256sum --check "$(basename "$checksum")")
           digest="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+          migration_head="$(find migrations -maxdepth 1 -type f -name '*.php' -printf '%f\n' | sort | tail -n 1)"
+          test -n "$migration_head"
+          contract_sha256="$(sha256sum docs/v1-coordination-contract.md | cut -d ' ' -f 1)"
           printf 'archive=%s\nchecksum=%s\n' "$archive" "$checksum" >> "$GITHUB_OUTPUT"
           {
             printf 'repository=%s\n' "$GITHUB_REPOSITORY"
             printf 'tag=%s\ncommit=%s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
-            printf 'workflow=%s\nrun_id=%s\nrun_attempt=%s\n' \
+            printf 'producing_and_verifying_workflow=%s\nrun_id=%s\nrun_attempt=%s\n' \
               "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
             printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
             printf 'archive=%s\nsha256=%s\n' "$archive_name" "$digest"
+            printf 'migration_head=%s\n' "${migration_head%.php}"
+            printf 'coordination_contract_sha256=%s\n' "$contract_sha256"
+            printf 'runtime_baseline=PHP 8.2 Apache on Debian Bookworm\n'
             printf 'database_baseline=MySQL 5.7.44 strict mode\n'
           } > release-provenance.txt
       - name: Publish new prerelease without replacing an existing tag or release
