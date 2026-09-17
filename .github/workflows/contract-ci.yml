@@ -27,7 +27,7 @@ jobs:
           --health-timeout=5s
           --health-retries=12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
@@ -35,10 +35,10 @@ jobs:
           coverage: none
         env:
           fail-fast: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Install OpenAPI validator dependencies
@@ -79,7 +79,7 @@ jobs:
           node --test companion/test/package.test.mjs | tee ci-evidence/companion-portable.txt
       - name: Retain source-contract test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: source-contract-${{ github.sha }}-${{ github.run_attempt }}
           path: ci-evidence/
@@ -90,7 +90,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Package exact commit and verify candidate archive
         shell: bash
         run: |
@@ -114,7 +114,7 @@ jobs:
           pwsh -NoProfile -File ./release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
       - name: Retain Docker source-tree acceptance log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docker-source-acceptance-${{ github.sha }}-${{ github.run_attempt }}
           path: |
