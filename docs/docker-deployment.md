@@ -4,12 +4,12 @@
 only after the clean-environment acceptance harness passes against the release
 artifact and the result is recorded.
 
-The source-tree lifecycle passed locally on 2026-09-16; see
+An earlier MySQL 8.4 source-tree lifecycle passed locally on 2026-09-16; see
 [`docker-acceptance-2026-09-16.md`](docker-acceptance-2026-09-16.md). Release
-promotion remains pending because that run built the current working tree, not
-an immutable release artifact.
+promotion remains pending because that run used a different database baseline
+and built the working tree, not an immutable release artifact.
 
-This runbook describes the supported self-hosted Docker deployment for
+This runbook describes the candidate self-hosted Docker deployment for
 Syndicatum. It is an operator procedure, not a substitute for tested backups,
 TLS termination, host hardening, monitoring, or an organization-specific
 disaster-recovery plan.
@@ -20,15 +20,19 @@ The candidate stack uses:
 
 - Docker Engine with the Compose v2 plugin;
 - PHP 8.2 with Apache on Debian Bookworm;
-- MySQL 8.4 LTS;
+- MySQL 5.7.44 with strict SQL mode, matching the owner-selected V1 version
+  baseline;
 - the Compose services `app`, `db`, and `worker`;
 - the named volume `syndicatum_db` for MySQL data; and
 - the named volume `syndicatum_avatars` for uploaded avatars shared by the web
   application and worker.
 
-`compose.yaml` pins the PHP major/minor and MySQL LTS series. Treat movement to
-a new PHP minor, Debian release, or MySQL LTS series as an upgrade requiring
-the full test suite and a backup/restore rehearsal.
+`compose.yaml` pins the PHP major/minor and MySQL 5.7.44. Treat movement to
+a new PHP minor, Debian release, or MySQL version as an upgrade requiring
+the full test suite and a backup/restore rehearsal. The MySQL 5.7 series has
+reached its final release; this is a stability baseline, not a claim of ongoing
+upstream security maintenance. Security and release review must address that
+risk before promoting this candidate path for external production use.
 
 The `worker` service runs both existing background processors in a bounded
 loop: agent webhook delivery and the optional Realtime message outbox. The
@@ -250,7 +254,7 @@ restore over the only surviving database or volume.
 
 The required rehearsal is:
 
-1. Create an isolated MySQL 8.4 instance or an isolated Compose project with a
+1. Create an isolated MySQL 5.7.44 instance or an isolated Compose project with a
    new database volume and no production ingress.
 2. Import the dump with the MySQL client using credentials supplied through the
    isolated environment, not shell history.

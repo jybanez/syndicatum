@@ -18,7 +18,7 @@ services:
       context: .
       dockerfile: docker/mysql.Dockerfile
       args:
-        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:8.4}
+        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:5.7.44}
     image: ${SYNDICATUM_DB_IMAGE:-syndicatum-db:local}
     restart: unless-stopped
     environment:
@@ -31,6 +31,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --log-bin-trust-function-creators=1
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
     volumes:
       - syndicatum_db:/var/lib/mysql
     healthcheck:

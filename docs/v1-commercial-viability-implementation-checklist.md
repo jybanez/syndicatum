@@ -25,8 +25,9 @@ checks, and operational proof are all present where applicable.
 - [x] Map each checklist item to existing implementation, missing work, owner,
       dependency, and acceptance evidence.
 - [x] Record the candidate V1 Docker operating environment and explicit
-      non-goals in `docs/docker-deployment.md`; support remains conditional on
-      the acceptance run.
+      non-goals in `docs/docker-deployment.md`; the owner-selected MySQL 5.7.44
+      baseline still requires Docker/release-artifact acceptance and security
+      review before support is declared.
 - [x] Establish a guarded, repeatable clean-environment acceptance harness in
       `scripts/docker-acceptance.ps1`.
 
@@ -106,15 +107,15 @@ web app, Project API V1, MCP, and supported agent integrations.
 
 **Current progress:** `.github/workflows/contract-ci.yml` is a candidate
 source-tree CI job for migrations, Project API/OpenAPI, OAuth, activation,
-and portable Codex/Companion adapter checks. Its YAML parsed locally
-and the component suites passed locally. The first clean-checkout GitHub run
-failed on a strict-MySQL test-fixture omission. The corrected workflow's
-[run 35139295763](https://github.com/jybanez/syndicatum/actions/runs/35139295763)
-passed at commit `3221582836a9ace83b26854a6281ae53880b5701`, asserted
-MySQL 8.4.11 with `STRICT_TRANS_TABLES`, and retained revision-bound test logs
-as a GitHub Actions artifact for 30 days. This is historical candidate evidence,
-not acceptance for the owner-selected MySQL 5.7.44 baseline; CI and release
-acceptance must be rerun on 5.7.44.
+and portable Codex/Companion adapter checks. The earlier MySQL 8.4 run is
+historical candidate evidence only. After the owner chose the existing 5.7
+series, [run 35223834414](https://github.com/jybanez/syndicatum/actions/runs/35223834414)
+passed at commit `deb706db5cf52dec67ab0b531acea2b58eaeeb39`, asserted
+MySQL 5.7.44 with `STRICT_TRANS_TABLES`, and retained revision-bound test logs
+as a GitHub Actions artifact for 30 days. This is source-contract CI evidence,
+not Docker or immutable-release-artifact acceptance. The local development
+server is also MySQL 5.7.44 but currently uses non-strict SQL mode; its
+configuration is not interchangeable with the strict candidate baseline.
 No immutable release artifact has been recorded. The job does not yet cover the full PHP/JavaScript,
 documentation, migration, packaging, and security release matrix below.
 CI acceptance requires a clean checkout of the exact candidate release commit,
