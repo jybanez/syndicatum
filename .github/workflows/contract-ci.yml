@@ -12,6 +12,46 @@ permissions:
   contents: read
 
 jobs:
+  security-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare private scanner output directory
+        run: mkdir -p ci-security
+      - name: Scan source dependencies, secrets, and configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: json
+          output: ci-security/trivy.json
+          exit-code: '0'
+      - name: Retain counts only and reject detected secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ci-security/trivy.json
+          secret_count="$(jq '[.Results[]? | .Secrets[]?] | length' ci-security/trivy.json)"
+          vulnerability_count="$(jq '[.Results[]? | .Vulnerabilities[]?] | length' ci-security/trivy.json)"
+          misconfiguration_count="$(jq '[.Results[]? | .Misconfigurations[]?] | length' ci-security/trivy.json)"
+          printf 'commit=%s\nsecret_findings=%s\nvulnerability_findings=%s\nmisconfiguration_findings=%s\n' \
+            "$GITHUB_SHA" "$secret_count" "$vulnerability_count" "$misconfiguration_count" \
+            | tee ci-security/summary.txt
+          if [ "$secret_count" -ne 0 ]; then
+            echo 'Secret findings require private triage and credential rotation where applicable.' >&2
+            exit 1
+          fi
+      - name: Retain revision-bound counts without raw secret findings
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: security-inventory-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-security/summary.txt
+          if-no-files-found: warn
+          retention-days: 30
+
   source-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

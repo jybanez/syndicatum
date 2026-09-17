@@ -146,6 +146,13 @@ unpacked it, and repeated Docker acceptance from that copy; see the
 No tagged, published immutable V1 release artifact has been recorded. The job
 does not yet cover the full PHP/JavaScript, documentation, migration, packaging,
 and security release matrix below.
+The candidate `security-inventory` CI job scans the source checkout for
+dependency vulnerabilities, secrets, and configuration findings. It retains
+only revision-bound finding counts, not raw secret matches. A detected secret
+fails the job; vulnerability and configuration counts remain informational
+until findings are triaged and an enforceable policy is agreed. This is not a
+PHP/JavaScript static-code security audit, container-image review, third-party
+license inventory, or security sign-off.
 The proposed `.github/workflows/release-rc.yml` path requires an annotated
 `v1.0.0-rc.N` tag on protected `main` with reviewed release notes, reruns the
 source and Docker checks at the tag, publishes their checksummed archive as a
