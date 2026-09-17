@@ -14,9 +14,12 @@ This table records its 19 CRITICAL package/CVE
 findings individually. A blank scanner fix version means **not listed by the
 scanner**, not proof that no fix exists. All applicability and residual-risk
 judgments remain open until checked against the running image and advisory.
-The process probe passed in [PR CI run 35257011669](https://github.com/jybanez/syndicatum/actions/runs/35257011669):
-Apache had one UID 0 master and UID 33 workers; MySQL's running server was
-UID 999, and the worker service was separately verified as non-root UID 33.
+The process probe passed in [PR CI run 35258886273](https://github.com/jybanez/syndicatum/actions/runs/35258886273):
+Apache had one UID 0 master (`CapEff=00000000a80425fb`) and UID 33 workers
+(zero effective capabilities); MySQL's running server was UID 999 with zero
+effective capabilities, and the worker service was separately verified as
+non-root UID 33. All probed processes had `NoNewPrivs=1`. The same run found
+no enabled Apache CGI/Perl module and no Apache `libperl` linkage.
 Thus the Dockerfile `USER` heuristic does not describe MySQL's steady-state
 server privilege, but the Apache master does remain privileged. The Compose
 stack uses `no-new-privileges:true`. In `compose.yaml`, the database has no
@@ -25,27 +28,28 @@ the application publishes port 80 to host loopback by default (the bind
 address is configurable), and the worker publishes no port. The database
 volume is writable at `/var/lib/mysql`, and the app/worker share a writable
 avatar volume at `/var/lib/syndicatum/avatars`. No explicit capability drop or
-read-only root filesystem is configured. Effective capabilities and whether
-the Apache root master is necessary throughout steady state remain open.
+read-only root filesystem is configured. The Apache root master retains
+effective capabilities in steady state; whether each is necessary and whether
+the master can be made non-root remain open.
 
 ## CRITICAL findings
 
 | CVE | Severity | Image / package | Reachable or exposed? | Fix available? | Planned action | Mitigation / residual risk | Acceptance |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CVE-2026-13221 | CRITICAL | app / `libperl5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `libperl5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `libperl5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
+| CVE-2026-13221 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-42496 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
 | CVE-2025-7458 | CRITICAL | app / `libsqlite3-0` | Unknown | None listed | Check whether production PHP/Apache calls SQLite | Unassessed | Open |
 | CVE-2026-6653 | CRITICAL | app / `libxml2` | Unknown | None listed | Check XML use and reachable input path | Unassessed | Open |
-| CVE-2026-13221 | CRITICAL | app / `perl` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `perl` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-13221 | CRITICAL | app / `perl-base` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `perl-base` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl-base` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-13221 | CRITICAL | app / `perl-modules-5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `perl-modules-5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
+| CVE-2026-13221 | CRITICAL | app / `perl` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-42496 | CRITICAL | app / `perl` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `perl` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
+| CVE-2026-13221 | CRITICAL | app / `perl-base` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-42496 | CRITICAL | app / `perl-base` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `perl-base` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
+| CVE-2026-13221 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-42496 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
 | CVE-2023-45853 | CRITICAL | app / `zlib1g` | Debian says affected MiniZip code is not built into this Bookworm binary | Not applicable to this binary per Debian | Verify package lineage; obtain independent review | Proposed N/A; no compensating control claimed | Review pending |
 | CVE-2023-24538 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.8 / 1.20.3 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
 | CVE-2023-24540 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.9 / 1.20.4 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
@@ -66,8 +70,11 @@ the Apache root master is necessary throughout steady state remain open.
 - [CVE-2026-42496](https://security-tracker.debian.org/tracker/CVE-2026-42496)
   concerns Perl `Archive::Tar` extraction of attacker-controlled symlink
   targets. No direct Perl or `Archive::Tar` call was found in tracked PHP
-  application code; Apache's installed Perl dependency and other runtime
-  paths remain to be checked.
+  application code. [PR CI run 35258886273](https://github.com/jybanez/syndicatum/actions/runs/35258886273)
+  also confirms the shipped Apache runtime has no enabled CGI/Perl module or
+  `libperl` linkage. Apache's installed Perl dependency alone therefore does
+  not show reachability, but indirect CLI/transitive execution paths remain
+  to be checked.
 - [CVE-2026-13221](https://security-tracker.debian.org/tracker/CVE-2026-13221)
   concerns compilation of a Perl regex with more than 65,535 alternatives.
   No direct application Perl call was found; this is not yet proof of
