@@ -13,35 +13,35 @@ records its 19 CRITICAL package/CVE
 findings individually. A blank scanner fix version means **not listed by the
 scanner**, not proof that no fix exists. All applicability and residual-risk
 judgments remain open until checked against the running image and advisory.
-The process probe passed in [PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225):
-Apache had one UID 0 master (`CapEff=00000000000004c0`) and UID 33 workers
-(zero effective capabilities); MySQL's running server was UID 999 with zero
-effective capabilities, and the worker service was separately verified as
-non-root UID 33. All probed processes had `NoNewPrivs=1`. The same run found
-no enabled Apache CGI/Perl module and no Apache `libperl` linkage.
-Thus the Dockerfile `USER` heuristic does not describe MySQL's steady-state
-server privilege, but the Apache master does remain privileged. The Compose
+The earlier process probe in [PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225)
+recorded one UID 0 Apache master with three effective capabilities. The later
+[PR CI run 35264623906](https://github.com/jybanez/syndicatum/actions/runs/35264623906)
+passed the archived-candidate lifecycle after Apache moved to internal port
+8080 and UID 33 with **all app capabilities dropped**. Its acceptance probe
+requires UID 33 Apache processes, zero effective capabilities for Apache and
+MySQL, and `NoNewPrivs=1`. The worker service also runs as UID 33. The image
+has no enabled Apache CGI/Perl module and no Apache `libperl` linkage. Thus
+the Dockerfile `USER` heuristic does not describe MySQL's steady-state server
+privilege, and the previous Apache root-master exposure has been removed from
+the candidate stack. The Compose
 stack uses `no-new-privileges:true`. In `compose.yaml`, the database has no
 published host port and attaches only to the `internal: true` backend network;
 the application publishes port 80 to host loopback by default (the bind
 address is configurable), and the worker publishes no port. The database
 volume is writable at `/var/lib/mysql`, and the app/worker share a writable
-avatar volume at `/var/lib/syndicatum/avatars`. The application now drops all
-default capabilities and adds only `NET_BIND_SERVICE`, `SETGID`, and `SETUID`;
-the root master's effective set fell from `00000000a80425fb` in run
-35258886273 to `00000000000004c0` without breaking clean install or restore.
-No read-only root filesystem is configured. Whether the master can be made
-non-root and whether the three retained capabilities can be reduced further
-remain open.
+avatar volume at `/var/lib/syndicatum/avatars`. The app and worker root
+filesystems are now read-only; `/tmp` is tmpfs for both, and Apache run/lock
+directories are separate tmpfs mounts owned by UID 33. Clean install and
+backup/restore passed with these mounts in run 35264623906. The database
+volume remains writable as required, while database root-filesystem
+hardening and any indirect runtime write paths beyond the exercised
+acceptance scenario remain to be reviewed. These changes narrow exposure but
+do not accept or close any vulnerability finding.
 
 [PR CI run 35263219092](https://github.com/jybanez/syndicatum/actions/runs/35263219092)
-passed all three jobs after the Docker acceptance probe was changed from
-logging these privilege values to failing on a regression: the Apache root
-master must have only `CapEff=00000000000004c0`, its non-root workers and
-`mysqld` must have zero effective capabilities, and all three process classes
-must report `NoNewPrivs=1`. This protects the tested hardening baseline; it
-does not resolve whether a non-root Apache master or read-only root filesystem
-is feasible.
+first made the privilege probe fail on regression. The assertion was tightened
+for the non-root/zero-capability app model in run 35264623906. This protects
+the tested baseline but is not an independent production security review.
 
 ## CRITICAL findings
 

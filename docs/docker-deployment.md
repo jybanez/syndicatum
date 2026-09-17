@@ -122,6 +122,12 @@ ordinary mutable settings.
 The default bind is `127.0.0.1:8080`; it is intentionally not exposed to other
 hosts. For production, place a maintained reverse proxy or load balancer in
 front of Syndicatum, terminate HTTPS there, and forward to the loopback port.
+The app also listens on port 8080 **inside** its container so Apache can run
+as `www-data` without Linux capabilities. The app and worker use read-only
+root filesystems; their `/tmp` paths are tmpfs, Apache's run/lock directories
+are tmpfs, and the shared avatar volume remains writable. Keep those mounts
+when adapting the Compose stack, and verify custom integrations do not assume
+other writable image paths.
 Set the public origin to the externally reachable HTTPS origin before OAuth,
 MCP, or discussion binding is enabled.
 
