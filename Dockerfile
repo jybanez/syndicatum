@@ -23,6 +23,8 @@ RUN set -eux; \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
     docker-php-ext-install -j"$(nproc)" curl gd mbstring opcache pdo_mysql; \
     a2enmod headers rewrite; \
+    sed -ri 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf; \
+    sed -ri 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf; \
     apt-get purge -y --auto-remove \
         curl \
         libcurl4-openssl-dev \
@@ -47,7 +49,8 @@ RUN set -eux; \
     mkdir -p /var/lib/syndicatum/avatars /var/www/html/runtime; \
     chown -R www-data:www-data /var/lib/syndicatum /var/www/html/runtime
 
-EXPOSE 80
+EXPOSE 8080
 
+USER www-data
 ENTRYPOINT ["syndicatum-entrypoint"]
 CMD ["apache2-foreground"]
