@@ -29,7 +29,8 @@ RUN set -eux; \
         libjpeg62-turbo-dev \
         libonig-dev \
         libpng-dev \
-        libwebp-dev; \
+        libwebp-dev \
+        linux-libc-dev; \
     rm -rf /var/lib/apt/lists/*
 
 COPY docker/apache-syndicatum.conf /etc/apache2/conf-available/syndicatum.conf
