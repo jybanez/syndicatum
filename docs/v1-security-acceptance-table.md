@@ -152,6 +152,21 @@ purged without removing the library; the Dockerfile now removes it. CI run
 application HIGH findings from 92 to 87. The five `libcurl4` HIGH findings
 remain for applicability/fix review.
 
+The tracked production PHP search found seven direct cURL callers:
+`AccountIntegration`, `AgentWebhookWorker`, `GoogleIntegration`,
+`IntegrationHealth`, `RealtimeIntegration`, `ResponsesApiActivationService`,
+and `WorkspaceAgentTriggerService`. Each creates a new easy handle and closes
+it after one transfer, including the two background delivery callers. No
+`curl_multi`, shared-handle, handle-reset/copy, `CURLOPT_SERVICE_NAME`,
+`CURLOPT_PROXYAUTH`, or explicit proxy option appears in tracked production
+PHP; the bundled `curl` CLI is absent. Several callers explicitly disable
+redirects, while the others leave libcurl's default redirect behavior. The
+Compose service environment does not configure proxy variables. These are
+negative *source and declared-Compose* findings, not proof that an operator's
+modified environment, extension, or future integration cannot invoke a
+vulnerable path. Confirm the exact published image and runtime environment
+before an independent reviewer accepts any N/A disposition.
+
 | CVE | Severity | Image / package | Reachable or exposed? | Fix available? | Planned action | Mitigation / residual risk | Acceptance |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | CVE-2024-21626 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` container creation; `gosu` only switches user and execs | runc 1.1.12 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
