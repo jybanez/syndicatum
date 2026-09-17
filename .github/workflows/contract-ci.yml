@@ -2,6 +2,8 @@ name: V1 contract candidate
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
