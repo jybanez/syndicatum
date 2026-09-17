@@ -275,6 +275,14 @@ try {
     Write-Host "Apache processes: $appProcesses"
     Write-Host "MySQL processes: $databaseProcesses"
 
+    Write-Step 'Checking shipped Apache Perl/CGI runtime paths'
+    $apacheModules = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'apache2ctl', '-M') -Capture)
+    $apacheLibraries = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'sh', '-c', 'ldd /usr/sbin/apache2') -Capture)
+    if ($apacheModules -match '(?m)\b(?:cgi|cgid|perl)_module\b' -or $apacheLibraries -match '(?i)libperl') {
+        throw 'The shipped Apache runtime enables CGI/Perl or links libperl; review Perl advisory exposure before acceptance.'
+    }
+    Write-Host 'Apache Perl/CGI modules: absent; Apache libperl linkage: absent.'
+
     Write-Step 'Creating an acceptance-only database probe'
     $createProbe = 'require "src/Db.php"; $p=Db::pdo(); $p->exec("CREATE TABLE syndicatum_acceptance_probe (probe_key VARCHAR(64) PRIMARY KEY, probe_value VARCHAR(255) NOT NULL)"); $s=$p->prepare("INSERT INTO syndicatum_acceptance_probe (probe_key, probe_value) VALUES (?, ?)"); $s->execute(["backup_restore", getenv("SYNDICATUM_ACCEPTANCE_PROBE")]);'
     Invoke-Compose -Arguments @('exec', '-T', '-e', "SYNDICATUM_ACCEPTANCE_PROBE=$probeValue", $AppService, 'php', '-r', $createProbe)
