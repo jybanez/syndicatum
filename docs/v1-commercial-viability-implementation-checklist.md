@@ -152,6 +152,12 @@ source and Docker checks at the tag, publishes their checksummed archive as a
 prerelease, then downloads and clean-installs the published bytes. This is
 workflow preparation, not evidence of a tagged release or a passing published-
 artifact acceptance run; those gates remain open until a real RC run succeeds.
+At `e8a4f59`, the workflow implementation passed both existing PR checks in
+[run 35247230416](https://github.com/jybanez/syndicatum/actions/runs/35247230416).
+No repository tag-protection ruleset was returned by the current read-only
+ruleset query; workflow validation alone does not prevent an authorized actor
+from moving an RC tag. Tag immutability enforcement remains to be verified or
+configured before describing an RC tag as protected.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
 check. GitHub branch protection on `main` now requires pull requests and the
@@ -171,6 +177,14 @@ local defaults alone are insufficient.
       [candidate policy](v1-release-policy.md) separates application,
       protocol, and installed-client versions and was approved by the
       Commercial Assessor for the current candidate scope.
+- [x] Implement the candidate RC publication workflow. Commit `e8a4f59`
+      requires an annotated `v1.0.0-rc.N` tag on `main`, reruns contract/Docker
+      checks, publishes the tested archive with checksum/provenance, and
+      installs the downloaded release asset. PR CI run 35247230416 passed;
+      neither a real tag nor the new tag-triggered workflow has run yet.
+- [ ] Enforce or verify immutable RC tag protection and record the exact tag,
+      commit, CI run, archive/hash, published release, and downloaded-artifact
+      acceptance for the first real RC.
 - [x] Decide the first-release support path: `v1.0.0` supports a fresh Docker
       installation only on the declared baseline. Jonathan confirmed this
       decision through the Commercial Assessor in project message 2337. The

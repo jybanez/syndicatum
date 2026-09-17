@@ -25,7 +25,10 @@ pull-request path. Add `docs/releases/<tag>.md` to that reviewed commit, with:
 
 Do not tag a moving feature branch, reuse or move an RC tag, or use an RC as a
 stable release. The workflow rejects a non-annotated tag, a commit outside
-`main`, missing release notes, or an existing release. The first `v1.0.0`
+`main`, missing release notes, or an existing release. A GitHub tag-protection
+ruleset must also be verified/configured to enforce non-movement at the
+repository boundary; workflow checks do not themselves make refs immutable.
+The first `v1.0.0`
 support promise is a fresh Docker installation; migration of the internal
 deployment is separate assistance, not an in-place upgrade gate. Stable
 `v1.0.0` promotion has its own release review and artifact identity.
