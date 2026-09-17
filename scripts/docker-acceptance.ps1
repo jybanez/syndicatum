@@ -221,6 +221,11 @@ try {
 
         Write-Step 'Starting application and worker after database verification'
         Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), $AppService, $WorkerService)
+        $workerUid = (Invoke-Compose -Arguments @('exec', '-T', $WorkerService, 'id', '-u') -Capture).Trim()
+        if ($workerUid -eq '0' -or $workerUid -notmatch '^[1-9][0-9]*$') {
+            throw "Worker must run as a non-root numeric user; observed UID: $workerUid"
+        }
+        Write-Host "Verified worker runs as non-root UID $workerUid."
     } catch {
         Write-Warning 'Container startup failed. Capturing service state and logs before cleanup.'
         try { Invoke-Compose -Arguments @('ps', '--all') } catch { Write-Warning $_ }

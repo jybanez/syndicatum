@@ -79,6 +79,7 @@ services:
 
   worker:
     image: ${SYNDICATUM_IMAGE:-syndicatum:local}
+    user: www-data
     restart: unless-stopped
     init: true
     depends_on:

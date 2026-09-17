@@ -61,6 +61,9 @@ published release artifact before declaring this a supported path.
 The `worker` service runs both existing background processors in a bounded
 loop: agent webhook delivery and the optional Realtime message outbox. The
 Realtime processor exits successfully without work when Realtime is disabled.
+Compose runs the worker as `www-data`; the acceptance harness verifies its
+effective UID is non-root. The Apache and MySQL images still have privileged
+startup paths and require separate runtime hardening review.
 Do not run an additional scheduler for these processors unless the Compose
 worker is disabled deliberately; their database locks prevent concurrent work,
 but duplicate supervisors make operations harder to diagnose.
