@@ -38,18 +38,18 @@ the master can be made non-root remain open.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | CVE-2026-13221 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
 | CVE-2026-42496 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `libperl5.36` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
 | CVE-2025-7458 | CRITICAL | app / `libsqlite3-0` | Unknown | None listed | Check whether production PHP/Apache calls SQLite | Unassessed | Open |
 | CVE-2026-6653 | CRITICAL | app / `libxml2` | Unknown | None listed | Check XML use and reachable input path | Unassessed | Open |
 | CVE-2026-13221 | CRITICAL | app / `perl` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
 | CVE-2026-42496 | CRITICAL | app / `perl` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `perl` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
 | CVE-2026-13221 | CRITICAL | app / `perl-base` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
 | CVE-2026-42496 | CRITICAL | app / `perl-base` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl-base` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `perl-base` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
 | CVE-2026-13221 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
 | CVE-2026-42496 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; architecture review pending | None listed | Check image architecture and Perl call path | Unassessed | Open |
+| CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
 | CVE-2023-45853 | CRITICAL | app / `zlib1g` | Debian says affected MiniZip code is not built into this Bookworm binary | Not applicable to this binary per Debian | Verify package lineage; obtain independent review | Proposed N/A; no compensating control claimed | Review pending |
 | CVE-2023-24538 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.8 / 1.20.3 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
 | CVE-2023-24540 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.9 / 1.20.4 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
@@ -65,8 +65,10 @@ the master can be made non-root remain open.
   security review of the exact image package.
 - [CVE-2026-8376](https://security-tracker.debian.org/tracker/CVE-2026-8376)
   concerns a 32-bit Perl build and attacker-controlled regex compilation.
-  Architecture and reachable runtime Perl calls must be verified before the
-  four package rows can be marked not applicable.
+  [PR CI run 35260520816](https://github.com/jybanez/syndicatum/actions/runs/35260520816)
+  recorded `amd64` for the tested application image. The four package rows
+  are proposed not applicable to that tested image; a wider multi-architecture
+  release claim would require separate analysis and independent review.
 - [CVE-2026-42496](https://security-tracker.debian.org/tracker/CVE-2026-42496)
   concerns Perl `Archive::Tar` extraction of attacker-controlled symlink
   targets. No direct Perl or `Archive::Tar` call was found in tracked PHP
@@ -89,7 +91,13 @@ the master can be made non-root remain open.
   under review.
 - The four database-image Go findings are attributed by the exact CI scan to
   `/usr/local/bin/gosu`, not to `mysqld`. The MySQL entrypoint invokes `gosu`
-  to drop privileges before starting the server. The Go advisories concern
+  to drop privileges before starting the server. The selected `mysql:5.7.44`
+  image digest `sha256:4bc6bc963e6d8443453676cae56536f4b8156d78bae03c0145cbe47c2aad73bb`
+  contains `gosu` 1.16 built with Go 1.18.2 on amd64; the extracted binary's
+  SHA-256 is `3a4e1fc7430f9e7dd7b0cbbe0bfde26bf4a250702e84cf48a1eb2b631c64cf13`.
+  A byte-string probe found `text/template` as a positive control but no
+  `html/template`, `net/netip`, or `crypto/tls` package paths. This is
+  supporting evidence, not a complete call-path analysis. The Go advisories concern
   [`html/template` JavaScript escaping (CVE-2023-24538)](https://pkg.go.dev/vuln/GO-2023-1703),
   [`html/template` whitespace escaping (CVE-2023-24540)](https://pkg.go.dev/vuln/GO-2023-1752),
   [`net/netip` address classification (CVE-2024-24790)](https://pkg.go.dev/vuln/GO-2024-2887),
