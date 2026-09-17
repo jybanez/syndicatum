@@ -34,6 +34,15 @@ No read-only root filesystem is configured. Whether the master can be made
 non-root and whether the three retained capabilities can be reduced further
 remain open.
 
+[PR CI run 35263219092](https://github.com/jybanez/syndicatum/actions/runs/35263219092)
+passed all three jobs after the Docker acceptance probe was changed from
+logging these privilege values to failing on a regression: the Apache root
+master must have only `CapEff=00000000000004c0`, its non-root workers and
+`mysqld` must have zero effective capabilities, and all three process classes
+must report `NoNewPrivs=1`. This protects the tested hardening baseline; it
+does not resolve whether a non-root Apache master or read-only root filesystem
+is feasible.
+
 ## CRITICAL findings
 
 | CVE | Severity | Image / package | Reachable or exposed? | Fix available? | Planned action | Mitigation / residual risk | Acceptance |
