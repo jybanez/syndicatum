@@ -148,7 +148,7 @@ does not yet cover the full PHP/JavaScript, documentation, migration, packaging,
 and security release matrix below.
 The candidate `security-inventory` CI job scans the source checkout for
 dependency vulnerabilities, secrets, and configuration findings. It retains
-only revision-bound finding counts, not raw secret matches. A detected secret
+revision-bound counts and non-secret finding identifiers, not raw secret matches. A detected secret
 fails the job; vulnerability and configuration counts remain informational
 until findings are triaged and an enforceable policy is agreed. This is not a
 PHP/JavaScript static-code security audit, container-image review, third-party
