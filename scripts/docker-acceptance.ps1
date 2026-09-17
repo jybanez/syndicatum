@@ -265,7 +265,7 @@ try {
     }
 
     Write-Step 'Recording effective Apache and MySQL process privileges'
-    $processProbe = 'for file in /proc/[0-9]*/status; do name= uid=; while read -r field value rest; do case "$field" in Name:) name=$value;; Uid:) uid=$value; break;; esac; done < "$file"; case "$name" in apache2|mysqld) printf "%s:%s\n" "$name" "$uid";; esac; done'
+    $processProbe = 'for file in /proc/[0-9]*/status; do name= uid= cap= nnp=; while read -r field value rest; do case "$field" in Name:) name=$value;; Uid:) uid=$value;; CapEff:) cap=$value;; NoNewPrivs:) nnp=$value;; esac; done < "$file"; case "$name" in apache2|mysqld) printf "%s:%s:CapEff=%s:NoNewPrivs=%s\n" "$name" "$uid" "$cap" "$nnp";; esac; done'
     $appProcesses = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'sh', '-c', $processProbe) -Capture).Trim()
     $databaseProcesses = (Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-c', $processProbe) -Capture).Trim()
     if ($appProcesses -notmatch 'apache2:0' -or $appProcesses -notmatch 'apache2:[1-9][0-9]*' -or
