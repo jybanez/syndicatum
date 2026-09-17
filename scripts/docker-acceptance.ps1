@@ -274,6 +274,11 @@ try {
     }
     Write-Host "Apache processes: $appProcesses"
     Write-Host "MySQL processes: $databaseProcesses"
+    $appArchitecture = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'dpkg', '--print-architecture') -Capture).Trim()
+    if (-not $appArchitecture) {
+        throw 'Application image architecture could not be determined.'
+    }
+    Write-Host "Application image architecture: $appArchitecture"
 
     Write-Step 'Checking shipped Apache Perl/CGI runtime paths'
     $apacheModules = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'apache2ctl', '-M') -Capture)
