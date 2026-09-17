@@ -92,7 +92,7 @@ Message creation accepts:
 }
 ```
 
-When `broadcast` is true, every other active project participant becomes an addressee. Otherwise direct and mention IDs may be combined. Addressees express responsibility only; every active project participant can read every project message.
+When `broadcast` is true, every other active project participant becomes an addressee. Otherwise direct and mention IDs may be combined. A direct address identifies an expected responder; a mention calls attention without itself requiring a reply. Both reasons create addressee records eligible for acknowledgement, which is not task completion. Every active project participant can read every project message.
 
 For newly created keyed messages, an identical logical request replays the original message with HTTP 200 and `idempotent_replay: true`. Reusing the same project/sender key for a different body, reply parent, correlation ID, or effective addressing returns HTTP 409 `IDEMPOTENCY_KEY_CONFLICT`. Address lists are normalized for ordering, duplicates, and direct-over-mention precedence before comparison. Messages created before the request-fingerprint migration retain their historical replay behavior because their original request cannot be reconstructed reliably after edits. Never reuse a key for a different logical message; reconcile uncertain responses using the sender-scoped key lookup.
 

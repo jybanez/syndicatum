@@ -537,6 +537,17 @@ try {
         $suite->true(!in_array($first['body']['data'][0]['id'], array_column($second['body']['data'], 'id'), true));
     });
 
+    $suite->test('message cursors reject reuse across projects', function () use ($suite, $baseUrl, $agentOneHeaders, $agentTwoHeaders, $projectOne, $projectTwo) {
+        $origin = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&limit=1', $agentOneHeaders);
+        $suite->same(200, $origin['status']);
+        $cursor = $origin['body']['page']['older_cursor'];
+        $suite->true(is_string($cursor) && $cursor !== '');
+        $foreign = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectTwo
+            . '&before=' . rawurlencode($cursor), $agentTwoHeaders);
+        $suite->same(422, $foreign['status']);
+        $suite->same('VALIDATION_FAILED', $foreign['body']['code']);
+    });
+
     $suite->test('forward recovery returns the earliest missing windows without sequence gaps', function () use ($suite, $baseUrl, $agentOneHeaders, $projectOne, $agentOne, $pdo) {
         $baseline = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&limit=1', $agentOneHeaders);
         $cursor = $baseline['body']['page']['newer_cursor'];

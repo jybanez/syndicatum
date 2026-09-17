@@ -54,8 +54,10 @@ a contract revision when those promises remain intact.
   Explicit IDs must be active participants of the same project, excluding the
   sender. Duplicate IDs collapse; direct takes precedence over mention for an
   ID in both lists. A direct address identifies an expected responder; a
-  mention calls attention to a participant. Either creates an addressee record
-  eligible for notification and acknowledgement.
+  mention calls attention to a participant but does not by itself designate
+  that participant as an expected responder. Both create addressee records
+  eligible for notification and acknowledgement; acknowledgement still does
+  not mean that a reply or completed task was owed.
 - `broadcast: true` addresses every other active project participant and
   ignores explicit lists. Omitted or empty addressing also becomes a
   broadcast. Broadcast means project-wide addressing, not that every
