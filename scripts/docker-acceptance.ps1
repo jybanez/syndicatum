@@ -264,6 +264,17 @@ try {
         throw "Application root returned HTTP $($indexResponse.StatusCode)."
     }
 
+    Write-Step 'Recording effective Apache and MySQL process privileges'
+    $processProbe = 'for file in /proc/[0-9]*/status; do name= uid=; while read -r field value rest; do case "$field" in Name:) name=$value;; Uid:) uid=$value; break;; esac; done < "$file"; case "$name" in apache2|mysqld) printf "%s:%s\n" "$name" "$uid";; esac; done'
+    $appProcesses = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'sh', '-c', $processProbe) -Capture).Trim()
+    $databaseProcesses = (Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-c', $processProbe) -Capture).Trim()
+    if ($appProcesses -notmatch 'apache2:0' -or $appProcesses -notmatch 'apache2:[1-9][0-9]*' -or
+        $databaseProcesses -notmatch 'mysqld:[1-9][0-9]*') {
+        throw "Unexpected runtime process privileges. Apache: $appProcesses; MySQL: $databaseProcesses"
+    }
+    Write-Host "Apache processes: $appProcesses"
+    Write-Host "MySQL processes: $databaseProcesses"
+
     Write-Step 'Creating an acceptance-only database probe'
     $createProbe = 'require "src/Db.php"; $p=Db::pdo(); $p->exec("CREATE TABLE syndicatum_acceptance_probe (probe_key VARCHAR(64) PRIMARY KEY, probe_value VARCHAR(255) NOT NULL)"); $s=$p->prepare("INSERT INTO syndicatum_acceptance_probe (probe_key, probe_value) VALUES (?, ?)"); $s->execute(["backup_restore", getenv("SYNDICATUM_ACCEPTANCE_PROBE")]);'
     Invoke-Compose -Arguments @('exec', '-T', '-e', "SYNDICATUM_ACCEPTANCE_PROBE=$probeValue", $AppService, 'php', '-r', $createProbe)
