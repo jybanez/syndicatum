@@ -14,10 +14,13 @@ This table records its 19 CRITICAL package/CVE
 findings individually. A blank scanner fix version means **not listed by the
 scanner**, not proof that no fix exists. All applicability and residual-risk
 judgments remain open until checked against the running image and advisory.
-The Docker acceptance candidate now records effective Apache and MySQL process
-UIDs after health checks, separately from the Dockerfile `USER` heuristic.
-That evidence must be read from a passing CI run before any runtime-privilege
-disposition is entered below.
+The process probe passed in [PR CI run 35257011669](https://github.com/jybanez/syndicatum/actions/runs/35257011669):
+Apache had one UID 0 master and UID 33 workers; MySQL's running server was
+UID 999, and the worker service was separately verified as non-root UID 33.
+Thus the Dockerfile `USER` heuristic does not describe MySQL's steady-state
+server privilege, but the Apache master does remain privileged. The Compose
+stack uses `no-new-privileges:true`; capabilities, writable mounts, and
+reachable ports still require review before accepting the runtime finding.
 
 ## CRITICAL findings
 
@@ -37,11 +40,50 @@ disposition is entered below.
 | CVE-2026-13221 | CRITICAL | app / `perl-modules-5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
 | CVE-2026-42496 | CRITICAL | app / `perl-modules-5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
 | CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | Unknown | None listed | Check Apache dependency and advisory path | Unassessed | Open |
-| CVE-2023-45853 | CRITICAL | app / `zlib1g` | Unknown | None listed | Check linked runtime use and advisory applicability | Unassessed | Open |
-| CVE-2023-24538 | CRITICAL | db / Go `stdlib` | Unknown | Scanner lists Go 1.19.8 / 1.20.3 | Identify bundled binary and supported rebuild path | Legacy-image risk unassessed | Open |
-| CVE-2023-24540 | CRITICAL | db / Go `stdlib` | Unknown | Scanner lists Go 1.19.9 / 1.20.4 | Identify bundled binary and supported rebuild path | Legacy-image risk unassessed | Open |
-| CVE-2024-24790 | CRITICAL | db / Go `stdlib` | Unknown | Scanner lists Go 1.21.11 / 1.22.4 | Identify bundled binary and supported rebuild path | Legacy-image risk unassessed | Open |
-| CVE-2025-68121 | CRITICAL | db / Go `stdlib` | Unknown | Scanner lists newer Go versions | Identify bundled binary and supported rebuild path | Legacy-image risk unassessed | Open |
+| CVE-2023-45853 | CRITICAL | app / `zlib1g` | Debian says affected MiniZip code is not built into this Bookworm binary | Not applicable to this binary per Debian | Verify package lineage; obtain independent review | Proposed N/A; no compensating control claimed | Review pending |
+| CVE-2023-24538 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.8 / 1.20.3 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
+| CVE-2023-24540 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `html/template` symbols not yet checked in exact CI binary | Scanner lists Go 1.19.9 / 1.20.4 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
+| CVE-2024-24790 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `net/netip` symbols not yet checked in exact CI binary | Scanner lists Go 1.21.11 / 1.22.4 | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
+| CVE-2025-68121 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Startup helper; vulnerable `crypto/tls` symbols not yet checked in exact CI binary | Scanner lists newer Go versions | Check binary symbols/call path; rebuild helper if reachable | Legacy-image risk unassessed | Open |
+
+## Advisory and source-path triage notes
+
+- [Debian's CVE-2023-45853 record](https://security-tracker.debian.org/tracker/CVE-2023-45853)
+  states that the vulnerable MiniZip code was not built into the Bookworm
+  `zlib1g` binary at the scanned version. This supports a proposed
+  not-applicable disposition for the one zlib finding, pending independent
+  security review of the exact image package.
+- [CVE-2026-8376](https://security-tracker.debian.org/tracker/CVE-2026-8376)
+  concerns a 32-bit Perl build and attacker-controlled regex compilation.
+  Architecture and reachable runtime Perl calls must be verified before the
+  four package rows can be marked not applicable.
+- [CVE-2026-42496](https://security-tracker.debian.org/tracker/CVE-2026-42496)
+  concerns Perl `Archive::Tar` extraction of attacker-controlled symlink
+  targets. No direct Perl or `Archive::Tar` call was found in tracked PHP
+  application code; Apache's installed Perl dependency and other runtime
+  paths remain to be checked.
+- [CVE-2026-13221](https://security-tracker.debian.org/tracker/CVE-2026-13221)
+  concerns compilation of a Perl regex with more than 65,535 alternatives.
+  No direct application Perl call was found; this is not yet proof of
+  unreachability.
+- [CVE-2025-7458](https://security-tracker.debian.org/tracker/CVE-2025-7458)
+  requires the ability to issue crafted SQLite SQL. Tracked PHP application
+  code has no direct SQLite call, but the PHP SQLite extensions are loaded and
+  Apache depends on `libsqlite3-0`; runtime exposure remains under review.
+- [CVE-2026-6653](https://security-tracker.debian.org/tracker/CVE-2026-6653)
+  concerns crafted XML input to libxml2. Tracked PHP application code has no
+  direct XML parser call, but PHP XML extensions are loaded; exposure remains
+  under review.
+- The four database-image Go findings are attributed by the exact CI scan to
+  `/usr/local/bin/gosu`, not to `mysqld`. The MySQL entrypoint invokes `gosu`
+  to drop privileges before starting the server. The Go advisories concern
+  [`html/template` JavaScript escaping (CVE-2023-24538)](https://pkg.go.dev/vuln/GO-2023-1703),
+  [`html/template` whitespace escaping (CVE-2023-24540)](https://pkg.go.dev/vuln/GO-2023-1752),
+  [`net/netip` address classification (CVE-2024-24790)](https://pkg.go.dev/vuln/GO-2024-2887),
+  and [`crypto/tls` session resumption with mutated configuration (CVE-2025-68121)](https://pkg.go.dev/vuln/GO-2026-4337).
+  These are provisionally unlikely in a user-switch-and-exec helper, but
+  binary symbol/call-path evidence from the exact CI image is needed before
+  marking any of them not applicable.
 
 ## HIGH findings and decision policy
 
