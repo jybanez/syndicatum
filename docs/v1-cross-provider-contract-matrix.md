@@ -16,6 +16,24 @@ The companion [provider error and recovery matrix](v1-provider-error-recovery-ma
 separates adapter checks, server/telemetry evidence, and installed-client
 outcomes for failure and recovery scenarios.
 
+## Observable contract traceability
+
+The following table ties the provider-neutral claims to named executable
+checks. A component check supports the stated source-tree claim only; it does
+not turn an adapter into an installed, interoperable provider client.
+
+| Externally observable claim | Executable source-tree evidence | Remaining limit |
+| --- | --- | --- |
+| Project membership controls discovery; foreign project messages and addressees are concealed or rejected. | `tests/project-api.php`: “project discovery includes owned and shared projects”; “project isolation conceals messages and rejects foreign addressees and replies”. | Repeat with installed clients and revoked/changed membership. |
+| One canonical sender and message are retained for a logical idempotent write; direct address overrides a duplicate mention. | `tests/project-api.php`: “agent creates canonical direct and mention message idempotently”; OpenAPI response capture via `tests/openapi-message-contract.py`. | Reconcile uncertain network responses in installed provider clients. |
+| All project members may read; addressee filters represent responsibility, not message confidentiality. | `tests/project-api.php`: “all project members see messages while addressed filters express responsibility”. | Verify equivalent user-visible behavior through each claimed path. |
+| Broadcast addresses every other active participant; empty addressing normalizes to broadcast. | `tests/project-api.php`: “broadcast resolves every participant”; “omitted or empty addressing is normalized to a project broadcast”. | Verify provider notifications and acknowledgements after a live broadcast. |
+| Only the addressed identity acknowledges; acknowledgement is distinct from first read or task completion. | `tests/project-api.php`: “human addressee acknowledges using session and CSRF”; “core API errors distinguish authentication, concealment, and addressee conflicts”. | The distinct meaning of completion is a contract prohibition, not a state supplied by this API; inspect provider UI wording. |
+| Canonical newest-first pages and bounded forward recovery preserve ordering and identity. | `tests/project-api.php`: “newest-first cursors paginate without duplicate messages”; “forward recovery returns the earliest missing windows without sequence gaps”; “message lists default to 50 while explicit recovery pages may request 200”. | Reconnect/gap recovery with installed clients and delayed activation is unverified. |
+| Revisions, tombstones, and reply links remain in the same project. | `tests/project-api.php`: “owner can revise and soft-delete a project message with history retained”; “project isolation conceals messages and rejects foreign addressees and replies”. | Cross-provider rendering of revisions and reply context is unverified. |
+| ChatGPT OAuth requires a confirmed discussion binding; a provisioned service token instead uses its pinned project-agent identity. | `tests/project-api.php`: “OAuth MCP timeline tools still require a confirmed binding context”; “remote MCP service token uses its pinned project and agent without a ChatGPT discussion binding”. | Independent MCP client and live token-rotation acceptance remain open. |
+| Activation is a hint, not a substitute for the canonical record. | `tests/agent-activation.php`: Gemini authoritative response and ChatGPT binding tests; `companion/test/package.test.mjs`: metadata-only diagnostics and provider response-path checks. | Delivery outage/recovery and exact installed-client behavior remain open. |
+
 ## Participation paths
 
 | Path and claimed surface | Identity and authoritative operation | Current automated evidence | Recorded live evidence and limit | V1 acceptance still needed |
