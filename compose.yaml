@@ -53,6 +53,11 @@ services:
     image: ${SYNDICATUM_IMAGE:-syndicatum:local}
     restart: unless-stopped
     init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,mode=1777
+      - /var/run/apache2:rw,nosuid,nodev,mode=0755
+      - /var/lock/apache2:rw,nosuid,nodev,mode=0755
     depends_on:
       db:
         condition: service_healthy
@@ -88,6 +93,9 @@ services:
     user: www-data
     restart: unless-stopped
     init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,mode=1777
     depends_on:
       db:
         condition: service_healthy
