@@ -143,6 +143,35 @@ purged without removing the library; the Dockerfile now removes it. CI run
 application HIGH findings from 92 to 87. The five `libcurl4` HIGH findings
 remain for applicability/fix review.
 
+| CVE | Severity | Image / package | Reachable or exposed? | Fix available? | Planned action | Mitigation / residual risk | Acceptance |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| CVE-2024-21626 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` container creation; `gosu` only switches user and execs | runc 1.1.12 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
+| CVE-2023-27561 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` container configuration; `gosu` only switches user and execs | runc 1.1.5 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
+| CVE-2025-31133 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` rootfs masking; `gosu` does not set up rootfs | runc 1.2.8 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
+| CVE-2025-52565 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` console bind mounts; `gosu` does not create mounts | runc 1.2.8 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
+| CVE-2025-52881 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` procfs/LSM setup; `gosu` does not configure containers | runc 1.2.8 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
+| CVE-2026-12064 | HIGH (scanner) | app / `libcurl4` | Upstream describes a curl CLI-only path; CLI was purged, but library remains | No Debian fix listed in scan | Independently confirm CLI-only scope and published image contents | Proposed N/A for library; no acceptance yet | Review pending |
+| CVE-2026-6276 | HIGH (scanner) | app / `libcurl4` | Requires reuse of one easy handle after a custom Host header; application PHP call sites create and close a handle per request | No Debian fix listed in scan | Verify all reachable call paths and upstream preconditions | Proposed N/A for current app paths; library remains | Review pending |
+| CVE-2026-8286 | HIGH (scanner) | app / `libcurl4` | Requires cleartext mail/FTP/LDAP STARTTLS connection reuse; identified PHP call sites use HTTP(S) | No Debian fix listed in scan | Verify configured URL schemes and indirect callers | Proposed N/A for current app paths; library remains | Review pending |
+| CVE-2026-8458 | HIGH (scanner) | app / `libcurl4` | Requires HTTP Negotiate service-name use; no `CURLOPT_SERVICE_NAME` found in application source | No Debian fix listed in scan | Verify indirect callers and runtime configuration | Proposed N/A for current app paths; library remains | Review pending |
+| CVE-2026-8927 | HIGH (scanner) | app / `libcurl4` | Requires reuse of one handle across different Digest-authenticating proxies; application PHP call sites create and close per request | No Debian fix listed in scan | Verify indirect callers and proxy configuration | Proposed N/A for current app paths; library remains | Review pending |
+
+The [gosu maintainer](https://github.com/tianon/gosu) describes the helper as
+switching user/group and then `exec`-ing the target process. The
+[runc maintainer advisories](https://github.com/opencontainers/runc/security/advisories)
+describe container-creation/configuration paths for the five rows above.
+`govulncheck` reported some shared runc-library symbols in `gosu`; that
+symbol-level result is not proof that the rootfs/mount/namespace attack paths
+are invoked. Independent review must verify each proposed N/A and separately
+assess the Docker host runtime version; this table concerns the bundled helper.
+
+The [curl upstream advisories](https://curl.se/docs/security.html) specify the
+preconditions for the five `libcurl4` rows. Source inspection covered the
+application's PHP cURL call sites in `src/`; it is not yet a complete audit of
+extensions, dependencies, deployment proxy settings, or the published image.
+Upstream severity can differ from the scanner's HIGH rating. None of these
+proposed dispositions changes the release gate before independent review.
+
 The first `v1.0.0-rc.N` may be marked **internal/test only** to validate the
 release process, but must not be presented as production-ready while critical
 findings are unreviewed. The table is complete only when every CRITICAL and
