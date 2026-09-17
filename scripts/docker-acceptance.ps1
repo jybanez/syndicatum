@@ -268,12 +268,12 @@ try {
     $processProbe = 'for file in /proc/[0-9]*/status; do name= uid= cap= nnp=; while read -r field value rest; do case "$field" in Name:) name=$value;; Uid:) uid=$value;; CapEff:) cap=$value;; NoNewPrivs:) nnp=$value;; esac; done < "$file"; case "$name" in apache2|mysqld) printf "%s:%s:CapEff=%s:NoNewPrivs=%s\n" "$name" "$uid" "$cap" "$nnp";; esac; done'
     $appProcesses = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'sh', '-c', $processProbe) -Capture).Trim()
     $databaseProcesses = (Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-c', $processProbe) -Capture).Trim()
-    if ($appProcesses -notmatch 'apache2:0' -or $appProcesses -notmatch 'apache2:[1-9][0-9]*' -or
+    if ($appProcesses -match '(?m)^apache2:0:' -or $appProcesses -notmatch 'apache2:[1-9][0-9]*' -or
         $databaseProcesses -notmatch 'mysqld:[1-9][0-9]*') {
         throw "Unexpected runtime process privileges. Apache: $appProcesses; MySQL: $databaseProcesses"
     }
-    if ($appProcesses -notmatch '(?m)^apache2:0:CapEff=00000000000004c0:NoNewPrivs=1\r?$' -or
-        $appProcesses -notmatch '(?m)^apache2:[1-9][0-9]*:CapEff=0000000000000000:NoNewPrivs=1\r?$' -or
+    if ($appProcesses -notmatch '(?m)^apache2:33:CapEff=0000000000000000:NoNewPrivs=1\r?$' -or
+        $appProcesses -match '(?m)^apache2:[^:]+:CapEff=(?!0000000000000000)' -or
         $databaseProcesses -notmatch '(?m)^mysqld:[1-9][0-9]*:CapEff=0000000000000000:NoNewPrivs=1\r?$') {
         throw "Runtime capability or no-new-privileges regression. Apache: $appProcesses; MySQL: $databaseProcesses"
     }
