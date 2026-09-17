@@ -75,3 +75,27 @@ jobs:
           path: ci-evidence/
           if-no-files-found: warn
           retention-days: 30
+
+  docker-source-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identify Docker acceptance environment
+        run: |
+          docker version --format '{{.Server.Version}}'
+          docker compose version
+          pwsh --version
+      - name: Run isolated MySQL 5.7.44 source-tree lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwsh -NoProfile -File ./scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
+      - name: Retain Docker source-tree acceptance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-source-acceptance-${{ github.sha }}-${{ github.run_attempt }}
+          path: docker-acceptance.log
+          if-no-files-found: warn
+          retention-days: 30
