@@ -132,9 +132,12 @@ No immutable release artifact has been recorded. The job does not yet cover the 
 documentation, migration, packaging, and security release matrix below.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
-check. The candidate job is not yet a required check. Portable fixture results
-must remain labeled separately from installed client evidence; one successful
-ad hoc workflow run is not enough. The required
+check. GitHub branch protection on `main` now requires pull requests and the
+up-to-date `source-contract` and `docker-source-acceptance` GitHub Actions
+checks, including for administrators; force-push and deletion are disabled.
+[Draft PR 1](https://github.com/jybanez/syndicatum/pull/1) is the current
+candidate, not an approved merge or release. Portable fixture results must
+remain labeled separately from installed client evidence; the required
 release path must test at least one database mode/configuration representative
 of the supported production deployment, including strict SQL behavior; permissive
 local defaults alone are insufficient.
