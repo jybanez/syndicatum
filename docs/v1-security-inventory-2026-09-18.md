@@ -67,6 +67,12 @@ HIGH rows disappeared; the PHP-required `libcurl4` library remains. This run
 also recorded Apache/MySQL runtime process capabilities and absence of Apache
 CGI/Perl modules and `libperl` linkage. These findings improve triage evidence,
 but do not by themselves establish exploitability or release acceptance.
+[PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225)
+then passed with the application container limited to `NET_BIND_SERVICE`,
+`SETGID`, and `SETUID`; the Apache root master's effective capability mask
+fell from `00000000a80425fb` to `00000000000004c0`. Apache workers and MySQL's
+server process retained zero effective capabilities. Root-master and image
+configuration acceptance remain open.
 The [security acceptance table](v1-security-acceptance-table.md) records all
 19 current CRITICAL package/CVE findings as open and defines the remaining
 HIGH-finding triage queue. No finding is accepted by this inventory alone.
