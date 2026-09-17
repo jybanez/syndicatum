@@ -25,6 +25,11 @@ This filesystem scan does not assess built container-image packages, PHP or
 JavaScript code vulnerabilities, third-party license obligations, or the
 security support status of MySQL 5.7.44. Zero dependency findings in this
 source scan must not be interpreted as zero image or runtime vulnerabilities.
+The Docker CI candidate now inventories the exact application and database
+images built during isolated acceptance. It retains only severity counts,
+requires a non-empty scanner result for each image, and does not fail merely
+because a known vulnerability is present. Its first run must be inspected and
+triaged before any vulnerability-release policy is claimed.
 Before an external production-readiness claim, review the built images and
 the terminal MySQL baseline, establish a severity policy, and obtain the
 planned legal and security review.
