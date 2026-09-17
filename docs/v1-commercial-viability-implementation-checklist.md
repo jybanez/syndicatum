@@ -146,6 +146,12 @@ unpacked it, and repeated Docker acceptance from that copy; see the
 No tagged, published immutable V1 release artifact has been recorded. The job
 does not yet cover the full PHP/JavaScript, documentation, migration, packaging,
 and security release matrix below.
+The proposed `.github/workflows/release-rc.yml` path requires an annotated
+`v1.0.0-rc.N` tag on protected `main` with reviewed release notes, reruns the
+source and Docker checks at the tag, publishes their checksummed archive as a
+prerelease, then downloads and clean-installs the published bytes. This is
+workflow preparation, not evidence of a tagged release or a passing published-
+artifact acceptance run; those gates remain open until a real RC run succeeds.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
 check. GitHub branch protection on `main` now requires pull requests and the
