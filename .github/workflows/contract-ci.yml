@@ -205,8 +205,8 @@ jobs:
             printf '%s_image_results=%s\n%s_critical=%s\n%s_high=%s\n%s_medium=%s\n' \
               "$component" "$result_count" "$component" "$critical" "$component" "$high" "$component" "$medium" \
               | tee -a image-security-summary.txt
-            jq -r --arg component "$component" '.Results[]? | .Vulnerabilities[]? |
-              [$component, .PkgName, .InstalledVersion, .FixedVersion, .VulnerabilityID, .Severity] | @tsv' \
+            jq -r --arg component "$component" '.Results[]? as $result | $result.Vulnerabilities[]? |
+              [$component, $result.Target, $result.Type, .PkgName, .InstalledVersion, .FixedVersion, .VulnerabilityID, .Severity] | @tsv' \
               "$report" >> image-security-findings.tsv
           done
           sort -u image-security-findings.tsv -o image-security-findings.tsv

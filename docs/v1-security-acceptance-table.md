@@ -8,10 +8,16 @@ exploitability. Source secret/dependency scan results are tracked separately in
 **Evidence baseline:** [PR CI run 35255907969](https://github.com/jybanez/syndicatum/actions/runs/35255907969)
 on the archived MySQL 5.7.44 candidate. The Docker acceptance artifact retains
 `image-security-findings.tsv` with package, installed version, scanner-listed
-fix version, CVE, and severity. This table records its 19 CRITICAL package/CVE
+fix version, CVE, and severity. The next CI revision also records the scanner
+target path and package type so bundled-binary findings can be attributed.
+This table records its 19 CRITICAL package/CVE
 findings individually. A blank scanner fix version means **not listed by the
 scanner**, not proof that no fix exists. All applicability and residual-risk
 judgments remain open until checked against the running image and advisory.
+The Docker acceptance candidate now records effective Apache and MySQL process
+UIDs after health checks, separately from the Dockerfile `USER` heuristic.
+That evidence must be read from a passing CI run before any runtime-privilege
+disposition is entered below.
 
 ## CRITICAL findings
 
