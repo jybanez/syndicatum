@@ -8,6 +8,14 @@ changes
 **Purpose:** establish what already exists, what needs hardening, and what is
 net-new before Phase 0 execution begins.
 
+**Status update (2026-09-17):** This is the original gap audit, not a release
+certificate. The [implementation checklist](v1-commercial-viability-implementation-checklist.md)
+is the live status source. Since the audit baseline, strict MySQL 5.7.44
+source-tree and checksummed candidate-archive Docker rehearsals, required PR
+CI, and an Assessor-reviewed observable-contract traceability matrix have been
+added. Published-release, external-security, and installed-client gates remain
+open.
+
 ## Classification
 
 - **Verified:** implementation and automated evidence exist in the current
@@ -67,12 +75,12 @@ working tree, not a published application release artifact.
 | Workstream | Status | Existing evidence | V1 gap |
 | --- | --- | --- | --- |
 | P0.1 Baseline and acceptance contract | **Partial** | This audit, the V1 checklist, `docs/architecture-inventory.md`, the guarded Docker acceptance harness, its 2026-09-16 source-tree pass, and 246 passing tests | Named owners, estimates, and evidence links per implementation item are not yet complete |
-| P0.2 Repeatable production deployment | **Partial / source-tree acceptance passed** | Candidate Dockerfile/Compose stack, Linux runbook, portable worker loop, environment template, startup validation, ordered migrations, health endpoint, and the recorded clean-install/backup/restore acceptance pass now exist | An immutable published artifact and its install/upgrade/rollback proof remain required before the path is promoted to supported |
-| P0.3 Stable coordination contract | **Partial / strong foundation** | Project API V1, OpenAPI, agent protocol, MCP tools, authorization boundaries, replies, acknowledgement fields, cursor ordering, revisions, and compatibility headers are documented and tested | No single frozen V1 contract/versioning policy; acknowledgement wording and notification semantics need one canonical specification; documentation contains overlapping historical contracts and some stale compatibility status |
-| P0.4 Release trust | **Partial / major gap** | Git history, deterministic Companion archive/checksum build, plugin release runbooks, release notes, public legal pages, production preflight scripts, and an `AGPL-3.0-only` repository license exist | No completed third-party license inventory, no repository CI workflow, no dependency/secret/static-security workflow, no immutable whole-application artifact, and no tested application install/upgrade/rollback from a published release |
+| P0.2 Repeatable production deployment | **Partial / exact-baseline rehearsal passed** | Candidate Dockerfile/Compose stack, Linux runbook, startup validation, ordered migrations, health endpoint, and clean MySQL 5.7.44 strict-mode backup/restore passes from source and a checksummed unpacked candidate archive now exist | A tagged published release artifact and its install/upgrade/rollback proof remain required before support is declared |
+| P0.3 Stable coordination contract | **Partial / reviewed traceability** | Candidate provider-neutral semantics, Project API/OpenAPI checks, and an Assessor-reviewed claim-to-test matrix now cover identity, authorization, addressing, ordering, acknowledgement, and recovery limits | Full contract freeze and installed-client/provider acceptance remain open; the release/versioning policy is still under review |
+| P0.4 Release trust | **Partial / enforced candidate CI** | Git history, AGPL license, checksummed candidate archive, draft PR, and protected `main` requiring two GitHub Actions jobs with retained revision-bound evidence | Third-party license inventory, dependency/secret/static-security scanning, tagged published V1 artifact, and upgrade/rollback proof remain open |
 | P0.5 Permission-safe onboarding | **Partial / strong foundation** | OAuth/device authorization, confirmation intents, project-scoped authorization, protected Codex profiles, isolated credentials, single-use claim codes, and negative identity tests exist | ChatGPT binding uses case-insensitive but otherwise exact project and agent names; no authorized project picker or broader normalized matching; clean-user usability evidence is absent |
 | P0.6 Delivery and activation observability | **Partial / major gap** | Durable Realtime, webhook, Workspace Agent, and Responses delivery tables contain status, attempt count, retry time, errors, and terminal state; Companion exposes sanitized health; `scripts/plugin-operational-status.php` exposes limited counts | Attempt history is overwritten rather than retained per attempt; no unified lifecycle/classification; CLI status omits Companion/Codex and disabled legacy activation queues; public health is shallow; no administrator health UI, safe replay workflow, or retention policy |
-| P0.7 Supported participation paths | **Partial / strong foundation** | Web humans, Codex, ChatGPT, Gemini, webhooks, and remote MCP have implemented paths and focused tests; Codex protected-profile isolation is extensively tested | No one shared compatibility/contract test matrix, no clean-release three-provider end-to-end exercise, limited physical-device coverage, and known limitations are spread across several documents |
+| P0.7 Supported participation paths | **Partial / strong foundation** | Web humans, Codex, ChatGPT, Gemini, webhooks, and remote MCP have implemented paths and focused tests; the shared provider matrix now names evidence and unverified claims | No clean-release three-provider end-to-end exercise; limited physical-device coverage; generic remote MCP remains unproven |
 
 ## Detailed findings
 
@@ -99,10 +107,12 @@ working tree, not a published application release artifact.
   portable worker loop, environment contract, and Linux-oriented operations
   runbook now exist.
 - The Docker acceptance harness is platform-independent at the container layer
-  and uses isolated project-scoped volumes. Its 2026-09-16 run passed clean
-  startup, 24 migrations and checksum verification, application/worker health,
-  reachability, logical backup, mutation, restore, and restored-data
-  verification. This is source-tree evidence, not published-artifact evidence.
+  and uses isolated project-scoped volumes. The original 2026-09-16 MySQL 8.4
+  source-tree run is historical only. The
+  [2026-09-17 record](docker-acceptance-2026-09-17.md) verifies exact MySQL
+  5.7.44 strict mode, 25 migrations, health/reachability, logical backup,
+  mutation, restore, and cleanup, first from source and then from a checksummed
+  unpacked candidate archive. Neither run proves a tagged published release.
 - The container path rejects missing, weak, placeholder, and reused secrets;
   legacy non-container configuration still retains historical database defaults
   and should not be treated as a production configuration model.

@@ -95,6 +95,14 @@ independent-client onboarding and installed-release acceptance remain open.
 The [provider error/recovery matrix](v1-provider-error-recovery-matrix.md)
 tracks component, server/telemetry, and installed-client evidence separately.
 
+- [x] Review the observable claim-to-test traceability table with the
+      Commercial Assessor. The revised
+      [cross-provider matrix](v1-cross-provider-contract-matrix.md) at
+      `d5749ca` was approved for the current candidate scope, and
+      [PR CI run 35231389230](https://github.com/jybanez/syndicatum/actions/runs/35231389230)
+      passed both required jobs. This review does not certify installed-client
+      interoperability or freeze the complete V1 contract.
+
 - [ ] Version and document project identity and membership boundaries.
 - [ ] Version and document human and agent participant identity boundaries.
 - [ ] Document authorization rules for every supported participant action.
