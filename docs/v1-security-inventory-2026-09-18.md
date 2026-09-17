@@ -26,10 +26,18 @@ JavaScript code vulnerabilities, third-party license obligations, or the
 security support status of MySQL 5.7.44. Zero dependency findings in this
 source scan must not be interpreted as zero image or runtime vulnerabilities.
 The Docker CI candidate now inventories the exact application and database
-images built during isolated acceptance. It retains only severity counts,
-requires a non-empty scanner result for each image, and does not fail merely
+images built during isolated acceptance. It retains severity counts and a
+vulnerability-only package/version/fix/CVE inventory; it requires a
+non-empty scanner result for each image and does not fail merely
 because a known vulnerability is present. Its first run must be inspected and
 triaged before any vulnerability-release policy is claimed.
+The first image scan in [PR CI run 35253824628](https://github.com/jybanez/syndicatum/actions/runs/35253824628)
+passed technically and reported 17 critical, 286 high, and 1261 medium
+application-image findings, plus 4 critical, 97 high, and 88 medium
+database-image findings. These are finding counts, not unique CVE counts or
+evidence of exploitability. The next CI revision retains a vulnerability-only
+package/version/fix/CVE inventory for triage; it still does not upload raw
+secret-scan reports.
 Before an external production-readiness claim, review the built images and
 the terminal MySQL baseline, establish a severity policy, and obtain the
 planned legal and security review.

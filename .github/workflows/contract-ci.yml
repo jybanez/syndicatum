@@ -189,10 +189,11 @@ jobs:
           format: json
           output: database-image-scan.json
           exit-code: '0'
-      - name: Retain image counts without raw reports
+      - name: Retain image vulnerability inventory without raw reports
         shell: bash
         run: |
           set -euo pipefail
+          : > image-security-findings.tsv
           for component in application database; do
             report="${component}-image-scan.json"
             test -s "$report"
@@ -204,7 +205,11 @@ jobs:
             printf '%s_image_results=%s\n%s_critical=%s\n%s_high=%s\n%s_medium=%s\n' \
               "$component" "$result_count" "$component" "$critical" "$component" "$high" "$component" "$medium" \
               | tee -a image-security-summary.txt
+            jq -r --arg component "$component" '.Results[]? | .Vulnerabilities[]? |
+              [$component, .PkgName, .InstalledVersion, .FixedVersion, .VulnerabilityID, .Severity] | @tsv' \
+              "$report" >> image-security-findings.tsv
           done
+          sort -u image-security-findings.tsv -o image-security-findings.tsv
       - name: Retain Docker source-tree acceptance log
         if: always()
         uses: actions/upload-artifact@v6
@@ -213,6 +218,7 @@ jobs:
           path: |
             docker-acceptance.log
             image-security-summary.txt
+            image-security-findings.tsv
             release-candidate/*.tar.gz
             release-candidate/*.sha256
           if-no-files-found: warn
