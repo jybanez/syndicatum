@@ -69,8 +69,10 @@ deployment is approved.
       authentication, binding, Realtime, queue, and activation delivery health.
 - [x] Document routine operation and incident-recovery commands.
 
-**Exit evidence:** a clean machine can install, start, upgrade, back up, restore,
-and diagnose Syndicatum by following the documented procedure.
+**Exit evidence:** a clean machine can install, start, back up, restore, and
+diagnose `v1.0.0` by following the documented procedure. Upgrade acceptance
+begins with releases after `v1.0.0`, from the immediately previous supported
+release.
 
 ### P0.3 Stable V1 coordination contract
 
@@ -163,10 +165,12 @@ local defaults alone are insufficient.
       [candidate policy](v1-release-policy.md) separates application,
       protocol, and installed-client versions and was approved by the
       Commercial Assessor for the current candidate scope.
-- [ ] Finalize the first-release support baseline: record the actual deployed
-      pre-V1 revision, schema/configuration state, and whether that deployment
-      class supports in-place upgrade or clean-install only; then rehearse the
-      chosen path before claiming release readiness.
+- [x] Decide the first-release support path: `v1.0.0` supports a fresh Docker
+      installation only on the declared baseline. Jonathan confirmed this
+      decision through the Commercial Assessor in project message 2337. The
+      existing internal deployment is not a supported prior commercial release;
+      its in-place upgrade is not a `v1.0.0` release gate. Data migration from
+      it is separate assistance, not a supported upgrade promise.
 - [ ] Define a repeatable release and rollback process.
 - [ ] Add continuous integration for PHP, JavaScript, documentation contracts,
       migrations, and packaging.
@@ -176,11 +180,13 @@ local defaults alone are insufficient.
       claim; keep this separate from functional compatibility on 5.7.44.
 - [ ] Produce immutable release artifacts with checksums.
 - [ ] Publish release notes and migration notes for each release.
-- [ ] Test installation and upgrade from the published artifact, not only from a
-      working tree.
+- [ ] Test clean installation of `v1.0.0` from its published artifact, not only
+      from a working tree. For later releases, test upgrade from the immediately
+      previous supported published release.
 
-**Exit evidence:** a tagged release can be built, verified, installed, upgraded,
-and rolled back using published artifacts and documentation.
+**Exit evidence:** `v1.0.0` can be built, verified, clean-installed, backed up,
+and restored using published artifacts and documentation. Later supported
+releases must additionally pass prior-release upgrade and rollback acceptance.
 
 ### P0.5 Permission-safe onboarding and binding
 
@@ -242,7 +248,8 @@ and can complete a real cross-provider handoff without privileged intervention.
 ### Phase 0 release gate
 
 - [ ] A new team completes clean deployment without bespoke assistance.
-- [ ] The team completes an upgrade, backup, and restore exercise.
+- [ ] The team completes a clean `v1.0.0` installation and backup/restore
+      exercise; prior-release upgrade/rollback applies after `v1.0.0`.
 - [ ] The V1 coordination contract is versioned, documented, and tested.
 - [ ] Supported integrations complete the cross-provider acceptance scenario.
 - [ ] Operators correctly diagnose representative binding, authentication,

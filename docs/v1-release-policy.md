@@ -52,17 +52,18 @@ remains the release gate.
 2. Install that artifact on a clean supported environment. Verify runtime
    identity, exact MySQL 5.7.44 strict-mode baseline, migrations, health,
    backup/restore, and the supported client/coordination acceptance matrix.
-3. For subsequent releases, rehearse upgrade from the immediately previous
-   supported application release. For first `v1.0.0`, identify the actual
-   deployed pre-V1 Syndicatum baseline by revision, schema state, and operating
-   configuration, then rehearse the in-place migration if it will be offered.
-   If a deployment class supports clean install only, state that explicitly
-   before release rather than calling the internal baseline a prior published
-   release. Preserve an off-host database backup and matching file/configuration
-   snapshot for every supported in-place path.
-4. Rehearse a failed-upgrade recovery. Restore files and database together when
-   schema changes make application-only rollback unsafe; do not edit applied
-   migration checksums or promise reverse migrations that do not exist.
+3. First `v1.0.0` supports a fresh Docker installation on the declared runtime
+   and database baseline only. The current internal Syndicatum deployment is
+   not a prior supported commercial release; an in-place upgrade from it is
+   outside the `v1.0.0` support promise and is not a release gate. Record its
+   revision, schema state, and configuration separately if offering data-
+   migration assistance. For releases after `v1.0.0`, rehearse upgrade from the
+   immediately previous supported application release and preserve an off-host
+   database backup and matching file/configuration snapshot for that path.
+4. For subsequent supported upgrades, rehearse failed-upgrade recovery. Restore
+   files and database together when schema changes make application-only
+   rollback unsafe; do not edit applied migration checksums or promise reverse
+   migrations that do not exist.
 5. Publish stable `v1.0.0` only after release, security, legal, and installed-
    client gates close. Keep the release notes, checksums, migration notes, and
    known limitations with the tag. A failed RC is replaced by a new RC tag,

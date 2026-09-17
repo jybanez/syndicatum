@@ -24,6 +24,12 @@ Syndicatum. It is an operator procedure, not a substitute for tested backups,
 TLS termination, host hardening, monitoring, or an organization-specific
 disaster-recovery plan.
 
+The first supported `v1.0.0` path is a fresh Docker installation on the
+declared baseline. In-place upgrade of the current internal Syndicatum
+deployment is not supported for `v1.0.0` and is not a release gate. The
+upgrade/rollback procedure below applies to later supported releases, starting
+from the immediately previous supported release.
+
 ## Runtime contract
 
 The candidate stack uses:
@@ -173,10 +179,23 @@ Compose network and must not be published on the host.
 8. Sign in, change the bootstrap password, configure the public HTTPS origin,
    and keep optional integrations disabled until tested independently.
 
-For migration of a pre-expansion installation, do not substitute this section
-for [the expansion migration runbook](expansion-migration-runbook.md). That
-workflow requires preflight, backfill, reconciliation, and a compatibility
-observation period.
+### Moving data from the current internal deployment
+
+Treat this as **migration assistance**, not a supported in-place upgrade to
+`v1.0.0`. Keep the internal deployment intact while installing `v1.0.0` in a
+separate environment. Record the internal revision, schema/migration state, and
+relevant configuration; create and verify a protected database export plus
+avatar and configuration backups before changing anything. Inventory projects,
+participants, messages, addressees, revisions, and credentials that must be
+mapped. Import only through a separately reviewed, tested migration procedure
+for that exact source state; do not restore an internal database dump directly
+over a fresh `v1.0.0` schema or assume credentials can be carried forward.
+Reconcile counts and representative records, verify identity isolation and
+login, then explicitly approve any cutover. Preserve the source and recovery
+set until the migration is validated. No generic pre-V1 import procedure is
+certified by this runbook. For pre-expansion installations, the
+[expansion migration runbook](expansion-migration-runbook.md) describes source
+preflight/backfill, but it is not a `v1.0.0` support promise.
 
 ## Clean-environment acceptance
 
@@ -291,6 +310,10 @@ after the recovery point must be revoked after a real restore unless they can
 be reconciled reliably.
 
 ## Upgrade
+
+This procedure applies only after `v1.0.0`, from the immediately previous
+supported release. Do not apply it to the current internal deployment as a
+shortcut to first-release installation.
 
 1. Read the target release notes and migration notes. Confirm the previous
    release can be recovered and that the target runtime/database versions are
