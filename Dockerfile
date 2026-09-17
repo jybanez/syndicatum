@@ -24,6 +24,7 @@ RUN set -eux; \
     docker-php-ext-install -j"$(nproc)" curl gd mbstring opcache pdo_mysql; \
     a2enmod headers rewrite; \
     apt-get purge -y --auto-remove \
+        curl \
         libcurl4-openssl-dev \
         libfreetype6-dev \
         libjpeg62-turbo-dev \

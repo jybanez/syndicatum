@@ -89,7 +89,9 @@ the Apache root master is necessary throughout steady state remain open.
   and [`crypto/tls` session resumption with mutated configuration (CVE-2025-68121)](https://pkg.go.dev/vuln/GO-2026-4337).
   These are provisionally unlikely in a user-switch-and-exec helper, but
   binary symbol/call-path evidence from the exact CI image is needed before
-  marking any of them not applicable.
+  marking any of them not applicable. The [gosu maintainer's security policy](https://github.com/tianon/gosu/blob/master/SECURITY.md)
+  specifically recommends `govulncheck` for this distinction rather than
+  assuming every vulnerable Go standard-library package is invoked.
 
 ## HIGH findings and decision policy
 
@@ -102,6 +104,14 @@ acceptance. Fix compatible, reachable findings where possible; any remaining
 exposed HIGH finding requires documented mitigation and owner/security
 acceptance. This is the Commercial Assessor's recommended threshold, not yet an
 approved owner exception.
+
+Of the database HIGH rows, the exact CI inventory attributes 57 to the bundled
+`gosu` binary, 32 to Oracle Linux packages, and 8 to Python packages. This is
+an attribution queue, not a release disposition. The application inventory
+contains five HIGH rows for the `curl` command-line package and another five
+for its shared library. An APT dry run showed the CLI can be purged without
+removing the library; the candidate Dockerfile now removes it, pending a new
+image scan and acceptance run.
 
 The first `v1.0.0-rc.N` may be marked **internal/test only** to validate the
 release process, but must not be presented as production-ready while critical
