@@ -127,6 +127,8 @@ $suffix = ((New-HexSecret 6) -replace '[^a-z0-9]', '').Substring(0, 12)
 $projectName = "syndicatum-acceptance-$suffix"
 $databaseName = "syndicatum_acceptance_$suffix"
 Assert-AcceptanceIdentity $projectName $databaseName
+$applicationImage = "${projectName}-app:acceptance"
+$databaseImage = "${projectName}-db:acceptance"
 
 $environmentPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.env"
 if (Test-Path -LiteralPath $environmentPath) {
@@ -146,6 +148,9 @@ $BaseUrl = $BaseUrl.TrimEnd('/')
 
 $environment = @(
     "COMPOSE_PROJECT_NAME=$projectName"
+    "SYNDICATUM_IMAGE=$applicationImage"
+    "SYNDICATUM_DB_IMAGE=$databaseImage"
+    'SYNDICATUM_MYSQL_IMAGE=mysql:5.7.44'
     'SYNDICATUM_HTTP_BIND=127.0.0.1'
     "SYNDICATUM_HTTP_PORT=$HttpPort"
     "MYSQL_DATABASE=$databaseName"
@@ -179,6 +184,12 @@ try {
             throw "Rendered Compose configuration does not contain required service '$requiredService'."
         }
     }
+    if ($renderedConfig.services.$DatabaseService.image -ne $databaseImage -or
+        $renderedConfig.services.$AppService.image -ne $applicationImage -or
+        $renderedConfig.services.$WorkerService.image -ne $applicationImage -or
+        $renderedConfig.services.$DatabaseService.build.args.MYSQL_IMAGE -ne 'mysql:5.7.44') {
+        throw 'Acceptance images do not match the isolated MySQL 5.7.44 candidate baseline.'
+    }
     foreach ($volumeProperty in @($renderedConfig.volumes.PSObject.Properties)) {
         $volume = $volumeProperty.Value
         $externalProperty = $volume.PSObject.Properties['external']
@@ -194,7 +205,7 @@ try {
     Write-Step "Starting isolated project $projectName"
     $started = $true
     try {
-        Invoke-Compose -Arguments @('up', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString())
+        Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString())
     } catch {
         Write-Warning 'Container startup failed. Capturing service state and logs before cleanup.'
         try { Invoke-Compose -Arguments @('ps', '--all') } catch { Write-Warning $_ }
