@@ -39,6 +39,14 @@ estimates, and the clean-install acceptance plan remain to be assigned.
 
 ### P0.2 Repeatable production deployment
 
+**Database baseline:** MySQL 5.7.44 is the owner-selected V1 compatibility
+target. Strict-mode CI has passed on that version, but the isolated Docker
+install and backup/restore rehearsal have not completed on 5.7.44. The earlier
+8.4 acceptance run is historical candidate evidence, not V1 baseline proof.
+The final 5.7 release is a legacy stabilization choice, not a claim that the
+database receives current upstream security fixes or that external production
+deployment is approved.
+
 - [ ] Promote the candidate Linux/Docker deployment path to supported after its
       clean-environment acceptance run passes against a release artifact.
 - [x] Pin and document runtime, database, web-server, worker, and extension
@@ -49,11 +57,11 @@ estimates, and the clean-install acceptance plan remain to be assigned.
 - [x] Provide controlled, ordered, and repeatable database migrations.
 - [x] Document upgrade and rollback procedures.
 - [x] Provide backup and restore procedures.
-- [x] Test backup restoration into a clean environment.
-      Evidence: `docs/docker-acceptance-2026-09-16.md` records an isolated
-      source-tree build, database mutation, logical backup, restore, and probe
-      verification. Published-release-artifact proof remains part of the first
-      unchecked deployment item above.
+- [ ] Test backup restoration into a clean MySQL 5.7.44 environment.
+      Historical evidence: `docs/docker-acceptance-2026-09-16.md` records an
+      isolated MySQL 8.4 source-tree build, database mutation, logical backup,
+      restore, and probe verification. It does not satisfy the selected baseline
+      or published-release-artifact acceptance.
 - [ ] Expose health states that distinguish application, database,
       authentication, binding, Realtime, queue, and activation delivery health.
 - [x] Document routine operation and incident-recovery commands.
@@ -135,6 +143,9 @@ local defaults alone are insufficient.
 - [ ] Add continuous integration for PHP, JavaScript, documentation contracts,
       migrations, and packaging.
 - [ ] Add dependency, secret, and baseline static-security scanning.
+- [ ] Review the security and deployment-hardening implications of using the
+      terminal MySQL 5.7.44 release before any external production-readiness
+      claim; keep this separate from functional compatibility on 5.7.44.
 - [ ] Produce immutable release artifacts with checksums.
 - [ ] Publish release notes and migration notes for each release.
 - [ ] Test installation and upgrade from the published artifact, not only from a
@@ -343,6 +354,10 @@ delays, bounded recovery, and no silent loss or duplication.
 
 The following remain out of V1 unless pilot evidence and an explicit scope
 decision bring them back:
+
+- [ ] Defer the move from the 5.7.44 stabilization baseline to a supported
+      MySQL LTS release until after V1 stability; track it explicitly as a
+      post-V1 security and operations risk, not generic compatibility work.
 
 - [ ] No proprietary LLM runtime.
 - [ ] No full workflow or automation builder.

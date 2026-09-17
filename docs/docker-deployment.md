@@ -29,8 +29,9 @@ The candidate stack uses:
 
 `compose.yaml` pins the PHP major/minor and MySQL 5.7.44. Treat movement to
 a new PHP minor, Debian release, or MySQL version as an upgrade requiring
-the full test suite and a backup/restore rehearsal. The MySQL 5.7 series has
-reached its final release; this is a stability baseline, not a claim of ongoing
+the full test suite and a backup/restore rehearsal. Oracle identifies
+[5.7.44 as the final MySQL 5.7 release](https://dev.mysql.com/doc/relnotes/mysql/5.7/en/news-5-7-44.html);
+this is a stability baseline, not a claim of ongoing
 upstream security maintenance. Security and release review must address that
 risk before promoting this candidate path for external production use.
 
