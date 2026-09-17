@@ -81,21 +81,35 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Package exact commit and verify candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-candidate/unpacked
+          archive="syndicatum-${GITHUB_SHA}.tar.gz"
+          git archive --format=tar --prefix=syndicatum/ "$GITHUB_SHA" | gzip -n > "release-candidate/$archive"
+          (cd release-candidate && sha256sum "$archive" > "$archive.sha256" && sha256sum --check "$archive.sha256")
+          tar -xzf "release-candidate/$archive" -C release-candidate/unpacked
+          test -f release-candidate/unpacked/syndicatum/compose.yaml
+          test -f release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1
       - name: Identify Docker acceptance environment
         run: |
           docker version --format '{{.Server.Version}}'
           docker compose version
           pwsh --version
-      - name: Run isolated MySQL 5.7.44 source-tree lifecycle
+      - name: Run isolated MySQL 5.7.44 archived-candidate lifecycle
         shell: bash
         run: |
           set -euo pipefail
-          pwsh -NoProfile -File ./scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
+          pwsh -NoProfile -File ./release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
       - name: Retain Docker source-tree acceptance log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: docker-source-acceptance-${{ github.sha }}-${{ github.run_attempt }}
-          path: docker-acceptance.log
+          path: |
+            docker-acceptance.log
+            release-candidate/*.tar.gz
+            release-candidate/*.sha256
           if-no-files-found: warn
           retention-days: 30
