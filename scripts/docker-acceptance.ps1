@@ -202,10 +202,25 @@ try {
         }
     }
 
-    Write-Step "Starting isolated project $projectName"
+    Write-Step "Starting isolated MySQL 5.7.44 database for $projectName"
     $started = $true
     try {
-        Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString())
+        Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), $DatabaseService)
+
+        $databaseProbe = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --batch --skip-column-names -uroot -e "SELECT VERSION(), @@GLOBAL.sql_mode"'
+        $databaseDetails = (Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $databaseProbe) -Capture).Trim()
+        $databaseParts = $databaseDetails -split "`t", 2
+        if ($databaseParts.Count -ne 2 -or $databaseParts[0] -notmatch '^5\.7\.44(?:$|[.-])') {
+            throw "Acceptance requires MySQL 5.7.44; observed: $databaseDetails"
+        }
+        $sqlModes = @($databaseParts[1].Split(',') | ForEach-Object { $_.Trim() })
+        if ($sqlModes -notcontains 'STRICT_TRANS_TABLES' -and $sqlModes -notcontains 'STRICT_ALL_TABLES') {
+            throw "Acceptance requires strict SQL mode; observed: $($databaseParts[1])"
+        }
+        Write-Host "Verified database version $($databaseParts[0]) and SQL mode $($databaseParts[1])."
+
+        Write-Step 'Starting application and worker after database verification'
+        Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), $AppService, $WorkerService)
     } catch {
         Write-Warning 'Container startup failed. Capturing service state and logs before cleanup.'
         try { Invoke-Compose -Arguments @('ps', '--all') } catch { Write-Warning $_ }

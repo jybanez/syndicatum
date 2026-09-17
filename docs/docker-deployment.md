@@ -35,6 +35,12 @@ this is a stability baseline, not a claim of ongoing
 upstream security maintenance. Security and release review must address that
 risk before promoting this candidate path for external production use.
 
+The Docker acceptance harness builds project-unique images and starts the
+database first. It verifies the running server reports MySQL 5.7.44 with
+strict SQL mode before allowing the application to start or run migrations.
+The full 5.7.44 lifecycle acceptance remains open until that preflight and
+the subsequent install, health, backup, and restore checks complete.
+
 The `worker` service runs both existing background processors in a bounded
 loop: agent webhook delivery and the optional Realtime message outbox. The
 Realtime processor exits successfully without work when Realtime is disabled.

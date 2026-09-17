@@ -43,6 +43,9 @@ estimates, and the clean-install acceptance plan remain to be assigned.
 target. Strict-mode CI has passed on that version, but the isolated Docker
 install and backup/restore rehearsal have not completed on 5.7.44. The earlier
 8.4 acceptance run is historical candidate evidence, not V1 baseline proof.
+The acceptance harness now builds project-unique images and asserts the
+running database version and strict SQL mode before application startup;
+this preflight itself still needs a completed 5.7.44 run.
 The final 5.7 release is a legacy stabilization choice, not a claim that the
 database receives current upstream security fixes or that external production
 deployment is approved.
