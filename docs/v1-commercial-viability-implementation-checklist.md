@@ -154,10 +154,11 @@ workflow preparation, not evidence of a tagged release or a passing published-
 artifact acceptance run; those gates remain open until a real RC run succeeds.
 At `e8a4f59`, the workflow implementation passed both existing PR checks in
 [run 35247230416](https://github.com/jybanez/syndicatum/actions/runs/35247230416).
-No repository tag-protection ruleset was returned by the current read-only
-ruleset query; workflow validation alone does not prevent an authorized actor
-from moving an RC tag. Tag immutability enforcement remains to be verified or
-configured before describing an RC tag as protected.
+Jonathan approved the [V1 tag-protection policy](v1-tag-protection-proposal.md)
+in project message 2369. GitHub readback confirmed two active `refs/tags/v1.*`
+rulesets: owner-only creation (`23612219`) and no-bypass update/deletion
+(`23612208`). The ruleset configuration should be rechecked before tagging;
+the repository administrator can still change the rulesets themselves.
 CI acceptance requires a clean checkout of the exact candidate release commit,
 retained results that identify that revision, and a required branch/release
 check. GitHub branch protection on `main` now requires pull requests and the
@@ -182,9 +183,12 @@ local defaults alone are insufficient.
       checks, publishes the tested archive with checksum/provenance, and
       installs the downloaded release asset. PR CI run 35247230416 passed;
       neither a real tag nor the new tag-triggered workflow has run yet.
-- [ ] Enforce or verify immutable RC tag protection and record the exact tag,
-      commit, CI run, archive/hash, published release, and downloaded-artifact
-      acceptance for the first real RC.
+- [x] Apply and read back V1 tag protection. Rulesets `23612219` and
+      `23612208` are active with the approved pattern, rules, and bypass lists;
+      see the [policy record](v1-tag-protection-proposal.md).
+- [ ] Produce and verify the first real RC evidence chain: exact protected-main
+      commit, immutable tag, required CI run, archive/hash, published release,
+      and downloaded-artifact acceptance on the declared baseline.
 - [x] Decide the first-release support path: `v1.0.0` supports a fresh Docker
       installation only on the declared baseline. Jonathan confirmed this
       decision through the Commercial Assessor in project message 2337. The

@@ -1,9 +1,11 @@
 # V1 release tag protection — approval proposal
 
-**Status:** Proposed repository-governance change; not applied.
+**Status:** Approved by Jonathan in Syndicatum message 2369 and applied on
+2026-09-18. Both active rulesets were read back from GitHub. No V1 tag has been
+created.
 **Repository:** `jybanez/syndicatum`
-**Current observation:** The repository rulesets API returned zero rulesets on
-2026-09-18. Protected `main` and the RC workflow do not by themselves prevent
+**Prior observation:** The repository rulesets API returned zero rulesets
+before this change. Protected `main` and the RC workflow alone did not prevent
 a release tag from being moved or deleted.
 
 ## Recommended boundary
@@ -11,7 +13,7 @@ a release tag from being moved or deleted.
 Protect `refs/tags/v1.*`, covering `v1.0.0-rc.N`, stable `v1.0.0`, and later
 V1 tags. Existing `companion-v*` package tags are outside this scope.
 
-Create two **active tag rulesets** with this same ref pattern:
+The two **active tag rulesets** use this same ref pattern:
 
 1. **V1 tag creation:** `creation` rule; only repository owner `jybanez`
    (GitHub user ID `309048`) has an `always` bypass to create a matching tag.
@@ -27,11 +29,11 @@ administrators can still edit or disable repository rulesets as a governance
 action; this policy does not claim that account owners are technically unable
 to change the policy itself.
 
-Proposed API bodies, for review before any write:
+Approved rule bodies (the GitHub-created names use ASCII hyphens):
 
 ```json
 {
-  "name": "V1 tag creation — owner only",
+  "name": "V1 tag creation - owner only",
   "target": "tag",
   "enforcement": "active",
   "bypass_actors": [
@@ -44,7 +46,7 @@ Proposed API bodies, for review before any write:
 
 ```json
 {
-  "name": "V1 tag immutability — no bypass",
+  "name": "V1 tag immutability - no bypass",
   "target": "tag",
   "enforcement": "active",
   "bypass_actors": [],
@@ -74,8 +76,15 @@ Proposed API bodies, for review before any write:
    chain. A failed RC is superseded by a **new** RC number; never repair it by
    moving the old tag.
 
-No V1 tag or release should be created until Jonathan approves this repository
-policy and the resulting rulesets have been applied and verified.
+Readback on 2026-09-18 confirmed:
+
+- ruleset `23612219`: active `tag` target, `refs/tags/v1.*`, `creation`, sole
+  bypass `User:309048:always`;
+- ruleset `23612208`: active `tag` target, `refs/tags/v1.*`, `update` and
+  `deletion`, empty bypass list.
+
+This closes tag-protection setup, not the published-RC release gate. Recheck
+these rulesets immediately before the first tag is created.
 
 ## GitHub references
 
