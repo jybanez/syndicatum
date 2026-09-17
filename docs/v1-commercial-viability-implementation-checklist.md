@@ -159,9 +159,14 @@ local defaults alone are insufficient.
 - [x] Select `AGPL-3.0-only`, publish the canonical license text, and document
       the open-core boundary. Legal review and the third-party license inventory
       remain release-gate work.
-- [ ] Define and review the V1 versioning policy. A
-      [candidate policy](v1-release-policy.md) now separates application,
-      protocol, and installed-client versions; release review remains open.
+- [x] Draft and review the V1 release/versioning policy content. The
+      [candidate policy](v1-release-policy.md) separates application,
+      protocol, and installed-client versions and was approved by the
+      Commercial Assessor for the current candidate scope.
+- [ ] Finalize the first-release support baseline: record the actual deployed
+      pre-V1 revision, schema/configuration state, and whether that deployment
+      class supports in-place upgrade or clean-install only; then rehearse the
+      chosen path before claiming release readiness.
 - [ ] Define a repeatable release and rollback process.
 - [ ] Add continuous integration for PHP, JavaScript, documentation contracts,
       migrations, and packaging.
