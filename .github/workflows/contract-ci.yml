@@ -28,7 +28,7 @@ jobs:
           format: json
           output: ci-security/trivy.json
           exit-code: '0'
-      - name: Retain counts only and reject detected secrets
+      - name: Retain safe finding summary and reject detected secrets
         shell: bash
         run: |
           set -euo pipefail
@@ -39,11 +39,17 @@ jobs:
           printf 'commit=%s\nsecret_findings=%s\nvulnerability_findings=%s\nmisconfiguration_findings=%s\n' \
             "$GITHUB_SHA" "$secret_count" "$vulnerability_count" "$misconfiguration_count" \
             | tee ci-security/summary.txt
+          jq -r '.Results[]? as $result | $result.Misconfigurations[]? |
+            ["configuration", $result.Target, .ID, .Severity] | @tsv' \
+            ci-security/trivy.json | sort -u | tee -a ci-security/summary.txt
+          jq -r '.Results[]? as $result | $result.Vulnerabilities[]? |
+            ["dependency", $result.Target, .PkgName, .VulnerabilityID, .Severity] | @tsv' \
+            ci-security/trivy.json | sort -u | tee -a ci-security/summary.txt
           if [ "$secret_count" -ne 0 ]; then
             echo 'Secret findings require private triage and credential rotation where applicable.' >&2
             exit 1
           fi
-      - name: Retain revision-bound counts without raw secret findings
+      - name: Retain revision-bound summary without raw secret findings
         if: always()
         uses: actions/upload-artifact@v6
         with:
