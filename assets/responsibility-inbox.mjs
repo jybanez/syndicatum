@@ -118,6 +118,7 @@ export function createResponsibilityInbox(host, options) {
   let loading = false;
   let destroyed = false;
   let generation = 0;
+  let conflictNotice = false;
   const participants = () => options.participants();
   const participantName = (participantId) => participants()
     .find((entry) => Number(entry.id) === Number(participantId))?.display_name
@@ -279,8 +280,11 @@ export function createResponsibilityInbox(host, options) {
         status.textContent = `${ACTIONS[kind]} recorded in the project timeline.`;
       } catch (error) {
         if (error.status === 409) {
-          await load();
-          status.textContent = "Responsibility changed before your action. Review the refreshed item; nothing was posted by this attempt.";
+          const refreshed = await load();
+          conflictNotice = true;
+          status.textContent = refreshed
+            ? "Responsibility changed before your action. Review the refreshed item; nothing was posted by this attempt."
+            : "Responsibility changed before your action; nothing was posted. Refresh failed; use Refresh before trying again.";
         } else {
           errorText.textContent = error.message || "Action failed. You can retry the unchanged request.";
           submit.disabled = false;
@@ -293,6 +297,7 @@ export function createResponsibilityInbox(host, options) {
 
   async function load(append = false) {
     if (destroyed || (append && loading)) return;
+    conflictNotice = false;
     const requestedView = view;
     const requestedCursor = append ? cursor : null;
     if (!append) { rows = []; cursor = null; hasMore = false; }
@@ -302,15 +307,17 @@ export function createResponsibilityInbox(host, options) {
     render();
     try {
       const page = await options.fetchPage(requestedView, requestedCursor);
-      if (destroyed || current !== generation) return;
+      if (destroyed || current !== generation) return false;
       rows = append ? [...rows, ...(page.data || [])] : (page.data || []);
       cursor = page.page?.older_cursor || null;
       hasMore = Boolean(page.page?.has_more);
       status.textContent = `${rows.length} item${rows.length === 1 ? "" : "s"} shown${hasMore ? " · more available" : ""}. This is a live view; refresh after project changes.`;
+      return true;
     } catch (error) {
-      if (destroyed || current !== generation) return;
+      if (destroyed || current !== generation) return false;
       status.textContent = `Responsibility could not be loaded: ${error.message || "Unknown error"}. Retry Refresh.`;
       if (!append) { rows = []; cursor = null; hasMore = false; }
+      return false;
     } finally {
       if (!destroyed && current === generation) { loading = false; render(); }
     }
@@ -320,7 +327,9 @@ export function createResponsibilityInbox(host, options) {
   return {
     load,
     markStale() {
-      if (!destroyed) status.textContent = "Project activity may have changed this live view. Refresh before acting or paging.";
+      if (!destroyed && !conflictNotice) {
+        status.textContent = "Project activity may have changed this live view. Refresh before acting or paging.";
+      }
     },
     destroy() { destroyed = true; generation++; host.replaceChildren(); },
   };
