@@ -78,6 +78,7 @@ try {
         60
     );
     $bindingService = new DiscussionBindingIntentService($pdo);
+    $principalAccess = $access;
     $bindingContext = isset($args['binding_context_id']) ? $bindingService->context($access, $args['binding_context_id']) : null;
     if ($bindingContext) { $access = $bindingContext; }
     if (!$bindingContext && !$serviceTokenAccess
@@ -86,6 +87,8 @@ try {
     }
     if ($name === 'diagnose_connection') {
         $contextAuthorized = $bindingContext !== null || $serviceTokenAccess;
+        $bindingHealth = $serviceTokenAccess ? ['state' => 'not_required']
+            : $bindingService->contextHealth($principalAccess, $args['binding_context_id'] ?? '');
         $context = $contextAuthorized ? $repository->projectContext($access) : null;
         $agent = $contextAuthorized ? $access['identity']['agent'] : null;
         $contextType = $serviceTokenAccess ? 'service_token'
@@ -117,6 +120,7 @@ try {
                 'agent_id' => (int) $agent['authenticated_agent_id'], 'participant_id' => (int) $access['participant_id']] : 'Unknown',
             'discussion_binding' => $serviceTokenAccess ? 'Not required'
                 : ($bindingContext ? ($contextType === 'interactive' ? 'Not changed' : 'Successful') : 'Required'),
+            'binding_health' => $bindingHealth,
             'context_type' => $contextType ?? 'none',
             'granted_scopes' => array_values($access['scope']),
             'client_boundary' => $contextAuthorized

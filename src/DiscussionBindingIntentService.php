@@ -207,8 +207,15 @@ class DiscussionBindingIntentService
             JOIN project_agents pa ON pa.project_id = i.project_id AND pa.agent_id = i.confirmed_agent_id
             JOIN chat_agents a ON a.id = i.confirmed_agent_id
             JOIN project_participants pp ON pp.project_id = i.project_id AND pp.agent_id = i.confirmed_agent_id AND pp.kind = 'agent'
+            JOIN project_members pm ON pm.project_id = i.project_id AND pm.user_id = i.created_by_user_id
+            LEFT JOIN agent_activation_bindings ab ON ab.project_id = i.project_id AND ab.agent_id = i.confirmed_agent_id
             WHERE i.context_token_hash = ? AND i.created_by_user_id = ?
               AND i.status = 'confirmed'
+              AND p.status = 'active' AND pa.status = 'active' AND a.is_active = 1 AND pp.status = 'active'
+              AND pm.status = 'active' AND pm.role IN ('owner','admin')
+              AND (i.discussion_reference IS NULL OR
+                   (ab.enabled = 1 AND ab.runtime_type = 'chatgpt' AND ab.activation_driver = 'browser_companion'
+                    AND ab.conversation_id = i.discussion_id))
               AND (i.discussion_reference IS NOT NULL OR i.expires_at > ?) LIMIT 1");
         $statement->execute([hash('sha256', $token), (int) ($oauthAccess['principal_user_id'] ?? 0), Db::now()]);
         $row = $statement->fetch();
@@ -222,6 +229,26 @@ class DiscussionBindingIntentService
             'binding' => ['status' => 'Successful', 'type' => $row['discussion_reference'] === null ? 'interactive' : 'discussion',
                 'intent_id' => $row['id'], 'discussion_reference' => $row['discussion_reference']],
         ];
+    }
+
+    public function contextHealth(array $oauthAccess, $contextToken)
+    {
+        $token = trim((string) $contextToken);
+        if ($token === '') { return ['state' => 'missing']; }
+        if ($this->context($oauthAccess, $token) !== null) { return ['state' => 'healthy']; }
+
+        $statement = $this->pdo->prepare('SELECT status, discussion_reference, expires_at
+            FROM connector_discussion_binding_intents
+            WHERE context_token_hash = ? AND created_by_user_id = ? LIMIT 1');
+        $statement->execute([hash('sha256', $token), (int) ($oauthAccess['principal_user_id'] ?? 0)]);
+        $row = $statement->fetch();
+        if (!$row) { return ['state' => 'invalid']; }
+        if ($row['status'] === 'cancelled') { return ['state' => 'revoked']; }
+        if ($row['discussion_reference'] === null && strtotime($row['expires_at']) <= time()) {
+            return ['state' => 'stale'];
+        }
+        if ($row['status'] === 'pending') { return ['state' => 'pending']; }
+        return ['state' => 'unusable'];
     }
 
     private function agentProvider($projectId, $agentId)
