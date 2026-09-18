@@ -481,6 +481,62 @@ try {
             'status' => 409, 'body' => $stale['body']];
     });
 
+    $suite->test('responsibility API conceals foreign and unrelated IDs before actor decisions', function () use ($suite, $baseUrl, $agentOneHeaders, $agentTwoHeaders, $memberHeaders, $projectOne, $projectTwo, $memberId, $agentOne, $messageId, $pdo) {
+        $lookup = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND user_id = ?');
+        $lookup->execute([$projectTwo, $memberId]);
+        $responderId = (int) $lookup->fetchColumn();
+        $request = projectApiRequest($baseUrl, 'POST',
+            '/api/v1/project-messages.php?project_id=' . $projectTwo,
+            $agentTwoHeaders, ['body' => 'Authorization matrix request',
+                'direct_participant_ids' => [$responderId]]);
+        $suite->same(201, $request['status'], $request['raw']);
+        $requestId = $request['body']['data']['id'];
+        $other = projectApiRequest($baseUrl, 'POST',
+            '/api/v1/project-messages.php?project_id=' . $projectTwo,
+            $agentTwoHeaders, ['body' => 'Unrelated message']);
+        $suite->same(201, $other['status'], $other['raw']);
+        $otherId = $other['body']['data']['id'];
+        $priorEvent = $pdo->query('SELECT event_message_id FROM responsibility_events ORDER BY event_message_id LIMIT 1')->fetchColumn();
+        $suite->true($priorEvent !== false, 'Prior request event was not persisted.');
+        $path = '/api/v1/project-messages.php?project_id=' . $projectTwo;
+        $write = function ($key, $kind, $source, $initial, $expected, array $extra = [], $headers = null) use ($baseUrl, $path, $memberHeaders) {
+            return projectApiRequest($baseUrl, 'POST', $path,
+                $headers === null ? $memberHeaders : $headers,
+                ['body' => 'Authorization matrix probe', 'idempotency_key' => $key,
+                    'responsibility_event' => array_merge([
+                        'kind' => $kind, 'request_message_id' => $source,
+                        'initial_responder_participant_id' => $initial,
+                        'expected_event_id' => $expected,
+                    ], $extra)]);
+        };
+        $before = (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn();
+        $notFound = [
+            $write('matrix-foreign-source', 'work_started', $messageId, $responderId, $messageId),
+            $write('matrix-foreign-responder', 'work_started', $requestId, $agentOne['participant_id'], $requestId),
+            $write('matrix-foreign-expected', 'work_started', $requestId, $responderId, $messageId),
+            $write('matrix-unrelated-expected', 'work_started', $requestId, $responderId, $otherId),
+            $write('matrix-missing-expected', 'work_started', $requestId, $responderId, 2147483647),
+            $write('matrix-unrelated-reference', 'unblocked', $requestId, $responderId, $requestId,
+                ['reference_event_id' => (int) $priorEvent]),
+            $write('matrix-foreign-target', 'transfer_offered', $requestId, $responderId, $requestId,
+                ['target_participant_id' => $agentOne['participant_id']], $agentTwoHeaders),
+        ];
+        foreach ($notFound as $response) {
+            $suite->same(404, $response['status'], $response['raw']);
+            $suite->same('MESSAGE_NOT_FOUND', $response['body']['code']);
+        }
+        $foreignActor = $write('matrix-foreign-actor', 'work_started', $requestId,
+            $responderId, $requestId, [], $agentOneHeaders);
+        $suite->same(404, $foreignActor['status'], $foreignActor['raw']);
+        $suite->same('PROJECT_NOT_FOUND', $foreignActor['body']['code']);
+        $wrongRole = $write('matrix-wrong-role', 'work_started', $requestId,
+            $responderId, $requestId, [], $agentTwoHeaders);
+        $suite->same(403, $wrongRole['status'], $wrongRole['raw']);
+        $suite->same('RESPONSIBILITY_FORBIDDEN', $wrongRole['body']['code']);
+        $suite->same($before, (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn(),
+            'Rejected responsibility writes left canonical messages behind.');
+    });
+
     $suite->test('all project members see messages while addressed filters express responsibility', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $messageId, &$contractSamples) {
         $all = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders);
         $mine = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&addressed_to=me&acknowledged=false', $humanHeaders);

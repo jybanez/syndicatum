@@ -495,14 +495,19 @@ and can complete a real cross-provider handoff without privileged intervention.
 
 ### P1.1 Explicit responsibility signals
 
-**Design/documentation sub-gate approved by Commercial Assessor:**
+**Scoped P1.1 sub-gates reviewed by Commercial Assessor:**
 [`v1-responsibility-state-proposal.md`](v1-responsibility-state-proposal.md)
 defines an append-only, canonical-message-backed event model and explicit
 conflict/correction behavior. The Assessor approved these semantics for draft
-PR #6 head `7cf0a07` in project message #2726. This is not implementation
-approval: API/reducer correctness, inbox behavior, migration readiness,
-concurrency safety, and installed-client acceptance remain unproven. All P1.1
-implementation acceptance items below remain open.
+PR #6 head `7cf0a07` in project message #2726. The Assessor separately
+accepted the pure reducer transition/role matrix at `7c0eabc` (#2738), the
+bounded persistence and canonical-message atomicity/idempotency paths at
+`2acdad9` (#2740), and genuine concurrent two-writer serialization plus HTTP
+409 conflict mapping at `a8a6241` (#2743), all at **source/CI scope only**.
+Those decisions do not close P1.1: the full API authorization/foreign-ID
+matrix, pure inbox derivation, historical direct-message migration/backfill,
+and installed-client acceptance remain open. The implementation items below
+remain unchecked until their full exit evidence is reviewed.
 
 - [ ] Define the minimum explicit state needed to represent waiting, unresolved,
       resolved, blocked, and responsibility transfer without inferring it from

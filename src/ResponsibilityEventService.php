@@ -105,6 +105,15 @@ class ResponsibilityEventService
             }
         }
 
+        // Expected versions must name this request or one of its persisted
+        // events. A foreign/unrelated ID is concealed as not found; a known
+        // but older version proceeds to the reducer's 409 conflict check.
+        $expectedId = isset($input['expected_event_id'])
+            ? (int) $input['expected_event_id'] : 0;
+        if ($expectedId !== $requestId && !isset($knownEvents[$expectedId])) {
+            throw new RuntimeException('MESSAGE_NOT_FOUND');
+        }
+
         $responderActive = $this->activeParticipant($projectId, $state['responder_id']);
         $responderGeneration = $this->participantGeneration($projectId,
             $state['responder_id']);
