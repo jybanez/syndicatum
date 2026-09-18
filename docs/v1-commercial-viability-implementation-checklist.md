@@ -415,8 +415,10 @@ retry/terminal state for one message. Webhook, Workspace Agent, and Responses
 API delivery rows now use the same bounded HTTP/transport categories where
 their evidence aligns, while retaining provider-specific queue states. This
 is mapped in the [cross-provider taxonomy](v1-delivery-failure-taxonomy.md).
-It is source/CI scope only, not completion of the administrator-view, live
-cross-provider delivery, or operational recovery gate.
+It is source/CI scope only, not completion of live cross-provider delivery or
+operational recovery. Commercial Assessor accepted the shared taxonomy and
+administrator Delivery health surface as bounded source/CI sub-items; neither
+acceptance establishes a published or installed release.
 The host-only operational command now includes a bounded 50-row diagnostic
 sample per path, separating last failed attempt from current path state. This
 operator-CLI increment is now complemented by an authenticated, read-only
@@ -426,7 +428,11 @@ an isolated local-browser smoke showed the administrator route rendering all
 four paths and an unknown worker state against a fresh test database. The
 temporary database and server were removed afterward. Published/installed
 visual and real operational recovery evidence is still required before the
-full administrator-view/observability gate can close.
+full observability gate can close. The isolated Docker acceptance harness
+exercises a stopped delivery worker, an aging Realtime queue, worker restart,
+and a unique ingress receipt; it now also checks the administrator Delivery
+health endpoint on both sides of that transition. This remains isolated
+candidate evidence, not a production receiver or published-artifact claim.
 
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.
