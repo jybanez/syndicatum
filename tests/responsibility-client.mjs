@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { responsibilityActions, responsibilityEvent } from "../assets/responsibility-inbox.mjs";
+import { responsibilityActions, responsibilityEvent, responsibilityLabels } from "../assets/responsibility-inbox.mjs";
 import { evidenceDetails } from "../assets/responsibility-evidence.mjs";
 
 const request = {
@@ -85,4 +85,12 @@ test("canonical evidence fallback preserves identity, reply context, revisions, 
   const removed = evidenceDetails({ ...message, deleted_at: "2026-09-19T09:00:00Z" }, parent);
   assert.match(removed.tombstone, /Removed 2026-09-19/);
   assert.doesNotMatch(removed.body, /Original evidence/);
+});
+
+test("resolved work labels a retained block as history rather than a current blocker", () => {
+  const name = () => "Responder";
+  assert.deepEqual(responsibilityLabels({ ...request, blocked: true, state: "open" }, name),
+    ["Blocked"]);
+  assert.deepEqual(responsibilityLabels({ ...request, blocked: true, state: "resolved" }, name),
+    ["Previously blocked"]);
 });

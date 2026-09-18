@@ -58,6 +58,18 @@ export function responsibilityActions(item, actorId, moderator, activeParticipan
   return actions;
 }
 
+export function responsibilityLabels(item, participantName) {
+  const labels = [];
+  if (item.blocked) labels.push(item.state === "resolved" ? "Previously blocked" : "Blocked");
+  if (item.work_started) labels.push("Work started");
+  if (item.acknowledged) labels.push("Acknowledged");
+  if (item.outcome === "withdrawn") labels.push("Request withdrawn, not completed");
+  if (item.state === "transfer_pending" && item.pending_target_participant_id) {
+    labels.push(`Offered to ${participantName(item.pending_target_participant_id)}`);
+  }
+  return labels;
+}
+
 export function responsibilityEvent(item, kind, targetId = null) {
   if (!Object.hasOwn(ACTIONS, kind) || !item || item.state === "unknown") {
     throw new Error("This responsibility action is unavailable.");
@@ -168,14 +180,7 @@ export function createResponsibilityInbox(host, options) {
         ? "No active owner" : "Not verified";
     meta.textContent = `From ${requester} · ${responder} · ${item.request_created_at}`;
     const flags = element("p", "responsibility-flags");
-    const labels = [];
-    if (item.blocked) labels.push("Blocked");
-    if (item.work_started) labels.push("Work started");
-    if (item.acknowledged) labels.push("Acknowledged");
-    if (item.outcome === "withdrawn") labels.push("Request withdrawn, not completed");
-    if (item.state === "transfer_pending" && item.pending_target_participant_id) {
-      labels.push(`Offered to ${participantName(item.pending_target_participant_id)}`);
-    }
+    const labels = responsibilityLabels(item, participantName);
     flags.textContent = labels.join(" · ");
     flags.hidden = !labels.length;
     const actions = element("div", "responsibility-actions");

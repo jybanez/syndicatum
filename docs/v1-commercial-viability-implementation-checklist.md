@@ -527,10 +527,12 @@ keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
 The first [isolated installed-client probe](v1-responsibility-installed-acceptance-2026-09-19.md)
 at `7f69fda` verified a direct request in the owner’s waiting view, mounted
 and filtered-out canonical evidence navigation, and an owner withdrawal that
-updated the inbox and appended one canonical timeline event. It is a narrow
-positive probe; the remaining role/state, conflict, history, responsive, and
-accessibility acceptance cases are still open and the checkboxes below remain
-unchecked pending full evidence and Assessor review.
+updated the inbox and appended one canonical timeline event. A second
+authenticated participant then exercised acknowledgment, start, block,
+resolution proposal, and owner acceptance. It is a narrow positive probe;
+the remaining role/state, conflict, history, responsive, and accessibility
+acceptance cases are still open and the checkboxes below remain unchecked
+pending full evidence and Assessor review.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
