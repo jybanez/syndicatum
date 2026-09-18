@@ -58,6 +58,7 @@ class MessageDeliveryStatus
             'failure_code' => $state === 'accepted' ? null
                 : (isset($row['last_failure_code']) ? $row['last_failure_code'] : null),
             'response_status' => isset($row['response_status']) ? (int) $row['response_status'] : null,
+            'provider_state' => isset($row['response_state']) ? $row['response_state'] : null,
         ];
     }
 
@@ -129,6 +130,8 @@ class MessageDeliveryStatus
                         ? 'last_attempt_at' : 'NULL AS last_attempt_at',
                     Db::columnExists($pdo, $table, 'last_failure_code')
                         ? 'last_failure_code' : 'NULL AS last_failure_code',
+                    Db::columnExists($pdo, $table, 'response_state')
+                        ? 'response_state' : 'NULL AS response_state',
                 ];
             }
         }

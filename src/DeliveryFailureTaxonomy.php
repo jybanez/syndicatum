@@ -18,10 +18,17 @@ class DeliveryTransportException extends RuntimeException
 
 class DeliveryProviderStateException extends RuntimeException
 {
+    private $state;
+
     public function __construct($state)
     {
-        $state = in_array($state, ['failed', 'cancelled', 'incomplete'], true) ? $state : 'unknown';
-        parent::__construct('Provider response ended in state ' . $state . '.');
+        $this->state = in_array($state, ['failed', 'cancelled', 'incomplete'], true) ? $state : 'unknown';
+        parent::__construct('Provider response ended in state ' . $this->state . '.');
+    }
+
+    public function state()
+    {
+        return $this->state;
     }
 }
 
@@ -33,21 +40,23 @@ class DeliveryFailureTaxonomy
         'invalid_request', 'internal_error', 'unknown',
     ];
 
-    public static function fromHttpStatus($status)
+    public static function fromHttpStatus($status, $path = 'generic')
     {
         $status = (int) $status;
         if ($status === 0) { return 'transport'; }
         if ($status === 408) { return 'timeout'; }
         if ($status === 429) { return 'rate_limiting'; }
         if ($status === 401 || $status === 403) { return 'authentication'; }
-        if ($status === 404) { return 'routing'; }
+        // Only Realtime's room ingress contract establishes 404 as routing.
+        // A webhook or provider API 404 may mean a missing endpoint/resource.
+        if ($status === 404) { return $path === 'realtime' ? 'routing' : 'rejected'; }
         if ($status >= 500 && $status <= 599) { return 'upstream_error'; }
         return 'rejected';
     }
 
-    public static function fromException(Exception $exception, $httpStatus = null)
+    public static function fromException(Exception $exception, $httpStatus = null, $path = 'generic')
     {
-        if ($httpStatus !== null) { return self::fromHttpStatus($httpStatus); }
+        if ($httpStatus !== null) { return self::fromHttpStatus($httpStatus, $path); }
         if ($exception instanceof DeliveryTransportException) { return $exception->failureCode(); }
         if ($exception instanceof DeliveryProviderStateException) { return 'rejected'; }
         return 'internal_error';

@@ -162,6 +162,8 @@ retaining their provider-specific queue states. Their per-message activation
 projections include last attempt, next retry/poll, last success, terminal
 outcome, HTTP status, and failure category. An unclassified local failure is
 `internal_error`; this does not assert that the remote provider caused it.
+The [cross-provider mapping](v1-delivery-failure-taxonomy.md) records which
+categories actually align and where provider-specific state remains separate.
 Raw provider error bodies, cURL strings, and exception messages are not
 retained in delivery or binding `last_error` fields. Workspace Agent and
 Responses API activation remain disabled by V1 policy; this schema and source

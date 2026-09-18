@@ -45,4 +45,13 @@ expectState($activation['state'], 'pending');
 expectState($activation['next_retry_at'], '2026-09-18 07:12:00');
 expectState($activation['failure_code'], 'timeout');
 expectState($activation['terminal_outcome'], null);
+$providerFailure = MessageDeliveryStatus::activationEvent([
+    'delivery_uuid' => 'delivery-2', 'status' => 'dead', 'attempt_count' => 1,
+    'next_attempt_at' => null, 'last_attempt_at' => '2026-09-18 07:15:00',
+    'last_failure_code' => 'rejected', 'response_status' => 200,
+    'response_state' => 'cancelled', 'delivered_at' => null,
+]);
+expectState($providerFailure['state'], 'failed');
+expectState($providerFailure['provider_state'], 'cancelled');
+expectState($providerFailure['failure_code'], 'rejected');
 echo "Message delivery projection contract passed.\n";
