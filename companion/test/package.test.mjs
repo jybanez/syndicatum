@@ -63,6 +63,13 @@ test("MCP binding intents require an in-discussion Continue or Cancel confirmati
   assert.match(content, /diagnose_connection using the binding_context_id/);
   assert.match(content, /adapter\.deliver\(prompt\)/);
   assert.match(content, /Retry status check/);
+  assert.match(content, /data-field="server"/);
+  assert.match(content, /binding\?\.project_name/);
+  assert.match(content, /binding\?\.agent_name/);
+  assert.match(content, /Status check submitted in this discussion/);
+  assert.doesNotMatch(content, /if \(verification\?\.ok\) \{ host\.remove\(\); return; \}/);
+  assert.match(background, /server_url: current\.baseUrl/);
+  assert.match(background, /companion_sync_warning/);
 });
 
 test("popup contains no legacy binding-code workflow", async () => {

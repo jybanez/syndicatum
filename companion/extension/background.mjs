@@ -259,17 +259,18 @@ async function checkBindingIntents() {
   });
   if (!tab?.id) return;
   try {
-    await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: intents[0] });
+    await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: { ...intents[0], server_url: current.baseUrl } });
   } catch (error) {
     if (!String(error?.message || error).includes("Receiving end does not exist")) throw error;
     await injectProviderAdapter(tab.id, "chatgpt");
-    await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: intents[0] });
+    await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: { ...intents[0], server_url: current.baseUrl } });
   }
 }
 
 async function resolveBindingIntent(request, sender) {
   const action = String(request?.action || "");
   if (!["continue", "cancel"].includes(action)) throw new Error("Invalid binding action.");
+  const current = await state();
   const body = { binding_intent_id: request.intentId, action };
   if (action === "continue") {
     if (!sender?.tab?.url) throw new Error("The ChatGPT discussion URL could not be read.");
@@ -279,12 +280,16 @@ async function resolveBindingIntent(request, sender) {
   }
   const result = await api("/api/v1/connector-discussion-bindings.php", { method: "POST", body: JSON.stringify(body) });
   if (action === "continue") {
-    const bindings = await refreshBindings();
-    await recover(bindings);
-    await save({ lastBindingMessage: `Discussion Binding: Successful — ${result.agent_name || "agent"}.`, lastError: null });
+    await save({ lastBindingMessage: `Discussion Binding: Successful — ${result.project_name || "project"} / ${result.agent_name || "agent"}.`, lastError: null });
+    try {
+      const bindings = await refreshBindings();
+      await recover(bindings);
+    } catch (error) {
+      result.companion_sync_warning = "The binding succeeded, but Companion refresh is pending. Refresh Companion to check delivery.";
+    }
   }
   setTimeout(() => void checkBindingIntents(), 0);
-  return result;
+  return action === "continue" ? { ...result, server_url: current.baseUrl } : result;
 }
 
 async function recover(bindings) {
