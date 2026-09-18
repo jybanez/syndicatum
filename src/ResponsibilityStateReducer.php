@@ -31,10 +31,10 @@ class ResponsibilityStateReducer
             ? $state['request_message_id'] : $state['last_event_id'];
         if ($eventId <= 0 || !isset($event['expected_event_id'])
             || (int) $event['expected_event_id'] !== (int) $expected) {
-            throw new RuntimeException('Stale or invalid expected responsibility event.');
+            throw new RuntimeException('RESPONSIBILITY_CONFLICT');
         }
         if (empty($actor['active']) || empty($actor['id'])) {
-            throw new RuntimeException('Active actor required.');
+            throw new RuntimeException('RESPONSIBILITY_FORBIDDEN');
         }
         $actorId = (int) $actor['id'];
         $requester = $actorId === (int) $state['requester_id'];
@@ -54,7 +54,7 @@ class ResponsibilityStateReducer
                 self::requireState($base, ['open', 'disputed']);
                 self::requireActor($responder);
                 if ($state['blocked']) {
-                    throw new RuntimeException('Already blocked.');
+                    throw new RuntimeException('RESPONSIBILITY_CONFLICT');
                 }
                 $state['blocked'] = true;
                 $state['block_event_id'] = $eventId;
@@ -64,7 +64,7 @@ class ResponsibilityStateReducer
                 self::requireActor($responder);
                 if (!$state['blocked'] || !isset($event['ref_event_id'])
                     || (int) $event['ref_event_id'] !== (int) $state['block_event_id']) {
-                    throw new RuntimeException('Referenced block required.');
+                    throw new RuntimeException('RESPONSIBILITY_CONFLICT');
                 }
                 $state['blocked'] = false;
                 $state['block_event_id'] = null;
@@ -105,7 +105,7 @@ class ResponsibilityStateReducer
                     ? $mayDecide : ($responder || $mayDecide));
                 if (empty($event['target_id']) || empty($actor['target_active'])
                     || (int) $event['target_id'] === (int) $state['responder_id']) {
-                    throw new RuntimeException('Active different transfer target required.');
+                    throw new RuntimeException('RESPONSIBILITY_TARGET_INACTIVE');
                 }
                 $state['pending'] = ['kind' => 'transfer', 'id' => $eventId,
                     'prior_state' => $base, 'target_id' => (int) $event['target_id']];
@@ -140,7 +140,7 @@ class ResponsibilityStateReducer
                 self::requireState($base, ['orphaned']);
                 self::requireActor($mayDecide);
                 if (empty($actor['responder_active'])) {
-                    throw new RuntimeException('Original responder is not active.');
+                    throw new RuntimeException('RESPONSIBILITY_TARGET_INACTIVE');
                 }
                 $state['state'] = 'open';
                 break;
@@ -148,17 +148,17 @@ class ResponsibilityStateReducer
                 self::requireActor($moderator);
                 self::requireReason($event);
                 if (empty($event['ref_event_id'])) {
-                    throw new RuntimeException('Referenced event required.');
+                    throw new RuntimeException('RESPONSIBILITY_CONFLICT');
                 }
                 foreach (array_keys($event) as $field) {
                     if (!in_array($field, ['id', 'kind', 'expected_event_id',
                         'ref_event_id', 'reason', 'supporting_link'], true)) {
-                        throw new RuntimeException('Correction cannot change authority or state.');
+                        throw new InvalidArgumentException('Correction cannot change authority or state.');
                     }
                 }
                 break;
             default:
-                throw new RuntimeException('Unknown responsibility event kind.');
+                throw new InvalidArgumentException('Unknown responsibility event kind.');
         }
 
         $state['last_event_id'] = $eventId;
@@ -168,14 +168,14 @@ class ResponsibilityStateReducer
     private static function requireState($actual, array $allowed)
     {
         if (!in_array($actual, $allowed, true)) {
-            throw new RuntimeException('Invalid responsibility transition.');
+            throw new RuntimeException('RESPONSIBILITY_CONFLICT');
         }
     }
 
     private static function requireActor($allowed)
     {
         if (!$allowed) {
-            throw new RuntimeException('Actor cannot perform responsibility event.');
+            throw new RuntimeException('RESPONSIBILITY_FORBIDDEN');
         }
     }
 
@@ -184,14 +184,14 @@ class ResponsibilityStateReducer
         if ($state !== $kind . '_pending' || !is_array($pending)
             || $pending['kind'] !== $kind || !isset($event['ref_event_id'])
             || (int) $event['ref_event_id'] !== (int) $pending['id']) {
-            throw new RuntimeException('Referenced pending event required.');
+            throw new RuntimeException('RESPONSIBILITY_CONFLICT');
         }
     }
 
     private static function requireReason(array $event)
     {
         if (!isset($event['reason']) || trim((string) $event['reason']) === '') {
-            throw new RuntimeException('Reason required.');
+            throw new InvalidArgumentException('Reason required.');
         }
     }
 }

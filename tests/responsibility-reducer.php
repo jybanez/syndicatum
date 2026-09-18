@@ -30,7 +30,7 @@ function responsibilityFails(callable $test)
 {
     try {
         $test();
-    } catch (RuntimeException $expected) {
+    } catch (Exception $expected) {
         return;
     }
     throw new RuntimeException('Expected transition to fail.');

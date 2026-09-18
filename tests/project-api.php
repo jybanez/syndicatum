@@ -433,6 +433,54 @@ try {
         $suite->same($messageId, $lookup['body']['data'][0]['id']);
     });
 
+    $suite->test('responsibility stale transition is an HTTP conflict, not a server error', function () use ($suite, $baseUrl, $agentTwoHeaders, $memberHeaders, $projectTwo, $memberId, $pdo, &$contractSamples) {
+        $participantLookup = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND user_id = ?');
+        $participantLookup->execute([$projectTwo, $memberId]);
+        $ownerParticipant = (int) $participantLookup->fetchColumn();
+        $request = projectApiRequest($baseUrl, 'POST',
+            '/api/v1/project-messages.php?project_id=' . $projectTwo,
+            $agentTwoHeaders, ['body' => 'Please decide',
+                'direct_participant_ids' => [$ownerParticipant]]);
+        $suite->same(201, $request['status'], $request['raw']);
+        $requestId = $request['body']['data']['id'];
+        $started = [
+            'body' => 'I started reviewing',
+            'idempotency_key' => 'responsibility-http-start',
+            'responsibility_event' => [
+                'kind' => 'work_started',
+                'request_message_id' => $requestId,
+                'initial_responder_participant_id' => $ownerParticipant,
+                'expected_event_id' => $requestId,
+            ],
+        ];
+        $created = projectApiRequest($baseUrl, 'POST',
+            '/api/v1/project-messages.php?project_id=' . $projectTwo,
+            $memberHeaders, $started);
+        $suite->same(201, $created['status'], $created['raw']);
+        $replayed = projectApiRequest($baseUrl, 'POST',
+            '/api/v1/project-messages.php?project_id=' . $projectTwo,
+            $memberHeaders, $started);
+        $suite->same(200, $replayed['status'], $replayed['raw']);
+        $suite->same(true, $replayed['body']['idempotent_replay']);
+        $stale = projectApiRequest($baseUrl, 'POST',
+            '/api/v1/project-messages.php?project_id=' . $projectTwo,
+            $memberHeaders, [
+                'body' => 'I am blocked',
+                'idempotency_key' => 'responsibility-http-stale',
+                'responsibility_event' => [
+                    'kind' => 'blocked',
+                    'request_message_id' => $requestId,
+                    'initial_responder_participant_id' => $ownerParticipant,
+                    'expected_event_id' => $requestId,
+                ],
+            ]);
+        $suite->same(409, $stale['status'], $stale['raw']);
+        $suite->same('RESPONSIBILITY_CONFLICT', $stale['body']['code']);
+        $contractSamples[] = ['schema' => 'ApiError',
+            'path' => '/api/v1/project-messages.php', 'method' => 'post',
+            'status' => 409, 'body' => $stale['body']];
+    });
+
     $suite->test('all project members see messages while addressed filters express responsibility', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $messageId, &$contractSamples) {
         $all = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders);
         $mine = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&addressed_to=me&acknowledged=false', $humanHeaders);

@@ -175,7 +175,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MessageWriteResponse' }
         '409':
-          description: 'IDEMPOTENCY_KEY_CONFLICT for changed request content under a reused key, or PROJECT_ARCHIVED.'
+          description: 'IDEMPOTENCY_KEY_CONFLICT, PROJECT_ARCHIVED, RESPONSIBILITY_CONFLICT for a stale or invalid transition, RESPONSIBILITY_TARGET_INACTIVE, or RESPONSIBILITY_BASELINE_UNAVAILABLE for a historical direct message.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
@@ -514,6 +514,29 @@ components:
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
         idempotency_key: { type: string, maxLength: 160 }
         correlation_id: { type: string, nullable: true, maxLength: 160 }
+        responsibility_event: { $ref: '#/components/schemas/ResponsibilityEventWrite' }
+    ResponsibilityEventWrite:
+      type: object
+      description: >-
+        Optional P1.1 structured event written atomically with this canonical
+        message. An idempotency key is required. The referenced source must be
+        a same-project direct message, not another responsibility-event message.
+        Historical direct messages without a membership-generation baseline
+        require migration before they can receive responsibility events.
+      required: [kind, request_message_id, initial_responder_participant_id, expected_event_id]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [work_started, blocked, unblocked, resolution_proposed,
+            resolution_accepted, resolution_disputed, resolution_withdrawn,
+            request_withdrawn, transfer_offered, transfer_accepted,
+            transfer_declined, reopened, responder_restored, corrected]
+        request_message_id: { type: integer, minimum: 1 }
+        initial_responder_participant_id: { type: integer, minimum: 1 }
+        expected_event_id: { type: integer, minimum: 1, description: Latest observed event message ID, or original request message ID when no event exists. }
+        reference_event_id: { type: integer, minimum: 1, description: Required for an unblock, pending-offer/proposal decision, or correction. }
+        target_participant_id: { type: integer, minimum: 1, description: Required only for transfer_offered. }
     AgentActivationBinding:
       type: object
       required: [project_id, agent_id, enabled]

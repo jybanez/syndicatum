@@ -143,14 +143,14 @@ try {
         $responderParticipant) {
         responsibilityWrite($repository, $responder, $requestId,
             $responderParticipant, $requestId, 'blocked', 'responsibility-stale');
-    }, 'Stale');
+    }, 'RESPONSIBILITY_CONFLICT');
     responsibilityAssert((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === $before,
         'Stale event left an orphan canonical message.');
     responsibilityExpectFailure(function () use ($repository, $owner, $requestId,
         $responderParticipant, $eventId) {
         responsibilityWrite($repository, $owner, $requestId,
             $responderParticipant, $eventId, 'blocked', 'responsibility-forbidden');
-    }, 'Actor cannot');
+    }, 'RESPONSIBILITY_FORBIDDEN');
     responsibilityExpectFailure(function () use ($repository, $responder, $foreignRequestId,
         $responderParticipant) {
         responsibilityWrite($repository, $responder, $foreignRequestId,
@@ -188,7 +188,7 @@ try {
         responsibilityWrite($repository, $target, $requestId,
             $responderParticipant, $acceptedId, 'work_started',
             'responsibility-no-silent-restore');
-    }, 'Invalid responsibility transition');
+    }, 'RESPONSIBILITY_CONFLICT');
     $restored = responsibilityWrite($repository, $owner, $requestId,
         $responderParticipant, $acceptedId, 'responder_restored',
         'responsibility-explicit-restore');
@@ -235,13 +235,13 @@ try {
             WHERE project_id = ? FOR UPDATE');
         $lock->execute([$projectId]);
         responsibilityAssert($lock->fetchColumn() !== false, 'Project sequence lock missing.');
-        foreach (['race-a', 'race-b'] as $key) {
+        foreach (['race-a' => 'work_started', 'race-b' => 'blocked'] as $key => $kind) {
             $pipes = [];
             $process = proc_open([PHP_BINARY,
                 __DIR__ . '/fixtures/responsibility-concurrent-writer.php',
                 (string) $projectId, (string) $responderParticipant,
                 (string) $raceRequestId, (string) $responderParticipant,
-                (string) $raceRequestId, $key],
+                (string) $raceRequestId, $key, $kind],
                 [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
                 $pipes, dirname(__DIR__));
             responsibilityAssert(is_resource($process), 'Concurrent writer did not start.');
@@ -283,8 +283,9 @@ try {
     }
     sort($raceResults);
     responsibilityAssert(count($raceResults) === 2
-        && strpos($raceResults[0], 'CREATED ') === 0
-        && strpos($raceResults[1], 'ERROR Stale') === 0,
+        && preg_match('/^CREATED ([0-9]+) (work_started|blocked) (race-a|race-b)$/',
+            $raceResults[0], $winner) === 1
+        && $raceResults[1] === 'ERROR RESPONSIBILITY_CONFLICT',
         'Competing writes did not produce exactly one winner and one conflict: '
             . implode(' | ', $raceResults));
     responsibilityAssert((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn()
@@ -295,6 +296,34 @@ try {
     $raceCount->execute([$raceRequestId]);
     responsibilityAssert((int) $raceCount->fetchColumn() === 1,
         'Competing writes did not leave exactly one responsibility event.');
+    $replay = responsibilityWrite($repository, $responder, $raceRequestId,
+        $responderParticipant, $raceRequestId, $winner[2], $winner[3]);
+    responsibilityAssert(!$replay['created']
+        && $replay['message']['id'] === (int) $winner[1],
+        'Winner idempotency replay was not stable after the race.');
+    $winningEvent = $pdo->prepare('SELECT re.kind, re.event_message_id,
+        em.project_sequence FROM responsibility_events re
+        JOIN messages em ON em.id = re.event_message_id
+        WHERE re.project_id = ? AND re.request_message_id = ?
+        ORDER BY em.project_sequence, re.event_message_id');
+    $winningEvent->execute([$projectId, $raceRequestId]);
+    $committed = $winningEvent->fetchAll(PDO::FETCH_ASSOC);
+    responsibilityAssert(count($committed) === 1
+        && (int) $committed[0]['event_message_id'] === (int) $winner[1]
+        && $committed[0]['kind'] === $winner[2],
+        'Canonical sequence does not identify exactly the winning event.');
+    $finalState = ResponsibilityStateReducer::apply(
+        ResponsibilityStateReducer::initial($raceRequestId,
+            $ownerParticipant, $responderParticipant),
+        ['id' => (int) $committed[0]['event_message_id'],
+            'kind' => $committed[0]['kind'],
+            'expected_event_id' => $raceRequestId],
+        ['id' => $responderParticipant, 'active' => true, 'moderator' => false]);
+    responsibilityAssert($finalState['state'] === 'open'
+        && $finalState['last_event_id'] === (int) $winner[1]
+        && $finalState['work_started'] === ($winner[2] === 'work_started')
+        && $finalState['blocked'] === ($winner[2] === 'blocked'),
+        'Final reducer state includes anything beyond the committed event.');
     echo "PASS two live writers, one event, one stale conflict, no losing message.\n";
 
     echo "Responsibility persistence and conflict tests passed.\n";
