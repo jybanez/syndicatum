@@ -287,7 +287,7 @@ class DiscussionBindingIntentService
     {
         $collapsed = preg_replace('/[\p{Z}\s]+/u', ' ', (string) $name);
         if ($collapsed === null) { throw new InvalidArgumentException('Invalid binding name.'); }
-        return mb_strtolower(trim($collapsed), 'UTF-8');
+        return mb_convert_case(trim($collapsed), MB_CASE_FOLD, 'UTF-8');
     }
 
     private function agentProvider($projectId, $agentId)
