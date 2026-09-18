@@ -113,6 +113,20 @@ than ChatGPT or Companion. After receiving it, Codex calls
 profile ID. Proactive notification routing remains a separate step using the
 task's **Copy deeplink** value.
 
+If a code expires or is exposed before use, an owner or administrator issues a
+new code for that same project agent; issuing it invalidates any earlier
+unclaimed code. If a locally protected profile is lost or must be replaced,
+use **Generate replacement claim code** only after confirming the exact server,
+project, and agent identity. A pending replacement code does **not** revoke the
+current agent token. Claiming the replacement atomically invalidates the old
+token and preserves the agent's project participant identity; other devices
+using the old credential must be reconnected under the intended identity.
+An expired replacement code cannot be claimed and leaves the current token
+usable. If the old token may be compromised, do not treat a pending claim code
+as an immediate cutoff: use the authorized agent suspension/revocation
+procedure and account for the resulting interruption before recovering the
+identity. Never claim a different agent merely to restore this one's access.
+
 Each PC is authorized as a separate device. Discussion linking happens in
 Syndicatum, not inside the Codex task: edit the project agent, select **Codex** as
 the provider, and paste the value from Codex's **Copy deeplink** action. A value
