@@ -219,6 +219,9 @@ try {
     (new ChatRepository($pdo))->installSchema();
     $ownerId = projectApiInsertUser($pdo, 'owner@project.test', 'Owner Human');
     $memberId = projectApiInsertUser($pdo, 'member@project.test', 'Member Human');
+    $pdo->prepare("INSERT INTO user_system_roles (user_id, role_id, created_at)
+        SELECT ?, id, ? FROM system_roles WHERE code = 'administrator'")
+        ->execute([$ownerId, Db::now()]);
     $projectOne = projectApiInsertProject($pdo, $ownerId, 'Project One', 'project-one');
     $projectTwo = projectApiInsertProject($pdo, $memberId, 'Project Two', 'project-two');
     $ownerParticipant = (int) $pdo->query('SELECT id FROM project_participants WHERE project_id = ' . $projectOne . ' AND user_id = ' . $ownerId)->fetchColumn();
@@ -468,6 +471,21 @@ try {
                 $suite->same($acknowledged, $addressee['acknowledged_at']);
             }
         }
+    });
+
+    $suite->test('delivery health is readable only by a system administrator', function () use ($suite, $baseUrl, $humanHeaders, $memberHeaders, $agentOneHeaders) {
+        $path = '/api/v1/admin/delivery-health.php';
+        $anonymous = projectApiRequest($baseUrl, 'GET', $path);
+        $member = projectApiRequest($baseUrl, 'GET', $path, $memberHeaders);
+        $agent = projectApiRequest($baseUrl, 'GET', $path, $agentOneHeaders);
+        $administrator = projectApiRequest($baseUrl, 'GET', $path, $humanHeaders);
+        $suite->same(401, $anonymous['status']);
+        $suite->same(403, $member['status']);
+        $suite->same(401, $agent['status']);
+        $suite->same(200, $administrator['status'], $administrator['raw']);
+        $suite->same('unknown', $administrator['body']['data']['state']);
+        $suite->true(isset($administrator['body']['data']['paths']['realtime']));
+        $suite->true(strpos($administrator['raw'], 'signing_secret') === false);
     });
 
     $suite->test('core API errors distinguish authentication, concealment, and addressee conflicts', function () use ($suite, $baseUrl, $agentOneHeaders, $agentTwoHeaders, $projectOne, $messageId, &$contractSamples) {
