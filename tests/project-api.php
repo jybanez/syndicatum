@@ -724,16 +724,35 @@ try {
                 'params' => ['name' => $name, 'arguments' => $arguments],
             ]);
         };
-        $unbound = $call('list_projects');
-        $suite->same(200, $unbound['status'], $unbound['raw']);
-        $suite->same(true, $unbound['body']['result']['isError']);
-        $suite->same('DISCUSSION_BINDING_REQUIRED', $unbound['body']['result']['content'][0]['text']);
-        $invalid = $call('list_projects', ['binding_context_id' => 'not-a-confirmed-context']);
-        $suite->same(true, $invalid['body']['result']['isError']);
-        $suite->same('DISCUSSION_BINDING_REQUIRED', $invalid['body']['result']['content'][0]['text']);
+        $projectMessageCount = (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn();
+        $protectedTools = [
+            'list_projects' => [],
+            'get_project' => [],
+            'list_participants' => [],
+            'list_messages' => [],
+            'get_message' => ['message_id' => 1],
+            'post_message' => ['body' => 'Unbound call must not post', 'broadcast' => true],
+            'acknowledge_message' => ['message_id' => 1],
+        ];
+        foreach ([[], ['binding_context_id' => 'not-a-confirmed-context']] as $context) {
+            foreach ($protectedTools as $name => $arguments) {
+                $response = $call($name, array_merge($arguments, $context));
+                $suite->same(200, $response['status'], $name . ': ' . $response['raw']);
+                $suite->same(true, $response['body']['result']['isError'], $name);
+                $suite->same('DISCUSSION_BINDING_REQUIRED',
+                    $response['body']['result']['content'][0]['text'], $name);
+                $suite->same(null, $response['body']['result']['structuredContent'] ?? null,
+                    $name . ' exposed structured data before binding');
+            }
+        }
+        $suite->same($projectMessageCount,
+            (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn(),
+            'Unbound MCP writes must not create messages');
         $diagnosis = $call('diagnose_connection');
         $suite->same(false, $diagnosis['body']['result']['structuredContent']['result']['checks']['project_access_valid']);
         $suite->same('Required', $diagnosis['body']['result']['structuredContent']['result']['discussion_binding']);
+        $suite->same('Unknown', $diagnosis['body']['result']['structuredContent']['result']['project']);
+        $suite->same('Unknown', $diagnosis['body']['result']['structuredContent']['result']['agent_identity']);
     });
 
     $suite->test('legacy API can be disabled through the controlled operations setting', function () use ($suite, $baseUrl, $pdo) {
