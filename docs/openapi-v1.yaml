@@ -474,7 +474,7 @@ components:
         page: { $ref: '#/components/schemas/MessagePage' }
     ResponsibilityInboxItem:
       type: object
-      required: [project_id, request_message_id, request_sequence, request_created_at, requester_participant_id, initial_responder_participant_id, current_responder_participant_id, state, blocked, work_started, acknowledged, latest_evidence_message_id, latest_evidence_sequence, projection_error, canonical_message_api_href]
+      required: [project_id, request_message_id, request_sequence, request_created_at, requester_participant_id, initial_responder_participant_id, current_responder_participant_id, last_responder_participant_id, state, blocked, block_event_message_id, work_started, outcome, pending_event_message_id, pending_target_participant_id, pending_proposer_participant_id, acknowledged, latest_evidence_message_id, latest_evidence_sequence, projection_error, canonical_message_api_href]
       properties:
         project_id: { type: integer, minimum: 1 }
         request_message_id: { type: integer, minimum: 1 }
@@ -483,9 +483,15 @@ components:
         requester_participant_id: { type: integer, minimum: 1 }
         initial_responder_participant_id: { type: integer, minimum: 1 }
         current_responder_participant_id: { type: integer, minimum: 1, nullable: true }
+        last_responder_participant_id: { type: integer, minimum: 1, nullable: true, description: Last explicitly assigned responder even when currently orphaned; null for unknown baselines. }
         state: { type: string, enum: [open, resolution_pending, transfer_pending, disputed, orphaned, resolved, unknown] }
         blocked: { type: boolean, nullable: true }
+        block_event_message_id: { type: integer, minimum: 1, nullable: true, description: Exact active block event to reference when unblocking. }
         work_started: { type: boolean, nullable: true }
+        outcome: { type: string, nullable: true, enum: [accepted, withdrawn, null], description: Distinguishes accepted completion from withdrawn requests. }
+        pending_event_message_id: { type: integer, minimum: 1, nullable: true, description: Exact pending transfer offer or resolution proposal event to reference for a decision. }
+        pending_target_participant_id: { type: integer, minimum: 1, nullable: true, description: Proposed transfer target when a transfer is pending. }
+        pending_proposer_participant_id: { type: integer, minimum: 1, nullable: true, description: Resolution proposer when a resolution is pending. }
         acknowledged: { type: boolean }
         latest_evidence_message_id: { type: integer, minimum: 1, nullable: true }
         latest_evidence_sequence: { type: integer, minimum: 1, nullable: true }

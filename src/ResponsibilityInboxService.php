@@ -115,9 +115,26 @@ class ResponsibilityInboxService
                 'initial_responder_participant_id' => (int) $row['initial_responder_id'],
                 'current_responder_participant_id' => !$hasActiveOwner
                     ? null : (int) $state['responder_id'],
+                'last_responder_participant_id' => $state === null
+                    ? null : (int) $state['responder_id'],
                 'state' => $state === null ? 'unknown' : $state['state'],
                 'blocked' => $state === null ? null : (bool) $state['blocked'],
+                'block_event_message_id' => $state === null
+                    || $state['block_event_id'] === null
+                    ? null : (int) $state['block_event_id'],
                 'work_started' => $state === null ? null : (bool) $state['work_started'],
+                'outcome' => $state === null ? null : $state['outcome'],
+                'pending_event_message_id' => $state === null
+                    || !is_array($state['pending'])
+                    ? null : (int) $state['pending']['id'],
+                'pending_target_participant_id' => $state === null
+                    || !is_array($state['pending'])
+                    || !isset($state['pending']['target_id'])
+                    ? null : (int) $state['pending']['target_id'],
+                'pending_proposer_participant_id' => $state === null
+                    || !is_array($state['pending'])
+                    || !isset($state['pending']['proposer_id'])
+                    ? null : (int) $state['pending']['proposer_id'],
                 'acknowledged' => $row['acknowledged_at'] !== null,
                 'latest_evidence_message_id' => $state === null
                     ? null : ($state['last_event_id'] === null

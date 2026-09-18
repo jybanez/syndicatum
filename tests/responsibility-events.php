@@ -162,6 +162,15 @@ try {
     $blocked = responsibilityWrite($repository, $responder, $requestId,
         $responderParticipant, $eventId, 'blocked', 'responsibility-block');
     $blockedId = $blocked['message']['id'];
+    $blockItems = (new ResponsibilityInboxService($pdo))
+        ->page($responder, ['view' => 'blocked'])['data'];
+    $blockItems = array_values(array_filter($blockItems,
+        function ($item) use ($requestId) {
+            return $item['request_message_id'] === $requestId;
+        }));
+    responsibilityAssert(count($blockItems) === 1
+        && $blockItems[0]['block_event_message_id'] === $blockedId,
+        'Inbox did not expose the exact active block reference for a client unblock.');
     responsibilityExpectFailure(function () use ($repository, $owner, $requestId,
         $responderParticipant, $blockedId, $foreignParticipant) {
         responsibilityWrite($repository, $owner, $requestId,
@@ -352,7 +361,8 @@ try {
             return $item['request_message_id'] === $requestId;
         }));
     responsibilityAssert(count($orphanItems) === 1
-        && $orphanItems[0]['current_responder_participant_id'] === null,
+        && $orphanItems[0]['current_responder_participant_id'] === null
+        && $orphanItems[0]['last_responder_participant_id'] === $targetParticipant,
         'Inbox silently restored responsibility after membership reactivation.');
     $orphanOffer = responsibilityWrite($repository, $owner, $requestId,
         $responderParticipant, $addressedEvent['message']['id'],
@@ -364,7 +374,9 @@ try {
             return $item['request_message_id'] === $requestId;
         }));
     responsibilityAssert(count($pendingItems) === 1
-        && $pendingItems[0]['current_responder_participant_id'] === null,
+        && $pendingItems[0]['current_responder_participant_id'] === null
+        && $pendingItems[0]['pending_event_message_id'] === $orphanOffer['message']['id']
+        && $pendingItems[0]['pending_target_participant_id'] === $responderParticipant,
         'Orphaned transfer offer invented a current owner before acceptance.');
     $orphanDecline = responsibilityWrite($repository, $responder, $requestId,
         $responderParticipant, $orphanOffer['message']['id'],
@@ -391,6 +403,23 @@ try {
         'body' => 'Two independent direct responsibilities',
         'direct_participant_ids' => [$responderParticipant, $targetParticipant],
     ]);
+    $resolutionRequest = $repository->createMessage($owner, [
+        'body' => 'Proposed resolution needs a requester decision',
+        'direct_participant_ids' => [$responderParticipant],
+    ]);
+    $resolutionRequestId = $resolutionRequest['message']['id'];
+    $proposal = responsibilityWrite($repository, $responder, $resolutionRequestId,
+        $responderParticipant, $resolutionRequestId,
+        'resolution_proposed', 'responsibility-inbox-resolution-proposal');
+    $resolutionItems = $inbox->page($owner, ['view' => 'resolution_pending'])['data'];
+    $resolutionItems = array_values(array_filter($resolutionItems,
+        function ($item) use ($resolutionRequestId) {
+            return $item['request_message_id'] === $resolutionRequestId;
+        }));
+    responsibilityAssert(count($resolutionItems) === 1
+        && $resolutionItems[0]['pending_event_message_id'] === $proposal['message']['id']
+        && $resolutionItems[0]['pending_proposer_participant_id'] === $responderParticipant,
+        'Inbox did not expose the pending resolution reference and proposer.');
     $beforeRead = $pdo->prepare('SELECT participant_id, seen_at, acknowledged_at
         FROM message_addressees WHERE message_id = ? ORDER BY participant_id');
     $beforeRead->execute([$dual['message']['id']]);
