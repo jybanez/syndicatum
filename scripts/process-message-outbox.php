@@ -59,13 +59,14 @@ try {
 
             $attemptCount = (int) $event['attempt_count'];
             $error = isset($result['error']) ? $result['error'] : 'Realtime publish failed.';
+            $failureCode = isset($result['failure_code']) ? $result['failure_code'] : 'unknown';
             if (empty($result['retryable']) || $attemptCount >= $maxAttempts) {
-                $outbox->markDead($event['id'], $error);
+                $outbox->markDead($event['id'], $error, $failureCode);
                 $batch['dead']++;
                 continue;
             }
 
-            $outbox->markRetry($event['id'], $error, MessageOutbox::retryDelay($attemptCount));
+            $outbox->markRetry($event['id'], $error, MessageOutbox::retryDelay($attemptCount), $failureCode);
             $batch['retried']++;
         }
 
