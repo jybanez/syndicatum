@@ -5,6 +5,7 @@ require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/ProjectRepository.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/ResponsibilityInboxService.php';
+require_once dirname(__DIR__) . '/src/ResponsibilityMigrationAssessment.php';
 
 function responsibilityAssert($condition, $message)
 {
@@ -411,6 +412,44 @@ try {
         && $legacyPage['data'][0]['request_message_id'] === $old['message']['id']
         && $legacyPage['data'][0]['projection_error'] === 'RESPONSIBILITY_BASELINE_UNAVAILABLE',
         'Historical direct message was silently assigned a responsibility state.');
+    $assessment = (new ResponsibilityMigrationAssessment($pdo))->report($projectId);
+    responsibilityAssert($assessment['unverified_baselines'] === 1
+        && $assessment['events_on_unverified_baselines'] === 0
+        && $assessment['direct_items']
+            === $assessment['verified_baselines'] + $assessment['unverified_baselines'],
+        'Read-only migration assessment miscounted or invented baseline evidence.');
+    responsibilityAssert($assessment['current_addressee_validity']
+        === ['active' => 1, 'inactive' => 0, 'missing' => 0],
+        'Preflight misclassified an active current addressee.');
+    $emptyAssessment = (new ResponsibilityMigrationAssessment($pdo))
+        ->report($foreignProjectId);
+    responsibilityAssert($emptyAssessment['unverified_baselines'] === 0
+        && $emptyAssessment['current_addressee_validity']
+            === ['active' => 0, 'inactive' => 0, 'missing' => 0]
+        && $emptyAssessment['unverified_range']['oldest_project_sequence'] === null,
+        'Preflight misreported a project without unverified direct work.');
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE project_participants SET status = ? WHERE id = ?')
+            ->execute(['removed', $responderParticipant]);
+        responsibilityAssert((new ResponsibilityMigrationAssessment($pdo))
+            ->report($projectId)['current_addressee_validity']['inactive'] === 1,
+            'Preflight missed an inactive current addressee.');
+    } finally {
+        $pdo->rollBack();
+    }
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE message_addressees SET participant_id = ?
+            WHERE message_id = ? AND participant_id = ?')
+            ->execute([$foreignParticipant, $old['message']['id'],
+                $responderParticipant]);
+        responsibilityAssert((new ResponsibilityMigrationAssessment($pdo))
+            ->report($projectId)['current_addressee_validity']['missing'] === 1,
+            'Preflight missed a cross-project/missing current addressee.');
+    } finally {
+        $pdo->rollBack();
+    }
 
     $cursor = null;
     $keys = [];

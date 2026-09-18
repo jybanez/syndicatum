@@ -186,7 +186,7 @@ paths:
   /api/v1/project-responsibility-inbox.php:
     get:
       summary: Derive responsibility items from canonical direct messages and events
-      description: Read-only; no mutable inbox status. A page scans at most limit direct-request addressee rows, so a filtered page may contain fewer items than limit while has_more remains true. Historical rows without a verified membership-generation baseline are returned as unknown.
+      description: Read-only; no mutable inbox status. The project-bound keyset cursor prevents duplicate source rows when newer messages prepend, but this is a live projection, not a snapshot of event, membership, or acknowledgement state; clients should restart pagination after a relevant Realtime change or refresh. A page scans at most limit direct-request addressee rows, so a filtered page may contain fewer items than limit while has_more remains true. Historical rows without a verified membership-generation baseline are returned as unknown.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 50 } }
