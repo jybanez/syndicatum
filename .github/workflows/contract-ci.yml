@@ -116,6 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           php tests/migrations.php | tee ci-evidence/migrations.txt
+          php tests/expansion.php | tee ci-evidence/expansion.txt
           php tests/agent-activation.php | tee ci-evidence/agent-activation.txt
           php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
