@@ -358,6 +358,8 @@ and confirmation-time revalidation of the stored project/agent IDs have passing
 source tests and required PR checks. The Companion candidate now keeps the
 canonical bound server, project, and agent visible after confirmation and
 separates successful binding from submission of an MCP status-check request.
+The Commercial Assessor accepted that post-bind identity and status behavior
+at source/CI scope, not as an installed-client result.
 These are not installed-client or published-artifact results. The items below
 remain open until the actual Companion/discussion flow, usability, identity
 isolation, and exact release bytes are accepted.
