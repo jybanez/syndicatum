@@ -221,8 +221,9 @@ class ResponsesApiActivationService
         $status = $exception instanceof ResponsesApiHttpException ? $exception->status() : null;
         $code = DeliveryFailureTaxonomy::fromException($exception, $status);
         $error = DeliveryFailureTaxonomy::safeSummary($code, $status);
-        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, response_id = NULL, response_state = NULL, last_error = ?, last_failure_code = ? WHERE id = ? AND status IN ('sending', 'waiting')")
-            ->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, $code, (int) $row['id']]);
+        $providerState = $exception instanceof DeliveryProviderStateException ? $exception->state() : null;
+        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, response_id = NULL, response_state = ?, last_error = ?, last_failure_code = ? WHERE id = ? AND status IN ('sending', 'waiting')")
+            ->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $providerState, $error, $code, (int) $row['id']]);
         $this->pdo->prepare('UPDATE agent_activation_bindings SET responses_last_failure_at = ?, responses_last_error = ? WHERE project_id = ? AND agent_id = ?')
             ->execute([Db::now(), $error, (int) $row['project_id'], (int) $row['agent_id']]);
     }

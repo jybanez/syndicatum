@@ -4,13 +4,16 @@ require_once dirname(__DIR__) . '/src/DeliveryFailureTaxonomy.php';
 
 $expected = [
     0 => 'transport', 401 => 'authentication', 403 => 'authentication',
-    404 => 'routing', 408 => 'timeout', 429 => 'rate_limiting',
+    404 => 'rejected', 408 => 'timeout', 429 => 'rate_limiting',
     503 => 'upstream_error', 422 => 'rejected',
 ];
 foreach ($expected as $status => $code) {
     if (DeliveryFailureTaxonomy::fromHttpStatus($status) !== $code) {
         throw new RuntimeException('Unexpected delivery category for HTTP ' . $status);
     }
+}
+if (DeliveryFailureTaxonomy::fromHttpStatus(404, 'realtime') !== 'routing') {
+    throw new RuntimeException('Realtime ingress routing failure lost its category.');
 }
 if (DeliveryFailureTaxonomy::fromException(new DeliveryTransportException('timeout')) !== 'timeout') {
     throw new RuntimeException('A transport timeout lost its category.');

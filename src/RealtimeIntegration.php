@@ -324,7 +324,7 @@ class RealtimeIntegration
 
     public static function publishFailureCode($status)
     {
-        return DeliveryFailureTaxonomy::fromHttpStatus($status);
+        return DeliveryFailureTaxonomy::fromHttpStatus($status, 'realtime');
     }
 
     private function requiredSetting($key)
