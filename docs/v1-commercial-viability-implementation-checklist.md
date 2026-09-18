@@ -545,11 +545,20 @@ then the two-identity positive path in #2783. At exact head `af483a3`, CI run
 `35389996471` passed all required jobs, allowing the historical `Previously
 blocked` label correction at source/CI scope (#2785); it is not yet verified
 in an installed image containing that head. The checkboxes below remain
-unchecked pending full evidence. Next installed checks include reload/reopen
-reconstruction and exact evidence linkage/no duplicate after retry, 409 and
-unchanged-key retry UX, transfer/orphan and dispute/reopen paths, realistic
+unchecked pending full evidence. The next installed checks include HTTP 409
+conflict/recovery UX, transfer/orphan and dispute/reopen paths, realistic
 pagination/history and unknown baseline, edit/tombstone navigation, mobile,
 keyboard/focus accessibility, and the resolved historical-label recheck.
+
+At exact head `5e6ea70`, a second isolated installed-client probe recorded
+owner withdrawal reconstructed after browser reload, exact request `#1` to
+evidence `#2` linkage, and a same-key/same-content retry returning the original
+message without a duplicate. The same item was then reopened with evidence
+`#3`, and an installed API write using stale event `#2` correctly returned
+HTTP 409 without changing the one open item. See [the installed acceptance
+record](v1-responsibility-installed-acceptance-2026-09-19.md). This narrows the
+reload/linkage/replay and server conflict evidence only; browser conflict
+recovery UX and the remaining installed-client cases above are still open.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

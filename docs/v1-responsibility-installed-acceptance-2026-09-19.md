@@ -60,9 +60,50 @@ The source client now renders `Previously blocked` for this retained historical
 flag, with a unit test. That wording refinement has **not** been rechecked in
 an installed image yet.
 
-These observations exercise an authenticated installed browser against a
-running Docker app and database. The source/CI workflow for the same commit
-also passed `source-contract`, `security-inventory`, and Docker
+## Exact-head reload, linkage, and same-key retry probe
+
+A separate isolated Docker install used the Git archive of exact PR #6 head
+`5e6ea70a0161fcbd27a8b0da1f0d08f74990b6fa`, image
+`syndicatum-acceptance-next-5e6ea70-app:acceptance`, Compose project
+`syndicatum-acceptance-next-5e6ea70`, and local-only port `127.0.0.1:18083`.
+Health reported core `ok`, database connected, and expanded schema available.
+The source/CI jobs for this head passed in GitHub Actions run `35390835429`.
+This was new synthetic data, not a continuation of the earlier install.
+
+1. Through the installed browser UI, a synthetic owner created a project and
+   agent, then sent one direct request to that agent. The owner’s `Waiting on
+   others` view reconstructed exactly one open item, `Request #1`, linked to
+   the canonical request message `#1`.
+2. The owner withdrew it through the Inbox with an evidence note. The waiting
+   view became empty; `Resolved` showed the same `Request #1` with `Request
+   withdrawn, not completed` and links to both original and latest evidence.
+3. After a full browser reload and reopening the Inbox, `Resolved` still
+   contained exactly that one withdrawn request. The server’s resolved view
+   showed `request_message_id=1`, `state=resolved`, `outcome=withdrawn`, and
+   `latest_evidence_message_id=2` (project sequence 2). The timeline showed
+   the original direct request and one withdrawal evidence message.
+4. Retrying the exact withdrawal POST with unchanged content and the original
+   idempotency key returned HTTP 200, `idempotent_replay=true`, and the same
+   canonical message `#2` at project sequence 2. A subsequent timeline query
+   still returned exactly two messages, with no duplicate withdrawal event.
+5. The owner reopened that resolved item through the installed Inbox with a
+   note. `Resolved` became empty and `Waiting on others` showed the same
+   `Request #1` as open, with latest evidence `#3` at project sequence 3.
+   Reopening did not create another request item.
+6. An authenticated API write against this installed stack deliberately used
+   stale `expected_event_id=2` after the reopen. It returned HTTP 409 with
+   `RESPONSIBILITY_CONFLICT` and an instruction to reload the latest event.
+   A fresh Inbox read still showed one open request, latest evidence `#3`;
+   the rejected stale action did not advance the projection. This is server
+   conflict behavior only, not a browser UX acceptance test.
+
+This confirms only the tested owner-side reload/linkage and same-key replay
+path. It does not establish stale-conflict recovery UX, responder-side
+dispute/transfer, pagination/history, or accessibility acceptance.
+
+Both probes exercised an authenticated installed browser against a running
+Docker app and database. The source/CI workflow for the first probe's commit
+`7f69fda` also passed `source-contract`, `security-inventory`, and Docker
 `source-acceptance` in GitHub Actions run `35381942910`.
 
 ## Still open
@@ -70,7 +111,9 @@ also passed `source-contract`, `security-inventory`, and Docker
 - Responder-side dispute, handoff, orphaned/transfer, and reopened flows under
   independently authenticated identities. The observed acknowledge/start/
   blocked/propose/accept sequence is only one path through the matrix.
-- Stale HTTP 409 conflict UX and same-key retry proof in the installed client.
+- Stale HTTP 409 conflict UX and retry recovery in the installed client. The
+  unchanged-key retry of one successful withdrawal and an installed API 409
+  rejection are covered above, but do not prove browser recovery UX.
 - Paginated multi-project/no-duplication behavior and historical/unknown data.
 - Evidence navigation after edit and soft-delete, including an offscreen row.
 - Responsive-density, keyboard, focus, and screen-reader acceptance on the
