@@ -199,14 +199,14 @@ class RealtimeIntegration
                 'status' => 'rejected',
                 'retryable' => false,
                 'http_status' => null,
-                'error' => $exception->getMessage(),
+                'error' => 'Realtime publish request was invalid.',
             ];
         } catch (Exception $exception) {
             return [
                 'status' => 'failed',
                 'retryable' => true,
                 'http_status' => null,
-                'error' => $exception->getMessage(),
+                'error' => 'Realtime publish failed before a response was received.',
             ];
         }
     }
@@ -308,18 +308,12 @@ class RealtimeIntegration
     private function safeResponseError(array $response)
     {
         if (!empty($response['transport_error'])) {
-            return substr((string) $response['transport_error'], 0, 400);
-        }
-        $decoded = json_decode(isset($response['body']) ? (string) $response['body'] : '', true);
-        if (is_array($decoded)) {
-            if (isset($decoded['reason']) && trim((string) $decoded['reason']) !== '') {
-                return 'Realtime rejected the event: ' . substr((string) $decoded['reason'], 0, 300);
-            }
-            if (isset($decoded['message']) && trim((string) $decoded['message']) !== '') {
-                return substr((string) $decoded['message'], 0, 400);
-            }
+            return 'Realtime publish transport failed.';
         }
         $status = isset($response['status']) ? (int) $response['status'] : 0;
+        // Remote reason/message bodies and transport exceptions are untrusted.
+        // The worker persists this string in outbox diagnostics, so only keep
+        // a bounded numeric status that cannot echo credentials or message text.
         return $status > 0 ? ('Realtime publish returned HTTP ' . $status . '.') : 'Realtime publish failed.';
     }
 
