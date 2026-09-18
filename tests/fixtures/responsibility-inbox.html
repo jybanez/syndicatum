@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Responsibility Inbox visual fixture</title>
+<link rel="stylesheet" href="../../assets/app.css">
+<style>
+  :root { --ui-text: #eef4ff; --ui-muted: #a9bbd9; --ui-border-strong: #6485ba; --ui-radius-sm: 8px; --ui-font: system-ui, sans-serif; }
+  body { overflow: auto; padding: 16px; }
+  main { max-width: 870px; margin: auto; }
+  .ui-input, .ui-button { padding: 8px 10px; border: 1px solid #6485ba; border-radius: 8px; color: #eef4ff; background: #172943; }
+  .ui-button { cursor: pointer; }
+</style>
+<main>
+  <h1>Responsibility Inbox</h1>
+  <div id="fixture-host"></div>
+</main>
+<script type="module">
+  import { createResponsibilityInbox } from "../../assets/responsibility-inbox.mjs";
+  const people = [
+    { id: 10, display_name: "Requester Maya", status: "active" },
+    { id: 20, display_name: "Responder Joel", status: "active" },
+    { id: 30, display_name: "New responder", status: "active" },
+  ];
+  const base = { project_id: 2, request_created_at: "2026-09-19 08:00:00",
+    requester_participant_id: 10, initial_responder_participant_id: 20,
+    current_responder_participant_id: 20, last_responder_participant_id: 20,
+    block_event_message_id: null, pending_event_message_id: null,
+    pending_target_participant_id: null, pending_proposer_participant_id: null,
+    blocked: false, work_started: false, acknowledged: false, outcome: null };
+  const rows = [
+    { ...base, request_message_id: 108, latest_evidence_message_id: 108, state: "open" },
+    { ...base, request_message_id: 107, latest_evidence_message_id: 109,
+      block_event_message_id: 109, blocked: true, work_started: true, state: "open" },
+    { ...base, request_message_id: 106, latest_evidence_message_id: 110,
+      pending_event_message_id: 110, pending_proposer_participant_id: 20,
+      state: "resolution_pending" },
+    { ...base, request_message_id: 105, latest_evidence_message_id: 111,
+      current_responder_participant_id: null, pending_event_message_id: 111,
+      pending_target_participant_id: 30, state: "transfer_pending" },
+    { ...base, request_message_id: 104, latest_evidence_message_id: 112,
+      current_responder_participant_id: null, state: "orphaned" },
+    { ...base, request_message_id: 103, latest_evidence_message_id: 103,
+      current_responder_participant_id: null, last_responder_participant_id: null,
+      blocked: null, work_started: null, state: "unknown",
+      projection_error: "RESPONSIBILITY_BASELINE_UNAVAILABLE" },
+  ];
+  const inbox = createResponsibilityInbox(document.getElementById("fixture-host"), {
+    participants: () => people,
+    actorId: () => 20,
+    moderator: () => false,
+    newKey: () => crypto.randomUUID(),
+    async fetchPage(view) {
+      const data = view === "all" ? rows : rows.filter((row) => {
+        if (view === "mine") return row.current_responder_participant_id === 20;
+        if (view === "unacknowledged") return !row.acknowledged && row.initial_responder_participant_id === 20;
+        if (view === "waiting_on_others") return row.requester_participant_id === 20;
+        return row.state === view || (view === "blocked" && row.blocked);
+      });
+      return { data, page: { older_cursor: null, has_more: false } };
+    },
+    async writeEvent() { throw Object.assign(new Error("Visual fixture: no write sent."), { status: 422 }); },
+    async acknowledge() { throw new Error("Visual fixture: no acknowledgement sent."); },
+    openMessage: (id) => alert(`Visual fixture canonical message #${id}`),
+  });
+  await inbox.load();
+</script>
+</html>

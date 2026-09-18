@@ -79,6 +79,10 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                         <span class="app-visually-hidden" id="status-badge" aria-live="polite">Loading</span>
                         <span class="app-visually-hidden" id="timeline-count" aria-live="polite">0 messages</span>
                         <span class="app-visually-hidden" id="connection-label">HTTP</span>
+                        <div class="project-view-switch" id="project-view-switch" role="group" aria-label="Project view" hidden>
+                            <button type="button" class="ui-button ui-button-ghost is-active" id="show-timeline" aria-pressed="true">Timeline</button>
+                            <button type="button" class="ui-button ui-button-ghost" id="show-responsibility" aria-pressed="false">Responsibility Inbox</button>
+                        </div>
                     </header>
                     <section class="composer-shell" id="composer-shell" hidden aria-label="Compose message">
                         <div class="reply-context" id="reply-context" hidden></div>
@@ -88,7 +92,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                         </div>
                         <div id="composer-host"></div>
                     </section>
-                    <section class="filter-bar" aria-label="Timeline filters">
+                    <section class="filter-bar" id="timeline-filter-bar" aria-label="Timeline filters">
                         <div id="search-mount" class="app-search"></div>
                         <div class="filter-bar-actions">
                             <button type="button" class="ui-button ui-button-ghost timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
@@ -121,7 +125,8 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                         </div>
                     </section>
                     <div class="timeline-notice" id="timeline-notice" hidden></div>
-                    <div class="timeline-scroll"><div id="timeline-host"></div></div>
+                    <div class="timeline-scroll" id="timeline-scroll"><div id="timeline-host"></div></div>
+                    <div class="responsibility-scroll" id="responsibility-host" hidden></div>
                 </section>
             </section>
 
