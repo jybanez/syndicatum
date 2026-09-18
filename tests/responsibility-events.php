@@ -453,6 +453,7 @@ try {
 
     $cursor = null;
     $keys = [];
+    $newerDuringPaging = null;
     do {
         $filters = ['limit' => 1];
         if ($cursor !== null) {
@@ -464,11 +465,25 @@ try {
                 . $item['initial_responder_participant_id'];
         }
         $cursor = $page['page']['older_cursor'];
+        if ($newerDuringPaging === null) {
+            $newerDuringPaging = $repository->createMessage($owner, [
+                'body' => 'New direct request while older inbox pages are read',
+                'direct_participant_ids' => [$responderParticipant],
+            ]);
+        }
     } while ($page['page']['has_more']);
     responsibilityAssert(count($keys) === count(array_unique($keys))
         && in_array($dual['message']['id'] . ':' . $responderParticipant, $keys, true)
         && in_array($dual['message']['id'] . ':' . $targetParticipant, $keys, true),
         'Inbox cursor duplicated or omitted one direct addressee of a message.');
+    $newerKey = $newerDuringPaging['message']['id'] . ':' . $responderParticipant;
+    responsibilityAssert(!in_array($newerKey, $keys, true),
+        'A newer direct request slipped into an older keyset page.');
+    $freshPage = $inbox->page($owner, ['limit' => 1]);
+    responsibilityAssert(count($freshPage['data']) === 1
+        && $freshPage['data'][0]['request_message_id']
+            === $newerDuringPaging['message']['id'],
+        'A fresh inbox page did not surface a direct request added during pagination.');
     responsibilityExpectFailure(function () use ($inbox, $foreign, $cursor) {
         $inbox->page($foreign, ['before' => $cursor]);
     }, 'Invalid inbox cursor.');
