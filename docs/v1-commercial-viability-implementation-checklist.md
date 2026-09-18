@@ -292,12 +292,15 @@ retained results that identify that revision, and a required branch/release
 check. GitHub branch protection on `main` now requires pull requests and the
 up-to-date `source-contract` and `docker-source-acceptance` GitHub Actions
 checks, including for administrators; force-push and deletion are disabled.
-[Draft PR 1](https://github.com/jybanez/syndicatum/pull/1) is the current
-candidate, not an approved merge or release. Portable fixture results must
-remain labeled separately from installed client evidence; the required
-release path must test at least one database mode/configuration representative
-of the supported production deployment, including strict SQL behavior; permissive
-local defaults alone are insufficient.
+[PR 2](https://github.com/jybanez/syndicatum/pull/2) is the current
+protected-main candidate; it is open with required checks passing, not an
+approved merge or release. Onboarding and delivery follow-ups remain separate
+draft [PR 4](https://github.com/jybanez/syndicatum/pull/4) and
+[PR 5](https://github.com/jybanez/syndicatum/pull/5). Portable fixture
+results must remain labeled separately from installed client evidence. The
+required release path must test at least one database mode/configuration
+representative of the supported production deployment, including strict SQL
+behavior; permissive local defaults alone are insufficient.
 
 - [x] Select `AGPL-3.0-only`, publish the canonical license text, and document
       the open-core boundary. Legal review and the third-party license inventory
@@ -378,10 +381,15 @@ retry/terminal state for one message. Webhook, Workspace Agent, and Responses
 API delivery rows now use the same bounded HTTP/transport categories where
 their evidence aligns, while retaining provider-specific queue states. This
 is mapped in the [cross-provider taxonomy](v1-delivery-failure-taxonomy.md).
-It is source/CI scope only, not completion of live cross-provider delivery or
-operational recovery. Commercial Assessor accepted the shared taxonomy and
-administrator Delivery health surface as bounded source/CI sub-items; neither
-acceptance establishes a published or installed release.
+Commercial Assessor accepted the shared taxonomy, administrator Delivery
+health surface, and real-worker recovery exercise as bounded source/isolated-
+candidate sub-items in project messages 2618, 2629, and 2637. The terminal-
+recency correction at `adfc48e` was accepted at source/candidate scope in
+message 2644; [run 35327128084](https://github.com/jybanez/syndicatum/actions/runs/35327128084)
+passed source-contract, archived-candidate Docker/MySQL 5.7 acceptance, and
+security-inventory jobs. These acceptances do not establish a published or
+installed release, a live production receiver, or live Workspace/Responses
+activation.
 The host-only operational command now includes a bounded 50-row diagnostic
 sample per path, separating last failed attempt from current path state. This
 operator-CLI increment is now complemented by an authenticated, read-only
@@ -389,13 +397,15 @@ administrator Delivery health surface. Its source/CI tests cover role gating,
 retry/category separation, missing worker telemetry, and content-free output;
 an isolated local-browser smoke showed the administrator route rendering all
 four paths and an unknown worker state against a fresh test database. The
-temporary database and server were removed afterward. Published/installed
-visual and real operational recovery evidence is still required before the
-full observability gate can close. The isolated Docker acceptance harness
-exercises a stopped delivery worker, an aging Realtime queue, worker restart,
-and a unique ingress receipt; it now also checks the administrator Delivery
+temporary database and server were removed afterward. The isolated Docker
+acceptance harness exercises a stopped delivery worker, an aging Realtime
+queue, worker restart, and a unique ingress receipt. It also checks the
+administrator Delivery
 health endpoint on both sides of that transition. This remains isolated
 candidate evidence, not a production receiver or published-artifact claim.
+P0.6 remains open for the same health and recovery checks on the exact
+published RC bytes, with artifact hash/provenance, after the protected-main
+merge and release path becomes available.
 
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.
