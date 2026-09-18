@@ -10,6 +10,7 @@ x-syndicatum-environment: &syndicatum-environment
   SYNDICATUM_MASTER_KEY: ${SYNDICATUM_MASTER_KEY:?Set SYNDICATUM_MASTER_KEY in .env}
   SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST: ${SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST:-}
   SYNDICATUM_AVATAR_DIR: /var/lib/syndicatum/avatars
+  SYNDICATUM_WORKER_STALE_SECONDS: ${SYNDICATUM_WORKER_STALE_SECONDS:-120}
   TZ: ${TZ:-UTC}
 
 services:
@@ -106,7 +107,7 @@ services:
     volumes:
       - syndicatum_avatars:/var/lib/syndicatum/avatars
     healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/syndicatum-worker-heartbeat && find /tmp/syndicatum-worker-heartbeat -mmin -2 -print -quit | grep -q ."]
+      test: ["CMD-SHELL", "test -f /tmp/syndicatum-worker-heartbeat && test $$(($$(date +%s) - $$(stat -c %Y /tmp/syndicatum-worker-heartbeat))) -le $${SYNDICATUM_WORKER_STALE_SECONDS:-120}"]
       interval: 30s
       timeout: 5s
       retries: 3
