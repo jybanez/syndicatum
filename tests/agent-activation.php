@@ -285,6 +285,35 @@ try {
         $suite->same(null, $service->context($access, $cancel['binding_context_id']));
         $suite->same('revoked', $service->contextHealth($access, $cancel['binding_context_id'])['state']);
 
+        $revokedAccess = $service->prepare($access, 'Activation Project', 'No Access Agent');
+        $pdo->prepare("UPDATE project_members SET status = 'removed' WHERE project_id = ? AND user_id = ?")
+            ->execute([$project['id'], $owner['id']]);
+        $suite->throws(function () use ($service, $device, $revokedAccess) {
+            $service->confirm($device, $revokedAccess['intent_id'], 'https://chatgpt.com/c/revoked_access');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'No Access Agent'")->fetchColumn());
+        $pdo->prepare("UPDATE project_members SET status = 'active' WHERE project_id = ? AND user_id = ?")
+            ->execute([$project['id'], $owner['id']]);
+        $service->cancel($device, $revokedAccess['intent_id']);
+
+        $staleAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $pdo->prepare("UPDATE project_participants SET status = 'suspended' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $suite->throws(function () use ($service, $device, $staleAgent) {
+            $service->confirm($device, $staleAgent['intent_id'], 'https://chatgpt.com/c/stale_agent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $pdo->prepare("UPDATE project_participants SET status = 'active' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $service->cancel($device, $staleAgent['intent_id']);
+
+        $expired = $service->prepare($access, 'Activation Project', 'Expired Agent');
+        $pdo->prepare("UPDATE connector_discussion_binding_intents SET expires_at = DATE_SUB(?, INTERVAL 1 SECOND) WHERE id = ?")
+            ->execute([Db::now(), $expired['intent_id']]);
+        $suite->throws(function () use ($service, $device, $expired) {
+            $service->confirm($device, $expired['intent_id'], 'https://chatgpt.com/c/expired_intent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Expired Agent'")->fetchColumn());
+
         $normalized = $service->prepare($access, 'ACTIVATION   project', 'oAuTh   Placeholder');
         $suite->same('Activation Project', $normalized['project']['name']);
         $suite->same('OAuth Placeholder', $normalized['agent']['name']);

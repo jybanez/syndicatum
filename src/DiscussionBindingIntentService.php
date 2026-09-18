@@ -154,6 +154,24 @@ class DiscussionBindingIntentService
             if (!$intent || $intent['status'] !== 'pending' || strtotime($intent['expires_at']) <= time()) {
                 throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT');
             }
+            // Resolve the stored IDs only. A pending intent must not outlive the
+            // user's management access or the selected project/agent identity.
+            $access = $this->pdo->prepare("SELECT p.id FROM projects p
+                JOIN project_members pm ON pm.project_id = p.id
+                WHERE p.id = ? AND p.status = 'active' AND pm.user_id = ?
+                  AND pm.status = 'active' AND pm.role IN ('owner','admin') FOR UPDATE");
+            $access->execute([(int) $intent['project_id'], (int) $device['user_id']]);
+            if (!$access->fetch()) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
+            if ($intent['requested_agent_id'] !== null) {
+                $agent = $this->pdo->prepare("SELECT pa.agent_id FROM project_agents pa
+                    JOIN chat_agents a ON a.id = pa.agent_id
+                    JOIN project_participants pp ON pp.project_id = pa.project_id
+                        AND pp.agent_id = pa.agent_id AND pp.kind = 'agent'
+                    WHERE pa.project_id = ? AND pa.agent_id = ? AND pa.status = 'active'
+                      AND pa.provider = 'chatgpt' AND a.is_active = 1 AND pp.status = 'active' FOR UPDATE");
+                $agent->execute([(int) $intent['project_id'], (int) $intent['requested_agent_id']]);
+                if (!$agent->fetch()) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
+            }
             $conflict = $this->pdo->prepare("SELECT COUNT(*) FROM agent_activation_bindings
                 WHERE runtime_type = 'chatgpt' AND activation_driver = 'browser_companion' AND conversation_id = ?
                   AND enabled = 1 AND created_by_user_id = ? AND (? IS NULL OR agent_id <> ?)");
