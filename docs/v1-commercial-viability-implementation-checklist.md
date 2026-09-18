@@ -361,6 +361,9 @@ separates successful binding from submission of an MCP status-check request.
 These are not installed-client or published-artifact results. The items below
 remain open until the actual Companion/discussion flow, usability, identity
 isolation, and exact release bytes are accepted.
+The installed-client test procedure is
+[`v1-companion-installed-acceptance.md`](v1-companion-installed-acceptance.md);
+it is not a passing acceptance record.
 
 - [ ] Preserve pre-binding confidentiality: an unbound discussion cannot
       enumerate projects or participant identities.

@@ -64,6 +64,8 @@ test("MCP binding intents require an in-discussion Continue or Cancel confirmati
   assert.match(content, /adapter\.deliver\(prompt\)/);
   assert.match(content, /Retry status check/);
   assert.match(content, /data-field="server"/);
+  assert.match(content, /intent\.agent_name} \(ID \$\{intent\.agent_id}/);
+  assert.match(content, /intent\.agent_name} \(new agent\)/);
   assert.match(content, /binding\?\.project_name/);
   assert.match(content, /binding\?\.agent_name/);
   assert.match(content, /Status check submitted in this discussion/);

@@ -50,7 +50,8 @@
     panel.querySelector('[data-field="server"]').textContent = intent.server_url || "Syndicatum server";
     panel.querySelector('[data-field="discussion"]').textContent = `${document.title || "ChatGPT discussion"} — ${location.origin}${location.pathname}`;
     panel.querySelector('[data-field="project"]').textContent = `${intent.project_name} (ID ${intent.project_id})`;
-    panel.querySelector('[data-field="agent"]').textContent = intent.agent_name;
+    panel.querySelector('[data-field="agent"]').textContent = intent.agent_id
+      ? `${intent.agent_name} (ID ${intent.agent_id})` : `${intent.agent_name} (new agent)`;
     panel.querySelector('[data-field="action"]').textContent = intent.agent_action === "create" ? "Create this ChatGPT agent" : "Use the existing ChatGPT agent";
     shadow.appendChild(panel);
     document.documentElement.appendChild(host);
