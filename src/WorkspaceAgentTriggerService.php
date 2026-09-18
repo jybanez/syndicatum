@@ -177,7 +177,7 @@ class WorkspaceAgentTriggerService
         try {
             $updated = $this->pdo->prepare(
                 "UPDATE workspace_agent_trigger_deliveries SET status = 'succeeded', response_status = 202,
-                    run_id = ?, conversation_url = ?, last_error = NULL, last_failure_code = NULL, delivered_at = ? WHERE id = ? AND status = 'sending'"
+                    run_id = ?, conversation_url = ?, last_error = NULL, last_failure_code = NULL, delivered_at = ?, terminal_at = NULL WHERE id = ? AND status = 'sending'"
             );
             $updated->execute([$runId, $conversationUrl, $now, (int) $row['id']]);
             if ($updated->rowCount() !== 1) { $this->pdo->rollBack(); return false; }
@@ -230,8 +230,8 @@ class WorkspaceAgentTriggerService
         $code = DeliveryFailureTaxonomy::fromException($exception, $status);
         $error = DeliveryFailureTaxonomy::safeSummary($code, $status);
         $this->pdo->prepare(
-            "UPDATE workspace_agent_trigger_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, last_error = ?, last_failure_code = ? WHERE id = ? AND status = 'sending'"
-        )->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, $code, (int) $row['id']]);
+            "UPDATE workspace_agent_trigger_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, last_error = ?, last_failure_code = ?, terminal_at = ? WHERE id = ? AND status = 'sending'"
+        )->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, $code, $dead ? Db::now() : null, (int) $row['id']]);
         $this->pdo->prepare(
             'UPDATE agent_activation_bindings SET workspace_agent_last_failure_at = ?, workspace_agent_last_error = ? WHERE project_id = ? AND agent_id = ?'
         )->execute([Db::now(), $error, (int) $row['project_id'], (int) $row['agent_id']]);

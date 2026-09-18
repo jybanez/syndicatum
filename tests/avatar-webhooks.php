@@ -124,6 +124,23 @@ try {
         $suite->true(strpos(json_encode($report), 'Notify both agents') === false);
         $suite->true(strpos(json_encode($report), 'signing_secret') === false);
     });
+    $suite->test('recent terminal transition is counted even when the delivery was created earlier', function () use ($suite, $pdo) {
+        $row = $pdo->query("SELECT id, created_at FROM agent_webhook_deliveries WHERE status = 'retry' LIMIT 1")
+            ->fetch(PDO::FETCH_ASSOC);
+        $suite->true((bool) $row, 'Expected retrying webhook fixture.');
+        try {
+            $pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'dead',
+                created_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY), terminal_at = UTC_TIMESTAMP()
+                WHERE id = ?")->execute([(int) $row['id']]);
+            $health = AdminDeliveryHealth::snapshot($pdo);
+            $suite->same(1, $health['paths']['webhook']['terminal_last_24h']);
+            $suite->same('degraded', $health['paths']['webhook']['state']);
+            $suite->same('unknown', $health['state']); // Worker heartbeat is absent in this fixture.
+        } finally {
+            $pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'retry', created_at = ?,
+                terminal_at = NULL WHERE id = ?")->execute([$row['created_at'], (int) $row['id']]);
+        }
+    });
     $suite->test('administrator health does not hide a stale worker or missing diagnostics', function () use ($suite, $pdo) {
         $pdo->exec("INSERT INTO delivery_worker_heartbeats (worker_name, last_success_at)
             VALUES ('delivery', DATE_SUB(UTC_TIMESTAMP(), INTERVAL 180 SECOND))");
