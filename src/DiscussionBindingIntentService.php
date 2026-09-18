@@ -190,6 +190,12 @@ class DiscussionBindingIntentService
             $configured = (new AgentActivationService($this->pdo))->configure((int) $intent['project_id'], $agentId,
                 (int) $device['user_id'], ['provider' => 'chatgpt', 'activation_driver' => 'browser_companion',
                     'enabled' => true, 'discussion_reference' => $normalized['canonical_reference'], 'working_directory' => '']);
+            $names = $this->pdo->prepare('SELECT p.name AS project_name, pa.display_name AS agent_name
+                FROM projects p JOIN project_agents pa ON pa.project_id = p.id
+                WHERE p.id = ? AND pa.agent_id = ? LIMIT 1');
+            $names->execute([(int) $intent['project_id'], $agentId]);
+            $confirmedNames = $names->fetch(PDO::FETCH_ASSOC);
+            if (!$confirmedNames) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
             $this->pdo->prepare("UPDATE connector_discussion_binding_intents SET status = 'confirmed', confirmed_agent_id = ?,
                 discussion_id = ?, discussion_reference = ?, resolved_by_device_id = ?, resolved_at = ? WHERE id = ?")
                 ->execute([$agentId, $normalized['discussion_id'], $normalized['canonical_reference'], $device['id'], Db::now(), $intent['id']]);
@@ -197,7 +203,9 @@ class DiscussionBindingIntentService
                 'project_id' => (int) $intent['project_id'], 'intent_id' => $intent['id'], 'device_id' => $device['id'],
             ]);
             $this->pdo->commit();
-            return $configured + ['intent_id' => $intent['id'], 'discussion_binding' => 'Successful', 'device_id' => $device['id']];
+            return $configured + ['intent_id' => $intent['id'], 'discussion_binding' => 'Successful',
+                'project_name' => $confirmedNames['project_name'], 'agent_name' => $confirmedNames['agent_name'],
+                'device_id' => $device['id']];
         } catch (Exception $exception) {
             if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $exception;

@@ -251,6 +251,8 @@ try {
             ->execute(['realtime.enabled', 'true', Db::now()]);
         $confirmed = $service->confirm($device, $prepared['intent_id'], 'https://chatgpt.com/c/intent_created_agent?model=test');
         $suite->same('Successful', $confirmed['discussion_binding']);
+        $suite->same('Activation Project', $confirmed['project_name']);
+        $suite->same('Intent Created Agent', $confirmed['agent_name']);
         $suite->same(true, $confirmed['enabled']);
         $participantEvent = $pdo->query("SELECT event_type, payload_json FROM message_events_outbox
             WHERE event_type = 'syndicatum.participants.changed' ORDER BY id DESC LIMIT 1")->fetch();
@@ -355,6 +357,8 @@ try {
             ->execute([$project['id'], $placeholder['agent_id']]);
         $bound = $service->confirm($device, $stableIds['intent_id'], 'https://chatgpt.com/c/stable_ids');
         $suite->same((int) $placeholder['agent_id'], $bound['agent_id']);
+        $suite->same('Activation Project', $bound['project_name']);
+        $suite->same('Renamed After Preparation', $bound['agent_name']);
         $suite->same((int) $placeholder['agent_id'], $service->context($access, $stableIds['binding_context_id'])['identity']['agent']['id']);
         $pdo->prepare("UPDATE project_agents SET display_name = 'OAuth Placeholder' WHERE project_id = ? AND agent_id = ?")
             ->execute([$project['id'], $placeholder['agent_id']]);

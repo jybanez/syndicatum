@@ -351,6 +351,17 @@ releases must additionally pass prior-release upgrade and rollback acceptance.
 
 ### P0.5 Permission-safe onboarding and binding
 
+**Current source/CI progress:** draft PR #4 keeps onboarding work separate from
+the V1 merge candidate. Pre-binding protected-tool denial and confidentiality,
+permission-scoped Unicode casefolding plus collapsed-whitespace resolution,
+and confirmation-time revalidation of the stored project/agent IDs have passing
+source tests and required PR checks. The Companion candidate now keeps the
+canonical bound server, project, and agent visible after confirmation and
+separates successful binding from submission of an MCP status-check request.
+These are not installed-client or published-artifact results. The items below
+remain open until the actual Companion/discussion flow, usability, identity
+isolation, and exact release bytes are accepted.
+
 - [ ] Preserve pre-binding confidentiality: an unbound discussion cannot
       enumerate projects or participant identities.
 - [ ] Replace byte-for-byte project-name guessing with normalized matching or an
