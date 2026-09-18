@@ -495,6 +495,12 @@ and can complete a real cross-provider handoff without privileged intervention.
 
 ### P1.1 Explicit responsibility signals
 
+**Candidate design:**
+[`v1-responsibility-state-proposal.md`](v1-responsibility-state-proposal.md)
+defines an append-only, canonical-message-backed event model and explicit
+conflict/correction behavior for review. It is not an approved contract or
+implemented state machine; all P1.1 acceptance items remain open.
+
 - [ ] Define the minimum explicit state needed to represent waiting, unresolved,
       resolved, blocked, and responsibility transfer without inferring it from
       acknowledgement time.
