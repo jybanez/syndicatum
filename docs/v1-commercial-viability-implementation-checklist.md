@@ -543,8 +543,9 @@ acceptance cases are still open. The Assessor accepted the owner-side positive
 path and installed evidence navigation at isolated-probe scope in #2781,
 then the two-identity positive path in #2783. At exact head `af483a3`, CI run
 `35389996471` passed all required jobs, allowing the historical `Previously
-blocked` label correction at source/CI scope (#2785); it is not yet verified
-in an installed image containing that head. The checkboxes below remain
+blocked` label correction at source/CI scope (#2785). At that checkpoint it
+had not yet been verified in an installed image. The later isolated wording
+probe below closes only that observation. The checkboxes remain
 unchecked pending full evidence. Other installed checks include HTTP 409
 conflict/recovery UX, transfer/orphan and dispute/reopen paths, realistic
 pagination/history and unknown baseline, edit/tombstone navigation, mobile,
@@ -577,6 +578,14 @@ effect UX for this exercised owner-side path in #2795. Exact docs/evidence
 head `92cbb1a` passed all required CI jobs in run `35398146572` (#2796).
 Broader roles/states, transfer, dispute, pagination/history, edit/tombstone,
 and accessibility remain open; neither P1.1 nor P1.2 is closed overall.
+
+The [installed wording probe](v1-responsibility-installed-acceptance-2026-09-19.md)
+then used the exact `d9ccd63` application image with fresh MySQL 5.7.44 data
+and two authenticated synthetic humans. Its blocked-then-accepted request
+appeared in `Resolved` as `Previously blocked · Work started`, including after
+a full reload. The authenticated projection retained `blocked=true` and one
+resolved request. This is installed wording evidence pending Assessor review,
+not historical-baseline, accessibility, P1.1/P1.2, or release acceptance.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

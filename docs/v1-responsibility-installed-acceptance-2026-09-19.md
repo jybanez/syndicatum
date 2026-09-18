@@ -139,6 +139,38 @@ created no canonical message or responsibility event. This is a bounded
 owner-side browser recovery result, not a full multi-role or accessibility
 acceptance claim.
 
+## Resolved historical-label installation probe
+
+A fourth disposable Compose stack,
+`syndicatum-acceptance-wording-d9ccd63`, served the exact previously built
+`d9ccd63` application image at `127.0.0.1:18085` with a verified MySQL 5.7.44
+image and fresh isolated volumes. Health reported core `ok`, database
+connected, and expanded schema available. The application image is the same
+`sha256:8d73fd382b492e1069dc0bd9fb2394e131ef567ff8fa3cce0efa8ab950c45019`
+used for the revised 409 probe; the later PR commits changed evidence and
+checklist documentation, not this runtime.
+
+Two synthetic human accounts were registered through separately authenticated
+installed browser sessions. A project and an unclaimed agent were created only
+as disposable fixtures; no agent claim code or protected task profile was used.
+The owner invited the second human, who accepted through the installed,
+session/CSRF-protected invitation API because the current browser client has no
+invitation-acceptance form. The owner posted a direct request to the responder
+through the installed authenticated API; the responder posted `work_started`,
+`blocked`, and `resolution_proposed` evidence; the owner accepted the proposal.
+Each write returned HTTP 201. The canonical timeline then contained exactly
+five messages with sequences 1–5.
+
+The real installed owner browser selected the Responsibility Inbox's `Resolved`
+view. It rendered one `Request #1` card as `Resolved` with the labels
+`Previously blocked · Work started`, not a contradictory current `Blocked`
+label. After a full page reload and reopening that view, the same card and
+labels reconstructed. An authenticated inbox read returned one resolved item
+with `blocked=true`, `work_started=true`, and latest evidence message `#5`.
+This verifies only the installed historical wording for an accepted resolution
+that retained a blocked-history flag. It does not verify other historical
+baselines, screen-reader presentation, or full P1.1/P1.2 acceptance.
+
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
@@ -150,8 +182,8 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
   independently authenticated identities. The observed acknowledge/start/
   blocked/propose/accept sequence is only one path through the matrix.
 - Broader stale HTTP 409 recovery across other roles and states, including
-  refresh-failure UX. The owner-side withdrawal conflict above is exercised;
-  it is pending Assessor review at this exact-build scope.
+  refresh-failure UX. The owner-side withdrawal conflict above is exercised
+  and accepted at narrow scope.
 - Paginated multi-project/no-duplication behavior and historical/unknown data.
 - Evidence navigation after edit and soft-delete, including an offscreen row.
 - Responsive-density, keyboard, focus, and screen-reader acceptance on the
@@ -178,3 +210,6 @@ conflict refresh/no-side-effect UX only for the exercised owner-side path in
 exact image `d9ccd63`. GitHub Actions run `35398146572` then passed all
 required jobs at evidence/checklist head `92cbb1a` (#2796). The remaining
 installed matrix and overall P1.1/P1.2 gates remain open.
+
+The installed `Previously blocked` wording probe above is a new bounded result
+pending Assessor review. It does not change the broader gates by itself.
