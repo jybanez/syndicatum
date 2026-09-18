@@ -178,8 +178,10 @@ class ProjectManagementService
             $statement = $this->pdo->prepare('UPDATE project_members SET role = ?, status = ?, removed_at = ?, updated_at = ? WHERE project_id = ? AND user_id = ?');
             $statement->execute([$remove ? 'member' : $role, $status, $remove ? $now : null, $now, (int) $projectId, (int) $memberUserId]);
             if ($statement->rowCount() < 1) { throw new RuntimeException('MEMBER_NOT_FOUND'); }
-            $this->pdo->prepare('UPDATE project_participants SET status = ?, updated_at = ? WHERE project_id = ? AND user_id = ?')
-                ->execute([$status, $now, (int) $projectId, (int) $memberUserId]);
+            $this->pdo->prepare('UPDATE project_participants
+                SET status_generation = status_generation + CASE WHEN status <> ? THEN 1 ELSE 0 END,
+                    status = ?, updated_at = ? WHERE project_id = ? AND user_id = ?')
+                ->execute([$status, $status, $now, (int) $projectId, (int) $memberUserId]);
             $this->insertAudit((int) $actorUserId, $remove ? 'project.member_removed' : 'project.member_updated', 'project', (string) ((int) $projectId), ['member_user_id' => (int) $memberUserId, 'role' => $remove ? null : $role]);
             $this->pdo->commit();
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
@@ -333,8 +335,11 @@ class ProjectManagementService
         try {
             $this->pdo->prepare('UPDATE project_agents SET status = ?, updated_at = ? WHERE project_id = ? AND agent_id = ?')
                 ->execute([$status, $now, (int) $projectId, (int) $agentId]);
-            $this->pdo->prepare('UPDATE project_participants SET status = ?, updated_at = ? WHERE project_id = ? AND agent_id = ?')
-                ->execute([$participantStatus, $now, (int) $projectId, (int) $agentId]);
+            $this->pdo->prepare('UPDATE project_participants
+                SET status_generation = status_generation + CASE WHEN status <> ? THEN 1 ELSE 0 END,
+                    status = ?, updated_at = ? WHERE project_id = ? AND agent_id = ?')
+                ->execute([$participantStatus, $participantStatus, $now,
+                    (int) $projectId, (int) $agentId]);
             $sql = 'UPDATE chat_agents SET is_active = ?, updated_at = ?';
             $params = [$status === 'active' ? 1 : 0, $now];
             if ($revokeToken) {

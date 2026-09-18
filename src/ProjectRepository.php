@@ -6,6 +6,7 @@ require_once __DIR__ . '/MessageOutbox.php';
 require_once __DIR__ . '/AgentWebhookService.php';
 require_once __DIR__ . '/WorkspaceAgentTriggerService.php';
 require_once __DIR__ . '/ResponsesApiActivationService.php';
+require_once __DIR__ . '/ResponsibilityEventService.php';
 
 class ProjectRepository
 {
@@ -351,10 +352,22 @@ class ProjectRepository
             $messageId = (int) $this->pdo->lastInsertId();
             $addressees = $this->resolveAddressees($projectId, $senderId, $input);
             $add = $this->pdo->prepare(
-                'INSERT INTO message_addressees (message_id, participant_id, reason, created_at) VALUES (?, ?, ?, ?)'
+                'INSERT INTO message_addressees
+                 (message_id, participant_id, reason, responsibility_status_generation, created_at)
+                 SELECT ?, pp.id, ?, CASE WHEN ? = ? THEN pp.status_generation ELSE NULL END, ?
+                 FROM project_participants pp WHERE pp.id = ? AND pp.project_id = ?'
             );
             foreach ($addressees as $participantId => $reason) {
-                $add->execute([$messageId, $participantId, $reason, $now]);
+                $add->execute([$messageId, $reason, $reason, 'direct', $now,
+                    $participantId, $projectId]);
+            }
+
+            if (isset($input['responsibility_event'])) {
+                if (!is_array($input['responsibility_event'])) {
+                    throw new InvalidArgumentException('responsibility_event must be an object.');
+                }
+                (new ResponsibilityEventService($this->pdo))->record($access,
+                    $input['responsibility_event'], $messageId, $idempotencyKey, $body);
             }
 
             $message = $this->messagesByIds($projectId, [$messageId]);
@@ -421,14 +434,24 @@ class ProjectRepository
         }
         sort($direct, SORT_NUMERIC);
         sort($mention, SORT_NUMERIC);
-        return hash('sha256', json_encode([
+        $fingerprintInput = [
             'body' => $body,
             'reply_to_message_id' => !empty($input['reply_to_message_id']) ? (int) $input['reply_to_message_id'] : null,
             'correlation_id' => empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
             'broadcast' => $broadcast,
             'direct_participant_ids' => $broadcast ? [] : array_values($direct),
             'mention_participant_ids' => $broadcast ? [] : array_values($mention),
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        ];
+        if (isset($input['responsibility_event'])) {
+            if (!is_array($input['responsibility_event'])) {
+                throw new InvalidArgumentException('responsibility_event must be an object.');
+            }
+            $event = $input['responsibility_event'];
+            ksort($event);
+            $fingerprintInput['responsibility_event'] = $event;
+        }
+        return hash('sha256', json_encode($fingerprintInput,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
     public function acknowledge(array $access, $messageId)
