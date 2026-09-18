@@ -524,6 +524,14 @@ source-only evidence; the narrow installed probe below now confirms the
 mounted and filtered-out navigation paths. Broader authenticated behavior,
 keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
 
+The Assessor accepted **P1.2 canonical evidence navigation/deep-link fallback
+at source-client/CI scope** for exact head `7f69fda` in message #2779. This
+closes the source-level qualification in #2776, not the installed or
+accessibility gate. The authenticated probe below supplied bounded installed
+evidence for mounted-row focus and filtered-out dialog fallback with unchanged
+filters; dialog focus trap, Escape/return focus, and keyboard activation still
+need installed accessibility acceptance.
+
 The first [isolated installed-client probe](v1-responsibility-installed-acceptance-2026-09-19.md)
 at `7f69fda` verified a direct request in the owner’s waiting view, mounted
 and filtered-out canonical evidence navigation, and an owner withdrawal that
@@ -531,8 +539,17 @@ updated the inbox and appended one canonical timeline event. A second
 authenticated participant then exercised acknowledgment, start, block,
 resolution proposal, and owner acceptance. It is a narrow positive probe;
 the remaining role/state, conflict, history, responsive, and accessibility
-acceptance cases are still open and the checkboxes below remain unchecked
-pending full evidence and Assessor review.
+acceptance cases are still open. The Assessor accepted the owner-side positive
+path and installed evidence navigation at isolated-probe scope in #2781,
+then the two-identity positive path in #2783. At exact head `af483a3`, CI run
+`35389996471` passed all required jobs, allowing the historical `Previously
+blocked` label correction at source/CI scope (#2785); it is not yet verified
+in an installed image containing that head. The checkboxes below remain
+unchecked pending full evidence. Next installed checks include reload/reopen
+reconstruction and exact evidence linkage/no duplicate after retry, 409 and
+unchanged-key retry UX, transfer/orphan and dispute/reopen paths, realistic
+pagination/history and unknown baseline, edit/tombstone navigation, mobile,
+keyboard/focus accessibility, and the resolved historical-label recheck.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

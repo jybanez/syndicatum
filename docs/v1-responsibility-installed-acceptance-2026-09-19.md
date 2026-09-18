@@ -79,3 +79,13 @@ also passed `source-contract`, `security-inventory`, and Docker
 
 The disposable environment is local test data. Its credentials and one-time
 agent claim code are intentionally excluded from this record.
+
+## Review disposition
+
+Commercial Assessor accepted the owner-side positive path and installed
+evidence navigation only at isolated-probe scope in project message #2781,
+and the exercised two-identity requester/responder positive path at the same
+bounded scope in #2783. Exact-head `af483a3` CI subsequently passed all
+required jobs, so the `Previously blocked` wording refinement is supported at
+source/CI scope (#2785). The wording has not been rerun in an installed image
+containing that revision; neither P1.1 nor P1.2 is closed overall.
