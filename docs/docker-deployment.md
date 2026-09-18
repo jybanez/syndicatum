@@ -257,9 +257,33 @@ docker compose exec app php scripts/chat-db.php migration-status
 docker compose exec app php scripts/plugin-operational-status.php
 ```
 
-`plugin-operational-status.php` exits `0` when healthy, `2` when backlog or dead
-deliveries need attention, and `3` when database status cannot be read. Alert
-on repeated HTTP health failures, restarting/unhealthy containers, worker
+`plugin-operational-status.php` separates Realtime outbox, agent webhook,
+Workspace Agent trigger, and Responses API activation-delivery queues. It exits
+`0` when no threshold is breached, `2` when stale work or recent failed/dead
+deliveries need attention, and `3` when database status cannot be read.
+
+Each delivery component reports `state` (`ok`, `degraded`, or `unknown`),
+`pending`, `oldest_pending_seconds`, and `last_success_at` as a UTC timestamp
+or `null` if no success has been recorded. Missing delivery tables produce
+`unknown` with null metrics and an overall `unknown` state, never a healthy
+zero. The `worker` component reports the last successful Docker delivery-worker
+cycle and heartbeat age: absent history/table is `unknown`, age above
+`SYNDICATUM_WORKER_STALE_SECONDS` is `degraded`, and a recent success is `ok`.
+The declared V1 default is 120 seconds; the supported setting range is
+30–3600 seconds and it must exceed `SYNDICATUM_WORKER_INTERVAL_SECONDS`.
+The same threshold drives Docker's worker health check and is emitted as
+`worker.stale_after_seconds` in status JSON. A successful cycle does not
+prove a particular queued item was delivered. Aggregate precedence is
+`unknown` (any unknown worker or delivery component), then `degraded` (any
+available path with recent failure/dead-letter evidence or work older than
+five minutes, or a stale worker), then `ok` (worker and all four delivery
+paths are observable and `ok`). When aggregate is `unknown`, inspect each
+path: another path may also be `degraded`. A null or old delivery
+`last_success_at` does not yet degrade an idle path; delivery-specific success
+freshness remains open. The isolated source-tree stalled-worker failure and
+recovery case is recorded in the acceptance log.
+
+Alert on repeated HTTP health failures, restarting/unhealthy containers, worker
 absence, an oldest pending delivery above five minutes, dead-letter growth,
 low disk space, old backups, and TLS expiry.
 
