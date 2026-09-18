@@ -513,6 +513,14 @@ responsibility-baseline migration and non-inventive read-only preflight at
 not close P1.1: installed-client/UI acceptance remains open. The implementation
 items below remain unchecked until their full exit evidence is reviewed.
 
+The Assessor accepted the Responsibility Inbox source-client architecture and
+action contract at `5a33613` (#2775), with the navigation qualification in
+#2776. The client fetches exact canonical evidence and attempts to scroll to
+it in the existing Helper timeline. When virtualization or filters leave the
+row unmounted, the current alert fallback does **not** establish guaranteed
+timeline context. Authenticated installed-client behavior, reliable evidence
+navigation, keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
+
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
 The Commercial Assessor recommended its non-inventive policy in message #2765
