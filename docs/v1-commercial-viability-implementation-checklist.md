@@ -545,7 +545,7 @@ then the two-identity positive path in #2783. At exact head `af483a3`, CI run
 `35389996471` passed all required jobs, allowing the historical `Previously
 blocked` label correction at source/CI scope (#2785); it is not yet verified
 in an installed image containing that head. The checkboxes below remain
-unchecked pending full evidence. The next installed checks include HTTP 409
+unchecked pending full evidence. Other installed checks include HTTP 409
 conflict/recovery UX, transfer/orphan and dispute/reopen paths, realistic
 pagination/history and unknown baseline, edit/tombstone navigation, mobile,
 keyboard/focus accessibility, and the resolved historical-label recheck.
@@ -557,8 +557,23 @@ message without a duplicate. The same item was then reopened with evidence
 `#3`, and an installed API write using stale event `#2` correctly returned
 HTTP 409 without changing the one open item. See [the installed acceptance
 record](v1-responsibility-installed-acceptance-2026-09-19.md). This narrows the
-reload/linkage/replay and server conflict evidence only; browser conflict
-recovery UX and the remaining installed-client cases above are still open.
+reload/linkage/replay and server conflict evidence only. The Assessor accepted
+installed canonical-state reconstruction and idempotent retry for the exercised
+owner-side path, plus stale-conflict semantics at installed API scope, in #2791;
+exact-head docs-only CI support was accepted in #2793. P1.1/P1.2 remained open.
+
+A two-browser owner-side conflict probe then found that `5e6ea70` correctly
+returned 409, refreshed the stale waiting list, and wrote no duplicate, but
+routine live polling quickly replaced the specific `nothing was posted`
+notice. Client commit `d9ccd63` preserves that conflict notice until explicit
+refresh/view change and does not claim a successful refresh when it fails. An
+exact-archive installed image of `d9ccd63` reproduced the 409 with two
+authenticated views: the refreshed list and persistent notice were visible,
+switching to `Resolved` showed the same withdrawn request, and canonical
+sequence remained at four successful events with no stale-write message.
+See [the installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md).
+This browser result awaits Assessor review; broader roles/states, transfer,
+dispute, pagination/history, edit/tombstone, and accessibility remain open.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

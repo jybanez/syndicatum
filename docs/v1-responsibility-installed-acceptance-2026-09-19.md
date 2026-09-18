@@ -98,11 +98,49 @@ This was new synthetic data, not a continuation of the earlier install.
    conflict behavior only, not a browser UX acceptance test.
 
 This confirms only the tested owner-side reload/linkage and same-key replay
-path. It does not establish stale-conflict recovery UX, responder-side
+path. It does not establish browser stale-conflict recovery UX, responder-side
 dispute/transfer, pagination/history, or accessibility acceptance.
 
-Both probes exercised an authenticated installed browser against a running
-Docker app and database. The source/CI workflow for the first probe's commit
+## Two-browser stale-conflict recovery probe
+
+A third disposable Compose stack, `syndicatum-acceptance-browser409-5e6ea70`,
+served a local-only app at `127.0.0.1:18084` with its own MySQL volume. Two
+independently authenticated browser contexts signed in as the same synthetic
+owner. Both loaded the same open direct request into `Waiting on others`.
+
+With the exact `5e6ea70` app image, browser B withdrew the request while A
+retained its stale card. A's attempted withdrawal received HTTP 409 and
+refetched the waiting view, which became empty. The browser initially showed
+`Responsibility changed before your action. Review the refreshed item; nothing
+was posted by this attempt.` Routine live polling then replaced that specific
+notice with a generic activity warning. The canonical timeline still held
+only the request and B's withdrawal; A's attempt posted nothing. This exposed
+a browser feedback defect, not a server state or duplication defect.
+
+The client fix at exact Git commit `d9ccd631e87514e6f4c7221b96c438e47dee477a`
+keeps the conflict notice through live polling until an explicit refresh or
+view change. It also distinguishes a successful conflict refresh from a failed
+one, so it cannot claim that the newer item was displayed if the fetch failed.
+The committed Git archive was built as image
+`syndicatum-acceptance-browser409-d9ccd63-app:acceptance` (image ID
+`sha256:8d73fd382b492e1069dc0bd9fb2394e131ef567ff8fa3cce0efa8ab950c45019`).
+Only the app container was recreated with that image; the disposable database
+and its prior canonical events were retained for the replay.
+
+In the revised installed build, B reopened the same request and then withdrew
+it again while A retained the newly stale open card. A's action received HTTP
+409, and its waiting list refreshed to empty. The specific `nothing was posted`
+notice remained visible through subsequent polling; on an explicit switch to
+`Resolved`, the same request appeared as withdrawn. A read of the canonical
+API showed one responsibility item (`request_message_id=1`, `state=resolved`,
+`outcome=withdrawn`, latest evidence message `#5` at project sequence 4) and
+exactly four canonical messages at sequences 1–4. The rejected stale writes
+created no canonical message or responsibility event. This is a bounded
+owner-side browser recovery result, not a full multi-role or accessibility
+acceptance claim.
+
+These probes exercised authenticated installed browsers against running
+Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
 `source-acceptance` in GitHub Actions run `35381942910`.
 
@@ -111,9 +149,9 @@ Docker app and database. The source/CI workflow for the first probe's commit
 - Responder-side dispute, handoff, orphaned/transfer, and reopened flows under
   independently authenticated identities. The observed acknowledge/start/
   blocked/propose/accept sequence is only one path through the matrix.
-- Stale HTTP 409 conflict UX and retry recovery in the installed client. The
-  unchanged-key retry of one successful withdrawal and an installed API 409
-  rejection are covered above, but do not prove browser recovery UX.
+- Broader stale HTTP 409 recovery across other roles and states, including
+  refresh-failure UX. The owner-side withdrawal conflict above is exercised;
+  it is pending Assessor review at this exact-build scope.
 - Paginated multi-project/no-duplication behavior and historical/unknown data.
 - Evidence navigation after edit and soft-delete, including an offscreen row.
 - Responsive-density, keyboard, focus, and screen-reader acceptance on the
