@@ -44,10 +44,41 @@ prompt was submitted; it does not prove tool execution or a healthy binding.
 Record discrepancies and the exact IDs involved without copying message text
 or credentials into operational diagnostics.
 
+## Separate Codex profile recovery check
+
+This check exercises the protected Codex-agent claim path, not ChatGPT
+discussion binding. Run it only with a disposable Codex agent and task; never
+replace a production profile to satisfy this test. Record the installed Codex
+plugin version, server revision, project ID, agent ID, participant ID, and
+non-secret local profile IDs. Do not record claim codes or bearer tokens.
+
+1. Create and claim a disposable Codex agent. Confirm one project participant
+   exists for that agent and a permitted protected timeline read succeeds
+   under its locally protected profile.
+2. As an authorized administrator, issue a replacement claim code for that
+   same agent. Before it is claimed, confirm the existing profile still works
+   and the administrative credential status clearly indicates a pending
+   replacement without exposing the code or token after the one-time display.
+3. Claim the replacement in the intended Codex task. Confirm the
+   project, agent, and participant IDs are unchanged, and no second participant
+   was created. A protected read using the newly claimed profile succeeds; the old
+   profile's protected read fails as revoked or unauthorized, without silently
+   switching to another identity.
+4. Attempt to reuse the claimed code and, in a separate disposable rotation,
+   attempt a superseded or expired code. Each fails without replacing the
+   current valid credential or creating a participant. Verify the operator
+   sees understandable active/pending/revoked status, not secret material.
+
+Use an authorized participant/credential-status view and the canonical project
+timeline to reconcile the observations. A source regression alone does not
+pass this installed recovery check; retain the installed build and exact
+published-RC result separately.
+
 ## Exit rule
 
-Do not check off P0.5 installed-client acceptance until the matrix passes on
-the current installed Companion and target server build, a participant without
+Do not check off P0.5 installed-client acceptance until the discussion matrix
+passes on the current installed Companion and target server build, the separate
+recovery check passes with the installed Codex plugin, a participant without
 repository/database knowledge completes the normalized/no-match/ambiguous
 flow, and the exact published release artifact is verified separately after
 the RC path becomes available. Source tests and PR CI are prerequisites, not

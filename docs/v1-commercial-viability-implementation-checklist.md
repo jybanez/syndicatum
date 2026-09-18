@@ -368,6 +368,12 @@ confidentiality sub-gate at source/CI scope in project message 2662;
 [run 35330007628](https://github.com/jybanez/syndicatum/actions/runs/35330007628)
 passed source-contract, archived-candidate Docker/MySQL 5.7 acceptance, and
 security-inventory at that exact head.
+Commercial Assessor messages 2688 and 2695 additionally accept claim-code
+replacement/same-identity recovery and target-identity isolation at
+documentation/source/CI scope, including real same-project and foreign-project
+competing agents at `5ea44d7`. The
+[installed-client procedure](v1-companion-installed-acceptance.md#separate-codex-profile-recovery-check)
+now specifies a separate disposable Codex recovery sequence; it has not run.
 These are not installed-client or published-artifact results. The items below
 remain open until the actual Companion/discussion flow, usability, identity
 isolation, and exact release bytes are accepted.
