@@ -370,6 +370,11 @@ name guessing, while an unbound or unauthorized client learns nothing sensitive.
 
 ### P0.6 Delivery and activation observability
 
+**Candidate source progress:** the Realtime outbox now reduces untrusted
+remote response, transport, and exception text to bounded status-only
+diagnostics before persistence or worker logging. This is one privacy guard,
+not completion of the cross-provider telemetry and administrator-view gate.
+
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.
 - [ ] Classify failures as backpressure, binding, routing, authentication,

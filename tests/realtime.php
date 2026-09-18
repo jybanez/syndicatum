@@ -179,6 +179,27 @@ $suite->test('publisher retries transient responses and rejects permanent respon
     $suite->same(false, $permanent->publishOutboxEvent($event)['retryable']);
 });
 
+$suite->test('publisher diagnostics never retain untrusted response or exception text', function () use ($suite) {
+    $event = [
+        'event_uuid' => 'event-safe-diagnostic',
+        'project_id' => 1,
+        'event_type' => 'syndicatum.message.created',
+        'payload_json' => '{}',
+    ];
+    $remoteBody = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()), function () {
+        return ['status' => 429, 'body' => '{"reason":"bearer secret-in-remote-body"}'];
+    });
+    $transport = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()), function () {
+        return ['status' => 0, 'transport_error' => 'bearer secret-in-transport-error'];
+    });
+    $exception = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()), function () {
+        throw new RuntimeException('bearer secret-in-exception');
+    });
+    $suite->same('Realtime publish returned HTTP 429.', $remoteBody->publishOutboxEvent($event)['error']);
+    $suite->same('Realtime publish transport failed.', $transport->publishOutboxEvent($event)['error']);
+    $suite->same('Realtime publish failed before a response was received.', $exception->publishOutboxEvent($event)['error']);
+});
+
 $database = 'syndicatum_realtime_test_' . bin2hex(function_exists('random_bytes') ? random_bytes(6) : openssl_random_pseudo_bytes(6));
 if (!preg_match('/^syndicatum_realtime_test_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe Realtime test database name.');
@@ -221,8 +242,10 @@ try {
         $suite->same('Stored message', $payload['message']['body']);
         $attempt = $outbox->beginAttempt($event['id']);
         $suite->same(1, (int) $attempt['attempt_count']);
-        $outbox->markRetry($event['id'], "temporary\nerror", 5);
-        $suite->same('temporary error', $pdo->query('SELECT last_error FROM message_events_outbox')->fetchColumn());
+        $outbox->markRetry($event['id'], "bearer secret-in-error\nmessage text", 5);
+        $suite->same('Realtime delivery failed.', $pdo->query('SELECT last_error FROM message_events_outbox')->fetchColumn());
+        $outbox->markRetry($event['id'], 'Realtime publish returned HTTP 429.', 5);
+        $suite->same('Realtime publish returned HTTP 429.', $pdo->query('SELECT last_error FROM message_events_outbox')->fetchColumn());
         $pdo->exec('INSERT INTO message_addressees (message_id, participant_id) VALUES (8, 21)');
         $outbox->markPublished($event['id']);
         $suite->truthy($pdo->query('SELECT published_at FROM message_events_outbox')->fetchColumn() !== null);

@@ -83,7 +83,9 @@ try {
         if ($watch) { usleep($idleMilliseconds * 1000); }
     } while ($watch);
 } catch (Exception $exception) {
-    fwrite(STDERR, 'Realtime outbox worker failed: ' . $exception->getMessage() . "\n");
+    // The exception can contain a remote response or configuration value;
+    // do not copy it into durable process logs.
+    fwrite(STDERR, "Realtime outbox worker failed. Check bounded operational health.\n");
     exit(1);
 } finally {
     $outbox->releaseWorkerLock();

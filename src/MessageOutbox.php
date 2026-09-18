@@ -182,8 +182,22 @@ class MessageOutbox
 
     private static function safeError($error)
     {
-        $error = preg_replace('/[\r\n\t]+/', ' ', trim((string) $error));
-        return substr((string) $error, 0, 500);
+        $error = trim((string) $error);
+        if (preg_match('/^Realtime publish returned HTTP [1-5][0-9]{2}\.$/', $error)) {
+            return $error;
+        }
+        if (in_array($error, [
+            'Realtime integration is disabled.',
+            'Realtime publish transport failed.',
+            'Realtime publish request was invalid.',
+            'Realtime publish failed before a response was received.',
+            'Realtime publish failed.',
+        ], true)) {
+            return $error;
+        }
+        // This is a durable operational field. Never persist arbitrary text
+        // from a transport, exception, or future worker caller.
+        return 'Realtime delivery failed.';
     }
 
     private static function uuidV4()

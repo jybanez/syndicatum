@@ -283,6 +283,12 @@ path: another path may also be `degraded`. A null or old delivery
 freshness remains open. The isolated source-tree stalled-worker failure and
 recovery case is recorded in the acceptance log.
 
+Realtime outbox `last_error` retains only a generic failure description or a
+numeric HTTP status. Remote response bodies, transport exception text, and
+message contents must not be copied into this operational field or worker
+logs. Use the status code and queue state to triage; inspect upstream service
+logs under their own access controls when a deeper cause is needed.
+
 Alert on repeated HTTP health failures, restarting/unhealthy containers, worker
 absence, an oldest pending delivery above five minutes, dead-letter growth,
 low disk space, old backups, and TLS expiry.
