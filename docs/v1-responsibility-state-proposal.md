@@ -1,7 +1,9 @@
 # Responsibility state and handoff contract (Phase 1 candidate)
 
-**Status:** proposal for owner and Commercial Assessor review. No responsibility
-state API, inbox, or installed-client acceptance is claimed by this document.
+**Status:** Commercial Assessor-approved design/documentation baseline at PR #6
+head `7cf0a07` (project message #2726); owner review and implementation remain
+open. No responsibility-state API, inbox, or installed-client acceptance is
+claimed by this document.
 This builds on the candidate [V1 coordination contract](v1-coordination-contract.md)
 without changing what a message acknowledgement means.
 
