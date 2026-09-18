@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/ResponsibilityStateReducer.php';
+require_once __DIR__ . '/ResponsibilityStateProjector.php';
 
 /**
  * Called only inside ProjectRepository::createMessage's transaction, after the
@@ -49,13 +49,6 @@ class ResponsibilityEventService
         if (!$sourceRow) {
             throw new RuntimeException('MESSAGE_NOT_FOUND');
         }
-        if ($sourceRow['responsibility_status_generation'] === null) {
-            throw new RuntimeException('RESPONSIBILITY_BASELINE_UNAVAILABLE');
-        }
-        $anchorGeneration = (int) $sourceRow['responsibility_status_generation'];
-
-        $state = ResponsibilityStateReducer::initial($requestId,
-            (int) $sourceRow['sender_participant_id'], $initialResponderId);
         $history = $this->pdo->prepare(
             'SELECT re.*, em.project_sequence
              FROM responsibility_events re
@@ -65,45 +58,12 @@ class ResponsibilityEventService
              ORDER BY em.project_sequence, re.event_message_id FOR UPDATE'
         );
         $history->execute([$projectId, $requestId, $initialResponderId]);
-        $knownEvents = [];
-        foreach ($history->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $eventId = (int) $row['event_message_id'];
-            $knownEvents[$eventId] = true;
-            if ($row['prior_state'] === 'orphaned' && $state['state'] !== 'orphaned') {
-                $state['state'] = 'orphaned';
-                $state['pending'] = null;
-            }
-            $historicalEvent = [
-                'id' => $eventId,
-                'kind' => $row['kind'],
-                'expected_event_id' => (int) $row['expected_event_message_id'],
-                'ref_event_id' => $row['reference_event_message_id'] === null
-                    ? null : (int) $row['reference_event_message_id'],
-                'target_id' => $row['target_participant_id'] === null
-                    ? null : (int) $row['target_participant_id'],
-                'reason' => 'Previously validated canonical evidence',
-            ];
-            // Event-time authority was checked before persistence. Current
-            // membership cannot retroactively invalidate historical decisions.
-            $historicalActor = [
-                'id' => (int) $row['actor_participant_id'],
-                'active' => true,
-                'moderator' => (bool) $row['actor_was_moderator'],
-                'target_active' => true,
-                'responder_active' => true,
-            ];
-            if ($row['kind'] === 'corrected') {
-                unset($historicalEvent['target_id']);
-            }
-            $state = ResponsibilityStateReducer::apply($state, $historicalEvent,
-                $historicalActor);
-            if (in_array($row['kind'], ['transfer_accepted', 'responder_restored'], true)) {
-                if ($row['responder_status_generation'] === null) {
-                    throw new RuntimeException('RESPONSIBILITY_BASELINE_UNAVAILABLE');
-                }
-                $anchorGeneration = (int) $row['responder_status_generation'];
-            }
-        }
+        $projection = ResponsibilityStateProjector::replay($requestId,
+            (int) $sourceRow['sender_participant_id'], $initialResponderId,
+            $sourceRow['responsibility_status_generation'],
+            $history->fetchAll(PDO::FETCH_ASSOC));
+        $state = $projection['state'];
+        $knownEvents = $projection['known_event_ids'];
 
         // Expected versions must name this request or one of its persisted
         // events. A foreign/unrelated ID is concealed as not found; a known
@@ -117,15 +77,9 @@ class ResponsibilityEventService
         $responderActive = $this->activeParticipant($projectId, $state['responder_id']);
         $responderGeneration = $this->participantGeneration($projectId,
             $state['responder_id']);
-        if ((!$responderActive || $responderGeneration !== $anchorGeneration)
-            && $state['state'] !== 'resolved') {
-            if ($state['state'] === 'transfer_pending') {
-                $state['pending']['prior_state'] = 'orphaned';
-            } elseif ($state['state'] !== 'orphaned') {
-                $state['state'] = 'orphaned';
-                $state['pending'] = null;
-            }
-        }
+        $state = ResponsibilityStateProjector::withCurrentValidity($state,
+            $projection['responder_status_generation'], $responderActive,
+            $responderGeneration);
 
         $kind = isset($input['kind']) ? trim((string) $input['kind']) : '';
         $ref = isset($input['reference_event_id']) ? (int) $input['reference_event_id'] : null;
