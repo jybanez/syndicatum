@@ -31,4 +31,10 @@ $realtime = DeliveryOperatorView::sample([
 ], 'realtime');
 expectOperator($realtime['terminal'], 1, 'Realtime terminal count wrong');
 expectOperator($realtime['latest_failed_attempt']['queue_state'], 'dead', 'Realtime disposition wrong');
+$responses = DeliveryOperatorView::sample([
+    ['status' => 'dead', 'attempt_count' => 8, 'last_attempt_at' => '2026-09-18 10:00:00',
+        'last_failure_code' => 'rejected', 'response_status' => null, 'response_state' => 'cancelled',
+        'next_attempt_at' => null],
+], 'responses_api');
+expectOperator($responses['latest_failed_attempt']['provider_state'], 'cancelled', 'Provider state lost');
 echo "Bounded delivery operator view passed.\n";

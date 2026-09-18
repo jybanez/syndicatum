@@ -99,6 +99,16 @@ Use the path-wide state and backlog/dead counters for current attention. A
 sample marked `unavailable` means the diagnostic migration or table is absent;
 do not infer healthy delivery from it. The command remains host-operator-only
 and read-only; it does not expose message bodies or remote error payloads.
+System administrators can also open **Delivery health** in the application.
+Its read-only endpoint requires an administrator session and shows each path's
+current state, global pending/retry/terminal counts, oldest pending age, last
+attempt and success, a bounded recent failure sample, and worker heartbeat.
+Missing tables or diagnostic columns are `unknown`/`unavailable`, not zero.
+Workspace Agent and Responses API are explicitly labeled disabled in V1 at
+the activation dependency boundary; queue health does not imply activation.
+The last failure is historical context and does not by itself set current
+health. Times from database `DATETIME` columns are shown as server values
+without an invented timezone offset.
 Exit code `0` is healthy, `2` requires operator attention, and `3` means the
 database status could not be read. Pair this with
 `scripts/status-realtime-outbox.ps1` for process and Scheduled Task state.

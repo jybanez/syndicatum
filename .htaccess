@@ -26,4 +26,4 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-RewriteRule ^(?:users|agents|audit|projects/[^/]+)/?$ index.php [L,QSA]
+RewriteRule ^(?:users|agents|audit|delivery-health|projects/[^/]+)/?$ index.php [L,QSA]

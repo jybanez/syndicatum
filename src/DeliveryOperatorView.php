@@ -30,6 +30,9 @@ class DeliveryOperatorView
                 'queue_state' => $queueState,
                 'attempt_count' => (int) $row['attempt_count'],
                 'next_retry_at' => $queueState === 'retry' ? $row['next_attempt_at'] : null,
+                'provider_state' => isset($row['response_state'])
+                    && in_array($row['response_state'], ['failed', 'cancelled', 'incomplete'], true)
+                    ? $row['response_state'] : null,
             ];
         }
         return $result;

@@ -419,7 +419,14 @@ It is source/CI scope only, not completion of the administrator-view, live
 cross-provider delivery, or operational recovery gate.
 The host-only operational command now includes a bounded 50-row diagnostic
 sample per path, separating last failed attempt from current path state. This
-is an operator-CLI increment, not the administrator-facing application view.
+operator-CLI increment is now complemented by an authenticated, read-only
+administrator Delivery health surface. Its source/CI tests cover role gating,
+retry/category separation, missing worker telemetry, and content-free output;
+an isolated local-browser smoke showed the administrator route rendering all
+four paths and an unknown worker state against a fresh test database. The
+temporary database and server were removed afterward. Published/installed
+visual and real operational recovery evidence is still required before the
+full administrator-view/observability gate can close.
 
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.
