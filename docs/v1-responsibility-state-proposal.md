@@ -72,25 +72,29 @@ withdrawn request is never described as completed work.
 | `resolution_disputed` | `disputed`; same responder remains accountable | Original requester or moderator; references pending proposal |
 | `resolution_withdrawn` | `open` or prior disputed state | Proposing responder retracts their pending proposal |
 | `request_withdrawn` | `resolved`, outcome `withdrawn`, not completed | Original requester or moderator gives reason |
-| `transfer_offered` | `transfer_pending`; old responder remains accountable | Current responder, requester, or moderator offers active same-project target |
+| `transfer_offered` | `transfer_pending`; prior responder/state retained | From `open`/`disputed`: current responder, requester, or moderator; from `orphaned`: requester or moderator only; target is active in same project |
 | `transfer_accepted` | `open` with proposed responder now accountable | Proposed target explicitly accepts referenced pending offer |
-| `transfer_declined` | Prior unresolved state and old responder restored | Proposed target explicitly declines referenced pending offer |
+| `transfer_declined` | Exact pre-offer derived state restored; `orphaned` remains `orphaned` | Proposed target explicitly declines referenced pending offer |
 | `reopened` | `open`, prior resolution remains visible | Original requester or moderator gives reason |
 | `responder_restored` | `open` after an orphaned responder is reactivated | Original requester or moderator explicitly confirms same responder |
-| `corrected` | Explicit replacement interpretation, history retained | Moderator references exact event and gives reason |
+| `corrected` | Non-authority-bearing metadata correction only; no state/owner change | Moderator references exact valid event and gives reason |
 
 Transfer is two-step: an offer identifies one active same-project target; only
-that target accepts or declines; the old responder remains authoritative while
-pending or after decline. If the target becomes inactive, the offer cannot be
-accepted and the old responder remains accountable. A new offer needs an
-explicit event. Resolution is also two-step: the responder may propose but
+that target accepts or declines. For an `open` or `disputed` item, the old
+responder remains accountable while pending or after decline. For an
+`orphaned` item, there is no active accountable responder while pending; a
+decline restores `orphaned`, not a fictitious active owner. Acceptance moves
+either case to `open` with the new responder. If the target becomes inactive,
+the offer cannot be accepted and the pre-offer state is retained. A new offer
+needs an explicit event. Resolution is also two-step: the responder may propose but
 only the original requester or an authorized moderator may accept or dispute.
 A moderator acting for an unavailable requester records their own identity
 and reason. A disputed proposal never deletes the responder's evidence.
 
 Only one offer or resolution proposal may be pending on an item at a time.
-`transfer_offered` is allowed from `open` or `disputed` (including a blocked
-open item), not while resolution is pending. `resolution_proposed` is allowed
+`transfer_offered` is allowed from `open`, `disputed`, or `orphaned` (including
+a blocked open item), not while resolution is pending. From `orphaned`, only
+the requester or moderator may offer the transfer. `resolution_proposed` is allowed
 from `open` or `disputed`, not while transfer is pending. Acceptance/decline
 must reference the exact pending offer; resolution acceptance/dispute/withdrawal
 must reference the exact pending proposal. A stale reference is a conflict,
@@ -114,9 +118,10 @@ alone does not silently restore responsibility.
   reopen a resolved request. The responder, requester, or moderator may offer
   a transfer; only the active proposed new responder may accept or decline it.
   A moderator correction is exceptional, requires a reason, and is
-  audit-visible. All actors retain human/agent parity within their granted
-  posting and project scopes; moderator authority is not granted to an agent
-  by a mention.
+  audit-visible. Human and agent requesters/responders have parity within
+  their granted posting and project scopes; under the current V1 boundary,
+  moderator authority belongs to authorized humans, not to an agent merely
+  mentioned in a thread.
 - Every mutation checks the latest event under a transaction/lock and rejects
   a stale expected event/version with a documented conflict response. It never
   silently replaces a newer decision. Duplicate idempotent retries replay
@@ -124,13 +129,17 @@ alone does not silently restore responsibility.
   race surface a conflict for explicit reconciliation. The reducer applies
   accepted events by canonical project sequence, then event ID as a stable
   tie-breaker; client clocks do not select a winner. `transfer_declined`
-  restores the recorded pre-offer unresolved state. Accepted transfer clears
+  restores the recorded pre-offer state, including `orphaned`. Accepted transfer clears
   the old responder's personal blocked flag, so the new responder must mark
   their own block explicitly.
-- Corrections do not delete history. A correction references the precise
-  event being superseded and the replacement interpretation. The reducer
-  applies the correction at its own later project sequence; both original
-  and correction remain readable to authorized project participants.
+- `corrected` may annotate only non-authority-bearing metadata of an already
+  valid event, such as a non-secret reason typo or supporting link. It cannot
+  change event kind, actor, requester, responder, target, outcome, consent,
+  or the derived state. It cannot manufacture transfer acceptance/decline,
+  resolution acceptance, or responder substitution. A material state change
+  requires the normal event and its authorized actor. Corrections remain
+  append-only at a later project sequence, reference the exact event being
+  annotated, and preserve both original and correction for audit.
 - A resolved request may be reopened only through an explicit requester or
   moderator event with a reason. Its prior accepted resolution remains in
   the timeline; the inbox shows the current reopened state and its evidence.
