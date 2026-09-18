@@ -360,6 +360,14 @@ canonical bound server, project, and agent visible after confirmation and
 separates successful binding from submission of an MCP status-check request.
 The Commercial Assessor accepted that post-bind identity and status behavior
 at source/CI scope, not as an installed-client result.
+The foreign-project normalized-binding regression at `dbdf14f` confirms that
+an unauthorized account receives generic not-found results for both binding
+preparation and interactive context, without creating an intent or revealing
+the real foreign project/agent. The Commercial Assessor accepted this bounded
+confidentiality sub-gate at source/CI scope in project message 2662;
+[run 35330007628](https://github.com/jybanez/syndicatum/actions/runs/35330007628)
+passed source-contract, archived-candidate Docker/MySQL 5.7 acceptance, and
+security-inventory at that exact head.
 These are not installed-client or published-artifact results. The items below
 remain open until the actual Companion/discussion flow, usability, identity
 isolation, and exact release bytes are accepted.
