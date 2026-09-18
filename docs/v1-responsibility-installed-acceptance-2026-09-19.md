@@ -35,6 +35,11 @@ certificate or full P1.1/P1.2 acceptance.
    immediately showed no matching waiting item and reported that the action
    was recorded. The existing timeline then contained exactly the original
    direct request and one new withdrawal-note message.
+5. At a `390 × 844` browser viewport, `All direct work` showed the withdrawn
+   request as `Resolved` with the explicit qualifier `Request withdrawn, not
+   completed` and both evidence links. The document and viewport widths were
+   both 390 CSS pixels, so the inbox card introduced no horizontal overflow.
+   This is a single visual smoke check, not mobile usability acceptance.
 
 These observations exercise an authenticated installed browser against a
 running Docker app and database. The source/CI workflow for the same commit
