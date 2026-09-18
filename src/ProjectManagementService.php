@@ -354,8 +354,8 @@ class ProjectManagementService
                     }
                 }
                 if (Db::tableExists($this->pdo, 'agent_webhook_deliveries')) {
-                    $this->pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'dead', last_error = 'Agent removed from project' WHERE project_id = ? AND agent_id = ? AND status IN ('queued', 'retry')")
-                        ->execute([(int) $projectId, (int) $agentId]);
+                    $this->pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'dead', terminal_at = ?, last_error = 'Agent removed from project' WHERE project_id = ? AND agent_id = ? AND status IN ('queued', 'retry')")
+                        ->execute([$now, (int) $projectId, (int) $agentId]);
                 }
                 foreach (['oauth_access_tokens', 'oauth_refresh_tokens'] as $table) {
                     if (Db::tableExists($this->pdo, $table)) {

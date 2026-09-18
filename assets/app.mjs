@@ -32,6 +32,7 @@ const API = {
   adminUsers: "api/v1/admin/users.php",
   adminAgents: "api/v1/admin/agents.php",
   adminAudit: "api/v1/admin/audit.php",
+  adminDeliveryHealth: "api/v1/admin/delivery-health.php",
 };
 
 const state = {
@@ -219,7 +220,7 @@ function applicationPath(path = "") {
 
 function routeForSurface(surface, projectId = "") {
   if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
-  if (["users", "agents", "audit"].includes(surface)) return applicationPath(surface);
+  if (["users", "agents", "audit", "delivery-health"].includes(surface)) return applicationPath(surface);
   return applicationPath();
 }
 
@@ -232,7 +233,7 @@ function currentApplicationRoute() {
     try { return { surface: "project", projectId: decodeURIComponent(parts[1]) }; }
     catch (_error) { return { surface: "workspace", projectId: "" }; }
   }
-  if (["users", "agents", "audit"].includes(parts[0])) return { surface: parts[0], projectId: "" };
+  if (["users", "agents", "audit", "delivery-health"].includes(parts[0])) return { surface: parts[0], projectId: "" };
   const legacyProjectId = new URLSearchParams(location.search).get("project") || "";
   return legacyProjectId ? { surface: "project", projectId: legacyProjectId } : { surface: "workspace", projectId: "" };
 }
@@ -313,6 +314,7 @@ function mountNavbar() {
   if (state.mode === "expanded" && capability("admin.users")) items.push({ id: "users", label: "Users", icon: helperIconHtml("people.users"), className: "ui-button-borderless" });
   if (state.mode === "expanded" && capability("admin.agents")) items.push({ id: "agents", label: "Agents", icon: helperIconHtml("comms.radio"), className: "ui-button-borderless" });
   if (state.mode === "expanded" && capability("admin.audit")) items.push({ id: "audit", label: "Audit", icon: helperIconHtml("time.history"), className: "ui-button-borderless" });
+  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "delivery-health", label: "Delivery health", icon: helperIconHtml("actions.settings"), className: "ui-button-borderless" });
   const actions = [];
   if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) actions.push({
     id: "settings",
@@ -369,7 +371,7 @@ function mountNavbar() {
     mobileLayout: "scroll",
     onNavigate(item) {
       if (item?.id === "brand" || item?.id === "workspace") showWorkspaceSurface();
-      else if (["users", "agents", "audit"].includes(item?.id)) void showAdminSurface(item.id);
+      else if (["users", "agents", "audit", "delivery-health"].includes(item?.id)) void showAdminSurface(item.id);
     },
     onAction(action) { if (action?.id === "settings") void openSettings(); },
     onActionMenuSelect(_action, item) {
@@ -924,7 +926,7 @@ function setSurface(name) {
   state.surface = name;
   el.workspace_surface.hidden = name !== "workspace";
   el.project_surface.hidden = name !== "project";
-  el.admin_surface.hidden = !["users", "agents", "audit"].includes(name);
+  el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health"].includes(name);
   el.mobile_panel_switcher.hidden = !["workspace", "project"].includes(name);
   const labels = name === "project" ? ["Participants", "Timeline"] : ["Profile", "Projects"];
   panelButtons.forEach((button, index) => { button.textContent = labels[index] || button.textContent; });
@@ -1559,14 +1561,19 @@ function adminRows(payload, kind) {
 }
 
 async function showAdminSurface(kind, { historyMode = "push" } = {}) {
-  if (!capability(`admin.${kind}`)) return;
+  if (kind === "delivery-health" ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
   updateApplicationRoute(kind, "", historyMode);
-  el.admin_title.textContent = kind[0].toUpperCase() + kind.slice(1);
+  el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : kind[0].toUpperCase() + kind.slice(1);
   el.admin_list.replaceChildren(); const loading = document.createElement("p"); loading.textContent = "Loading…"; el.admin_list.append(loading);
-  const endpoint = { users: API.adminUsers, agents: API.adminAgents, audit: API.adminAudit }[kind];
+  const endpoint = { users: API.adminUsers, agents: API.adminAgents, audit: API.adminAudit, "delivery-health": API.adminDeliveryHealth }[kind];
   try {
-    const rows = adminRows(await request(endpoint), kind); el.admin_list.replaceChildren();
+    const payload = await request(endpoint);
+    if (kind === "delivery-health") {
+      renderAdminDeliveryHealth(unwrap(payload));
+      return;
+    }
+    const rows = adminRows(payload, kind); el.admin_list.replaceChildren();
     if (!rows.length) { const empty = document.createElement("p"); empty.className = "empty-state ui-panel"; empty.textContent = `No ${kind} to show.`; el.admin_list.append(empty); return; }
     rows.forEach((row) => {
       const card = document.createElement("article"); card.className = "admin-card ui-panel";
@@ -1575,6 +1582,42 @@ async function showAdminSurface(kind, { historyMode = "push" } = {}) {
       card.append(title, summary); el.admin_list.append(card);
     });
   } catch (error) { el.admin_list.replaceChildren(); const failure = document.createElement("p"); failure.className = "empty-state ui-panel"; failure.textContent = error.message; el.admin_list.append(failure); }
+}
+
+function renderAdminDeliveryHealth(report) {
+  el.admin_list.replaceChildren();
+  const addCard = (titleText, lines) => {
+    const card = document.createElement("article"); card.className = "admin-card ui-panel";
+    const title = document.createElement("strong"); title.textContent = titleText;
+    card.append(title);
+    lines.forEach((line) => { const detail = document.createElement("p"); detail.textContent = line; card.append(detail); });
+    el.admin_list.append(card);
+  };
+  const value = (item) => item === null || item === undefined ? "unavailable" : String(item);
+  const seconds = (item) => item === null || item === undefined ? "unavailable" : `${item} seconds`;
+  addCard("Overall", [`State: ${value(report?.state)}`, `Checked: ${value(report?.checked_at)}`]);
+  const worker = report?.worker || {};
+  addCard("Delivery worker", [
+    `State: ${value(worker.state)}`, `Heartbeat age: ${seconds(worker.age_seconds)}`,
+    `Last successful cycle: ${value(worker.last_success_at)}`,
+    ...(worker.unavailable_reason ? [`Telemetry: ${worker.unavailable_reason}`] : []),
+  ]);
+  const names = { realtime: "Realtime", webhook: "Agent webhooks", workspace_agent: "Workspace Agent", responses_api: "Responses API" };
+  Object.entries(names).forEach(([key, label]) => {
+    const path = report?.paths?.[key] || {};
+    const failure = path.diagnostic_sample?.latest_failed_attempt;
+    addCard(label, [
+      `Queue state: ${value(path.state)}`,
+      `Pending: ${value(path.pending)} · Retrying: ${value(path.retrying)} · Waiting: ${value(path.waiting)} · Terminal: ${value(path.terminal)}`,
+      `Oldest pending: ${seconds(path.oldest_pending_seconds)}`,
+      `Last attempt: ${value(path.last_attempt_at)} · Last success: ${value(path.last_success_at)}`,
+      ...(path.last_success_at === null && path.state !== "unknown" ? ["Delivery acceptance: not yet observed"] : []),
+      `Activation dependency: ${path.activation_dependency === "disabled_in_v1" ? "Disabled in V1" : "Delivery worker (see state above)"}`,
+      failure ? `Last failed attempt in newest 50 rows: ${value(failure.failure_code)}; queue ${value(failure.queue_state)}; HTTP ${value(failure.http_status)}; provider state ${value(failure.provider_state)}; at ${value(failure.at)}`
+        : `Last failed attempt in newest 50 rows: ${path.diagnostic_sample?.scope === "unavailable" ? "unavailable" : "none sampled"}`,
+      ...(path.unavailable_reason ? [`Telemetry: ${path.unavailable_reason}`] : []),
+    ]);
+  });
 }
 
 async function switchProject(projectId, { initial = false, historyMode = "push" } = {}) {
@@ -1965,7 +2008,8 @@ async function loadExpanded() {
     : null;
   if (requestedProject) {
     await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
-  } else if (["users", "agents", "audit"].includes(requestedRoute.surface) && capability(`admin.${requestedRoute.surface}`)) {
+  } else if (["users", "agents", "audit", "delivery-health"].includes(requestedRoute.surface)
+      && (requestedRoute.surface === "delivery-health" ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
     await showAdminSurface(requestedRoute.surface, { historyMode: "replace" });
   } else {
     showWorkspaceSurface({ historyMode: "replace" });

@@ -3,6 +3,7 @@
 require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/ConnectorDeviceService.php';
+require_once dirname(__DIR__) . '/src/SchemaMigrator.php';
 
 class MigrationTestSuite
 {
@@ -80,6 +81,9 @@ try {
         $suite->assertSame('202609050001_expansion_foundation', $versions[0]);
         $roles = $pdo->query('SELECT code FROM system_roles ORDER BY code')->fetchAll(PDO::FETCH_COLUMN);
         $suite->assertSame(['administrator', 'user'], $roles);
+        foreach (['agent_webhook_deliveries', 'workspace_agent_trigger_deliveries', 'responses_api_deliveries'] as $table) {
+            $suite->assertTrue(Db::columnExists($pdo, $table, 'terminal_at'), $table . ' has no terminal transition timestamp.');
+        }
     });
 
     $now = Db::now();
@@ -204,6 +208,24 @@ try {
         $outsiderExchange = $service->exchange($outsiderAuthorization['device_code']);
         $outsiderDevice = $service->authenticate($outsiderExchange['access_token']);
         $suite->assertSame(0, count($service->bindings($outsiderDevice)));
+    });
+
+    $suite->test('terminal migration preserves the old disable timestamp without claiming success', function () use ($suite, $pdo, $projectId, $agentId, $now) {
+        $senderId = (int) $pdo->query("SELECT id FROM project_participants WHERE project_id = {$projectId} AND kind = 'human' LIMIT 1")->fetchColumn();
+        $pdo->prepare('INSERT INTO messages (message_uuid, project_id, project_sequence, sender_participant_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            ->execute([Db::uuidV4(), $projectId, 1, $senderId, 'Migration fixture', $now, $now]);
+        $messageId = (int) $pdo->lastInsertId();
+        $oldCreatedAt = gmdate('Y-m-d H:i:s', time() - 2 * 86400);
+        $pdo->prepare("INSERT INTO responses_api_deliveries (delivery_uuid, project_id, message_id, agent_id, status, next_attempt_at, created_at, delivered_at)
+            VALUES (?, ?, ?, ?, 'dead', ?, ?, ?)")
+            ->execute([Db::uuidV4(), $projectId, $messageId, $agentId, $now, $oldCreatedAt, $now]);
+        $deliveryId = (int) $pdo->lastInsertId();
+        $pdo->exec("DELETE FROM syndicatum_schema_migrations WHERE version = '202609180004_delivery_terminal_timestamps'");
+        $executed = (new SchemaMigrator($pdo))->migrate();
+        $suite->assertSame(['202609180004_delivery_terminal_timestamps'], $executed);
+        $row = $pdo->query("SELECT terminal_at, delivered_at FROM responses_api_deliveries WHERE id = {$deliveryId}")->fetch(PDO::FETCH_ASSOC);
+        $suite->assertSame($now, $row['terminal_at']);
+        $suite->assertSame(null, $row['delivered_at']);
     });
 
     $suite->test('rerunning migrations is idempotent and preserves existing credentials', function () use ($suite, $repository, $pdo, $agentId, $tokenHash, $migrationCount) {

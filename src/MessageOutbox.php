@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
 
 class MessageOutbox
 {
@@ -107,10 +108,10 @@ class MessageOutbox
     {
         $statement = $this->pdo->prepare(
             'UPDATE message_events_outbox
-             SET attempt_count = attempt_count + 1
+             SET attempt_count = attempt_count + 1, last_attempt_at = ?
              WHERE id = ? AND published_at IS NULL AND failed_at IS NULL'
         );
-        $statement->execute([(int) $id]);
+        $statement->execute([Db::now(), (int) $id]);
         return $this->findById((int) $id);
     }
 
@@ -118,31 +119,31 @@ class MessageOutbox
     {
         $statement = $this->pdo->prepare(
             'UPDATE message_events_outbox
-             SET published_at = ?, last_error = NULL
+             SET published_at = ?, last_error = NULL, last_failure_code = NULL
              WHERE id = ? AND published_at IS NULL AND failed_at IS NULL'
         );
         $statement->execute([Db::now(), (int) $id]);
     }
 
-    public function markRetry($id, $error, $delaySeconds)
+    public function markRetry($id, $error, $delaySeconds, $failureCode = null)
     {
         $availableAt = date('Y-m-d H:i:s', time() + max(1, (int) $delaySeconds));
         $statement = $this->pdo->prepare(
             'UPDATE message_events_outbox
-             SET available_at = ?, last_error = ?
+             SET available_at = ?, last_error = ?, last_failure_code = ?
              WHERE id = ? AND published_at IS NULL AND failed_at IS NULL'
         );
-        $statement->execute([$availableAt, self::safeError($error), (int) $id]);
+        $statement->execute([$availableAt, self::safeError($error), self::safeFailureCode($failureCode), (int) $id]);
     }
 
-    public function markDead($id, $error)
+    public function markDead($id, $error, $failureCode = null)
     {
         $statement = $this->pdo->prepare(
             'UPDATE message_events_outbox
-             SET failed_at = ?, last_error = ?
+             SET failed_at = ?, last_error = ?, last_failure_code = ?
              WHERE id = ? AND published_at IS NULL AND failed_at IS NULL'
         );
-        $statement->execute([Db::now(), self::safeError($error), (int) $id]);
+        $statement->execute([Db::now(), self::safeError($error), self::safeFailureCode($failureCode), (int) $id]);
     }
 
     public function acquireWorkerLock($timeoutSeconds)
@@ -182,8 +183,27 @@ class MessageOutbox
 
     private static function safeError($error)
     {
-        $error = preg_replace('/[\r\n\t]+/', ' ', trim((string) $error));
-        return substr((string) $error, 0, 500);
+        $error = trim((string) $error);
+        if (preg_match('/^Realtime publish returned HTTP [1-5][0-9]{2}\.$/', $error)) {
+            return $error;
+        }
+        if (in_array($error, [
+            'Realtime integration is disabled.',
+            'Realtime publish transport failed.',
+            'Realtime publish request was invalid.',
+            'Realtime publish failed before a response was received.',
+            'Realtime publish failed.',
+        ], true)) {
+            return $error;
+        }
+        // This is a durable operational field. Never persist arbitrary text
+        // from a transport, exception, or future worker caller.
+        return 'Realtime delivery failed.';
+    }
+
+    private static function safeFailureCode($code)
+    {
+        return DeliveryFailureTaxonomy::safeCode($code);
     }
 
     private static function uuidV4()

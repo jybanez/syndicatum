@@ -1,15 +1,16 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
 
 class WorkspaceAgentTriggerHttpException extends RuntimeException
 {
     private $httpStatus;
 
-    public function __construct($status, $detail = '')
+    public function __construct($status)
     {
         $this->httpStatus = (int) $status;
-        parent::__construct('Workspace Agent API returned HTTP ' . (int) $status . ($detail === '' ? '.' : ': ' . $detail));
+        parent::__construct('Workspace Agent API returned HTTP ' . (int) $status . '.');
     }
 
     public function status() { return $this->httpStatus; }
@@ -137,10 +138,10 @@ class WorkspaceAgentTriggerService
     private function attempt(array $row)
     {
         $claimed = $this->pdo->prepare(
-            "UPDATE workspace_agent_trigger_deliveries SET status = 'sending', attempt_count = attempt_count + 1, next_attempt_at = ?
+            "UPDATE workspace_agent_trigger_deliveries SET status = 'sending', attempt_count = attempt_count + 1, last_attempt_at = ?, next_attempt_at = ?
              WHERE id = ? AND status IN ('queued', 'retry')"
         );
-        $claimed->execute([date('Y-m-d H:i:s', time() + 120), (int) $row['id']]);
+        $claimed->execute([Db::now(), date('Y-m-d H:i:s', time() + 120), (int) $row['id']]);
         if ($claimed->rowCount() !== 1) { return false; }
 
         $triggerId = trim((string) $row['workspace_agent_trigger_id']);
@@ -167,8 +168,7 @@ class WorkspaceAgentTriggerService
         $status = isset($response['status']) ? (int) $response['status'] : 0;
         $decoded = json_decode(isset($response['body']) ? (string) $response['body'] : '', true);
         if ($status !== 202) {
-            $detail = is_array($decoded) && isset($decoded['error']['message']) ? substr((string) $decoded['error']['message'], 0, 300) : '';
-            throw new WorkspaceAgentTriggerHttpException($status, $detail);
+            throw new WorkspaceAgentTriggerHttpException($status);
         }
         $conversationUrl = is_array($decoded) && isset($decoded['conversation_url']) ? (string) $decoded['conversation_url'] : null;
         $runId = is_array($decoded) && isset($decoded['agent_trigger_run_id']) ? (string) $decoded['agent_trigger_run_id'] : null;
@@ -177,7 +177,7 @@ class WorkspaceAgentTriggerService
         try {
             $updated = $this->pdo->prepare(
                 "UPDATE workspace_agent_trigger_deliveries SET status = 'succeeded', response_status = 202,
-                    run_id = ?, conversation_url = ?, last_error = NULL, delivered_at = ? WHERE id = ? AND status = 'sending'"
+                    run_id = ?, conversation_url = ?, last_error = NULL, last_failure_code = NULL, delivered_at = ?, terminal_at = NULL WHERE id = ? AND status = 'sending'"
             );
             $updated->execute([$runId, $conversationUrl, $now, (int) $row['id']]);
             if ($updated->rowCount() !== 1) { $this->pdo->rollBack(); return false; }
@@ -212,9 +212,9 @@ class WorkspaceAgentTriggerService
         curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, 2);
         $body = curl_exec($handle);
         if ($body === false) {
-            $error = curl_error($handle);
+            $failureCode = curl_errno($handle) === 28 ? 'timeout' : 'transport';
             curl_close($handle);
-            throw new RuntimeException('Workspace Agent request failed: ' . $error);
+            throw new DeliveryTransportException($failureCode);
         }
         $status = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
         curl_close($handle);
@@ -223,14 +223,15 @@ class WorkspaceAgentTriggerService
 
     private function markFailed(array $row, Exception $exception, $dead)
     {
-        $error = substr(preg_replace('/[\r\n\t]+/', ' ', $exception->getMessage()), 0, 500);
         $attempt = (int) $row['attempt_count'] + 1;
         $delays = [5, 30, 120, 600, 1800, 3600, 7200];
         $delay = $delays[min(count($delays) - 1, max(0, $attempt - 1))];
         $status = $exception instanceof WorkspaceAgentTriggerHttpException ? $exception->status() : null;
+        $code = DeliveryFailureTaxonomy::fromException($exception, $status);
+        $error = DeliveryFailureTaxonomy::safeSummary($code, $status);
         $this->pdo->prepare(
-            "UPDATE workspace_agent_trigger_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, last_error = ? WHERE id = ? AND status = 'sending'"
-        )->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, (int) $row['id']]);
+            "UPDATE workspace_agent_trigger_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, last_error = ?, last_failure_code = ?, terminal_at = ? WHERE id = ? AND status = 'sending'"
+        )->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, $code, $dead ? Db::now() : null, (int) $row['id']]);
         $this->pdo->prepare(
             'UPDATE agent_activation_bindings SET workspace_agent_last_failure_at = ?, workspace_agent_last_error = ? WHERE project_id = ? AND agent_id = ?'
         )->execute([Db::now(), $error, (int) $row['project_id'], (int) $row['agent_id']]);
