@@ -234,6 +234,26 @@ try {
             $service->prepareInteractiveContext($access, 'Activation Project', 'Missing Agent');
         }, 'INTERACTIVE_CONTEXT_NOT_FOUND');
 
+        $foreignUser = (new AuthService($pdo))->register([
+            'email' => 'activation-foreign@example.test', 'username' => 'activation-foreign',
+            'display_name' => 'Foreign Project Owner', 'password' => 'foreign project test password',
+            'password_confirmation' => 'foreign project test password',
+        ])['user'];
+        $foreignProject = (new ProjectManagementService($pdo))->createProject($foreignUser['id'],
+            ['name' => 'Foreign Binding Project']);
+        (new ProjectManagementService($pdo))->createAgent($foreignProject['id'], $foreignUser['id'],
+            ['display_name' => 'Foreign ChatGPT Agent', 'provider' => 'chatgpt']);
+        $intentCount = (int) $pdo->query('SELECT COUNT(*) FROM connector_discussion_binding_intents')->fetchColumn();
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, '  FOREIGN   binding PROJECT  ', 'Foreign ChatGPT Agent');
+        }, 'PROJECT_NOT_FOUND');
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, '  FOREIGN   binding PROJECT  ', 'Foreign ChatGPT Agent');
+        }, 'INTERACTIVE_CONTEXT_NOT_FOUND');
+        $suite->same($intentCount,
+            (int) $pdo->query('SELECT COUNT(*) FROM connector_discussion_binding_intents')->fetchColumn(),
+            'Unauthorized project lookup must not create a binding intent');
+
         $prepared = $service->prepare($access, 'Activation Project', 'Intent Created Agent');
         $suite->same('create_on_confirmation', $prepared['agent']['action']);
         $suite->same('pending', $service->contextHealth($access, $prepared['binding_context_id'])['state']);
