@@ -878,7 +878,7 @@ try {
         $suite->same('Unknown', $diagnosis['body']['result']['structuredContent']['result']['agent_identity']);
     });
 
-    $suite->test('responsibility API role decisions follow persisted membership and handoff state', function () use ($suite, $baseUrl, $pdo, $ownerId, $memberId, $humanHeaders, $memberHeaders, $agentTwoHeaders, $secret) {
+    $suite->test('responsibility API role decisions follow persisted membership and handoff state', function () use ($suite, $baseUrl, $pdo, $ownerId, $memberId, $humanHeaders, $memberHeaders, $agentTwoHeaders, $secret, &$contractSamples) {
         $project = projectApiInsertProject($pdo, $ownerId,
             'Responsibility Role Matrix', 'responsibility-role-matrix');
         $targetId = projectApiAddMember($pdo, $project, $memberId, 'member');
@@ -976,6 +976,33 @@ try {
         $last->execute([$corrected, $project]);
         $suite->same(['kind' => 'corrected', 'prior_state' => 'resolved'],
             $last->fetch(PDO::FETCH_ASSOC));
+        $inboxPath = '/api/v1/project-responsibility-inbox.php?project_id=' . $project;
+        $resolvedPage = projectApiRequest($baseUrl, 'GET', $inboxPath
+            . '&view=resolved', $adminHeaders);
+        $suite->same(200, $resolvedPage['status'], $resolvedPage['raw']);
+        $contractSamples[] = ['schema' => 'ResponsibilityInboxPageResponse',
+            'path' => '/api/v1/project-responsibility-inbox.php',
+            'method' => 'get', 'status' => 200, 'body' => $resolvedPage['body']];
+        $suite->same(1, count($resolvedPage['body']['data']));
+        $suite->same($requestId,
+            $resolvedPage['body']['data'][0]['request_message_id']);
+        $suite->same($corrected,
+            $resolvedPage['body']['data'][0]['latest_evidence_message_id']);
+        $suite->same('resolved', $resolvedPage['body']['data'][0]['state']);
+        $mine = projectApiRequest($baseUrl, 'GET', $inboxPath
+            . '&view=mine', $memberHeaders);
+        $suite->same(200, $mine['status'], $mine['raw']);
+        $suite->same([], $mine['body']['data']);
+        $foreignInbox = projectApiRequest($baseUrl, 'GET', $inboxPath,
+            $agentTwoHeaders);
+        $suite->same(404, $foreignInbox['status'], $foreignInbox['raw']);
+        $suite->same('PROJECT_NOT_FOUND', $foreignInbox['body']['code']);
+        $invalidLimit = projectApiRequest($baseUrl, 'GET', $inboxPath
+            . '&limit=51', $adminHeaders);
+        $suite->same(422, $invalidLimit['status'], $invalidLimit['raw']);
+        $invalidView = projectApiRequest($baseUrl, 'GET', $inboxPath
+            . '&view=implicit_completion', $adminHeaders);
+        $suite->same(422, $invalidView['status'], $invalidView['raw']);
     });
 
     $suite->test('responsibility API rejects mention authority and preserves orphaned handoff rules', function () use ($suite, $baseUrl, $pdo, $ownerId, $humanHeaders, $secret) {

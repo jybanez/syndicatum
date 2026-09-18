@@ -183,6 +183,24 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-responsibility-inbox.php:
+    get:
+      summary: Derive responsibility items from canonical direct messages and events
+      description: Read-only; no mutable inbox status. A page scans at most limit direct-request addressee rows, so a filtered page may contain fewer items than limit while has_more remains true. Historical rows without a verified membership-generation baseline are returned as unknown.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 50 } }
+        - { name: before, in: query, description: Opaque project-bound cursor for older direct-request addressee rows., schema: { type: string } }
+        - { name: view, in: query, schema: { type: string, enum: [all, mine, addressed_to_me, unacknowledged, waiting_on_others, blocked, transfer_pending, resolution_pending, disputed, orphaned, resolved, unknown], default: all } }
+      responses:
+        '200':
+          description: Derived responsibility items and an opaque candidate-page cursor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResponsibilityInboxPageResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-message.php:
     get:
       summary: Read one canonical message
@@ -454,6 +472,38 @@ components:
       properties:
         data: { type: array, items: { $ref: '#/components/schemas/Message' } }
         page: { $ref: '#/components/schemas/MessagePage' }
+    ResponsibilityInboxItem:
+      type: object
+      required: [project_id, request_message_id, request_sequence, request_created_at, requester_participant_id, initial_responder_participant_id, current_responder_participant_id, state, blocked, work_started, acknowledged, latest_evidence_message_id, latest_evidence_sequence, projection_error, canonical_message_api_href]
+      properties:
+        project_id: { type: integer, minimum: 1 }
+        request_message_id: { type: integer, minimum: 1 }
+        request_sequence: { type: integer, minimum: 1 }
+        request_created_at: { type: string }
+        requester_participant_id: { type: integer, minimum: 1 }
+        initial_responder_participant_id: { type: integer, minimum: 1 }
+        current_responder_participant_id: { type: integer, minimum: 1, nullable: true }
+        state: { type: string, enum: [open, resolution_pending, transfer_pending, disputed, orphaned, resolved, unknown] }
+        blocked: { type: boolean, nullable: true }
+        work_started: { type: boolean, nullable: true }
+        acknowledged: { type: boolean }
+        latest_evidence_message_id: { type: integer, minimum: 1, nullable: true }
+        latest_evidence_sequence: { type: integer, minimum: 1, nullable: true }
+        projection_error: { type: string, nullable: true, enum: [RESPONSIBILITY_BASELINE_UNAVAILABLE, RESPONSIBILITY_PROJECTION_FAILED, null] }
+        canonical_message_api_href: { type: string }
+    ResponsibilityInboxPageResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ResponsibilityInboxItem' } }
+        page:
+          type: object
+          required: [limit, scanned, has_more, older_cursor]
+          properties:
+            limit: { type: integer, minimum: 1, maximum: 50 }
+            scanned: { type: integer, minimum: 0, maximum: 50 }
+            has_more: { type: boolean }
+            older_cursor: { type: string, nullable: true }
     MessageResponse:
       type: object
       required: [data]

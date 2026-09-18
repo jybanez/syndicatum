@@ -503,7 +503,8 @@ PR #6 head `7cf0a07` in project message #2726. The Assessor separately
 accepted the pure reducer transition/role matrix at `7c0eabc` (#2738), the
 bounded persistence and canonical-message atomicity/idempotency paths at
 `2acdad9` (#2740), and genuine concurrent two-writer serialization plus HTTP
-409 conflict mapping at `a8a6241` (#2743), all at **source/CI scope only**.
+409 conflict mapping at `a8a6241` (#2743), and the bounded API foreign-ID /
+exercised-role paths at `d3d3705` (#2751), all at **source/CI scope only**.
 Those decisions do not close P1.1: the full API authorization/foreign-ID
 matrix, pure inbox derivation, historical direct-message migration/backfill,
 and installed-client acceptance remain open. The implementation items below

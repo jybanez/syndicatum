@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/ProjectRepository.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
+require_once dirname(__DIR__) . '/src/ResponsibilityInboxService.php';
 
 function responsibilityAssert($condition, $message)
 {
@@ -325,6 +326,114 @@ try {
         && $finalState['blocked'] === ($winner[2] === 'blocked'),
         'Final reducer state includes anything beyond the committed event.');
     echo "PASS two live writers, one event, one stale conflict, no losing message.\n";
+
+    $inbox = new ResponsibilityInboxService($pdo);
+    $ownerView = $inbox->page($owner, ['view' => 'waiting_on_others']);
+    $ownedRequests = array_column($ownerView['data'], 'request_message_id');
+    responsibilityAssert(in_array($requestId, $ownedRequests, true)
+        && in_array($raceRequestId, $ownedRequests, true),
+        'Requester inbox omitted canonical work waiting on responders.');
+    $targetView = $inbox->page($target, ['view' => 'mine']);
+    $targetItems = array_values(array_filter($targetView['data'], function ($item) use ($requestId) {
+        return $item['request_message_id'] === $requestId;
+    }));
+    responsibilityAssert(count($targetItems) === 1
+        && $targetItems[0]['current_responder_participant_id'] === $targetParticipant
+        && $targetItems[0]['state'] === 'open'
+        && $targetItems[0]['latest_evidence_message_id'] === $addressedEvent['message']['id'],
+        'Inbox did not rebuild transferred responsibility from canonical evidence.');
+
+    $management->updateMember($projectId, $ownerId, $targetId, 'member', true);
+    $management->updateMember($projectId, $ownerId, $targetId, 'member', false);
+    $orphanView = $inbox->page($owner, ['view' => 'orphaned']);
+    $orphanItems = array_values(array_filter($orphanView['data'],
+        function ($item) use ($requestId) {
+            return $item['request_message_id'] === $requestId;
+        }));
+    responsibilityAssert(count($orphanItems) === 1
+        && $orphanItems[0]['current_responder_participant_id'] === null,
+        'Inbox silently restored responsibility after membership reactivation.');
+    $orphanOffer = responsibilityWrite($repository, $owner, $requestId,
+        $responderParticipant, $addressedEvent['message']['id'],
+        'transfer_offered', 'responsibility-inbox-orphan-offer',
+        ['target_participant_id' => $responderParticipant]);
+    $pendingView = $inbox->page($owner, ['view' => 'transfer_pending']);
+    $pendingItems = array_values(array_filter($pendingView['data'],
+        function ($item) use ($requestId) {
+            return $item['request_message_id'] === $requestId;
+        }));
+    responsibilityAssert(count($pendingItems) === 1
+        && $pendingItems[0]['current_responder_participant_id'] === null,
+        'Orphaned transfer offer invented a current owner before acceptance.');
+    $orphanDecline = responsibilityWrite($repository, $responder, $requestId,
+        $responderParticipant, $orphanOffer['message']['id'],
+        'transfer_declined', 'responsibility-inbox-orphan-decline',
+        ['reference_event_id' => $orphanOffer['message']['id']]);
+    $restoredAgain = responsibilityWrite($repository, $owner, $requestId,
+        $responderParticipant, $orphanDecline['message']['id'],
+        'responder_restored', 'responsibility-inbox-restore');
+    $repository->updateMessage($owner, $requestId,
+        ['body' => 'Edited source request text']);
+    $repository->deleteMessage($owner, $requestId);
+    $restoredView = $inbox->page($target, ['view' => 'mine']);
+    $restoredItems = array_values(array_filter($restoredView['data'],
+        function ($item) use ($requestId) {
+            return $item['request_message_id'] === $requestId;
+        }));
+    responsibilityAssert(count($restoredItems) === 1
+        && $restoredItems[0]['latest_evidence_message_id']
+            === $restoredAgain['message']['id']
+        && $restoredItems[0]['state'] === 'open',
+        'Inbox lost the canonical item after source edit/soft deletion or restoration.');
+
+    $dual = $repository->createMessage($owner, [
+        'body' => 'Two independent direct responsibilities',
+        'direct_participant_ids' => [$responderParticipant, $targetParticipant],
+    ]);
+    $beforeRead = $pdo->prepare('SELECT participant_id, seen_at, acknowledged_at
+        FROM message_addressees WHERE message_id = ? ORDER BY participant_id');
+    $beforeRead->execute([$dual['message']['id']]);
+    $untouchedAddressees = $beforeRead->fetchAll(PDO::FETCH_ASSOC);
+    $inbox->page($responder, ['view' => 'unacknowledged']);
+    $beforeRead->execute([$dual['message']['id']]);
+    responsibilityAssert($beforeRead->fetchAll(PDO::FETCH_ASSOC) === $untouchedAddressees,
+        'Reading the derived inbox mutated message seen/acknowledgement state.');
+    $old = $repository->createMessage($owner, [
+        'body' => 'Historical request without verified membership generation',
+        'direct_participant_ids' => [$responderParticipant],
+    ]);
+    $pdo->prepare('UPDATE message_addressees
+        SET responsibility_status_generation = NULL
+        WHERE message_id = ? AND participant_id = ?')
+        ->execute([$old['message']['id'], $responderParticipant]);
+    $legacyPage = $inbox->page($responder, ['view' => 'unknown']);
+    responsibilityAssert(count($legacyPage['data']) === 1
+        && $legacyPage['data'][0]['request_message_id'] === $old['message']['id']
+        && $legacyPage['data'][0]['projection_error'] === 'RESPONSIBILITY_BASELINE_UNAVAILABLE',
+        'Historical direct message was silently assigned a responsibility state.');
+
+    $cursor = null;
+    $keys = [];
+    do {
+        $filters = ['limit' => 1];
+        if ($cursor !== null) {
+            $filters['before'] = $cursor;
+        }
+        $page = $inbox->page($owner, $filters);
+        foreach ($page['data'] as $item) {
+            $keys[] = $item['request_message_id'] . ':'
+                . $item['initial_responder_participant_id'];
+        }
+        $cursor = $page['page']['older_cursor'];
+    } while ($page['page']['has_more']);
+    responsibilityAssert(count($keys) === count(array_unique($keys))
+        && in_array($dual['message']['id'] . ':' . $responderParticipant, $keys, true)
+        && in_array($dual['message']['id'] . ':' . $targetParticipant, $keys, true),
+        'Inbox cursor duplicated or omitted one direct addressee of a message.');
+    responsibilityExpectFailure(function () use ($inbox, $foreign, $cursor) {
+        $inbox->page($foreign, ['before' => $cursor]);
+    }, 'Invalid inbox cursor.');
+    echo "PASS canonical inbox rebuild, unknown baseline, and multi-addressee pagination.\n";
 
     echo "Responsibility persistence and conflict tests passed.\n";
 } finally {
