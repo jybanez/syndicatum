@@ -69,10 +69,13 @@ Run the credential-free public preflight with
 rate-limit blocks, Realtime backlog/recent failures, webhook backlog/recent
 dead letters, Workspace Agent trigger deliveries, and Responses API activation
 deliveries. The latter two include queued/retrying (and, for Responses API,
-waiting) work, dead entries created within the last 24 hours, and oldest
-pending age. The delivery tables do not record a separate time of transition
-to `dead`, so this counter must not be read as the number that *became* dead
-within the last 24 hours.
+waiting) work, dead transitions within the last 24 hours, and oldest pending
+age. Realtime uses `failed_at`; webhook, Workspace Agent, and Responses API
+deliveries use `terminal_at`. For rows already dead before the terminal-time
+migration, the backfill uses the last attempt, the prior disable timestamp,
+or row creation in that order, so historical counts can be approximate. The
+backfill also clears `delivered_at` on dead rows previously stamped by the
+disabled-path migration, so they no longer masquerade as successful delivery.
 Each delivery path now reports `ok`, `degraded`, or `unknown` and the last
 successful publish/delivery timestamp (UTC, or `null` when none is recorded).
 Missing tables produce `unknown` with null counts, and the overall state is

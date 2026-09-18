@@ -53,6 +53,7 @@ try {
         'database' => 'ok',
         'state' => 'ok',
         'missing_delivery_tables' => [],
+        'missing_delivery_columns' => [],
         'worker' => ['state' => 'unknown', 'last_success_at' => null,
             'age_seconds' => null, 'stale_after_seconds' => $workerStaleSeconds],
         'rate_limits' => ['active_blocks' => 0, 'recent_hits' => 0],
@@ -100,43 +101,49 @@ try {
         $status['realtime_outbox'] = operationalUnknownDelivery();
         $status['realtime_outbox']['failed_last_24h'] = null;
     }
-    if (Db::tableExists($pdo, 'agent_webhook_deliveries')) {
+    if (Db::tableExists($pdo, 'agent_webhook_deliveries')
+        && Db::columnExists($pdo, 'agent_webhook_deliveries', 'terminal_at')) {
         $pending = "status IN ('queued','sending','retry')";
         $status['agent_webhooks']['pending'] = operationalScalar($pdo, "SELECT COUNT(*) FROM agent_webhook_deliveries WHERE {$pending}");
         $status['agent_webhooks']['dead_last_24h'] = operationalScalar($pdo,
-            "SELECT COUNT(*) FROM agent_webhook_deliveries WHERE status = 'dead' AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)");
+            "SELECT COUNT(*) FROM agent_webhook_deliveries WHERE status = 'dead' AND terminal_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)");
         $status['agent_webhooks']['oldest_pending_seconds'] = operationalOldestAge($pdo, 'agent_webhook_deliveries', $pending);
         $status['agent_webhooks']['last_success_at'] = operationalLastSuccess($pdo, 'agent_webhook_deliveries', 'delivered_at');
         $status['agent_webhooks']['state'] = operationalDeliveryState(
             $status['agent_webhooks']['dead_last_24h'], $status['agent_webhooks']['oldest_pending_seconds']);
     } else {
-        $status['missing_delivery_tables'][] = 'agent_webhook_deliveries';
+        if (Db::tableExists($pdo, 'agent_webhook_deliveries')) { $status['missing_delivery_columns'][] = 'agent_webhook_deliveries.terminal_at'; }
+        else { $status['missing_delivery_tables'][] = 'agent_webhook_deliveries'; }
         $status['agent_webhooks'] = operationalUnknownDelivery();
     }
-    if (Db::tableExists($pdo, 'workspace_agent_trigger_deliveries')) {
+    if (Db::tableExists($pdo, 'workspace_agent_trigger_deliveries')
+        && Db::columnExists($pdo, 'workspace_agent_trigger_deliveries', 'terminal_at')) {
         $pending = "status IN ('queued','sending','retry')";
         $status['workspace_agent_triggers']['pending'] = operationalScalar($pdo, "SELECT COUNT(*) FROM workspace_agent_trigger_deliveries WHERE {$pending}");
         $status['workspace_agent_triggers']['dead_last_24h'] = operationalScalar($pdo,
-            "SELECT COUNT(*) FROM workspace_agent_trigger_deliveries WHERE status = 'dead' AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)");
+            "SELECT COUNT(*) FROM workspace_agent_trigger_deliveries WHERE status = 'dead' AND terminal_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)");
         $status['workspace_agent_triggers']['oldest_pending_seconds'] = operationalOldestAge($pdo, 'workspace_agent_trigger_deliveries', $pending);
         $status['workspace_agent_triggers']['last_success_at'] = operationalLastSuccess($pdo, 'workspace_agent_trigger_deliveries', 'delivered_at');
         $status['workspace_agent_triggers']['state'] = operationalDeliveryState(
             $status['workspace_agent_triggers']['dead_last_24h'], $status['workspace_agent_triggers']['oldest_pending_seconds']);
     } else {
-        $status['missing_delivery_tables'][] = 'workspace_agent_trigger_deliveries';
+        if (Db::tableExists($pdo, 'workspace_agent_trigger_deliveries')) { $status['missing_delivery_columns'][] = 'workspace_agent_trigger_deliveries.terminal_at'; }
+        else { $status['missing_delivery_tables'][] = 'workspace_agent_trigger_deliveries'; }
         $status['workspace_agent_triggers'] = operationalUnknownDelivery();
     }
-    if (Db::tableExists($pdo, 'responses_api_deliveries')) {
+    if (Db::tableExists($pdo, 'responses_api_deliveries')
+        && Db::columnExists($pdo, 'responses_api_deliveries', 'terminal_at')) {
         $pending = "status IN ('queued','sending','waiting','retry')";
         $status['responses_api_activations']['pending'] = operationalScalar($pdo, "SELECT COUNT(*) FROM responses_api_deliveries WHERE {$pending}");
         $status['responses_api_activations']['dead_last_24h'] = operationalScalar($pdo,
-            "SELECT COUNT(*) FROM responses_api_deliveries WHERE status = 'dead' AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)");
+            "SELECT COUNT(*) FROM responses_api_deliveries WHERE status = 'dead' AND terminal_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)");
         $status['responses_api_activations']['oldest_pending_seconds'] = operationalOldestAge($pdo, 'responses_api_deliveries', $pending);
         $status['responses_api_activations']['last_success_at'] = operationalLastSuccess($pdo, 'responses_api_deliveries', 'delivered_at');
         $status['responses_api_activations']['state'] = operationalDeliveryState(
             $status['responses_api_activations']['dead_last_24h'], $status['responses_api_activations']['oldest_pending_seconds']);
     } else {
-        $status['missing_delivery_tables'][] = 'responses_api_deliveries';
+        if (Db::tableExists($pdo, 'responses_api_deliveries')) { $status['missing_delivery_columns'][] = 'responses_api_deliveries.terminal_at'; }
+        else { $status['missing_delivery_tables'][] = 'responses_api_deliveries'; }
         $status['responses_api_activations'] = operationalUnknownDelivery();
     }
     // Bounded operator sample. The path-wide state/counts above remain the

@@ -203,7 +203,7 @@ class ResponsesApiActivationService
         $now = Db::now();
         $this->pdo->beginTransaction();
         try {
-            $updated = $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'succeeded', response_status = ?, response_id = ?, response_state = ?, last_error = NULL, last_failure_code = NULL, delivered_at = ? WHERE id = ? AND status IN ('sending', 'waiting')");
+            $updated = $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'succeeded', response_status = ?, response_id = ?, response_state = ?, last_error = NULL, last_failure_code = NULL, delivered_at = ?, terminal_at = NULL WHERE id = ? AND status IN ('sending', 'waiting')");
             $updated->execute([$httpStatus, $responseId, $state, $now, (int) $row['id']]);
             if ($updated->rowCount() !== 1) { $this->pdo->rollBack(); return; }
             $this->pdo->prepare('UPDATE agent_activation_bindings SET responses_last_response_id = ?, responses_last_success_at = ?, responses_last_error = NULL WHERE project_id = ? AND agent_id = ?')
@@ -222,8 +222,8 @@ class ResponsesApiActivationService
         $code = DeliveryFailureTaxonomy::fromException($exception, $status);
         $error = DeliveryFailureTaxonomy::safeSummary($code, $status);
         $providerState = $exception instanceof DeliveryProviderStateException ? $exception->state() : null;
-        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, response_id = NULL, response_state = ?, last_error = ?, last_failure_code = ? WHERE id = ? AND status IN ('sending', 'waiting')")
-            ->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $providerState, $error, $code, (int) $row['id']]);
+        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, response_id = NULL, response_state = ?, last_error = ?, last_failure_code = ?, terminal_at = ? WHERE id = ? AND status IN ('sending', 'waiting')")
+            ->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $providerState, $error, $code, $dead ? Db::now() : null, (int) $row['id']]);
         $this->pdo->prepare('UPDATE agent_activation_bindings SET responses_last_failure_at = ?, responses_last_error = ? WHERE project_id = ? AND agent_id = ?')
             ->execute([Db::now(), $error, (int) $row['project_id'], (int) $row['agent_id']]);
     }

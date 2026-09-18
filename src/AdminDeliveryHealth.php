@@ -50,7 +50,8 @@ class AdminDeliveryHealth
         list($table, $path) = $definition;
         if (!Db::tableExists($pdo, $table)) { return self::unknown('table_missing'); }
         if (!Db::columnExists($pdo, $table, 'last_attempt_at')
-            || !Db::columnExists($pdo, $table, 'last_failure_code')) {
+            || !Db::columnExists($pdo, $table, 'last_failure_code')
+            || ($path !== 'realtime' && !Db::columnExists($pdo, $table, 'terminal_at'))) {
             return self::unknown('diagnostic_migration_missing');
         }
         $realtime = $path === 'realtime';
@@ -59,15 +60,14 @@ class AdminDeliveryHealth
         $retry = $realtime ? "({$pending}) AND attempt_count > 0" : "status = 'retry'";
         $waiting = $path === 'responses_api' ? "status = 'waiting'" : '1 = 0';
         $terminal = $realtime ? 'failed_at IS NOT NULL' : "status = 'dead'";
+        $terminalAt = $realtime ? 'failed_at' : 'terminal_at';
         $success = $realtime ? 'published_at' : 'delivered_at';
-        // Recent terminal count is based on row creation, because these queues
-        // do not yet persist a separate terminal-transition timestamp.
         $sql = "SELECT
             COALESCE(SUM(CASE WHEN {$pending} THEN 1 ELSE 0 END), 0) AS pending,
             COALESCE(SUM(CASE WHEN {$retry} THEN 1 ELSE 0 END), 0) AS retrying,
             COALESCE(SUM(CASE WHEN {$waiting} THEN 1 ELSE 0 END), 0) AS waiting,
             COALESCE(SUM(CASE WHEN {$terminal} THEN 1 ELSE 0 END), 0) AS terminal,
-            COALESCE(SUM(CASE WHEN {$terminal} AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END), 0) AS terminal_last_24h,
+            COALESCE(SUM(CASE WHEN {$terminal} AND {$terminalAt} >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR) THEN 1 ELSE 0 END), 0) AS terminal_last_24h,
             COALESCE(MAX(CASE WHEN {$pending} THEN GREATEST(0, TIMESTAMPDIFF(SECOND, created_at, UTC_TIMESTAMP())) ELSE 0 END), 0) AS oldest_pending_seconds,
             MAX(last_attempt_at) AS last_attempt_at,
             MAX({$success}) AS last_success_at
