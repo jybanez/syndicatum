@@ -1,0 +1,35 @@
+# Only for scripts/docker-acceptance.ps1. The mock ingress is internal to the
+# disposable Compose project and has no published host port.
+services:
+  worker:
+    environment:
+      SYNDICATUM_SETTING_REALTIME_ENABLED: 'true'
+      SYNDICATUM_SETTING_REALTIME_PUBLISH_URL: http://acceptance-ingress:8123/publish
+      SYNDICATUM_SETTING_REALTIME_BACKEND_INGRESS_SECRET: acceptance-only-ingress-secret
+      SYNDICATUM_SETTING_REALTIME_CLIENT_CODE: acceptance-client
+      SYNDICATUM_SETTING_REALTIME_PROJECT_CODE: acceptance-project
+    depends_on:
+      acceptance-ingress:
+        condition: service_healthy
+
+  acceptance-ingress:
+    image: ${SYNDICATUM_IMAGE:-syndicatum:local}
+    user: www-data
+    entrypoint: ["php", "-S", "0.0.0.0:8123", "/acceptance/ingress.php"]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,uid=33,gid=33,mode=1777
+      - /receipts:rw,nosuid,nodev,uid=33,gid=33,mode=0700
+    volumes:
+      - ./tests/fixtures/realtime-acceptance-ingress.php:/acceptance/ingress.php:ro
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8123/health') === 'ok' ? 0 : 1);"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
