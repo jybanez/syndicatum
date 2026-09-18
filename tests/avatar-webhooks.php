@@ -8,6 +8,7 @@ require_once dirname(__DIR__) . '/src/ProjectRepository.php';
 require_once dirname(__DIR__) . '/src/AvatarService.php';
 require_once dirname(__DIR__) . '/src/AgentWebhookService.php';
 require_once dirname(__DIR__) . '/src/AgentWebhookWorker.php';
+require_once dirname(__DIR__) . '/src/MessageDeliveryStatus.php';
 
 class AvatarWebhookTests
 {
@@ -91,6 +92,20 @@ try {
         $suite->true((bool) array_filter($captured[0]['headers'], function ($h) { return strpos($h, 'Idempotency-Key: ') === 0; }));
         $statuses = $pdo->query('SELECT agent_id, status FROM agent_webhook_deliveries ORDER BY agent_id')->fetchAll(PDO::FETCH_KEY_PAIR);
         $suite->same('succeeded', $statuses[$agentOne['agent_id']]); $suite->same('retry', $statuses[$agentTwo['agent_id']]);
+        $failure = $pdo->query("SELECT last_failure_code, last_error, last_attempt_at
+            FROM agent_webhook_deliveries WHERE status = 'retry' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        $suite->same('upstream_error', $failure['last_failure_code']);
+        $suite->same('Delivery failed: upstream_error (HTTP 500).', $failure['last_error']);
+        $suite->true($failure['last_attempt_at'] !== null);
+        $deliveryStatus = MessageDeliveryStatus::inspect($pdo, $message['message']['id']);
+        $agentStatus = null;
+        foreach ($deliveryStatus['addressees'] as $addressee) {
+            if (isset($addressee['agent_id']) && (int) $addressee['agent_id'] === (int) $agentTwo['agent_id']) {
+                $agentStatus = $addressee['activation']['webhook'];
+            }
+        }
+        $suite->same('upstream_error', $agentStatus['failure_code']);
+        $suite->true($agentStatus['next_retry_at'] !== null);
         $query = $pdo->prepare('SELECT pp.agent_id, ma.notified_at FROM message_addressees ma JOIN project_participants pp ON pp.id = ma.participant_id WHERE ma.message_id = ? ORDER BY pp.agent_id');
         $query->execute([$message['message']['id']]); $notified = $query->fetchAll(PDO::FETCH_KEY_PAIR);
         $suite->true($notified[$agentOne['agent_id']] !== null); $suite->same(null, $notified[$agentTwo['agent_id']]);

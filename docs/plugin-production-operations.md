@@ -156,6 +156,16 @@ more specific causal claim. These Realtime fields do not prove addressee
 notification or agent handling. The outbox timestamps are database `DATETIME`
 values without a stored timezone offset; correlate them with the deployment's
 database/PHP timezone configuration before comparing across hosts.
+Webhook, Workspace Agent, and Responses API delivery rows use the same
+bounded HTTP/transport categories where those facts are observable, while
+retaining their provider-specific queue states. Their per-message activation
+projections include last attempt, next retry/poll, last success, terminal
+outcome, HTTP status, and failure category. An unclassified local failure is
+`internal_error`; this does not assert that the remote provider caused it.
+Raw provider error bodies, cURL strings, and exception messages are not
+retained in delivery or binding `last_error` fields. Workspace Agent and
+Responses API activation remain disabled by V1 policy; this schema and source
+coverage do not imply those paths are supported for proactive activation.
 
 ## Incident response
 
