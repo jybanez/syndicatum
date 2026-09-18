@@ -417,6 +417,9 @@ their evidence aligns, while retaining provider-specific queue states. This
 is mapped in the [cross-provider taxonomy](v1-delivery-failure-taxonomy.md).
 It is source/CI scope only, not completion of the administrator-view, live
 cross-provider delivery, or operational recovery gate.
+The host-only operational command now includes a bounded 50-row diagnostic
+sample per path, separating last failed attempt from current path state. This
+is an operator-CLI increment, not the administrator-facing application view.
 
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.
