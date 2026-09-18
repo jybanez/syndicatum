@@ -220,6 +220,83 @@ try {
     responsibilityAssert((int) $check->fetchColumn() === 1,
         'Edit or soft deletion destroyed structured responsibility evidence.');
 
+    // Hold the project sequence row while two separate PHP processes enter
+    // createMessage. Both must be waiting on the real InnoDB lock together.
+    $raceRequest = $repository->createMessage($owner, [
+        'body' => 'Competing writer request',
+        'direct_participant_ids' => [$responderParticipant],
+    ]);
+    $raceRequestId = $raceRequest['message']['id'];
+    $messageCountBeforeRace = (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn();
+    $children = [];
+    $pdo->beginTransaction();
+    try {
+        $lock = $pdo->prepare('SELECT next_sequence FROM project_message_sequences
+            WHERE project_id = ? FOR UPDATE');
+        $lock->execute([$projectId]);
+        responsibilityAssert($lock->fetchColumn() !== false, 'Project sequence lock missing.');
+        foreach (['race-a', 'race-b'] as $key) {
+            $pipes = [];
+            $process = proc_open([PHP_BINARY,
+                __DIR__ . '/fixtures/responsibility-concurrent-writer.php',
+                (string) $projectId, (string) $responderParticipant,
+                (string) $raceRequestId, (string) $responderParticipant,
+                (string) $raceRequestId, $key],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes, dirname(__DIR__));
+            responsibilityAssert(is_resource($process), 'Concurrent writer did not start.');
+            fclose($pipes[0]);
+            stream_set_timeout($pipes[1], 10);
+            $ready = fgets($pipes[1]);
+            responsibilityAssert(is_string($ready)
+                && preg_match('/^READY ([0-9]+)\s*$/', $ready, $match) === 1,
+                'Concurrent writer did not become ready.');
+            $children[] = ['process' => $process, 'pipes' => $pipes,
+                'connection_id' => (int) $match[1]];
+        }
+        $waiters = 0;
+        for ($attempt = 0; $attempt < 30 && $waiters !== 2; $attempt++) {
+            usleep(100000);
+            $probe = $pdo->prepare("SELECT COUNT(*) FROM information_schema.PROCESSLIST
+                WHERE ID IN (?, ?) AND INFO LIKE '%project_message_sequences%'");
+            $probe->execute([$children[0]['connection_id'], $children[1]['connection_id']]);
+            $waiters = (int) $probe->fetchColumn();
+        }
+        responsibilityAssert($waiters === 2,
+            'Two writers were not simultaneously waiting on the sequence lock.');
+        $pdo->commit();
+    } finally {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    }
+    $raceResults = [];
+    foreach ($children as $child) {
+        $raceResults[] = trim(stream_get_contents($child['pipes'][1]));
+        fclose($child['pipes'][1]);
+        $stderr = stream_get_contents($child['pipes'][2]);
+        fclose($child['pipes'][2]);
+        $exitCode = proc_close($child['process']);
+        responsibilityAssert($stderr === '', 'Concurrent writer stderr: ' . $stderr);
+        responsibilityAssert(in_array($exitCode, [0, 2], true),
+            'Concurrent writer exited unexpectedly.');
+    }
+    sort($raceResults);
+    responsibilityAssert(count($raceResults) === 2
+        && strpos($raceResults[0], 'CREATED ') === 0
+        && strpos($raceResults[1], 'ERROR Stale') === 0,
+        'Competing writes did not produce exactly one winner and one conflict: '
+            . implode(' | ', $raceResults));
+    responsibilityAssert((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn()
+        === $messageCountBeforeRace + 1,
+        'Losing concurrent write left a canonical message behind.');
+    $raceCount = $pdo->prepare('SELECT COUNT(*) FROM responsibility_events
+        WHERE request_message_id = ?');
+    $raceCount->execute([$raceRequestId]);
+    responsibilityAssert((int) $raceCount->fetchColumn() === 1,
+        'Competing writes did not leave exactly one responsibility event.');
+    echo "PASS two live writers, one event, one stale conflict, no losing message.\n";
+
     echo "Responsibility persistence and conflict tests passed.\n";
 } finally {
     if (!preg_match('/^syndicatum_resp_test_[a-f0-9]{12}$/', $database)) {

@@ -62,7 +62,7 @@ class ResponsibilityEventService
              JOIN messages em ON em.id = re.event_message_id AND em.project_id = re.project_id
              WHERE re.project_id = ? AND re.request_message_id = ?
                AND re.initial_responder_participant_id = ?
-             ORDER BY em.project_sequence, re.event_message_id'
+             ORDER BY em.project_sequence, re.event_message_id FOR UPDATE'
         );
         $history->execute([$projectId, $requestId, $initialResponderId]);
         $knownEvents = [];

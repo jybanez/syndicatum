@@ -682,8 +682,16 @@ class ProjectRepository
 
     private function nextSequence($projectId)
     {
-        $insert = $this->pdo->prepare('INSERT IGNORE INTO project_message_sequences (project_id, next_sequence) VALUES (?, 1)');
-        $insert->execute([$projectId]);
+        $exists = $this->pdo->prepare(
+            'SELECT next_sequence FROM project_message_sequences WHERE project_id = ?'
+        );
+        $exists->execute([$projectId]);
+        if ($exists->fetchColumn() === false) {
+            $insert = $this->pdo->prepare(
+                'INSERT IGNORE INTO project_message_sequences (project_id, next_sequence) VALUES (?, 1)'
+            );
+            $insert->execute([$projectId]);
+        }
         $lock = $this->pdo->prepare('SELECT next_sequence FROM project_message_sequences WHERE project_id = ? FOR UPDATE');
         $lock->execute([$projectId]);
         $sequence = (int) $lock->fetchColumn();
