@@ -584,8 +584,10 @@ then used the exact `d9ccd63` application image with fresh MySQL 5.7.44 data
 and two authenticated synthetic humans. Its blocked-then-accepted request
 appeared in `Resolved` as `Previously blocked · Work started`, including after
 a full reload. The authenticated projection retained `blocked=true` and one
-resolved request. This is installed wording evidence pending Assessor review,
-not historical-baseline, accessibility, P1.1/P1.2, or release acceptance.
+resolved request. The Assessor accepted this exercised installed historical-
+qualifier wording sub-gate in #2803; evidence/checklist head `e961a95` passed
+all three required V1 CI jobs in run `35401728565` (#2804). This is not
+historical-baseline, accessibility, P1.1/P1.2, or release acceptance.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

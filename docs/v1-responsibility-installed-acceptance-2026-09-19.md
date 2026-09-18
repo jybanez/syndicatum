@@ -211,5 +211,8 @@ exact image `d9ccd63`. GitHub Actions run `35398146572` then passed all
 required jobs at evidence/checklist head `92cbb1a` (#2796). The remaining
 installed matrix and overall P1.1/P1.2 gates remain open.
 
-The installed `Previously blocked` wording probe above is a new bounded result
-pending Assessor review. It does not change the broader gates by itself.
+The Assessor accepted the installed `Previously blocked` wording sub-gate for
+the exercised resolved path and exact `d9ccd63` image in project message
+#2803. Evidence/checklist head `e961a95` then passed all three required V1 CI
+jobs in run `35401728565` (#2804). This does not close the broader historical,
+accessibility, P1.1/P1.2, merge, or release gates.
