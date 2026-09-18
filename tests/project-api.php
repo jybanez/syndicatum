@@ -2,6 +2,7 @@
 
 require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
+require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/McpServiceTokenService.php';
 
 class ProjectApiTestSuite
@@ -975,6 +976,129 @@ try {
         $last->execute([$corrected, $project]);
         $suite->same(['kind' => 'corrected', 'prior_state' => 'resolved'],
             $last->fetch(PDO::FETCH_ASSOC));
+    });
+
+    $suite->test('responsibility API rejects mention authority and preserves orphaned handoff rules', function () use ($suite, $baseUrl, $pdo, $ownerId, $humanHeaders, $secret) {
+        $project = projectApiInsertProject($pdo, $ownerId,
+            'Responsibility Edge Matrix', 'responsibility-edge-matrix');
+        $targetUser = projectApiInsertUser($pdo,
+            'edge-target@project.test', 'Edge Target');
+        $observerUser = projectApiInsertUser($pdo,
+            'edge-observer@project.test', 'Edge Observer');
+        $adminUser = projectApiInsertUser($pdo,
+            'edge-admin@project.test', 'Edge Admin');
+        $targetId = projectApiAddMember($pdo, $project, $targetUser, 'member');
+        $observerId = projectApiAddMember($pdo, $project, $observerUser, 'member');
+        projectApiAddMember($pdo, $project, $adminUser, 'admin');
+        $sessions = [];
+        foreach (['target' => $targetUser, 'observer' => $observerUser,
+            'admin' => $adminUser] as $name => $userId) {
+            $token = 'edge_' . $name . '_' . bin2hex(random_bytes(16));
+            $csrf = bin2hex(random_bytes(16));
+            projectApiSession($pdo, $userId, $token, $csrf);
+            $sessions[$name] = ['Cookie: syndicatum_session=' . $token,
+                'X-CSRF-Token: ' . $csrf];
+        }
+        $agentToken = 'edge_agent_' . bin2hex(random_bytes(20));
+        $responder = projectApiInsertAgent($pdo, $project,
+            'Edge Responder', $agentToken, $secret);
+        $agentHeaders = ['Authorization: Bearer ' . $agentToken];
+        $path = '/api/v1/project-messages.php?project_id=' . $project;
+        $request = projectApiRequest($baseUrl, 'POST', $path, $humanHeaders,
+            ['body' => 'Direct work; observer merely mentioned',
+                'direct_participant_ids' => [$responder['participant_id']],
+                'mention_participant_ids' => [$observerId]]);
+        $suite->same(201, $request['status'], $request['raw']);
+        $requestId = $request['body']['data']['id'];
+        $reply = projectApiRequest($baseUrl, 'POST', $path, $sessions['observer'],
+            ['body' => 'I replied, but do not own this work',
+                'reply_to_message_id' => $requestId]);
+        $suite->same(201, $reply['status'], $reply['raw']);
+        $write = function ($key, $kind, $expected, array $headers,
+            array $extra = []) use ($baseUrl, $path, $requestId, $responder) {
+            return projectApiRequest($baseUrl, 'POST', $path, $headers,
+                ['body' => $kind . ' edge evidence',
+                    'idempotency_key' => 'edge-' . $key,
+                    'responsibility_event' => array_merge([
+                        'kind' => $kind, 'request_message_id' => $requestId,
+                        'initial_responder_participant_id' => $responder['participant_id'],
+                        'expected_event_id' => $expected,
+                    ], $extra)]);
+        };
+        $created = function ($response) use ($suite) {
+            $suite->same(201, $response['status'], $response['raw']);
+            return $response['body']['data']['id'];
+        };
+        $rejected = function ($response, $status, $code) use ($suite) {
+            $suite->same($status, $response['status'], $response['raw']);
+            $suite->same($code, $response['body']['code']);
+        };
+        $rejected($write('mentioned-replier', 'work_started', $requestId,
+            $sessions['observer']), 403, 'RESPONSIBILITY_FORBIDDEN');
+        $proposal = $created($write('first-proposal', 'resolution_proposed',
+            $requestId, $agentHeaders));
+        $rejected($write('requester-withdraw-proposal', 'resolution_withdrawn',
+            $proposal, $humanHeaders, ['reference_event_id' => $proposal]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $withdrawnProposal = $created($write('responder-withdraw-proposal',
+            'resolution_withdrawn', $proposal, $agentHeaders,
+            ['reference_event_id' => $proposal]));
+        $withdrawnRequest = $created($write('requester-withdraw-request',
+            'request_withdrawn', $withdrawnProposal, $humanHeaders));
+        $rejected($write('observer-reopen', 'reopened', $withdrawnRequest,
+            $sessions['observer']), 403, 'RESPONSIBILITY_FORBIDDEN');
+        $reopened = $created($write('admin-reopen', 'reopened',
+            $withdrawnRequest, $sessions['admin']));
+        $firstOffer = $created($write('first-offer', 'transfer_offered',
+            $reopened, $agentHeaders, ['target_participant_id' => $targetId]));
+        $rejected($write('responder-decline', 'transfer_declined',
+            $firstOffer, $agentHeaders,
+            ['reference_event_id' => $firstOffer]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $declined = $created($write('target-decline', 'transfer_declined',
+            $firstOffer, $sessions['target'],
+            ['reference_event_id' => $firstOffer]));
+        $secondOffer = $created($write('second-offer', 'transfer_offered',
+            $declined, $agentHeaders, ['target_participant_id' => $targetId]));
+        $accepted = $created($write('target-accept', 'transfer_accepted',
+            $secondOffer, $sessions['target'],
+            ['reference_event_id' => $secondOffer]));
+
+        $management = new ProjectManagementService($pdo);
+        $management->updateMember($project, $ownerId, $targetUser, 'member', true);
+        $management->updateMember($project, $ownerId, $targetUser, 'member', false);
+        $rejected($write('former-responder-offer-while-orphaned', 'transfer_offered',
+            $accepted, $agentHeaders,
+            ['target_participant_id' => $responder['participant_id']]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $orphanOffer = $created($write('requester-orphan-offer',
+            'transfer_offered', $accepted, $humanHeaders,
+            ['target_participant_id' => $responder['participant_id']]));
+        $orphanDecline = $created($write('orphan-target-decline',
+            'transfer_declined', $orphanOffer, $agentHeaders,
+            ['reference_event_id' => $orphanOffer]));
+        $rejected($write('old-responder-restore', 'responder_restored',
+            $orphanDecline, $agentHeaders),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $restored = $created($write('moderator-restore', 'responder_restored',
+            $orphanDecline, $sessions['admin']));
+        $rejected($write('correction-target-field', 'corrected', $restored,
+            $sessions['admin'], ['reference_event_id' => $restored,
+                'target_participant_id' => $responder['participant_id']]),
+            422, 'VALIDATION_FAILED');
+        $corrected = $created($write('moderator-correction', 'corrected',
+            $restored, $sessions['admin'],
+            ['reference_event_id' => $restored]));
+        $created($write('restored-responder-still-owns-work', 'work_started',
+            $corrected, $sessions['target']));
+        $eventCount = $pdo->prepare('SELECT COUNT(*) FROM responsibility_events
+            WHERE project_id = ? AND request_message_id = ?');
+        $eventCount->execute([$project, $requestId]);
+        $suite->same(13, (int) $eventCount->fetchColumn());
+        $messageCount = $pdo->prepare('SELECT COUNT(*) FROM messages WHERE project_id = ?');
+        $messageCount->execute([$project]);
+        $suite->same(15, (int) $messageCount->fetchColumn(),
+            'Rejected role attempts or invalid correction left canonical messages.');
     });
 
     $suite->test('legacy API can be disabled through the controlled operations setting', function () use ($suite, $baseUrl, $pdo) {
