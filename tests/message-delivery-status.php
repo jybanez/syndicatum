@@ -36,4 +36,13 @@ $accepted = MessageDeliveryStatus::realtimeEvent([
 ]);
 expectState($accepted['terminal_outcome'], 'accepted');
 expectState($accepted['next_retry_at'], null);
+$activation = MessageDeliveryStatus::activationEvent([
+    'delivery_uuid' => 'delivery-1', 'status' => 'retry', 'attempt_count' => 2,
+    'next_attempt_at' => '2026-09-18 07:12:00', 'last_attempt_at' => '2026-09-18 07:10:00',
+    'last_failure_code' => 'timeout', 'response_status' => null, 'delivered_at' => null,
+]);
+expectState($activation['state'], 'pending');
+expectState($activation['next_retry_at'], '2026-09-18 07:12:00');
+expectState($activation['failure_code'], 'timeout');
+expectState($activation['terminal_outcome'], null);
 echo "Message delivery projection contract passed.\n";

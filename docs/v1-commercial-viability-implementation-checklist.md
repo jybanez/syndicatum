@@ -374,8 +374,11 @@ name guessing, while an unbound or unauthorized client learns nothing sensitive.
 remote response, transport, and exception text to bounded status-only
 diagnostics before persistence or worker logging. The Realtime outbox candidate
 also records last-attempt time and a bounded failure category and projects
-retry/terminal state for one message. This is one provider path, not completion
-of the cross-provider telemetry and administrator-view gate.
+retry/terminal state for one message. Webhook, Workspace Agent, and Responses
+API delivery rows now use the same bounded HTTP/transport categories where
+their evidence aligns, while retaining provider-specific queue states. This
+is source/CI scope only, not completion of the administrator-view, live
+cross-provider delivery, or operational recovery gate.
 
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.

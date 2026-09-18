@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
 
 /**
  * Optional PBB Realtime transport for project timeline events.
@@ -323,14 +324,7 @@ class RealtimeIntegration
 
     public static function publishFailureCode($status)
     {
-        $status = (int) $status;
-        if ($status === 0) { return 'transport'; }
-        if ($status === 408) { return 'timeout'; }
-        if ($status === 429) { return 'rate_limiting'; }
-        if ($status === 401 || $status === 403) { return 'authentication'; }
-        if ($status === 404) { return 'routing'; }
-        if ($status >= 500 && $status <= 599) { return 'upstream_error'; }
-        return 'rejected';
+        return DeliveryFailureTaxonomy::fromHttpStatus($status);
     }
 
     private function requiredSetting($key)

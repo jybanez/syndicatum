@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
 
 class MessageOutbox
 {
@@ -202,10 +203,7 @@ class MessageOutbox
 
     private static function safeFailureCode($code)
     {
-        $allowed = ['integration_disabled', 'transport', 'timeout', 'rate_limiting',
-            'authentication', 'routing', 'upstream_error', 'rejected',
-            'invalid_request', 'internal_error'];
-        return in_array($code, $allowed, true) ? $code : 'unknown';
+        return DeliveryFailureTaxonomy::safeCode($code);
     }
 
     private static function uuidV4()

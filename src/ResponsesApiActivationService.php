@@ -2,14 +2,15 @@
 
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/ChatGptOAuthService.php';
+require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
 
 class ResponsesApiHttpException extends RuntimeException
 {
     private $httpStatus;
-    public function __construct($status, $detail = '')
+    public function __construct($status)
     {
         $this->httpStatus = (int) $status;
-        parent::__construct('OpenAI Responses API returned HTTP ' . (int) $status . ($detail === '' ? '.' : ': ' . $detail));
+        parent::__construct('OpenAI Responses API returned HTTP ' . (int) $status . '.');
     }
     public function status() { return $this->httpStatus; }
     public function isPermanent() { return $this->httpStatus >= 400 && $this->httpStatus < 500 && !in_array($this->httpStatus, [408, 409, 429], true); }
@@ -122,8 +123,8 @@ class ResponsesApiActivationService
         $active = $this->pdo->prepare("SELECT COUNT(*) FROM responses_api_deliveries WHERE agent_id = ? AND id <> ? AND status IN ('sending', 'waiting')");
         $active->execute([(int) $row['agent_id'], (int) $row['id']]);
         if ((int) $active->fetchColumn() > 0) { return 'skipped'; }
-        $claimed = $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'sending', attempt_count = attempt_count + 1, next_attempt_at = ? WHERE id = ? AND status IN ('queued', 'retry')");
-        $claimed->execute([date('Y-m-d H:i:s', time() + 120), (int) $row['id']]);
+        $claimed = $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'sending', attempt_count = attempt_count + 1, last_attempt_at = ?, next_attempt_at = ? WHERE id = ? AND status IN ('queued', 'retry')");
+        $claimed->execute([Db::now(), date('Y-m-d H:i:s', time() + 120), (int) $row['id']]);
         if ($claimed->rowCount() !== 1) { return 'skipped'; }
         $payload = [
             'model' => trim((string) $row['responses_model']) ?: 'gpt-5.6-terra',
@@ -149,19 +150,21 @@ class ResponsesApiActivationService
         $state = trim((string) (isset($decoded['status']) ? $decoded['status'] : ''));
         if ($responseId === '') { throw new RuntimeException('OpenAI Responses API did not return a response ID.'); }
         if ($state === 'completed') { $this->markSucceeded($row, $responseId, $state, (int) $response['status']); return 'succeeded'; }
-        if (in_array($state, ['failed', 'cancelled', 'incomplete'], true)) { throw new RuntimeException($this->responseError($decoded)); }
-        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'waiting', response_status = ?, response_id = ?, response_state = ?, last_error = NULL, next_attempt_at = ? WHERE id = ? AND status = 'sending'")
+        if (in_array($state, ['failed', 'cancelled', 'incomplete'], true)) { throw new DeliveryProviderStateException($state); }
+        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'waiting', response_status = ?, response_id = ?, response_state = ?, last_error = NULL, last_failure_code = NULL, next_attempt_at = ? WHERE id = ? AND status = 'sending'")
             ->execute([(int) $response['status'], $responseId, $state ?: 'queued', date('Y-m-d H:i:s', time() + 2), (int) $row['id']]);
         return 'started';
     }
 
     private function poll(array $row)
     {
+        $this->pdo->prepare("UPDATE responses_api_deliveries SET last_attempt_at = ? WHERE id = ? AND status = 'waiting'")
+            ->execute([Db::now(), (int) $row['id']]);
         $response = $this->request('GET', 'https://api.openai.com/v1/responses/' . rawurlencode($row['response_id']), null, $row['responses_api_key_encrypted']);
         $decoded = $this->validResponse($response);
         $state = trim((string) (isset($decoded['status']) ? $decoded['status'] : ''));
         if ($state === 'completed') { $this->markSucceeded($row, $row['response_id'], $state, (int) $response['status']); return 'succeeded'; }
-        if (in_array($state, ['failed', 'cancelled', 'incomplete'], true)) { throw new RuntimeException($this->responseError($decoded)); }
+        if (in_array($state, ['failed', 'cancelled', 'incomplete'], true)) { throw new DeliveryProviderStateException($state); }
         $this->pdo->prepare("UPDATE responses_api_deliveries SET response_state = ?, response_status = ?, next_attempt_at = ? WHERE id = ? AND status = 'waiting'")
             ->execute([$state ?: 'in_progress', (int) $response['status'], date('Y-m-d H:i:s', time() + 2), (int) $row['id']]);
         return 'started';
@@ -172,8 +175,7 @@ class ResponsesApiActivationService
         $decoded = json_decode((string) (isset($response['body']) ? $response['body'] : ''), true);
         $status = (int) (isset($response['status']) ? $response['status'] : 0);
         if ($status < 200 || $status >= 300) {
-            $detail = is_array($decoded) && isset($decoded['error']['message']) ? substr((string) $decoded['error']['message'], 0, 300) : '';
-            throw new ResponsesApiHttpException($status, $detail);
+            throw new ResponsesApiHttpException($status);
         }
         if (!is_array($decoded)) { throw new RuntimeException('OpenAI Responses API returned invalid JSON.'); }
         return $decoded;
@@ -191,7 +193,7 @@ class ResponsesApiActivationService
         curl_setopt($handle, CURLOPT_CONNECTTIMEOUT, 5); curl_setopt($handle, CURLOPT_TIMEOUT, 30);
         curl_setopt($handle, CURLOPT_FOLLOWLOCATION, false); curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, true); curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, 2);
         $body = curl_exec($handle);
-        if ($body === false) { $error = curl_error($handle); curl_close($handle); throw new RuntimeException('OpenAI Responses API request failed: ' . $error); }
+        if ($body === false) { $failureCode = curl_errno($handle) === 28 ? 'timeout' : 'transport'; curl_close($handle); throw new DeliveryTransportException($failureCode); }
         $status = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE); curl_close($handle);
         return ['status' => $status, 'body' => $body];
     }
@@ -201,7 +203,7 @@ class ResponsesApiActivationService
         $now = Db::now();
         $this->pdo->beginTransaction();
         try {
-            $updated = $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'succeeded', response_status = ?, response_id = ?, response_state = ?, last_error = NULL, delivered_at = ? WHERE id = ? AND status IN ('sending', 'waiting')");
+            $updated = $this->pdo->prepare("UPDATE responses_api_deliveries SET status = 'succeeded', response_status = ?, response_id = ?, response_state = ?, last_error = NULL, last_failure_code = NULL, delivered_at = ? WHERE id = ? AND status IN ('sending', 'waiting')");
             $updated->execute([$httpStatus, $responseId, $state, $now, (int) $row['id']]);
             if ($updated->rowCount() !== 1) { $this->pdo->rollBack(); return; }
             $this->pdo->prepare('UPDATE agent_activation_bindings SET responses_last_response_id = ?, responses_last_success_at = ?, responses_last_error = NULL WHERE project_id = ? AND agent_id = ?')
@@ -214,21 +216,15 @@ class ResponsesApiActivationService
 
     private function markFailed(array $row, Exception $exception, $dead)
     {
-        $error = substr(preg_replace('/[\r\n\t]+/', ' ', $exception->getMessage()), 0, 500);
         $attempt = max(1, (int) $row['attempt_count'] + ($row['status'] === 'waiting' ? 0 : 1));
         $delays = [5, 30, 120, 600, 1800, 3600, 7200]; $delay = $delays[min(count($delays) - 1, $attempt - 1)];
         $status = $exception instanceof ResponsesApiHttpException ? $exception->status() : null;
-        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, response_id = NULL, response_state = NULL, last_error = ? WHERE id = ? AND status IN ('sending', 'waiting')")
-            ->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, (int) $row['id']]);
+        $code = DeliveryFailureTaxonomy::fromException($exception, $status);
+        $error = DeliveryFailureTaxonomy::safeSummary($code, $status);
+        $this->pdo->prepare("UPDATE responses_api_deliveries SET status = ?, next_attempt_at = ?, response_status = ?, response_id = NULL, response_state = NULL, last_error = ?, last_failure_code = ? WHERE id = ? AND status IN ('sending', 'waiting')")
+            ->execute([$dead ? 'dead' : 'retry', date('Y-m-d H:i:s', time() + $delay), $status, $error, $code, (int) $row['id']]);
         $this->pdo->prepare('UPDATE agent_activation_bindings SET responses_last_failure_at = ?, responses_last_error = ? WHERE project_id = ? AND agent_id = ?')
             ->execute([Db::now(), $error, (int) $row['project_id'], (int) $row['agent_id']]);
-    }
-
-    private function responseError(array $decoded)
-    {
-        if (isset($decoded['error']['message'])) { return 'OpenAI response failed: ' . substr((string) $decoded['error']['message'], 0, 350); }
-        if (isset($decoded['incomplete_details']['reason'])) { return 'OpenAI response incomplete: ' . (string) $decoded['incomplete_details']['reason']; }
-        return 'OpenAI response ended with status ' . (string) (isset($decoded['status']) ? $decoded['status'] : 'unknown') . '.';
     }
 
     private function encryptionKey($secret) { if ($secret === null || trim((string) $secret) === '') { throw new RuntimeException('PBB_AGENTCHAT_SECRET is required for Responses API configuration.'); } return hash('sha256', "syndicatum-responses-api\n" . $secret, true); }

@@ -121,6 +121,11 @@ jobs:
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
           php tests/operational-health.php | tee ci-evidence/operational-health.txt
           php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
+          php tests/delivery-failure-taxonomy.php | tee ci-evidence/delivery-failure-taxonomy.txt
+          php tests/realtime.php | tee ci-evidence/realtime-delivery.txt
+          php tests/avatar-webhooks.php | tee ci-evidence/agent-webhooks.txt
+          php tests/workspace-agent-triggers.php | tee ci-evidence/workspace-agent-triggers.txt
+          php tests/responses-api-activation.php | tee ci-evidence/responses-api-activation.txt
           php tests/outbox-retry-contract.php | tee ci-evidence/outbox-retry-contract.txt
           python tests/openapi-message-contract.py --php php | tee ci-evidence/openapi-message-contract.txt
       - name: Check portable Codex and Companion adapter contracts

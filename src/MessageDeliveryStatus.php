@@ -41,6 +41,26 @@ class MessageDeliveryStatus
         ];
     }
 
+    public static function activationEvent(array $row)
+    {
+        $state = self::deliveryState($row);
+        $queueStatus = $row['status'];
+        return [
+            'delivery_uuid' => $row['delivery_uuid'],
+            'state' => $state,
+            'queue_status' => $queueStatus,
+            'attempt_count' => (int) $row['attempt_count'],
+            'last_attempt_at' => self::databaseTime(isset($row['last_attempt_at']) ? $row['last_attempt_at'] : null),
+            'next_retry_at' => in_array($queueStatus, ['retry', 'waiting'], true)
+                ? self::databaseTime($row['next_attempt_at']) : null,
+            'last_success_at' => self::databaseTime(isset($row['delivered_at']) ? $row['delivered_at'] : null),
+            'terminal_outcome' => $state === 'pending' ? null : $state,
+            'failure_code' => $state === 'accepted' ? null
+                : (isset($row['last_failure_code']) ? $row['last_failure_code'] : null),
+            'response_status' => isset($row['response_status']) ? (int) $row['response_status'] : null,
+        ];
+    }
+
     private static function databaseTime($value)
     {
         // The outbox stores DATETIME without an offset. Do not claim UTC here
@@ -99,9 +119,18 @@ class MessageDeliveryStatus
             'responses_api_deliveries' => 'responses_api',
         ];
         $available = [];
+        $diagnosticColumns = [];
         foreach ($paths as $table => $name) {
             $available[$table] = Db::tableExists($pdo, $table);
             if (!$available[$table]) { $result['missing_delivery_tables'][] = $table; }
+            if ($available[$table]) {
+                $diagnosticColumns[$table] = [
+                    Db::columnExists($pdo, $table, 'last_attempt_at')
+                        ? 'last_attempt_at' : 'NULL AS last_attempt_at',
+                    Db::columnExists($pdo, $table, 'last_failure_code')
+                        ? 'last_failure_code' : 'NULL AS last_failure_code',
+                ];
+            }
         }
         foreach ($addressQuery->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $address = [
@@ -120,15 +149,13 @@ class MessageDeliveryStatus
                         $address['activation'][$name] = ['state' => 'unknown'];
                         continue;
                     }
-                    $deliveryQuery = $pdo->prepare('SELECT delivery_uuid, status, attempt_count FROM ' . $table . ' WHERE message_id = ? AND agent_id = ?');
+                    $deliveryQuery = $pdo->prepare('SELECT delivery_uuid, status, attempt_count, next_attempt_at,
+                            response_status, delivered_at, ' . implode(', ', $diagnosticColumns[$table]) . '
+                        FROM ' . $table . ' WHERE message_id = ? AND agent_id = ?');
                     $deliveryQuery->execute([(int) $messageId, (int) $row['agent_id']]);
                     $delivery = $deliveryQuery->fetch(PDO::FETCH_ASSOC);
-                    $address['activation'][$name] = $delivery ? [
-                        'delivery_uuid' => $delivery['delivery_uuid'],
-                        'state' => self::deliveryState($delivery),
-                        'queue_status' => $delivery['status'],
-                        'attempt_count' => (int) $delivery['attempt_count'],
-                    ] : ['state' => 'not_enqueued'];
+                    $address['activation'][$name] = $delivery
+                        ? self::activationEvent($delivery) : ['state' => 'not_enqueued'];
                 }
             }
             $result['addressees'][] = $address;
