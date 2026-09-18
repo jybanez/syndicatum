@@ -49,8 +49,9 @@ or credentials into operational diagnostics.
 This check exercises the protected Codex-agent claim path, not ChatGPT
 discussion binding. Run it only with a disposable Codex agent and task; never
 replace a production profile to satisfy this test. Record the installed Codex
-plugin version, server revision, project ID, agent ID, participant ID, and
-non-secret local profile IDs. Do not record claim codes or bearer tokens.
+plugin/build version and provenance, server revision, project ID, agent ID,
+participant ID, non-secret local profile IDs, and the pre-recovery working
+credential state. Do not record claim codes or bearer tokens.
 
 1. Create and claim a disposable Codex agent. Confirm one project participant
    exists for that agent and a permitted protected timeline read succeeds
@@ -59,18 +60,34 @@ non-secret local profile IDs. Do not record claim codes or bearer tokens.
    same agent. Before it is claimed, confirm the existing profile still works
    and the administrative credential status clearly indicates a pending
    replacement without exposing the code or token after the one-time display.
-3. Claim the replacement in the intended Codex task. Confirm the
-   project, agent, and participant IDs are unchanged, and no second participant
-   was created. A protected read using the newly claimed profile succeeds; the old
-   profile's protected read fails as revoked or unauthorized, without silently
-   switching to another identity.
+3. Claim the replacement in the intended Codex task. Confirm the project,
+   agent, and participant IDs are unchanged, no second agent or participant
+   was created, and the new credential is active. A protected read using the
+   newly claimed profile succeeds; the old profile's protected read now fails
+   as revoked or unauthorized, without silently switching to another identity.
 4. Attempt to reuse the claimed code and, in a separate disposable rotation,
-   attempt a superseded or expired code. Each fails without replacing the
-   current valid credential or creating a participant. Verify the operator
-   sees understandable active/pending/revoked status, not secret material.
+   attempt a superseded or expired code. Also attempt a code against a real
+   wrong agent in the same project and a real agent in another disposable
+   project. Each fails without changing the current active identity or token
+   state and without creating a participant.
+5. Restart or reopen the installed Codex client/task. Confirm the recovered
+   profile still resolves to the same project, agent, and participant IDs and
+   performs one permitted protected MCP/project operation using the new
+   credential. The old profile remains revoked after restart.
+6. Verify the operator-facing UI or CLI distinguishes pending, successful,
+   failed, active, and revoked recovery/credential states without printing
+   claim codes or bearer material. If a timeline or audit record exposes
+   recovery events, confirm they preserve the original participant identity
+   instead of implying a newly created actor.
+7. Invalidate or allow expiry of all disposable test credentials and codes,
+   confirm no duplicate recovery artifact remains active, and record the
+   non-secret cleanup outcome.
 
 Use an authorized participant/credential-status view and the canonical project
-timeline to reconcile the observations. A source regression alone does not
+timeline to reconcile the observations. In particular, record the old
+credential's success before replacement claim, its failure only after the
+claim succeeds, and post-restart protected-operation success. A source
+regression alone does not
 pass this installed recovery check; retain the installed build and exact
 published-RC result separately.
 
