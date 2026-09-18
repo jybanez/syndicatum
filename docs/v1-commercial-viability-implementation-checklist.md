@@ -42,7 +42,8 @@ estimates, and the clean-install acceptance plan remain to be assigned.
 **Database baseline:** MySQL 5.7.44 is the owner-selected V1 compatibility
 target. Strict-mode CI and the isolated Docker source-tree install and
 backup/restore rehearsal have passed on that version; see
-[`docker-acceptance-2026-09-17.md`](docker-acceptance-2026-09-17.md). The earlier
+[`docker-acceptance-2026-09-17.md`](docker-acceptance-2026-09-17.md) and the
+[2026-09-18 local rerun](docker-acceptance-2026-09-18.md). The earlier
 8.4 acceptance run is historical candidate evidence, not V1 baseline proof.
 The acceptance harness builds project-unique images and asserts the running
 database version and strict SQL mode before application startup.
@@ -67,6 +68,118 @@ deployment is approved.
       release-artifact acceptance remains open.
 - [ ] Expose health states that distinguish application, database,
       authentication, binding, Realtime, queue, and activation delivery health.
+      The local operator-status command now reports Realtime, webhook,
+      Workspace Agent, and Responses API delivery backlogs separately, including
+      stale/dead work, last-success UTC timestamps, and missing delivery tables.
+      Missing paths now report `unknown` with null metrics rather than a healthy
+      zero; the local read-only run reported `degraded` for one recent Realtime
+      failure. A second [isolated Docker source-tree rerun](docker-acceptance-2026-09-18.md#delivery-observability-rerun)
+      passed the fresh-install delivery-status assertion. This is partial
+      queue and activation visibility;
+      installed-client OAuth/Companion probes, sustained worker consumption,
+      release-artifact verification, and the complete health-state contract
+      remain open. Commercial Assessor project message 2468 also requires
+      explicit queued/retry/dead/success semantics, verified partial-observability
+      behavior for every path, and an operator-visible distinction between canonical
+      message existence and successful activation/handling. Assessor message
+      2475 adds explicit failure-case acceptance for missing tables,
+      stale/no-recent-success, retry-exhausted dead letters, stalled worker,
+      authenticated API and binding outcomes (healthy, stale/missing, revoked),
+      plus verification from the exact published artifact. The current
+      aggregate precedence is documented in the operator runbook; these
+      failure-case assertions are not yet complete.
+      Pure-state tests now assert that a recent terminal failure or pending
+      work older than 300 seconds becomes `degraded`, including the exact
+      300/301-second boundary; Realtime has one database-level retry/dead-letter
+      fixture below, while other delivery paths and operator-action
+      verification remain open.
+      The [2026-09-18 isolated acceptance rerun](docker-acceptance-2026-09-18.md#explicit-worker-heartbeat-rerun)
+      additionally proves a successful worker heartbeat at startup. A later
+      [failure/recovery rerun](docker-acceptance-2026-09-18.md#durable-worker-status-failure-and-recovery-rerun)
+      proves the operator status becomes `degraded` after a stopped worker's
+      heartbeat ages past 120 seconds, then returns to `ok` after restart.
+      A further [queued-work rerun](docker-acceptance-2026-09-18.md#stalled-worker-with-queued-work-rerun)
+      proves that status keeps a pending Realtime event visible while the
+      stalled worker is degraded and after it recovers. Actual consumption
+      and terminal delivery under load remain unverified.
+      A [declared-threshold rerun](docker-acceptance-2026-09-18.md#declared-worker-staleness-threshold-rerun)
+      confirms the Docker health check and operator status use the same
+      configurable V1 threshold (default 120 seconds) in the isolated
+      source-tree build. A non-default Docker threshold, active failing-cycle
+      distinction, and broader traffic behavior remain open.
+      A [due-event recovery rerun](docker-acceptance-2026-09-18.md#due-event-recovery-and-single-receipt-rerun)
+      now proves that one stable-UUID eligible outbox item remains visible
+      and ages during stoppage, then reaches terminal `published` on the
+      first attempt with one internal mock-ingress receipt after restart;
+      the future-scheduled control item remains queued. Canonical post
+      deduplication, crash-boundary exactly-once behavior, production ingress,
+      retry/dead-letter integration at that point, and the exact published
+      artifact remained unverified.
+      A [retry-exhaustion rerun](docker-acceptance-2026-09-18.md#retry-exhaustion-and-dead-letter-observability-rerun)
+      now verifies one Realtime outbox item's HTTP 503 retry, scheduled
+      reavailability, terminal failure at the two-attempt test limit, and
+      degraded operator status with attention; this does not cover the
+      default eight-attempt cadence, other delivery queues, real ingress, or
+      exact published bytes.
+      An [uncertain-outcome rerun](docker-acceptance-2026-09-18.md#uncertain-outcome-replay-rerun)
+      demonstrates that after a simulated remote side effect with HTTP 503,
+      the worker retries the same stable UUID; the mock receiver sees two
+      sends but applies one deduplicated effect, and the outbox eventually
+      reaches `published`. This validates the local replay path and explicitly
+      does not prove production receiver deduplication or exactly-once delivery.
+      A [default eight-attempt rerun](docker-acceptance-2026-09-18.md#default-eight-attempt-contract-and-integration-rerun)
+      now tests the actual outbox processor with no attempt-limit override:
+      seven retries stay pending, attempt eight becomes terminal failed, and
+      eight ingress sends are recorded. A pure executable contract test asserts
+      the V1 delay sequence. Time was accelerated by advancing only the
+      disposable row; real wall-clock scheduling and published bytes remain
+      unverified.
+      A [canonical-versus-activation rerun](docker-acceptance-2026-09-18.md#canonical-record-versus-activationhandling-rerun)
+      verifies that a read-only operator diagnostic reports one active
+      canonical message, a dead Responses API activation, and unconfirmed
+      addressee handling as separate states. This is one direct fixture path,
+      not exhaustive remote activation or published-artifact evidence.
+      An [authenticated API rerun](docker-acceptance-2026-09-18.md#authenticated-api-and-revoked-session-rerun)
+      verifies anonymous 401, valid disposable native-session 200, and
+      revoked-session 401 over HTTP. That run alone did not test project
+      membership, OAuth/MCP, binding states, or the exact published artifact.
+      A [member-scoped rerun](docker-acceptance-2026-09-18.md#member-scoped-project-authorization-rerun)
+      now verifies that one valid session sees its disposable project only
+      during active membership, and that removed membership yields an empty
+      project list and concealed direct context (404). A separate
+      [foreign-owner rerun](docker-acceptance-2026-09-18.md#foreign-owner-project-authorization-rerun)
+      verifies that the same session lists only its authorized project and
+      receives 404 for a real project owned by another fixture user. That run
+      did not cover OAuth/MCP, binding states, live production authorization,
+      or published bytes.
+      An [MCP authorization rerun](docker-acceptance-2026-09-18.md#mcp-oauth-and-service-token-authorization-rerun)
+      now verifies missing/invalid token 401, valid account OAuth token as
+      authenticated-but-unbound, valid project-agent service token as
+      project-authorized, and 401 after each token's revocation. These were
+      persisted token fixtures, not a full OAuth grant or discussion-binding
+      flow; the published-artifact gate remains open.
+      A [binding-health rerun](docker-acceptance-2026-09-18.md#mcp-binding-health-state-rerun)
+      now surfaces `missing`, `invalid`, `healthy`, `stale`, `unusable`,
+      `revoked`, and service-token `not_required` states in the same MCP
+      diagnosis result; an unknown context has no project access, and the
+      probe does not auto-create or substitute an agent identity.
+      Confirmed context lookup also rechecks current owner, project, agent,
+      participant, and Companion activation validity. This is an interactive
+      fixture flow with direct state transitions, not a complete external
+      Companion discussion or user-facing revocation acceptance.
+      A read-only [operator MCP connection CLI](plugin-production-operations.md#monitoring)
+      now projects the same non-secret binding vocabulary separately from
+      authentication, project access, and transport state. Its 12 pure
+      projection cases pass locally and are included in source-contract CI.
+      An [isolated CLI-over-HTTP rerun](docker-acceptance-2026-09-18.md#operator-mcp-connection-cli-http-rerun)
+      also proves invalid/revoked bearer, healthy/missing/stale/unusable OAuth
+      binding, service-token, and unreachable-endpoint projections without
+      captured credential output. Full OAuth/Companion consent and exact
+      published-artifact acceptance remain open.
+      A [missing-observability rerun](docker-acceptance-2026-09-18.md#missing-observability-failure-case-rerun)
+      now asserts that a temporarily absent Realtime table yields `unknown`
+      and null metrics, then returns to `ok` after restoration; the other
+      failure cases and published-artifact proof remain open.
 - [x] Document routine operation and incident-recovery commands.
 
 **Exit evidence:** a clean machine can install, start, back up, restore, and
