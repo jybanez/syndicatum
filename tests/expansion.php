@@ -226,12 +226,16 @@ try {
         $project = $management->createProject($administrator['id'], ['name' => 'Visible Claim Project']);
         $otherProject = $management->createProject($administrator['id'], ['name' => 'Other Claim Project']);
         $created = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Visible Review Agent']);
+        $otherParticipant = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Different Agent']);
+        $otherProjectAgent = $management->createAgent($otherProject['id'], $administrator['id'], ['display_name' => 'Visible Review Agent']);
         $suite->throws('INVALID_CLAIM', function () use ($management, $otherProject, $created) {
             $management->claimAgentByReference($otherProject['name'], 'Visible Review Agent', $created['claim_code']);
         });
         $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created) {
             $management->claimAgentByReference($project['name'], 'Different Agent', $created['claim_code']);
         });
+        $suite->same(false, $management->agentCredentialStatus($project['id'], $administrator['id'], $otherParticipant['agent_id'])['has_active_token']);
+        $suite->same(false, $management->agentCredentialStatus($otherProject['id'], $administrator['id'], $otherProjectAgent['agent_id'])['has_active_token']);
         $claim = $management->claimAgentByReference($project['name'], 'Visible Review Agent', $created['claim_code']);
         $suite->same($project['id'], $claim['project_id']);
         $suite->same('Visible Claim Project', $claim['project_name']);
