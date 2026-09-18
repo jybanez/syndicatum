@@ -572,8 +572,11 @@ authenticated views: the refreshed list and persistent notice were visible,
 switching to `Resolved` showed the same withdrawn request, and canonical
 sequence remained at four successful events with no stale-write message.
 See [the installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md).
-This browser result awaits Assessor review; broader roles/states, transfer,
-dispute, pagination/history, edit/tombstone, and accessibility remain open.
+The Assessor accepted installed browser stale-action conflict refresh/no-side-
+effect UX for this exercised owner-side path in #2795. Exact docs/evidence
+head `92cbb1a` passed all required CI jobs in run `35398146572` (#2796).
+Broader roles/states, transfer, dispute, pagination/history, edit/tombstone,
+and accessibility remain open; neither P1.1 nor P1.2 is closed overall.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

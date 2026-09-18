@@ -170,3 +170,11 @@ bounded scope in #2783. Exact-head `af483a3` CI subsequently passed all
 required jobs, so the `Previously blocked` wording refinement is supported at
 source/CI scope (#2785). The wording has not been rerun in an installed image
 containing that revision; neither P1.1 nor P1.2 is closed overall.
+
+The Assessor subsequently accepted canonical reload/idempotent retry for the
+exercised owner-side path and stale conflict at installed API scope in #2791.
+For the two-browser rerun, #2795 accepted installed browser stale-action
+conflict refresh/no-side-effect UX only for the exercised owner-side path in
+exact image `d9ccd63`. GitHub Actions run `35398146572` then passed all
+required jobs at evidence/checklist head `92cbb1a` (#2796). The remaining
+installed matrix and overall P1.1/P1.2 gates remain open.
