@@ -28,22 +28,16 @@ class DiscussionBindingIntentService
             throw new InvalidArgumentException('project_name and agent_name are required; agent_name may contain at most 120 characters.');
         }
 
-        $project = $this->pdo->prepare("SELECT p.id, p.name FROM projects p JOIN project_members pm ON pm.project_id = p.id
-            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')
-              AND LOWER(p.name) = LOWER(?)");
-        $project->execute([$userId, $projectName]);
-        $projects = $project->fetchAll();
+        $projects = $this->authorizedProjectsNamed($userId, $projectName);
         if (count($projects) !== 1) { throw new RuntimeException(count($projects) ? 'PROJECT_NAME_AMBIGUOUS' : 'PROJECT_NOT_FOUND'); }
         $project = $projects[0];
 
-        $agent = $this->pdo->prepare("SELECT pa.agent_id, pa.display_name FROM project_agents pa
-            WHERE pa.project_id = ? AND pa.status = 'active' AND LOWER(pa.display_name) = LOWER(?)");
-        $agent->execute([(int) $project['id'], $agentName]);
-        $agents = $agent->fetchAll();
+        $agents = $this->activeAgentsNamed((int) $project['id'], $agentName);
         if (count($agents) > 1) { throw new RuntimeException('AGENT_NAME_AMBIGUOUS'); }
         if ($agents && strtolower((string) $this->agentProvider((int) $project['id'], (int) $agents[0]['agent_id'])) !== 'chatgpt') {
             throw new RuntimeException('AGENT_PROVIDER_MISMATCH');
         }
+        if ($agents) { $agentName = $agents[0]['display_name']; }
 
         $intentId = $this->uuid();
         $contextToken = 'syndicatum_context_' . AuthService::randomToken(32);
@@ -81,18 +75,15 @@ class DiscussionBindingIntentService
             throw new InvalidArgumentException('project_name and agent_name are required; agent_name may contain at most 120 characters.');
         }
 
-        $statement = $this->pdo->prepare("SELECT p.id AS project_id, p.name AS project_name, pa.agent_id, pa.display_name
-            FROM projects p
-            JOIN project_members pm ON pm.project_id = p.id
-            JOIN project_agents pa ON pa.project_id = p.id
-            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')
-              AND pa.status = 'active' AND pa.provider = 'chatgpt'
-              AND LOWER(p.name) = LOWER(?) AND LOWER(pa.display_name) = LOWER(?)");
-        $statement->execute([$userId, $projectName, $agentName]);
-        $matches = $statement->fetchAll();
-        if (!$matches) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
-        if (count($matches) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
-        $match = $matches[0];
+        $projects = $this->authorizedProjectsNamed($userId, $projectName);
+        if (!$projects) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
+        if (count($projects) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
+        $project = $projects[0];
+        $agents = $this->activeAgentsNamed((int) $project['id'], $agentName, true);
+        if (!$agents) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
+        if (count($agents) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
+        $match = ['project_id' => $project['id'], 'project_name' => $project['name']]
+            + $agents[0];
 
         $intentId = $this->uuid();
         $contextToken = 'syndicatum_context_' . AuthService::randomToken(32);
@@ -249,6 +240,54 @@ class DiscussionBindingIntentService
         }
         if ($row['status'] === 'pending') { return ['state' => 'pending']; }
         return ['state' => 'unusable'];
+    }
+
+    private function authorizedProjectsNamed($userId, $name)
+    {
+        $sql = "SELECT p.id, p.name FROM projects p JOIN project_members pm ON pm.project_id = p.id
+            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')";
+        $exact = $this->pdo->prepare($sql . ' AND LOWER(p.name) = LOWER(?)');
+        $exact->execute([(int) $userId, $name]);
+        $matches = $exact->fetchAll(PDO::FETCH_ASSOC);
+        if ($matches) { return $matches; }
+        $candidates = $this->pdo->prepare($sql);
+        $candidates->execute([(int) $userId]);
+        return $this->normalizedMatches($candidates, 'name', $name);
+    }
+
+    private function activeAgentsNamed($projectId, $name, $chatGptOnly = false)
+    {
+        $sql = "SELECT pa.agent_id, pa.display_name FROM project_agents pa
+            WHERE pa.project_id = ? AND pa.status = 'active'";
+        if ($chatGptOnly) { $sql .= " AND pa.provider = 'chatgpt'"; }
+        $exact = $this->pdo->prepare($sql . ' AND LOWER(pa.display_name) = LOWER(?)');
+        $exact->execute([(int) $projectId, $name]);
+        $matches = $exact->fetchAll(PDO::FETCH_ASSOC);
+        if ($matches) { return $matches; }
+        $candidates = $this->pdo->prepare($sql);
+        $candidates->execute([(int) $projectId]);
+        return $this->normalizedMatches($candidates, 'display_name', $name);
+    }
+
+    private function normalizedMatches(PDOStatement $candidates, $field, $name)
+    {
+        $key = $this->bindingNameKey($name);
+        $matches = [];
+        while ($row = $candidates->fetch(PDO::FETCH_ASSOC)) {
+            if ($this->bindingNameKey($row[$field]) === $key) {
+                $matches[] = $row;
+                if (count($matches) > 1) { break; }
+            }
+        }
+        $candidates->closeCursor();
+        return $matches;
+    }
+
+    private function bindingNameKey($name)
+    {
+        $collapsed = preg_replace('/[\p{Z}\s]+/u', ' ', (string) $name);
+        if ($collapsed === null) { throw new InvalidArgumentException('Invalid binding name.'); }
+        return mb_strtolower(trim($collapsed), 'UTF-8');
     }
 
     private function agentProvider($projectId, $agentId)

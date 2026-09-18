@@ -15,7 +15,10 @@ class AgentActivationTests
     public function test($name, callable $callback) { try { $callback(); $this->passed++; echo "PASS  $name\n"; } catch (Exception $e) { $this->failed++; echo "FAIL  $name: {$e->getMessage()}\n"; } }
     public function same($expected, $actual) { if ($expected !== $actual) { throw new RuntimeException('Expected ' . var_export($expected, true) . ', got ' . var_export($actual, true)); } }
     public function true($value, $message = 'Expected true.') { if (!$value) { throw new RuntimeException($message); } }
-    public function throws(callable $callback) { try { $callback(); } catch (Exception $e) { return; } throw new RuntimeException('Expected exception.'); }
+    public function throws(callable $callback, $expectedMessage = null) { try { $callback(); } catch (Exception $e) {
+        if ($expectedMessage !== null) { $this->same($expectedMessage, $e->getMessage()); }
+        return;
+    } throw new RuntimeException('Expected exception.'); }
     public function finish() { echo "\n{$this->passed} passed, {$this->failed} failed.\n"; return $this->failed ? 1 : 0; }
 }
 
@@ -210,6 +213,10 @@ try {
         $service = new DiscussionBindingIntentService($pdo);
         $suite->same('missing', $service->contextHealth($access, '')['state']);
         $suite->same('invalid', $service->contextHealth($access, 'not-a-binding-context')['state']);
+        $normalizedInteractive = $service->prepareInteractiveContext($access,
+            '  activation   PROJECT  ', ' oAuTh   Placeholder ');
+        $suite->same('Activation Project', $normalizedInteractive['project']['name']);
+        $suite->same('OAuth Placeholder', $normalizedInteractive['agent']['name']);
         $activationCount = (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn();
         $interactive = $service->prepareInteractiveContext($access, 'Activation Project', 'OAuth Placeholder');
         $suite->same('interactive', $interactive['context_type']);
@@ -277,6 +284,31 @@ try {
         $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Cancelled Agent'")->fetchColumn());
         $suite->same(null, $service->context($access, $cancel['binding_context_id']));
         $suite->same('revoked', $service->contextHealth($access, $cancel['binding_context_id'])['state']);
+
+        $normalized = $service->prepare($access, 'ACTIVATION   project', 'oAuTh   Placeholder');
+        $suite->same('Activation Project', $normalized['project']['name']);
+        $suite->same('OAuth Placeholder', $normalized['agent']['name']);
+        $suite->same('use_existing', $normalized['agent']['action']);
+        $service->cancel($device, $normalized['intent_id']);
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Unknown   Project', 'OAuth Placeholder');
+        }, 'PROJECT_NOT_FOUND');
+        (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'],
+            ['display_name' => 'OAuth  Placeholder', 'provider' => 'chatgpt']);
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Activation Project', 'OAuth   Placeholder');
+        }, 'AGENT_NAME_AMBIGUOUS');
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, 'Activation Project', 'OAuth   Placeholder');
+        }, 'INTERACTIVE_CONTEXT_AMBIGUOUS');
+        (new ProjectManagementService($pdo))->createProject($owner['id'],
+            ['name' => 'Activation  Project', 'slug' => 'activation-double-space']);
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Activation   Project', 'OAuth Placeholder');
+        }, 'PROJECT_NAME_AMBIGUOUS');
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, 'Activation   Project', 'OAuth Placeholder');
+        }, 'INTERACTIVE_CONTEXT_AMBIGUOUS');
     });
 
     exit($suite->finish());

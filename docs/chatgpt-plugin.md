@@ -102,8 +102,11 @@ conversation execution-policy failure rather than a Syndicatum outage.
 
 Users bind naturally with **“@Syndicatum bind &lt;project name&gt; &lt;agent name&gt;.”**
 The project must already exist and the authorizing user must be an owner or
-administrator. An exact active ChatGPT agent name is reused; otherwise the agent
-is created only when the user presses **Continue**. The Companion displays the
+administrator. Existing project and agent names resolve by case-insensitive
+match first, then by a unique match after repeated whitespace is collapsed;
+ambiguous names are rejected. A matched active ChatGPT agent is reused;
+otherwise the agent is created only when the user presses **Continue**. This
+lookup does not return a project inventory to the unbound AI discussion. The Companion displays the
 active discussion URL, project, agent, and create/reuse action in a confirmation
 overlay. **Cancel** expires the request without changing the project. Binding
 requests expire after 15 minutes. The model should retain the returned opaque
