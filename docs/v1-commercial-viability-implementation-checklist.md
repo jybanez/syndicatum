@@ -519,9 +519,18 @@ action contract at `5a33613` (#2775), with the navigation qualification in
 mounted row in the existing Helper timeline. When virtualization or filters
 leave the row unmounted, the source client now provides a read-only evidence
 dialog with project sequence, reply context, revision/tombstone state, and
-explicit navigation without changing timeline filters. This fallback is not
-yet installed-client evidence. Authenticated behavior, reliable evidence
-navigation, keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
+explicit navigation without changing timeline filters. This initially had
+source-only evidence; the narrow installed probe below now confirms the
+mounted and filtered-out navigation paths. Broader authenticated behavior,
+keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
+
+The first [isolated installed-client probe](v1-responsibility-installed-acceptance-2026-09-19.md)
+at `7f69fda` verified a direct request in the owner’s waiting view, mounted
+and filtered-out canonical evidence navigation, and an owner withdrawal that
+updated the inbox and appended one canonical timeline event. It is a narrow
+positive probe; the remaining role/state, conflict, history, responsive, and
+accessibility acceptance cases are still open and the checkboxes below remain
+unchecked pending full evidence and Assessor review.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
