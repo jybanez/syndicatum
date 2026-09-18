@@ -363,6 +363,12 @@ try {
     try {
         $createWorkerFixture = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "INSERT INTO users (username, display_name, created_at, updated_at) VALUES (''{username}'', ''Acceptance worker owner'', UTC_TIMESTAMP(), UTC_TIMESTAMP()); SET @uid = LAST_INSERT_ID(); INSERT INTO workspaces (owner_user_id, name, created_at, updated_at) VALUES (@uid, ''Acceptance worker workspace'', UTC_TIMESTAMP(), UTC_TIMESTAMP()); SET @wid = LAST_INSERT_ID(); INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, created_at, updated_at) VALUES (UUID(), @wid, @uid, ''Acceptance worker project'', ''acceptance-worker'', UTC_TIMESTAMP(), UTC_TIMESTAMP()); SET @pid = LAST_INSERT_ID(); INSERT INTO message_events_outbox (event_uuid, project_id, event_type, payload_json, available_at, created_at) VALUES (UUID(), @pid, ''acceptance.future'', ''{}'', DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR), UTC_TIMESTAMP()); INSERT INTO message_events_outbox (event_uuid, project_id, event_type, payload_json, available_at, created_at) VALUES (''{due_uuid}'', @pid, ''acceptance.due'', ''{}'', DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 MINUTE), DATE_SUB(UTC_TIMESTAMP(), INTERVAL 3 MINUTE))"'.Replace('{username}', $workerFixtureUsername).Replace('{due_uuid}', $dueEventUuid)
         Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $createWorkerFixture) -Capture | Out-Null
+        $healthSessionToken = New-HexSecret 32
+        $healthSessionHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($healthSessionToken))).ToLowerInvariant()
+        $createHealthSession = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "SET @uid = (SELECT id FROM users WHERE username = ''{username}''); INSERT INTO user_system_roles (user_id, role_id, created_at) SELECT @uid, id, UTC_TIMESTAMP() FROM system_roles WHERE code = ''administrator''; INSERT INTO syndicatum_sessions (user_id, token_hash, csrf_token_hash, auth_provider, created_at, last_seen_at, expires_at) VALUES (@uid, ''{token_hash}'', REPEAT(''0'', 64), ''native'', UTC_TIMESTAMP(), UTC_TIMESTAMP(), DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR))"'.Replace('{username}', $workerFixtureUsername).Replace('{token_hash}', $healthSessionHash)
+        Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $createHealthSession) -Capture | Out-Null
+        $deliveryHealthUrl = "$BaseUrl/api/v1/admin/delivery-health.php"
+        $deliveryHealthHeaders = @{ Cookie = "syndicatum_session=$healthSessionToken" }
         Write-Step 'Checking authenticated API and revoked-session outcomes'
         $sessionToken = New-HexSecret 32
         $sessionHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($sessionToken))).ToLowerInvariant()
@@ -433,6 +439,14 @@ try {
             $staleStatus.realtime_outbox.oldest_pending_seconds -lt 180) {
             throw 'Stopped worker with queued work and stale heartbeat did not produce degraded status and operator attention.'
         }
+        $staleHealth = (Invoke-RestMethod -Uri $deliveryHealthUrl -Headers $deliveryHealthHeaders -TimeoutSec 10).data
+        if ($staleHealth.state -ne 'degraded' -or $staleHealth.worker.state -ne 'degraded' -or
+            $staleHealth.paths.realtime.pending -lt 2 -or $staleHealth.paths.realtime.oldest_pending_seconds -lt 180) {
+            throw 'Administrator Delivery health did not expose the stopped worker and aging Realtime queue.'
+        }
+        if (($staleHealth | ConvertTo-Json -Depth 12) -match 'Acceptance canonical message|MYSQL_ROOT_PASSWORD|payload_json') {
+            throw 'Administrator Delivery health exposed protected delivery content.'
+        }
         Start-Sleep -Seconds 2
         $laterStaleOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/plugin-operational-status.php') -Capture -AllowedExitCodes @(2)
         $laterStaleStatus = $laterStaleOutput | ConvertFrom-Json
@@ -462,6 +476,13 @@ try {
     if ($receiptCount -ne '1') {
         throw "Due event was not accepted exactly once by isolated ingress; receipts: $receiptCount"
     }
+    $recoveredHealth = (Invoke-RestMethod -Uri $deliveryHealthUrl -Headers $deliveryHealthHeaders -TimeoutSec 10).data
+    if ($recoveredHealth.state -ne 'ok' -or $recoveredHealth.worker.state -ne 'ok' -or
+        $recoveredHealth.paths.realtime.state -ne 'ok' -or $recoveredHealth.paths.realtime.pending -ne 1 -or
+        -not $recoveredHealth.paths.realtime.last_success_at) {
+        throw 'Administrator Delivery health did not return to healthy after worker recovery and ingress acceptance.'
+    }
+    Write-Host 'Verified administrator Delivery health degraded/healthy transition around real worker restart and one ingress receipt.'
     Write-Step 'Checking retry exhaustion and dead-letter observability'
     $retryEventUuid = [guid]::NewGuid().ToString()
     $retryWorkerArguments = @(
@@ -713,6 +734,8 @@ try {
     $deleteOAuthClient = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "DELETE FROM oauth_clients WHERE client_id = ''{client_id}''"'.Replace('{client_id}', $oauthClientId)
     Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $deleteOAuthClient) -Capture | Out-Null
     Write-Host 'Verified MCP token states and missing, invalid, healthy, stale, unusable, revoked, and not-required binding health without identity creation.'
+    $deleteHealthSession = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "SET @uid = (SELECT id FROM users WHERE username = ''{username}''); DELETE FROM syndicatum_sessions WHERE token_hash = ''{token_hash}''; DELETE FROM user_system_roles WHERE user_id = @uid AND role_id IN (SELECT id FROM system_roles WHERE code = ''administrator'')"'.Replace('{username}', $workerFixtureUsername).Replace('{token_hash}', $healthSessionHash)
+    Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $deleteHealthSession) -Capture | Out-Null
     $deleteWorkerFixture = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "SET @uid = (SELECT id FROM users WHERE username = ''{username}''); SET @pid = (SELECT id FROM projects WHERE owner_user_id = @uid LIMIT 1); DELETE FROM messages WHERE project_id = @pid; DELETE FROM project_participants WHERE project_id = @pid; DELETE FROM project_agents WHERE project_id = @pid; DELETE FROM project_members WHERE project_id = @pid; DELETE FROM projects WHERE id = @pid; DELETE FROM workspaces WHERE owner_user_id = @uid; DELETE FROM users WHERE id = @uid"'.Replace('{username}', $workerFixtureUsername)
     Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $deleteWorkerFixture) -Capture | Out-Null
     $deleteFixtureAgent = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "DELETE FROM chat_agents WHERE project_name = ''{agent_name}''"'.Replace('{agent_name}', $fixtureAgentName)

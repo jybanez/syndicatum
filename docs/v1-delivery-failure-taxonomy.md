@@ -27,6 +27,21 @@ Retryability is not a failure category: webhook and Workspace Agent treat
 4xx other than 408/429 as permanent; Responses also retries 409. All paths
 can terminate at the configured attempt limit. The operator surface must show
 `retry`/`waiting`/`dead`/`succeeded` and timestamps alongside the category.
-The current per-message projection supplies some of these facts; the
-administrator-wide health view and a real operator recovery exercise are
-still open P0.6 work.
+The per-message projection and administrator Delivery health view supply
+these facts at source/CI scope. Operational recovery and published-artifact
+acceptance remain open P0.6 work.
+
+## Mapping rule for new providers
+
+This table is normative for V1 integrations. Before a new provider reuses a
+shared failure code, its integration change must document the actual request,
+response, timeout, and retry semantics that support that mapping. In
+particular, an HTTP status alone must not be promoted to `routing` without a
+provider-specific ingress contract equivalent to Realtime's known 404 case.
+Document any provider-specific state or subcode separately, with an allowlist
+and a reason it is safe to retain. Tests must cover at least one failure,
+retry/terminal disposition, and later success without treating the last failed
+attempt as current health. If the evidence is unavailable, use the bounded
+`internal_error` or an explicit unknown state; do not guess a category from
+remote text. No mapping may persist provider bodies, headers, raw exceptions,
+or credentials.

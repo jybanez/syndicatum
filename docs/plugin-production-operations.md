@@ -190,6 +190,34 @@ coverage do not imply those paths are supported for proactive activation.
 
 ## Incident response
 
+### Delivery-worker recovery check
+
+When delivery is delayed, a system administrator should open **Delivery
+health** and record the affected path, current queue state, pending and retry
+counts, oldest pending age, worker heartbeat state, last attempt, last success,
+and bounded failure category. A missing metric or heartbeat is `unknown`, not
+healthy. Do not open raw delivery payloads, provider response bodies, or
+credentials to diagnose the path.
+
+For a stale or stopped delivery worker, first verify its process/service state
+and the deployment's configuration. Restart the worker through the deployment's
+normal supervisor (for a Docker deployment, `docker compose up --detach
+--wait worker` from the correct release directory). Then reopen **Delivery
+health**: the heartbeat must become current, due queue items should drain,
+and the affected path must return to `ok`. Reconcile a specific item using
+`scripts/plugin-message-delivery-status.php --message-id=NUMBER` and the
+receiver's stable delivery identity when available. A healthy heartbeat alone
+does not prove receiver acceptance; verify a last-success transition and, for
+an external receiver, its receipt or audit record. A future-scheduled item can
+remain pending without making the path degraded.
+
+If a row is terminal/dead, do not reset its status or blindly replay it.
+Preserve its sanitized attempt metadata, determine whether the receiver may
+already have applied the effect, and reconcile by the stable UUID before any
+manual redelivery. There is no general V1 production-safe replay command or
+cross-provider deduplication guarantee. Escalate unresolved terminal work for
+an incident-specific recovery decision.
+
 1. Preserve timestamps, request IDs, sanitized logs, process state, deployment
    commit, and recent configuration changes.
 2. Classify the incident as availability, authorization, data exposure,
