@@ -90,13 +90,15 @@ $database = 'syndicatum_resp_test_' . bin2hex(random_bytes(6));
 if (!preg_match('/^syndicatum_resp_test_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe temporary database name.');
 }
-$admin = new PDO('mysql:host=127.0.0.1;charset=utf8mb4', 'root', '',
+$testRootPassword = getenv('SYNDICATUM_TEST_DB_ROOT_PASSWORD');
+$testRootPassword = $testRootPassword === false ? '' : $testRootPassword;
+$admin = new PDO('mysql:host=127.0.0.1;charset=utf8mb4', 'root', $testRootPassword,
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $admin->exec('CREATE DATABASE `' . $database . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
 putenv('PBB_AGENTCHAT_DB_HOST=127.0.0.1');
 putenv('PBB_AGENTCHAT_DB_NAME=' . $database);
 putenv('PBB_AGENTCHAT_DB_USER=root');
-putenv('PBB_AGENTCHAT_DB_PASS=');
+putenv('PBB_AGENTCHAT_DB_PASS=' . $testRootPassword);
 putenv('PBB_AGENTCHAT_SECRET=' . bin2hex(random_bytes(32)));
 
 try {
@@ -398,6 +400,35 @@ try {
             === $restoredAgain['message']['id']
         && $restoredItems[0]['state'] === 'open',
         'Inbox lost the canonical item after source edit/soft deletion or restoration.');
+
+    // The former responder has a different status generation from the orphan's
+    // last responder. Acceptance must anchor the newly selected responder.
+    $recoveryRequest = $repository->createMessage($owner, [
+        'body' => 'Orphan recovery to a different active responder',
+        'direct_participant_ids' => [$targetParticipant],
+    ]);
+    $recoveryRequestId = $recoveryRequest['message']['id'];
+    $management->updateMember($projectId, $ownerId, $targetId, 'member', true);
+    $recoveryOffer = responsibilityWrite($repository, $owner, $recoveryRequestId,
+        $targetParticipant, $recoveryRequestId, 'transfer_offered',
+        'responsibility-recovery-offer',
+        ['target_participant_id' => $responderParticipant]);
+    $recoveryAccepted = responsibilityWrite($repository, $responder,
+        $recoveryRequestId, $targetParticipant, $recoveryOffer['message']['id'],
+        'transfer_accepted', 'responsibility-recovery-accept',
+        ['reference_event_id' => $recoveryOffer['message']['id']]);
+    $recoveryItems = array_values(array_filter(
+        $inbox->page($responder, ['view' => 'mine'])['data'],
+        function ($item) use ($recoveryRequestId) {
+            return $item['request_message_id'] === $recoveryRequestId;
+        }));
+    responsibilityAssert(count($recoveryItems) === 1
+        && $recoveryItems[0]['state'] === 'open'
+        && $recoveryItems[0]['current_responder_participant_id'] === $responderParticipant
+        && $recoveryItems[0]['latest_evidence_message_id']
+            === $recoveryAccepted['message']['id'],
+        'Accepted orphan handoff stayed unassigned when responder generations differed.');
+    $management->updateMember($projectId, $ownerId, $targetId, 'member', false);
 
     $dual = $repository->createMessage($owner, [
         'body' => 'Two independent direct responsibilities',

@@ -116,7 +116,7 @@ class ResponsibilityEventService
             unset($event['target_id']);
         }
         $priorState = $state['state'];
-        ResponsibilityStateReducer::apply($state, $event, $actor);
+        $state = ResponsibilityStateReducer::apply($state, $event, $actor);
         $newResponderGeneration = in_array($kind,
             ['transfer_accepted', 'responder_restored'], true)
             ? $this->participantGeneration($projectId, $state['responder_id']) : null;
