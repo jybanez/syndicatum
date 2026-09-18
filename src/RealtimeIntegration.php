@@ -154,6 +154,7 @@ class RealtimeIntegration
                 'status' => 'disabled',
                 'retryable' => true,
                 'http_status' => null,
+                'failure_code' => 'integration_disabled',
                 'error' => 'Realtime integration is disabled.',
             ];
         }
@@ -192,6 +193,7 @@ class RealtimeIntegration
                 'status' => 'rejected',
                 'retryable' => $retryable,
                 'http_status' => $status ?: null,
+                'failure_code' => self::publishFailureCode($status),
                 'error' => $this->safeResponseError($response),
             ];
         } catch (InvalidArgumentException $exception) {
@@ -199,6 +201,7 @@ class RealtimeIntegration
                 'status' => 'rejected',
                 'retryable' => false,
                 'http_status' => null,
+                'failure_code' => 'invalid_request',
                 'error' => 'Realtime publish request was invalid.',
             ];
         } catch (Exception $exception) {
@@ -206,6 +209,7 @@ class RealtimeIntegration
                 'status' => 'failed',
                 'retryable' => true,
                 'http_status' => null,
+                'failure_code' => 'internal_error',
                 'error' => 'Realtime publish failed before a response was received.',
             ];
         }
@@ -315,6 +319,18 @@ class RealtimeIntegration
         // The worker persists this string in outbox diagnostics, so only keep
         // a bounded numeric status that cannot echo credentials or message text.
         return $status > 0 ? ('Realtime publish returned HTTP ' . $status . '.') : 'Realtime publish failed.';
+    }
+
+    public static function publishFailureCode($status)
+    {
+        $status = (int) $status;
+        if ($status === 0) { return 'transport'; }
+        if ($status === 408) { return 'timeout'; }
+        if ($status === 429) { return 'rate_limiting'; }
+        if ($status === 401 || $status === 403) { return 'authentication'; }
+        if ($status === 404) { return 'routing'; }
+        if ($status >= 500 && $status <= 599) { return 'upstream_error'; }
+        return 'rejected';
     }
 
     private function requiredSetting($key)

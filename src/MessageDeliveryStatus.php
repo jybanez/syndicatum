@@ -23,6 +23,31 @@ class MessageDeliveryStatus
         return 'pending';
     }
 
+    public static function realtimeEvent(array $row)
+    {
+        $state = self::deliveryState($row);
+        $attemptCount = (int) $row['attempt_count'];
+        return [
+            'event_uuid' => $row['event_uuid'],
+            'event_type' => $row['event_type'],
+            'attempt_count' => $attemptCount,
+            'state' => $state,
+            'last_attempt_at' => self::databaseTime(isset($row['last_attempt_at']) ? $row['last_attempt_at'] : null),
+            'next_retry_at' => $state === 'pending' && $attemptCount > 0
+                ? self::databaseTime($row['available_at']) : null,
+            'terminal_outcome' => $state === 'pending' ? null : $state,
+            'failure_code' => $state === 'accepted' ? null
+                : (isset($row['last_failure_code']) ? $row['last_failure_code'] : null),
+        ];
+    }
+
+    private static function databaseTime($value)
+    {
+        // The outbox stores DATETIME without an offset. Do not claim UTC here
+        // unless the deployment timezone is independently established.
+        return $value === null || $value === '' ? null : (string) $value;
+    }
+
     public static function inspect(PDO $pdo, $messageId)
     {
         $query = $pdo->prepare('SELECT id, message_uuid, project_id, project_sequence, created_at, deleted_at FROM messages WHERE id = ?');
@@ -45,16 +70,17 @@ class MessageDeliveryStatus
             'missing_delivery_tables' => [],
         ];
         if (Db::tableExists($pdo, 'message_events_outbox')) {
-            $outbox = $pdo->prepare('SELECT event_uuid, event_type, attempt_count, published_at, failed_at FROM message_events_outbox WHERE message_id = ? ORDER BY id');
+            $attemptColumn = Db::columnExists($pdo, 'message_events_outbox', 'last_attempt_at')
+                ? 'last_attempt_at' : 'NULL AS last_attempt_at';
+            $failureColumn = Db::columnExists($pdo, 'message_events_outbox', 'last_failure_code')
+                ? 'last_failure_code' : 'NULL AS last_failure_code';
+            $outbox = $pdo->prepare('SELECT event_uuid, event_type, attempt_count, available_at,
+                    published_at, failed_at, ' . $attemptColumn . ', ' . $failureColumn . '
+                FROM message_events_outbox WHERE message_id = ? ORDER BY id');
             $outbox->execute([(int) $messageId]);
             $events = [];
             foreach ($outbox->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $events[] = [
-                    'event_uuid' => $row['event_uuid'],
-                    'event_type' => $row['event_type'],
-                    'attempt_count' => (int) $row['attempt_count'],
-                    'state' => self::deliveryState($row),
-                ];
+                $events[] = self::realtimeEvent($row);
             }
             $result['realtime'] = ['state' => count($events) ? 'recorded' : 'not_enqueued', 'events' => $events];
         } else {

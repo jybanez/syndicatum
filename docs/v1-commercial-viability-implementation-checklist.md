@@ -372,8 +372,10 @@ name guessing, while an unbound or unauthorized client learns nothing sensitive.
 
 **Candidate source progress:** the Realtime outbox now reduces untrusted
 remote response, transport, and exception text to bounded status-only
-diagnostics before persistence or worker logging. This is one privacy guard,
-not completion of the cross-provider telemetry and administrator-view gate.
+diagnostics before persistence or worker logging. The Realtime outbox candidate
+also records last-attempt time and a bounded failure category and projects
+retry/terminal state for one message. This is one provider path, not completion
+of the cross-provider telemetry and administrator-view gate.
 
 - [ ] Define the delivery lifecycle and terminal outcomes.
 - [ ] Record bounded metadata for each delivery attempt.

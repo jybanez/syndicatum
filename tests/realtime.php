@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/src/RealtimeIntegration.php';
+require_once dirname(__DIR__) . '/src/MessageDeliveryStatus.php';
 require_once dirname(__DIR__) . '/src/MessageOutbox.php';
 
 class RealtimeTestSettings
@@ -177,6 +178,10 @@ $suite->test('publisher retries transient responses and rejects permanent respon
     });
     $suite->same(true, $transient->publishOutboxEvent($event)['retryable']);
     $suite->same(false, $permanent->publishOutboxEvent($event)['retryable']);
+    $suite->same('rate_limiting', $transient->publishOutboxEvent($event)['failure_code']);
+    $suite->same('authentication', $permanent->publishOutboxEvent($event)['failure_code']);
+    $suite->same('routing', RealtimeIntegration::publishFailureCode(404));
+    $suite->same('upstream_error', RealtimeIntegration::publishFailureCode(503));
 });
 
 $suite->test('publisher diagnostics never retain untrusted response or exception text', function () use ($suite) {
@@ -221,17 +226,35 @@ try {
         project_sequence BIGINT UNSIGNED NULL,
         payload_json MEDIUMTEXT NOT NULL,
         attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+        last_attempt_at DATETIME NULL,
         available_at DATETIME NOT NULL,
         published_at DATETIME NULL,
         failed_at DATETIME NULL,
         last_error VARCHAR(500) NULL,
+        last_failure_code VARCHAR(32) NULL,
         created_at DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE message_addressees (
         message_id BIGINT UNSIGNED NOT NULL,
         participant_id BIGINT UNSIGNED NOT NULL,
+        reason VARCHAR(20) NOT NULL DEFAULT 'direct',
         notified_at DATETIME NULL,
+        seen_at DATETIME NULL,
+        acknowledged_at DATETIME NULL,
         PRIMARY KEY (message_id, participant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE messages (
+        id BIGINT UNSIGNED PRIMARY KEY,
+        message_uuid CHAR(36) NOT NULL,
+        project_id BIGINT UNSIGNED NOT NULL,
+        project_sequence BIGINT UNSIGNED NOT NULL,
+        created_at DATETIME NOT NULL,
+        deleted_at DATETIME NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE project_participants (
+        id BIGINT UNSIGNED PRIMARY KEY,
+        kind VARCHAR(20) NOT NULL,
+        agent_id BIGINT UNSIGNED NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     $suite->test('outbox stores a full message and tracks delivery state', function () use ($suite, $pdo) {
@@ -242,13 +265,29 @@ try {
         $suite->same('Stored message', $payload['message']['body']);
         $attempt = $outbox->beginAttempt($event['id']);
         $suite->same(1, (int) $attempt['attempt_count']);
+        $suite->truthy($attempt['last_attempt_at'] !== null);
         $outbox->markRetry($event['id'], "bearer secret-in-error\nmessage text", 5);
         $suite->same('Realtime delivery failed.', $pdo->query('SELECT last_error FROM message_events_outbox')->fetchColumn());
-        $outbox->markRetry($event['id'], 'Realtime publish returned HTTP 429.', 5);
+        $outbox->markRetry($event['id'], 'Realtime publish returned HTTP 429.', 5, 'rate_limiting');
         $suite->same('Realtime publish returned HTTP 429.', $pdo->query('SELECT last_error FROM message_events_outbox')->fetchColumn());
+        $suite->same('rate_limiting', $pdo->query('SELECT last_failure_code FROM message_events_outbox')->fetchColumn());
+        $outbox->markRetry($event['id'], 'Realtime publish failed.', 5, 'bearer secret-in-code');
+        $suite->same('unknown', $pdo->query('SELECT last_failure_code FROM message_events_outbox')->fetchColumn());
+        $pdo->exec("INSERT INTO messages (id, message_uuid, project_id, project_sequence, created_at)
+            VALUES (8, '00000000-0000-4000-8000-000000000008', 3, 12, '2026-09-18 07:00:00')");
+        $pdo->exec("INSERT INTO project_participants (id, kind) VALUES (21, 'human')");
         $pdo->exec('INSERT INTO message_addressees (message_id, participant_id) VALUES (8, 21)');
+        $pendingStatus = MessageDeliveryStatus::inspect($pdo, 8);
+        $suite->same('pending', $pendingStatus['realtime']['events'][0]['state']);
+        $suite->same('unknown', $pendingStatus['realtime']['events'][0]['failure_code']);
+        $suite->truthy($pendingStatus['realtime']['events'][0]['last_attempt_at'] !== null);
+        $suite->truthy($pendingStatus['realtime']['events'][0]['next_retry_at'] !== null);
         $outbox->markPublished($event['id']);
         $suite->truthy($pdo->query('SELECT published_at FROM message_events_outbox')->fetchColumn() !== null);
+        $suite->same(null, $pdo->query('SELECT last_failure_code FROM message_events_outbox')->fetchColumn());
+        $acceptedStatus = MessageDeliveryStatus::inspect($pdo, 8);
+        $suite->same('accepted', $acceptedStatus['realtime']['events'][0]['terminal_outcome']);
+        $suite->same(null, $acceptedStatus['realtime']['events'][0]['next_retry_at']);
         $suite->same(null, $pdo->query('SELECT notified_at FROM message_addressees WHERE message_id = 8 AND participant_id = 21')->fetchColumn(),
             'Publishing a shared Realtime event must not claim recipient-specific notification delivery.');
     });

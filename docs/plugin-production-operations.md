@@ -146,6 +146,16 @@ destination accepted a delivery, not that the agent read or acted on it;
 `acknowledged` records the participant's explicit handling acknowledgement.
 `not_enqueued` does not by itself imply a failed path; check binding and
 routing configuration. A missing delivery table is `unknown`, not zero work.
+For Realtime outbox events, `attempt_count`, `last_attempt_at`, and
+`next_retry_at` show the retry position; `terminal_outcome` is set only after
+acceptance or terminal failure. `failure_code` is a bounded category derived
+from the HTTP status or local failure type, not a copy of a remote response.
+`authentication`, `routing`, and `rate_limiting` reflect observed HTTP codes;
+other paths can remain `rejected`, `transport`, or `upstream_error` without a
+more specific causal claim. These Realtime fields do not prove addressee
+notification or agent handling. The outbox timestamps are database `DATETIME`
+values without a stored timezone offset; correlate them with the deployment's
+database/PHP timezone configuration before comparing across hosts.
 
 ## Incident response
 
