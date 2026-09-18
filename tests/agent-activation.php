@@ -208,6 +208,8 @@ try {
         $access = ['principal_user_id' => $owner['id'], 'access_token_id' => $accessTokenId,
             'scope' => ['projects:read', 'participants:read', 'messages:read', 'messages:write', 'messages:acknowledge']];
         $service = new DiscussionBindingIntentService($pdo);
+        $suite->same('missing', $service->contextHealth($access, '')['state']);
+        $suite->same('invalid', $service->contextHealth($access, 'not-a-binding-context')['state']);
         $activationCount = (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn();
         $interactive = $service->prepareInteractiveContext($access, 'Activation Project', 'OAuth Placeholder');
         $suite->same('interactive', $interactive['context_type']);
@@ -215,16 +217,19 @@ try {
         $suite->same($activationCount, (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn());
         $interactiveContext = $service->context($access, $interactive['binding_context_id']);
         $suite->same('interactive', $interactiveContext['binding']['type']);
+        $suite->same('healthy', $service->contextHealth($access, $interactive['binding_context_id'])['state']);
         $suite->same(null, $interactiveContext['binding']['discussion_reference']);
         $pdo->prepare("UPDATE connector_discussion_binding_intents SET expires_at = DATE_SUB(?, INTERVAL 1 SECOND) WHERE id = ?")
             ->execute([Db::now(), $interactiveContext['binding']['intent_id']]);
         $suite->same(null, $service->context($access, $interactive['binding_context_id']));
+        $suite->same('stale', $service->contextHealth($access, $interactive['binding_context_id'])['state']);
         $suite->throws(function () use ($service, $access) {
             $service->prepareInteractiveContext($access, 'Activation Project', 'Missing Agent');
         }, 'INTERACTIVE_CONTEXT_NOT_FOUND');
 
         $prepared = $service->prepare($access, 'Activation Project', 'Intent Created Agent');
         $suite->same('create_on_confirmation', $prepared['agent']['action']);
+        $suite->same('pending', $service->contextHealth($access, $prepared['binding_context_id'])['state']);
         $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Intent Created Agent'")->fetchColumn());
 
         $deviceId = Db::uuidV4();
@@ -246,13 +251,32 @@ try {
         $suite->same('agent_created', json_decode($participantEvent['payload_json'], true)['change']);
         $context = $service->context($access, $prepared['binding_context_id']);
         $suite->same('Successful', $context['binding']['status']);
+        $suite->same('healthy', $service->contextHealth($access, $prepared['binding_context_id'])['state']);
         $suite->same('Intent Created Agent', $context['identity']['agent']['display_name']);
         $suite->same(0, count($service->pending($device)));
+        $confirmedAgentId = (int) $context['identity']['agent']['id'];
+        $pdo->prepare('UPDATE agent_activation_bindings SET enabled = 0 WHERE agent_id = ?')->execute([$confirmedAgentId]);
+        $suite->same(null, $service->context($access, $prepared['binding_context_id']));
+        $suite->same('unusable', $service->contextHealth($access, $prepared['binding_context_id'])['state']);
+        $pdo->prepare('UPDATE agent_activation_bindings SET enabled = 1 WHERE agent_id = ?')->execute([$confirmedAgentId]);
+        $suite->true($service->context($access, $prepared['binding_context_id']) !== null);
+        $pdo->prepare("UPDATE project_members SET status = 'removed' WHERE project_id = ? AND user_id = ?")
+            ->execute([$project['id'], $owner['id']]);
+        $suite->same(null, $service->context($access, $prepared['binding_context_id']));
+        $pdo->prepare("UPDATE project_members SET status = 'active' WHERE project_id = ? AND user_id = ?")
+            ->execute([$project['id'], $owner['id']]);
+        $pdo->prepare("UPDATE project_participants SET status = 'suspended' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $confirmedAgentId]);
+        $suite->same(null, $service->context($access, $prepared['binding_context_id']));
+        $pdo->prepare("UPDATE project_participants SET status = 'active' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $confirmedAgentId]);
+        $suite->true($service->context($access, $prepared['binding_context_id']) !== null);
 
         $cancel = $service->prepare($access, 'Activation Project', 'Cancelled Agent');
         $service->cancel($device, $cancel['intent_id']);
         $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Cancelled Agent'")->fetchColumn());
         $suite->same(null, $service->context($access, $cancel['binding_context_id']));
+        $suite->same('revoked', $service->contextHealth($access, $cancel['binding_context_id'])['state']);
     });
 
     exit($suite->finish());
