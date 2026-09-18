@@ -2,6 +2,7 @@
 
 require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/OperationalHealth.php';
+require_once dirname(__DIR__) . '/src/DeliveryOperatorView.php';
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -137,6 +138,29 @@ try {
     } else {
         $status['missing_delivery_tables'][] = 'responses_api_deliveries';
         $status['responses_api_activations'] = operationalUnknownDelivery();
+    }
+    // Bounded operator sample. The path-wide state/counts above remain the
+    // authoritative health signal; a historical failure is not current state.
+    $samples = [
+        'realtime_outbox' => ['message_events_outbox', 'realtime'],
+        'agent_webhooks' => ['agent_webhook_deliveries', 'webhook'],
+        'workspace_agent_triggers' => ['workspace_agent_trigger_deliveries', 'workspace_agent'],
+        'responses_api_activations' => ['responses_api_deliveries', 'responses_api'],
+    ];
+    foreach ($samples as $component => $definition) {
+        list($table, $path) = $definition;
+        if (!Db::tableExists($pdo, $table)
+            || !Db::columnExists($pdo, $table, 'last_attempt_at')
+            || !Db::columnExists($pdo, $table, 'last_failure_code')) {
+            $status[$component]['diagnostic_sample'] = ['scope' => 'unavailable'];
+            continue;
+        }
+        $columns = $path === 'realtime'
+            ? 'attempt_count, last_attempt_at, last_failure_code, available_at AS next_attempt_at, published_at, failed_at'
+            : 'status, attempt_count, last_attempt_at, last_failure_code, next_attempt_at, response_status';
+        $rows = $pdo->query("SELECT {$columns} FROM {$table} ORDER BY id DESC LIMIT 50")
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $status[$component]['diagnostic_sample'] = DeliveryOperatorView::sample($rows, $path);
     }
     $componentStates = [$status['worker']['state']];
     foreach (['realtime_outbox', 'agent_webhooks', 'workspace_agent_triggers', 'responses_api_activations'] as $component) {

@@ -90,6 +90,15 @@ above the configured worker interval. Status JSON reports the effective
 as the aggregate so a known failure is not hidden by another unknown path.
 This contract does not yet assert freshness of delivery `last_success_at`, so
 an idle queue with no success history is not proof of a successful delivery.
+Each path also includes a `diagnostic_sample` from at most its newest 50
+delivery rows. It reports sampled retry/terminal counts and the newest failed
+attempt in that sample with only bounded category, numeric HTTP status, queue
+state, attempt count, and timing. This sample is not a fleet-wide total or the
+current path health: a failure can be historical while a later row succeeded.
+Use the path-wide state and backlog/dead counters for current attention. A
+sample marked `unavailable` means the diagnostic migration or table is absent;
+do not infer healthy delivery from it. The command remains host-operator-only
+and read-only; it does not expose message bodies or remote error payloads.
 Exit code `0` is healthy, `2` requires operator attention, and `3` means the
 database status could not be read. Pair this with
 `scripts/status-realtime-outbox.ps1` for process and Scheduled Task state.

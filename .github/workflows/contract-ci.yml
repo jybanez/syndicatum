@@ -122,6 +122,7 @@ jobs:
           php tests/operational-health.php | tee ci-evidence/operational-health.txt
           php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
           php tests/delivery-failure-taxonomy.php | tee ci-evidence/delivery-failure-taxonomy.txt
+          php tests/delivery-operator-view.php | tee ci-evidence/delivery-operator-view.txt
           php tests/realtime.php | tee ci-evidence/realtime-delivery.txt
           php tests/avatar-webhooks.php | tee ci-evidence/agent-webhooks.txt
           php tests/workspace-agent-triggers.php | tee ci-evidence/workspace-agent-triggers.txt
