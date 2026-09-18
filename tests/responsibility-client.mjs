@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { responsibilityActions, responsibilityEvent } from "../assets/responsibility-inbox.mjs";
+import { evidenceDetails } from "../assets/responsibility-evidence.mjs";
 
 const request = {
   project_id: 2,
@@ -65,4 +66,23 @@ test("pending decisions and orphaned restoration follow explicit actor and targe
     ["transfer_offered", "request_withdrawn", "responder_restored"]);
   assert.deepEqual(responsibilityActions(orphaned, 10, false, [10, 30]),
     ["transfer_offered", "request_withdrawn"]);
+});
+
+test("canonical evidence fallback preserves identity, reply context, revisions, and tombstones", () => {
+  const message = {
+    id: "109", sequence: 19, sender: { display_name: "Responder" },
+    created_at: "2026-09-19T08:00:00Z", addressees: [{ display_name: "Requester" }],
+    reply_to_message_id: "100", revision_count: 2,
+    body: "Original evidence", deleted_at: null,
+  };
+  const parent = { id: "100", sequence: 10, sender: { display_name: "Requester" } };
+  const visible = evidenceDetails(message, parent);
+  assert.equal(visible.identity, "Canonical message #109");
+  assert.equal(visible.sequence, "Project sequence 19");
+  assert.match(visible.reply, /#100, project sequence 10, from Requester/);
+  assert.equal(visible.revision, "2 revisions");
+  assert.equal(visible.body, "Original evidence");
+  const removed = evidenceDetails({ ...message, deleted_at: "2026-09-19T09:00:00Z" }, parent);
+  assert.match(removed.tombstone, /Removed 2026-09-19/);
+  assert.doesNotMatch(removed.body, /Original evidence/);
 });

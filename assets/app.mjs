@@ -1,5 +1,6 @@
 import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
+import { showCanonicalEvidence } from "./responsibility-evidence.mjs";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
@@ -1905,21 +1906,38 @@ function showProjectView(view) {
 }
 
 async function openResponsibilityMessage(messageId) {
+  const projectId = selectedProjectId();
+  const generation = state.generation;
   try {
-    const payload = await request(`${API.message}?${new URLSearchParams({ project_id: selectedProjectId(), id: messageId })}`);
+    const payload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: messageId })}`);
+    if (generation !== state.generation || projectId !== selectedProjectId()) return;
     const message = normalizeMessage(unwrap(payload));
     if (!message.id) throw new Error("The canonical message was unavailable.");
-    state.messages = sortAndDedupe([...state.messages, message]);
-    showProjectView("timeline");
-    renderTimeline();
-    requestAnimationFrame(() => {
+    const existing = state.messages.findIndex((entry) => entry.id === message.id);
+    if (existing >= 0) {
+      state.messages[existing] = message;
+      renderTimeline();
       const row = el.timeline_host.querySelector(`[data-item-id="${CSS.escape(message.id)}"]`);
-      if (row) row.scrollIntoView({ block: "center", behavior: "smooth" });
-      else void state.factories.uiAlert(message.deleted_at ? "This message was removed. Its canonical record remains in the project timeline." : message.body, {
-        title: `Canonical message #${message.id}`,
-        description: `The message may be outside the currently rendered timeline window. Sequence ${message.sequence}.`,
-      });
-    });
+      if (row) {
+        showProjectView("timeline");
+        row.setAttribute("tabindex", "-1");
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+        row.focus({ preventScroll: true });
+        return;
+      }
+    }
+    let parent = null;
+    if (message.reply_to_message_id) {
+      try {
+        const parentPayload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: message.reply_to_message_id })}`);
+        if (generation !== state.generation || projectId !== selectedProjectId()) return;
+        parent = normalizeMessage(unwrap(parentPayload));
+      } catch (_error) { /* Keep the exact child evidence visible when parent context is unavailable. */ }
+    }
+    showCanonicalEvidence(message, { parent, onTimeline: () => {
+      showProjectView("timeline");
+      el.show_timeline.focus();
+    } });
   } catch (error) {
     state.components.toast.warn(error.message, { title: "Canonical message unavailable" });
   }

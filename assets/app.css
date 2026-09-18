@@ -131,6 +131,15 @@ button, input, textarea { font: inherit; }
 .responsibility-action-error { margin: 0; color: #ffb4ab; }
 .responsibility-empty { padding: 28px 14px; border: 1px dashed var(--app-border); border-radius: 12px; color: var(--app-muted); text-align: center; }
 .responsibility-more { justify-self: start; }
+.responsibility-evidence-dialog { width: min(650px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-sizing: border-box; overflow: auto; padding: 22px; border: 1px solid var(--app-border); border-radius: 14px; color: var(--ui-text); background: #111d30; box-shadow: 0 24px 80px rgba(0, 0, 0, .55); }
+.responsibility-evidence-dialog::backdrop { background: rgba(2, 8, 19, .78); }
+.responsibility-evidence-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+.responsibility-evidence-intro { margin: 0 0 16px; color: var(--app-muted); line-height: 1.5; }
+.responsibility-evidence-facts { display: grid; grid-template-columns: minmax(85px, 120px) minmax(0, 1fr); gap: 8px 14px; margin: 0 0 18px; font-size: 13px; line-height: 1.5; }
+.responsibility-evidence-facts dt { color: var(--app-muted); }
+.responsibility-evidence-facts dd { margin: 0; overflow-wrap: anywhere; }
+.responsibility-evidence-body { padding: 14px; border: 1px solid var(--app-border); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.responsibility-evidence-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 #timeline-host { height: 100%; min-height: 0; }
 #timeline-host .ui-timeline { gap: 12px; }
 #timeline-host .ui-timeline-group-label { position: sticky; top: 0; z-index: 3; margin-bottom: 8px; padding: 8px 11px; border: 1px solid rgba(74, 97, 138, .3); border-radius: 11px; background: rgba(10, 18, 31, .96); }

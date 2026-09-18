@@ -515,10 +515,12 @@ items below remain unchecked until their full exit evidence is reviewed.
 
 The Assessor accepted the Responsibility Inbox source-client architecture and
 action contract at `5a33613` (#2775), with the navigation qualification in
-#2776. The client fetches exact canonical evidence and attempts to scroll to
-it in the existing Helper timeline. When virtualization or filters leave the
-row unmounted, the current alert fallback does **not** establish guaranteed
-timeline context. Authenticated installed-client behavior, reliable evidence
+#2776. The client fetches exact canonical evidence and attempts to focus its
+mounted row in the existing Helper timeline. When virtualization or filters
+leave the row unmounted, the source client now provides a read-only evidence
+dialog with project sequence, reply context, revision/tombstone state, and
+explicit navigation without changing timeline filters. This fallback is not
+yet installed-client evidence. Authenticated behavior, reliable evidence
 navigation, keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
 
 Historical-baseline handling and a read-only migration preflight are described

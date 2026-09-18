@@ -17,6 +17,7 @@
 </main>
 <script type="module">
   import { createResponsibilityInbox } from "../../assets/responsibility-inbox.mjs";
+  import { showCanonicalEvidence } from "../../assets/responsibility-evidence.mjs";
   const people = [
     { id: 10, display_name: "Requester Maya", status: "active" },
     { id: 20, display_name: "Responder Joel", status: "active" },
@@ -61,8 +62,15 @@
     },
     async writeEvent() { throw Object.assign(new Error("Visual fixture: no write sent."), { status: 422 }); },
     async acknowledge() { throw new Error("Visual fixture: no acknowledgement sent."); },
-    openMessage: (id) => alert(`Visual fixture canonical message #${id}`),
+    openMessage: (id) => showCanonicalEvidence({
+      id: String(id), sequence: Number(id) - 90, sender: { display_name: "Requester Maya" },
+      created_at: "2026-09-19T08:00:00Z", addressees: [{ display_name: "Responder Joel" }],
+      reply_to_message_id: "99", revision_count: 2, deleted_at: null,
+      body: "Canonical evidence shown without changing the inbox view or timeline filters.",
+    }, { parent: { id: "99", sequence: 9, sender: { display_name: "Earlier participant" } },
+      onTimeline: () => document.getElementById("navigation-status").textContent = "Timeline selected; filters unchanged." }),
   });
   await inbox.load();
 </script>
+<p id="navigation-status" role="status"></p>
 </html>
