@@ -191,6 +191,24 @@ try {
         $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created) {
             $management->claimAgent($project['id'], $created['agent_id'], $created['claim_code']);
         });
+        $firstReplacement = $management->issueAgentClaim($project['id'], $administrator['id'], $created['agent_id']);
+        $suite->truthy((new ChatRepository($pdo))->authenticate($claim['token']));
+        $replacement = $management->issueAgentClaim($project['id'], $administrator['id'], $created['agent_id']);
+        $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created, $firstReplacement) {
+            $management->claimAgent($project['id'], $created['agent_id'], $firstReplacement['claim_code']);
+        });
+        $suite->truthy((new ChatRepository($pdo))->authenticate($claim['token']));
+        $replaced = $management->claimAgent($project['id'], $created['agent_id'], $replacement['claim_code']);
+        $suite->same($claim['participant_id'], $replaced['participant_id']);
+        $suite->same(null, (new ChatRepository($pdo))->authenticate($claim['token']));
+        $suite->truthy((new ChatRepository($pdo))->authenticate($replaced['token']));
+        $expiredReplacement = $management->issueAgentClaim($project['id'], $administrator['id'], $created['agent_id']);
+        $pdo->prepare('UPDATE chat_agents SET claim_expires_at = ? WHERE id = ?')
+            ->execute([date('Y-m-d H:i:s', time() - 60), $created['agent_id']]);
+        $suite->throws('INVALID_CLAIM', function () use ($management, $project, $created, $expiredReplacement) {
+            $management->claimAgent($project['id'], $created['agent_id'], $expiredReplacement['claim_code']);
+        });
+        $suite->truthy((new ChatRepository($pdo))->authenticate($replaced['token']));
         $expired = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Expired Agent']);
         $pdo->prepare('UPDATE chat_agents SET claim_expires_at = ? WHERE id = ?')->execute([date('Y-m-d H:i:s', time() - 60), $expired['agent_id']]);
         $expiredStatus = $management->agentCredentialStatus($project['id'], $administrator['id'], $expired['agent_id']);

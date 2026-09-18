@@ -387,7 +387,14 @@ it is not a passing acceptance record.
 - [ ] Present the bound project and agent identity clearly after completion.
 - [ ] Prevent accidental replacement or reuse of an existing protected identity.
 - [ ] Preserve isolated credentials per agent profile.
-- [ ] Document claim-code expiry, single use, replacement, and recovery.
+- [x] Document claim-code expiry, single use, replacement, and recovery.
+      The [Codex operator guide](codex-plugin.md) distinguishes an unclaimed
+      code from an explicitly authorized replacement, states that the old token
+      remains valid until the replacement is claimed, and describes same-identity
+      recovery and immediate-revocation caution. The expansion regression
+      verifies superseded/expired replacement codes, old-token invalidation on
+      claim, and stable project participant identity. Installed recovery remains
+      part of P0.5's separate acceptance gate.
 - [ ] Add negative tests for cross-project, cross-participant, expired-code,
       reused-code, and unauthorized enumeration attempts.
 - [ ] Test onboarding with a user who has no repository or database knowledge.
