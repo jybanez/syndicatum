@@ -119,6 +119,9 @@ jobs:
           php tests/agent-activation.php | tee ci-evidence/agent-activation.txt
           php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
+          php tests/operational-health.php | tee ci-evidence/operational-health.txt
+          php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
+          php tests/outbox-retry-contract.php | tee ci-evidence/outbox-retry-contract.txt
           python tests/openapi-message-contract.py --php php | tee ci-evidence/openapi-message-contract.txt
       - name: Check portable Codex and Companion adapter contracts
         run: |
