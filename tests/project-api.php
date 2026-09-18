@@ -877,6 +877,106 @@ try {
         $suite->same('Unknown', $diagnosis['body']['result']['structuredContent']['result']['agent_identity']);
     });
 
+    $suite->test('responsibility API role decisions follow persisted membership and handoff state', function () use ($suite, $baseUrl, $pdo, $ownerId, $memberId, $humanHeaders, $memberHeaders, $agentTwoHeaders, $secret) {
+        $project = projectApiInsertProject($pdo, $ownerId,
+            'Responsibility Role Matrix', 'responsibility-role-matrix');
+        $targetId = projectApiAddMember($pdo, $project, $memberId, 'member');
+        $adminId = projectApiInsertUser($pdo,
+            'responsibility-admin@project.test', 'Responsibility Admin');
+        projectApiAddMember($pdo, $project, $adminId, 'admin');
+        $adminToken = 'responsibility_admin_' . bin2hex(random_bytes(20));
+        $adminCsrf = bin2hex(random_bytes(20));
+        projectApiSession($pdo, $adminId, $adminToken, $adminCsrf);
+        $adminHeaders = ['Cookie: syndicatum_session=' . $adminToken,
+            'X-CSRF-Token: ' . $adminCsrf];
+        $token = 'responsibility_matrix_' . bin2hex(random_bytes(20));
+        $responder = projectApiInsertAgent($pdo, $project,
+            'Responsibility Responder', $token, $secret);
+        $responderHeaders = ['Authorization: Bearer ' . $token];
+        $path = '/api/v1/project-messages.php?project_id=' . $project;
+        $request = projectApiRequest($baseUrl, 'POST', $path, $humanHeaders,
+            ['body' => 'Please complete this work',
+                'direct_participant_ids' => [$responder['participant_id']]]);
+        $suite->same(201, $request['status'], $request['raw']);
+        $requestId = $request['body']['data']['id'];
+        $post = function ($key, $kind, $expected, array $headers, array $extra = []) use ($baseUrl, $path, $requestId, $responder) {
+            return projectApiRequest($baseUrl, 'POST', $path, $headers,
+                ['body' => $kind . ' role evidence', 'idempotency_key' => 'roles-' . $key,
+                    'responsibility_event' => array_merge([
+                        'kind' => $kind, 'request_message_id' => $requestId,
+                        'initial_responder_participant_id' => $responder['participant_id'],
+                        'expected_event_id' => $expected,
+                    ], $extra)]);
+        };
+        $assertRejected = function ($response, $status, $code) use ($suite) {
+            $suite->same($status, $response['status'], $response['raw']);
+            $suite->same($code, $response['body']['code']);
+        };
+        $assertCreated = function ($response) use ($suite) {
+            $suite->same(201, $response['status'], $response['raw']);
+            return $response['body']['data']['id'];
+        };
+        $assertRejected($post('target-start', 'work_started', $requestId,
+            $memberHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
+        $assertRejected($post('requester-start', 'work_started', $requestId,
+            $humanHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
+        $started = $assertCreated($post('responder-start', 'work_started',
+            $requestId, $responderHeaders));
+        $assertRejected($post('target-block', 'blocked', $started,
+            $memberHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
+        $blocked = $assertCreated($post('responder-block', 'blocked',
+            $started, $responderHeaders));
+        $assertRejected($post('requester-unblock', 'unblocked', $blocked,
+            $humanHeaders, ['reference_event_id' => $blocked]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $unblocked = $assertCreated($post('responder-unblock', 'unblocked',
+            $blocked, $responderHeaders, ['reference_event_id' => $blocked]));
+        $proposed = $assertCreated($post('responder-proposal', 'resolution_proposed',
+            $unblocked, $responderHeaders));
+        $assertRejected($post('target-resolve', 'resolution_accepted', $proposed,
+            $memberHeaders, ['reference_event_id' => $proposed]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $disputed = $assertCreated($post('requester-dispute', 'resolution_disputed',
+            $proposed, $humanHeaders, ['reference_event_id' => $proposed]));
+        $offered = $assertCreated($post('responder-offer', 'transfer_offered',
+            $disputed, $responderHeaders, ['target_participant_id' => $targetId]));
+        $assertRejected($post('requester-accept', 'transfer_accepted', $offered,
+            $humanHeaders, ['reference_event_id' => $offered]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $accepted = $assertCreated($post('target-accept', 'transfer_accepted',
+            $offered, $memberHeaders, ['reference_event_id' => $offered]));
+        $assertRejected($post('old-responder-start', 'work_started', $accepted,
+            $responderHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
+        $newStart = $assertCreated($post('new-responder-start', 'work_started',
+            $accepted, $memberHeaders));
+        $newProposal = $assertCreated($post('new-responder-proposal',
+            'resolution_proposed', $newStart, $memberHeaders));
+        $resolved = $assertCreated($post('moderator-resolve',
+            'resolution_accepted', $newProposal, $adminHeaders,
+            ['reference_event_id' => $newProposal]));
+        $assertRejected($post('foreign-correct', 'corrected', $resolved,
+            $agentTwoHeaders, ['reference_event_id' => $resolved]),
+            404, 'PROJECT_NOT_FOUND');
+        $assertRejected($post('member-correct', 'corrected', $resolved,
+            $memberHeaders, ['reference_event_id' => $resolved]),
+            403, 'RESPONSIBILITY_FORBIDDEN');
+        $corrected = $assertCreated($post('moderator-correct', 'corrected',
+            $resolved, $adminHeaders, ['reference_event_id' => $resolved]));
+        $eventCount = $pdo->prepare('SELECT COUNT(*) FROM responsibility_events
+            WHERE project_id = ? AND request_message_id = ?');
+        $eventCount->execute([$project, $requestId]);
+        $suite->same(11, (int) $eventCount->fetchColumn());
+        $messageCount = $pdo->prepare('SELECT COUNT(*) FROM messages WHERE project_id = ?');
+        $messageCount->execute([$project]);
+        $suite->same(12, (int) $messageCount->fetchColumn(),
+            'Forbidden role attempts left canonical messages behind.');
+        $last = $pdo->prepare('SELECT kind, prior_state FROM responsibility_events
+            WHERE event_message_id = ? AND project_id = ?');
+        $last->execute([$corrected, $project]);
+        $suite->same(['kind' => 'corrected', 'prior_state' => 'resolved'],
+            $last->fetch(PDO::FETCH_ASSOC));
+    });
+
     $suite->test('legacy API can be disabled through the controlled operations setting', function () use ($suite, $baseUrl, $pdo) {
         $pdo->prepare(
             'INSERT INTO system_settings (setting_key, value_json, updated_at) VALUES (?, ?, ?)
