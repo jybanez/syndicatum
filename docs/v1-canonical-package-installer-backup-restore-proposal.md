@@ -1,6 +1,6 @@
 # Syndicatum V1 Canonical Package, Web Installer, Backup, and Restore Proposal
 
-**Status:** Proposed for owner review; no implementation authorized
+**Status:** Owner-approved on 2026-09-20; implementation authorized UI-first with non-deceptive placeholders and Helper-first composition
 **Prepared:** 2026-09-20
 **Architecture reference:** protected `main` at `f7e9497d0d08955c3bcc6fc35085725429f46bfd`
 **Decision record:** Syndicatum messages #2930, #2931, and #2933
@@ -12,7 +12,7 @@ Syndicatum should be distributed as one canonical, versioned application package
 
 The canonical clean artifact will be a deterministic ZIP produced only by trusted CI from an exact protected tag. It will contain the production application, a validated MySQL 8.4 schema baseline, a database-independent web installer, package metadata, integrity hashes, and the limited documentation needed to install the release. A fresh installation will apply the current baseline directly and will not replay migrations from the beginning of the project.
 
-The administrator will see one **Package / Backup / Restore** surface with three simple actions:
+The administrator will see one **Backup / Restore** surface with three simple actions:
 
 1. **Get clean Syndicatum package** — retrieve the CI-produced canonical package for an allowed release.
 2. **Build backup package** — create an authenticated-encrypted, non-executable recovery package from the running instance.
@@ -327,14 +327,14 @@ Infrastructure credentials are target-specific and are not exported:
 
 The restore flow asks the operator to supply target infrastructure credentials separately.
 
-## Unified Package / Backup / Restore surface
+## Unified Backup / Restore surface
 
 The administrator menu order becomes:
 
 1. Users
 2. Audit
 3. Delivery health, where retained by the current product navigation
-4. Package / Backup / Restore
+4. Backup / Restore
 5. Settings
 
 The new surface is visible only to system administrators and presents three product actions.
@@ -522,29 +522,41 @@ RC1/MySQL 5.7 items remain historical and unchanged. The new first baseline and 
 
 ## Implementation phases
 
-No phase begins until Jonathan approves this proposal.
+Jonathan approved the refactor in Syndicatum message #2957 and explicitly changed the execution order to UI-first. Missing backend capabilities must appear only as clearly labeled, fail-closed placeholders. Native Helper components and reusable helpers/services are required before custom controls or controller-owned low-level logic.
 
-### Phase 1 — Contract and test fixtures
+### Phase 1 — UI-first foundation and contracts
 
 Deliver:
 
+- first-run installer shell and approved step navigation using native Helper components;
+- administrator **Backup / Restore** navigation item and landing/status surface;
+- clean-package, build-backup, and staged-restore workflow screens;
+- Settings installation-identity area and Audit presentation hooks;
+- responsive, keyboard, focus, loading, empty, offline, and error states;
+- explicit **Not yet available** placeholders and disabled actions for missing backend operations;
+- stub API contracts that fail closed and cannot represent a placeholder as a completed operation;
 - package format/version specification;
 - release and backup payload allowlists;
 - table/state classification for backup and restore;
 - installation-state schema;
 - threat model for installer, package ingestion, backup, and restore;
+- UI/API/state/accessibility specifications and acceptance-test skeletons;
 - fixture packages covering valid, tampered, traversal, duplicate-path, zip-bomb, wrong-kind, and wrong-password cases.
 
 Exit criteria:
 
+- the visible UI is composed Helper-first and clearly distinguishes placeholders from real state;
+- no placeholder can claim a real install, backup, restore, checksum verification, or download;
+- non-administrators cannot discover administrator-only surface metadata;
 - parser/validator tests are fail-closed;
 - the package contract is reviewed before producer code exists;
 - all required metadata and compatibility rules are unambiguous.
 
-### Phase 2 — Baseline and canonical release builder
+### Phase 2 — Helper/service and package-baseline foundation
 
 Deliver:
 
+- reusable services for manifest parsing/validation, installation identity, baseline metadata, bootstrap ownership proof, compatibility, encryption/decryption, archive/path safety, persistent-asset classification, audit emission, and canonical provenance lookup;
 - deterministic baseline generator and drift check;
 - committed MySQL 8.4 baseline;
 - baseline-aware migration model;
@@ -560,7 +572,7 @@ Exit criteria:
 - CI proves no pre-baseline migration executes during fresh install;
 - the artifact contains only allowlisted production files.
 
-### Phase 3 — Web installer and protected configuration
+### Phase 3 — Connect the web installer
 
 Deliver:
 
@@ -580,11 +592,11 @@ Exit criteria:
 - missing HTTPS/private-path/extension/privilege requirements fail clearly and safely;
 - retries after simulated failures do not create a falsely installed or double-admin state.
 
-### Phase 4 — Encrypted backup and staged restore
+### Phase 4 — Connect encrypted backup and staged restore
 
 Deliver:
 
-- Package / Backup / Restore administrator surface before Settings;
+- Backup / Restore administrator surface before Settings;
 - canonical-release retrieval action;
 - streaming logical backup producer;
 - authenticated encryption envelope;
@@ -604,7 +616,7 @@ Exit criteria:
 - the live source remains unchanged by failed or successful staged restore;
 - restore evidence is checksummed and audited without secret leakage.
 
-### Phase 5 — GitHub and Docker adapters
+### Phase 5 — Release, GitHub, and Docker adapters
 
 Deliver:
 

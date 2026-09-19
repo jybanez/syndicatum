@@ -1,6 +1,6 @@
 # Syndicatum V1 Installer and Package Administration UI Proposal
 
-**Status:** Proposed supplement for owner review; no implementation authorized
+**Status:** Owner-approved on 2026-09-20 for UI-first, placeholder-safe, Helper-first implementation
 
 **Parent architecture:** `docs/v1-canonical-package-installer-backup-restore-proposal.md`
 
@@ -13,22 +13,28 @@ The parent proposal defines the package, installer, backup, and restore safety c
 V1 has two distinct interfaces:
 
 1. a **Web Installer** shown only while a new instance is uninstalled; and
-2. an administrator-only **Package / Backup / Restore** surface inside an installed instance.
+2. an administrator-only **Backup / Restore** surface inside an installed instance.
 
 Both use Syndicatum's current dark theme and native Helper UI components. They do not create a second administration application or design system.
 
-## Decision requested
+## Owner decision and implementation authority
 
-Approval of this UI direction means agreement with:
+Jonathan approved this UI direction in Syndicatum message #2957 with three binding implementation instructions:
+
+- start with the visible UI;
+- use explicit placeholders where package/install/backup/restore behavior is not yet implemented;
+- implement Helper-first.
+
+The approved direction includes:
 
 - a guided, full-page installer for new instances;
-- a new **Package / Backup / Restore** global-administration item;
+- a new **Backup / Restore** global-administration item;
 - three plain-language actions: **Get clean package**, **Build backup package**, and **Restore backup package**;
 - full-page backup and restore workflows, with modal dialogs only for re-authentication and bounded confirmations;
 - staged restore only in V1, with no control that overwrites the live instance;
-- installer UI in Phase 3 and installed-instance administration UI in Phase 4.
+- UI shells and placeholders first, then reusable helpers and package/baseline behavior, then real installer and backup/restore connections.
 
-Approval does not itself authorize implementation. The first authorization remains Phase 1 contract work only.
+Placeholders must be non-deceptive: they may say **Not yet available**, disable actions with an explanation, or use fixture data clearly marked development-only. They must never imply that a real install, backup, restore, checksum verification, or package download completed.
 
 ## Navigation and placement
 
@@ -39,7 +45,7 @@ For a system administrator, the expanded global navigation becomes:
 3. Agents
 4. Audit
 5. Delivery health
-6. Package / Backup / Restore
+6. Backup / Restore
 7. System Settings
 
 The new item appears after **Delivery health** and immediately before **System Settings**. It is absent for non-administrators, not merely disabled. Its route is stable and bookmarkable, for example `/admin/packages`.
@@ -149,7 +155,7 @@ Selecting **Install Syndicatum** shows durable stages:
 
 Completion shows **Open Syndicatum**. Failure names the stage, target state, and safe retry/cleanup action. The instance is never labeled installed before health verification succeeds.
 
-## Package / Backup / Restore administration
+## Backup / Restore administration
 
 ### Landing page
 
@@ -158,7 +164,7 @@ This is a full administration surface using the current global header and panel 
 ```text
 +------------------------------------------------------------------------+
 | Global administration                                                  |
-| Package / Backup / Restore                              [Refresh]       |
+| Backup / Restore                                        [Refresh]       |
 |                                                                        |
 | Installed release                                                      |
 | Version 1.x · Baseline … · Package verified · System healthy          |
@@ -291,7 +297,7 @@ Backup and restore are not hidden inside Settings. Settings remains focused on r
 - database host/name and TLS summary, never username secrets or password;
 - installer locked status.
 
-The group links to **Package / Backup / Restore** for package operations rather than duplicating its controls.
+The group links to **Backup / Restore** for package operations rather than duplicating its controls.
 
 ## Audit additions
 
@@ -368,10 +374,16 @@ Retry must query authoritative operation state before starting new work.
 
 ## Implementation timing
 
-### Phase 1 — UI contract and test skeletons
+### Phase 1 — UI-first foundation and contracts
 
-No production UI is added. Deliver:
+Ship the visible structure first using native Helper components:
 
+- first-run installer shell and step navigation;
+- administrator **Backup / Restore** navigation item and landing page;
+- clean-package, backup, and staged-restore workflow screens;
+- Settings installation-identity group and Audit presentation hooks;
+- responsive, keyboard, focus, loading, empty, offline, and failure states;
+- explicit **Not yet available** placeholders and disabled actions for unavailable backend operations;
 - route/capability names;
 - screen and state inventory;
 - operation state machine and API/error vocabulary;
@@ -380,13 +392,15 @@ No production UI is added. Deliver:
 - fixture-driven browser-test skeletons;
 - final user-facing security copy.
 
-### Phase 2 — Package and baseline foundation
+All placeholder state is visibly labeled. No placeholder can claim a real operation completed.
 
-No administrator surface ships. CI produces package, manifest, checksum, provenance, and baseline evidence needed by the later UI. Developer-only fixture harnesses are not linked from production navigation.
+### Phase 2 — Helper/service and package-baseline foundation
 
-### Phase 3 — Web Installer UI
+Build reusable helpers/services beneath the approved screens for manifest validation, installation identity, baseline metadata, bootstrap proof, compatibility, encryption, archive safety, persistent assets, audit emission, and provenance. CI then produces the package, manifest, checksum, provenance, and baseline evidence. UI routes/controllers orchestrate these helpers rather than owning low-level logic.
 
-The first user-visible changes ship:
+### Phase 3 — Connect the Web Installer
+
+Replace installer placeholders with the real protected flow:
 
 - installer route/shell;
 - ownership, system, database, administrator, review/install, progress, failure, completion, and lockout screens;
@@ -394,12 +408,10 @@ The first user-visible changes ship:
 
 Backup/restore is not yet added to installed instances.
 
-### Phase 4 — Package / Backup / Restore UI
+### Phase 4 — Connect Backup / Restore
 
-Installed-instance changes ship:
+Replace installed-instance placeholders with real operations:
 
-- new navigation item before System Settings;
-- landing page/release summary;
 - clean-package retrieval and verification;
 - encrypted-backup workflow;
 - staged-restore workflow;
@@ -448,4 +460,4 @@ The following controls are intentionally absent:
 
 ## Recommended next decision
 
-Review this supplement together with the parent architecture. If the visible navigation, installer steps, three administration workflows, and phase timing are acceptable, approve the architecture and authorize **Phase 1 only**. Phase 1 turns these screens into exact state/API/accessibility contracts and test skeletons; it does not yet add production UI.
+Implementation proceeds under Jonathan's approval beginning with the UI-first/helper-first Phase 1 slice. Material design conflicts still require owner direction; ordinary placeholder, helper, test, and integration work proceeds autonomously with Commercial Assessor review.
