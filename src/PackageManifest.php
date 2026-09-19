@@ -167,14 +167,8 @@ class PackageManifest
 
     private static function validateFormatVersion($version)
     {
-        if (!preg_match('/\A(\d+)\.(\d+)(?:\.(\d+))?\z/', $version, $matches)) {
-            throw new InvalidArgumentException('Package format version is invalid.');
-        }
-        if ((int) $matches[1] !== self::SUPPORTED_FORMAT_MAJOR) {
-            throw new InvalidArgumentException('Package format major version is not supported.');
-        }
-        if ((int) $matches[2] > self::SUPPORTED_FORMAT_MINOR) {
-            throw new InvalidArgumentException('Package format minor version is not declared backward-compatible by this reader.');
+        if ($version !== self::SUPPORTED_FORMAT_MAJOR . '.' . self::SUPPORTED_FORMAT_MINOR) {
+            throw new InvalidArgumentException('Package format version is not exactly supported by this reader.');
         }
     }
 

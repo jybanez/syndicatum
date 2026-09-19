@@ -138,6 +138,14 @@ packageContractThrows(function () {
     PackageManifest::validate($manifest);
 }, 'Undeclared compatible format minors must fail closed.');
 
+foreach (['1.0.1', '1.0.999'] as $unsupportedPatchVersion) {
+    packageContractThrows(function () use ($unsupportedPatchVersion) {
+        $manifest = validManifest();
+        $manifest['format_version'] = $unsupportedPatchVersion;
+        PackageManifest::validate($manifest);
+    }, 'Package format patch variants must fail closed: ' . $unsupportedPatchVersion);
+}
+
 packageContractThrows(function () {
     $manifest = validManifest();
     $manifest['required_capabilities'][] = 'unrecognized-security-rule';
@@ -422,5 +430,30 @@ packageContractThrows(function () use ($baseline) {
     $metadata['schema_head'] = '202609200003';
     BaselineMetadata::fromArray($metadata);
 }, 'Schema head must equal the final declared migration.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['schema_head'] = '202609190000';
+    BaselineMetadata::fromArray($metadata);
+}, 'Schema head cannot precede the baseline cutover.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['schema_head'] = '202609200001';
+    BaselineMetadata::fromArray($metadata);
+}, 'Schema head cannot stop before a later declared migration.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['post_baseline_migrations'][1]['id'] = $metadata['post_baseline_migrations'][0]['id'];
+    BaselineMetadata::fromArray($metadata);
+}, 'Duplicate migration identifiers must fail closed.');
+
+$noPostCutover = $baseline->toArray();
+$noPostCutover['post_baseline_migrations'] = [];
+$noPostCutover['schema_head'] = $noPostCutover['migration_cutover'];
+if (BaselineMetadata::fromArray($noPostCutover)->toArray()['schema_head'] !== $noPostCutover['migration_cutover']) {
+    packageContractFail('A baseline with no post-cutover migrations must allow head equal to cutover.');
+}
 
 echo 'Package manifest, compatibility, baseline, and installation identity contract assertions passed' . PHP_EOL;
