@@ -113,6 +113,8 @@ Release validation is bound to trusted source commit, tag, baseline, and schema 
 
 Parsing is not trust. The exact sidecar-manifest SHA-256 must match protected provenance/context before its inventory becomes authoritative, and canonical releases likewise require the expected whole-archive SHA-256. A future uploaded backup has no independently pre-known archive hash; its exact archive and sidecar identities must therefore come from a successfully authenticated encryption envelope before restore authority is granted. A structural/content validation report is evidence only and must never be treated as equivalent to authenticated release or restore authority.
 
+Trusted backup context separates required payload paths from optional allowed paths. V1 requires exactly `metadata/recovery.json` plus at least one logical-data file, which may be zero bytes for a legitimately empty table. Optional persistent assets are permitted only when the manifest presence flag matches their actual roles. Removing a required path from both archive and manifest does not make an incomplete backup valid. Asset signature checks are only type-prefix screening, not full media decoding; restored asset bytes remain untrusted, non-executable data for downstream serving.
+
 Opening or validating an archive never extracts it. Controlled extraction is a separate, explicit future operation that may run only after full validation into a private staging directory. A validation result is evidence, not a reusable authorization token: extraction must re-establish the trusted archive identity and prevent path races before writing any file. Release and backup producers remain deferred until this reader contract and its adversarial fixtures are accepted.
 
 ### Required manifest fields
