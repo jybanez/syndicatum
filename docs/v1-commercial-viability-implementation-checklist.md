@@ -404,6 +404,10 @@ behavior; permissive local defaults alone are insufficient.
       [external host/runtime baseline](v1-external-host-runtime-baseline.md),
       including Docker/Compose, maintained containerd/runc, supported OS/kernel,
       network boundary, operator privileges, and retained preflight evidence.
+      Draft PR 10 adds the fail-closed collector and its CI contract. Automation
+      does not close this item: a real compliant Ubuntu 24.04 amd64 host must
+      produce a passing checksummed evidence bundle and complete the exact
+      archived-candidate lifecycle before Assessor review.
 - [x] Produce immutable release artifacts with checksums for RC1.
 - [x] Publish release notes and migration notes for RC1.
 - [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only

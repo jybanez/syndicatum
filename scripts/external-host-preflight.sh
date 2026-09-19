@@ -110,6 +110,8 @@ capture() {
   printf 'captured_at_utc=%s\n' "$timestamp"
   printf 'minimum_docker=%s\nminimum_runc=%s\nminimum_containerd=%s\n' \
     "$MIN_DOCKER_VERSION" "$MIN_RUNC_VERSION" "$MIN_CONTAINERD_VERSION"
+  printf 'docker_floor_basis=required_security_fixes\nrunc_floor_basis=required_security_fix\n'
+  printf 'containerd_floor_basis=upstream_support_lifecycle\ncompose_requirement=maintained_v2_interface\n'
   printf 'expected_docker_admins=%s\nhost_patch_date=%s\noperator_network=%s\n' \
     "$expected_docker_admins" "$host_patch_date" "$operator_network"
   printf 'encrypted_storage_evidence=%s\ndisk_monitor_evidence=%s\nbackup_target=%s\n' \

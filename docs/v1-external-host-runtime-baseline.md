@@ -1,6 +1,7 @@
 # V1 external host and runtime baseline
 
-Status: **proposed for security review; not yet an external-deployment approval**.
+Status: **automated preflight implemented; a passing real external-host evidence
+bundle is still required before external-deployment approval**.
 
 This baseline defines the minimum host posture for a future design-partner V1
 deployment. It does not change the approved `v1.0.0-rc.1` boundary: RC1 remains
@@ -47,8 +48,11 @@ An external V1 host must satisfy all of the following before installation:
    maintained branch. As of 2026-09-19, containerd 1.6 and 2.1 are EOL, and the
    1.7 extension is narrowly maintained for specific GKE releases; a new
    standalone design-partner host should use a currently maintained 2.x line.
-   Do not install conflicting standalone `containerd` or `runc` packages beside
-   Docker's bundle.
+   The preflight currently treats 2.2.0 as the minimum maintained standalone
+   line. This is a **support-lifecycle floor**, not an independently claimed
+   CVE fix threshold or a permanently frozen product version; it must move when
+   the upstream lifecycle changes. Do not install conflicting standalone
+   `containerd` or `runc` packages beside Docker's bundle.
 7. **Kernel and patching:** use the vendor kernel for the supported OS, apply
    security updates before onboarding, enable unattended security updates or a
    documented monthly patch window, and rerun acceptance after Docker,
@@ -116,5 +120,44 @@ containerd --version
 
 The evidence record must also include host patch date, firewall rules, open
 ports, Docker-socket administrators, backup target, and the exact successful
-acceptance run. A future automated preflight should enforce these requirements;
-until it exists, this is a manual release checklist item.
+acceptance run. Run the fail-closed collector on the candidate host after these
+controls are configured:
+
+```bash
+sudo ./scripts/external-host-preflight.sh \
+  --expected-docker-admins 'operator1,operator2' \
+  --host-patch-date 'YYYY-MM-DD' \
+  --operator-network '203.0.113.0/24' \
+  --encrypted-storage-evidence 'ticket-or-command-output-reference' \
+  --disk-monitor-evidence 'monitor-or-alert-reference' \
+  --backup-target 's3://encrypted-off-host-target' \
+  --backup-verified-at 'YYYY-MM-DD' \
+  --acceptance-run-id 'exact archived-candidate run reference'
+```
+
+The script requires root so firewall and package-source evidence is complete.
+It automatically enforces Ubuntu 24.04 amd64, a recognized Ubuntu vendor
+kernel, Docker Engine >=29.5.1 from Docker's official repository, maintained
+Compose v2, `runc` >=1.3.6, a currently maintained containerd 2.x line via
+`containerd.io`, no conflicting standalone runtime packages, an explicit
+`DOCKER-USER` policy, no non-loopback listeners on HTTP/Docker-API/MySQL ports,
+an exact declared Docker-group member set, synchronized time, and recent patch
+and restore dates. The Compose major is a supported interface requirement;
+Compose 2.38.2 remains the tested RC1 reference rather than a separate security
+floor. The containerd 2.2.0 threshold is the current upstream-maintenance floor
+described above.
+
+Storage encryption, disk monitoring, operator-network scope, off-host backup,
+and the exact archived-candidate acceptance reference are operator-supplied
+attestations. The collector requires and records them but does not pretend to
+independently prove the named external systems.
+
+Each run writes raw command output, a pass/fail ledger, operator facts, and a
+SHA-256 manifest into a timestamped evidence directory. A passing bundle is
+necessary but not sufficient: it must be reviewed together with the exact
+successful archived-candidate lifecycle on that host. The `--self-test` mode
+used by CI validates only the script contract and never constitutes host
+acceptance evidence. Unsupported distributions, architectures, containerd
+branches, local-only backup targets, unrecognized kernels, or undocumented
+exceptions fail closed and require a separately reviewed baseline change; the
+script has no bypass flag.
