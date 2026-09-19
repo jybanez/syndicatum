@@ -1,9 +1,10 @@
 # V1 container security acceptance table
 
-**Status:** Exact-RC CRITICAL triage recorded; Commercial Assessor review is
-pending. No residual risk is accepted by this table. The HIGH-finding review
-and the overall security-disposition gate remain open. This is a release-gate
-record, not a claim that package presence proves practical exploitability.
+**Status:** Exact-RC CRITICAL review is closed (19/19), as are the bounded
+bundled-`gosu` and application-`libcurl4` HIGH tranches. No residual risk is
+accepted by this table. The remaining HIGH/package review and the overall
+security-disposition gate remain open. This is a release-gate record, not a
+claim that package presence proves practical exploitability.
 Source secret/dependency scan results are tracked separately in
 [`v1-security-inventory-2026-09-18.md`](v1-security-inventory-2026-09-18.md).
 
@@ -22,8 +23,8 @@ records all 19 CRITICAL package/CVE rows individually. A blank scanner fix
 version means **not listed by Trivy**, not proof that no fix exists. The
 dispositions below reconcile the exact RC rows with the published source,
 pinned-image contents, official Debian/Go advisories, and the prior binary
-analysis. They are proposed technical dispositions pending Commercial Assessor
-review; none is an owner acceptance of residual risk.
+analysis. The CRITICAL dispositions were approved in Syndicatum messages
+2851–2853; none is an owner acceptance of residual risk.
 The earlier process probe in [PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225)
 recorded one UID 0 Apache master with three effective capabilities. The later
 [PR CI run 35264623906](https://github.com/jybanez/syndicatum/actions/runs/35264623906)

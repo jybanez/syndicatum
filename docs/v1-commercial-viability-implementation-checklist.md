@@ -363,15 +363,18 @@ behavior; permissive local defaults alone are insufficient.
       The Assessor accepted that direction in project message 2859. No owner
       decision is needed to implement and test 8.4; a temporary external 5.7
       exception would require separate, time-bounded owner residual-risk
-      approval. Draft [PR 8](https://github.com/jybanez/syndicatum/pull/8)
-      preserves the 5.7 defaults and adds a separate pinned MySQL 8.4.11
-      clean-install compatibility job. Exact-head run 35435297688 passed that
-      job and the unchanged 5.7 lifecycle at `852a189`; Assessor review and a
-      real 5.7-to-8.4 migration exercise remain open. Commercial Assessor
-      message 2869 closes the **MySQL 8.4 clean-install compatibility** sub-
-      gate at that exact head and digest. The **MySQL 5.7-to-8.4 migration**,
-      **external host/runtime baseline**, and **overall external promotion**
-      gates remain open; RC1 remains the immutable 5.7.44 internal candidate.
+      approval. [PR 8](https://github.com/jybanez/syndicatum/pull/8)
+      preserves the 5.7 defaults and adds separate pinned MySQL 8.4.11 clean-
+      install and 5.7-to-8.4 logical migration jobs. Commercial Assessor
+      messages 2869 and 2877 close both database sub-gates for their documented
+      scope. The migration evidence exercised GitHub merge-ref candidate
+      `8bce52f` (parents protected main `5e9b4f4` and branch head `0e1141f`),
+      not the branch head in isolation. PR 8 then merged through protected main
+      as `27d8010`; main-push run 35442123805 passed source, security inventory,
+      5.7 lifecycle, 8.4 clean install, and 5.7-to-8.4 migration jobs. The
+      **external host/runtime baseline** and **overall external promotion**
+      gates remain open; RC1 remains the immutable 5.7.44 internal candidate,
+      and the merged 8.4 work belongs to a subsequent release chain.
 - [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
