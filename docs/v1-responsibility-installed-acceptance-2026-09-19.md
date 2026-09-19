@@ -258,6 +258,36 @@ closes only the exercised 50+5 pagination/no-duplicate and unknown-baseline
 presentation path; multi-project scale, edit/tombstone, responsive,
 accessibility, and overall P1.1/P1.2 remain open.
 
+## Edit, soft-delete, and offscreen evidence probe
+
+An eighth disposable Compose stack served the same exact `771a222` application
+image and MySQL 5.7.44 at `127.0.0.1:18090`, with fresh isolated volumes and
+two independently authenticated synthetic humans. The owner created one direct
+request and 51 newer direct requests so the exercised request was absent from
+the installed timeline's first 50 rows and appeared only after `Load older
+work` in the Responsibility Inbox.
+
+The owner edited the exercised canonical message once. The installed Inbox
+retained exactly one responsibility card for the request after pagination, and
+`View original message` used the offscreen canonical fallback. Its installed
+dialog preserved message ID `#1`, project sequence `1`, sender, addressee,
+timestamp, and top-level thread identity; it displayed the edited body and
+`1 revision; Current visible revision` without changing the Inbox filters or
+creating another responsibility record.
+
+The owner then soft-deleted the same message. Reopening the same Inbox card's
+canonical evidence retained the same message and sequence identity, displayed
+`1 revision`, the removal timestamp, `historical evidence retained`, and the
+explicit tombstone text `This message was removed. Its historical identity and
+responsibility evidence remain.` The authenticated API independently returned
+one revision row, a non-null `deleted_at`, and exactly one retained
+responsibility projection for request `#1` across the 50 + 2 cursor pages.
+
+This closes only the exercised installed edit/one-revision/soft-delete and
+offscreen canonical-fallback path. Multiple edits, reply-parent tombstones,
+other actor/role variants, responsive/accessibility, and overall P1.1/P1.2
+remain open pending Assessor review.
+
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
@@ -273,7 +303,9 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
   and accepted at narrow scope.
 - Broader multi-project scale beyond the exercised single-project 50+5
   pagination/no-duplicate and historical unknown-baseline path.
-- Evidence navigation after edit and soft-delete, including an offscreen row.
+- Broader evidence-history variants beyond the exercised one-edit,
+  soft-delete, and offscreen canonical-fallback path, including multiple edits
+  and reply-parent tombstones.
 - Responsive-density, keyboard, focus, and screen-reader acceptance on the
   installed client.
 - Assessor review of the remaining acceptance matrix.

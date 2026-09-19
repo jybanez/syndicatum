@@ -634,6 +634,21 @@ Commercial Assessor accepted this bounded installed sub-gate in project message
 #2815; exact evidence head `a3f0d86` passed all required jobs in GitHub Actions
 run `35412134767`.
 
+The next exact-image installed probe exercised edit and soft-delete fidelity on
+an offscreen canonical request. One request plus 51 newer direct requests put
+the exercised message outside the timeline's first 50 rows. After one edit,
+the Inbox loaded the older card and its canonical fallback preserved message
+ID, sequence, sender, addressee, timestamp, thread identity, the edited body,
+and `1 revision; Current visible revision`. After soft-delete, the same card
+retained the responsibility projection and showed the removal timestamp,
+`historical evidence retained`, and explicit non-destructive tombstone wording.
+The authenticated API returned one revision, a non-null deletion timestamp,
+and one retained responsibility row across its 50 + 2 cursor pages. This
+closes only the exercised one-edit/soft-delete/offscreen-fallback path;
+multiple edits, reply-parent tombstones, other role variants,
+responsive/accessibility, and overall gates remain open pending CI and
+Assessor review.
+
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
 The Commercial Assessor recommended its non-inventive policy in message #2765,
