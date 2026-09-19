@@ -335,6 +335,9 @@ try {
         $suite->true(strpos($source, 'label: "Backup / Restore"') !== false, 'Administrators need a visible Backup / Restore navigation entry.');
         $suite->true(strpos($source, 'createTabs: await uiLoader.get("ui.tabs", options)') !== false, 'The workflow must use the native Helper tabs component.');
         $suite->true(strpos($source, 'state.components.adminTabs = state.factories.createTabs') !== false, 'The Helper tabs component must mount the workflow sections.');
+        $suite->true(strpos($source, 'label: "Get clean package"') !== false && strpos($source, 'CI-built canonical release') !== false, 'The clean package flow must retrieve the canonical release rather than rebuild it.');
+        $suite->true(strpos($source, 'encrypted, non-executable recovery package') !== false, 'The backup preview must retain the mandatory encryption boundary.');
+        $suite->true(strpos($source, 'restore only to an empty or staged target') !== false && strpos($source, 'It will not overwrite the serving instance.') !== false, 'The restore preview must retain the staged-only V1 boundary.');
         $suite->true(strpos($source, 'stateLabel.textContent = "Not yet available";') !== false, 'Unavailable operations must be explicitly identified.');
         $suite->true(strpos($source, 'action.disabled = true;') !== false, 'Placeholder operation buttons must remain disabled.');
         $suite->true(strpos($source, 'No package, backup, or restore command can be run from this preview.') !== false, 'The preview needs a non-deceptive capability boundary.');
@@ -345,13 +348,18 @@ try {
     $suite->test('First-run setup preview uses the Helper stepper without enabling installation', function () use ($suite, $root) {
         $page = file_get_contents($root . '/setup.php');
         $source = file_get_contents($root . '/assets/setup.mjs');
+        $styles = file_get_contents($root . '/assets/setup.css');
         $routes = file_get_contents($root . '/.htaccess');
         $suite->true(strpos($routes, 'RewriteRule ^setup/?$ setup.php') !== false, 'The setup preview needs a stable route.');
         $suite->true(strpos($page, 'First-run setup · UI preview') !== false, 'The setup shell must identify itself as a preview.');
         $suite->true(strpos($page, 'This preview cannot create a database, administrator, package, or installation.') !== false, 'The setup shell must state its capability boundary.');
         $suite->true(strpos($source, 'await uiLoader.get("ui.stepper", options)') !== false, 'The setup flow must use the native Helper stepper.');
-        $suite->true(strpos($source, 'next.textContent = currentIndex === steps.length - 1 ? "Begin installation" : "Next";') !== false, 'The final action needs an explicit installation label.');
-        $suite->true(strpos($source, 'next.disabled = currentIndex === steps.length - 1;') !== false, 'The unimplemented installation action must remain disabled.');
+        $suite->true(strpos($source, '{ id: "ownership", title: "Ownership"') !== false && strpos($source, '{ id: "completion", title: "Completion"') !== false, 'The preview must show the approved ownership-through-completion stage model.');
+        $suite->true(strpos($source, 'next.textContent = currentIndex === reviewIndex ? "Begin installation"') !== false, 'The irreversible action needs an explicit installation label.');
+        $suite->true(strpos($source, 'next.disabled = currentIndex >= reviewIndex;') !== false, 'Review/install and completion actions must fail closed.');
+        $suite->true(strpos($source, 'Installation has not run') !== false, 'The completion preview must not imply a successful installation.');
+        $suite->true(strpos($source, 'renderStep({ focusStepper: true })') !== false && strpos($source, '?.focus({ preventScroll: true });') !== false, 'Keyboard activation must retain focus in the Helper stepper.');
+        $suite->true(strpos($styles, '.setup-workspace .ui-stepper--horizontal .ui-stepper-list') !== false && strpos($styles, 'grid-template-columns: repeat(2, minmax(0, 1fr));') !== false, 'The Helper stepper must reflow without horizontal overflow on mobile.');
         $suite->true(strpos($source, 'fetch(') === false, 'The UI-first setup preview must not call an invented backend.');
     });
 

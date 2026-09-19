@@ -1,14 +1,21 @@
 import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
 
 const steps = [
-  { id: "requirements", title: "Requirements", subtitle: "Review environment" },
+  { id: "ownership", title: "Ownership", subtitle: "Prove control" },
+  { id: "system", title: "System check", subtitle: "Review environment" },
   { id: "database", title: "Database", subtitle: "Plan connection" },
   { id: "administrator", title: "Administrator", subtitle: "Plan first account" },
-  { id: "review", title: "Review", subtitle: "Confirm scope" },
+  { id: "review", title: "Review & install", subtitle: "Confirm scope" },
+  { id: "completion", title: "Completion", subtitle: "Confirm result" },
 ];
 
 const content = {
-  requirements: {
+  ownership: {
+    title: "Prove control of this installation",
+    description: "The connected installer will require short-lived ownership proof before it accepts database details or creates the first administrator.",
+    fields: [["Public Syndicatum URL", "Not yet available"], ["Ownership proof", "Not yet available"]],
+  },
+  system: {
     title: "Check the installation environment",
     description: "The installer will verify the supported runtime, writable storage, HTTPS origin, and database reachability before it changes anything.",
     rows: [["Runtime baseline", "Not yet checked"], ["Storage permissions", "Not yet checked"], ["Public HTTPS origin", "Not yet checked"], ["Database reachability", "Not yet checked"]],
@@ -27,6 +34,11 @@ const content = {
     title: "Review before installation",
     description: "A final summary, secret-storage destination, and explicit confirmation will appear here once the installer contracts are connected.",
     rows: [["Environment", "Not verified"], ["Database", "Not configured"], ["Administrator", "Not configured"], ["Installation action", "Not yet available"]],
+  },
+  completion: {
+    title: "Installation has not run",
+    description: "This completion screen is a preview of the future result summary. No installation state, administrator, or database was created.",
+    rows: [["Installation", "Not started"], ["Health verification", "Not available"], ["Administrator sign-in", "Not available"], ["Audit record", "Not created"]],
   },
 };
 
@@ -61,7 +73,7 @@ function renderFields(panel, fields) {
   panel.appendChild(grid);
 }
 
-function renderStep() {
+function renderStep({ focusStepper = false } = {}) {
   const step = steps[currentIndex];
   const spec = content[step.id];
   stepper.setCurrentStep(step.id);
@@ -81,11 +93,15 @@ function renderStep() {
 
   const back = document.getElementById("setup-back");
   const next = document.getElementById("setup-next");
+  const reviewIndex = steps.findIndex((item) => item.id === "review");
   back.disabled = currentIndex === 0;
-  next.textContent = currentIndex === steps.length - 1 ? "Begin installation" : "Next";
-  next.disabled = currentIndex === steps.length - 1;
+  next.textContent = currentIndex === reviewIndex ? "Begin installation" : (currentIndex === steps.length - 1 ? "Finish" : "Next");
+  next.disabled = currentIndex >= reviewIndex;
   if (next.disabled) next.setAttribute("aria-describedby", "setup-boundary");
   else next.removeAttribute("aria-describedby");
+  if (focusStepper) {
+    document.querySelectorAll("#setup-stepper .ui-stepper-trigger")[currentIndex]?.focus({ preventScroll: true });
+  }
 }
 
 async function bootstrap() {
@@ -99,7 +115,7 @@ async function bootstrap() {
     clickable: true,
     onStepClick(step) {
       const nextIndex = steps.findIndex((item) => item.id === step.id);
-      if (nextIndex >= 0) { currentIndex = nextIndex; renderStep(); }
+      if (nextIndex >= 0) { currentIndex = nextIndex; renderStep({ focusStepper: true }); }
     },
   });
   document.getElementById("setup-back").addEventListener("click", () => {

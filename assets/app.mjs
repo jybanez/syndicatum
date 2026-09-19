@@ -1654,13 +1654,13 @@ function renderBackupRestoreSurface() {
       },
       {
         id: "clean-package",
-        label: "Clean package",
+        label: "Get clean package",
         render(host) {
           host.appendChild(backupRestorePlaceholder(
-            "Create a clean installation package",
-            "This will build a fresh-install artifact without customer data, runtime secrets, or machine-specific state.",
-            "Create clean package",
-            [["Source version"], ["Target platform"], ["Output artifact"]],
+            "Get the canonical clean installation package",
+            "This will retrieve and verify the CI-built canonical release. The serving instance will never rebuild or mint the executable package.",
+            "Get clean package",
+            [["Release download"], ["SHA-256 checksum"], ["Package manifest"]],
           ));
         },
       },
@@ -1670,9 +1670,9 @@ function renderBackupRestoreSurface() {
         render(host) {
           host.appendChild(backupRestorePlaceholder(
             "Build a verified backup",
-            "This will capture supported data and configuration, then verify the artifact before it is offered for download.",
+            "This will create an encrypted, non-executable recovery package containing the supported data, configuration, and required persistent assets, then verify it before download.",
             "Build backup",
-            [["Backup scope"], ["Estimated size"], ["Verification state"]],
+            [["Encryption"], ["Required persistent assets"], ["Verification state"]],
           ));
         },
       },
@@ -1682,9 +1682,9 @@ function renderBackupRestoreSurface() {
         render(host) {
           host.appendChild(backupRestorePlaceholder(
             "Restore from a verified backup",
-            "A future guided restore will validate compatibility, require an explicit confirmation, and preserve a rollback point.",
+            "A future guided restore will validate compatibility and restore only to an empty or staged target. It will not overwrite the serving instance.",
             "Select backup to restore",
-            [["Selected backup"], ["Compatibility"], ["Rollback point"]],
+            [["Selected encrypted backup"], ["Compatibility"], ["Empty or staged target"]],
           ));
         },
       },

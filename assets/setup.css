@@ -7,7 +7,7 @@ body { min-height: 100vh; margin: 0; color: var(--setup-text); background: radia
 .setup-heading p { margin: 7px 0 0; color: var(--setup-muted); }
 .setup-heading .ui-eyebrow { margin: 0 0 5px; }
 .setup-brand { width: 48px; height: 48px; }
-.setup-workspace { display: grid; gap: 18px; padding: 22px; border-color: var(--setup-border); background: color-mix(in srgb, var(--setup-panel) 96%, transparent); }
+.setup-workspace { display: grid; min-width: 0; gap: 18px; overflow: hidden; padding: 22px; border-color: var(--setup-border); background: color-mix(in srgb, var(--setup-panel) 96%, transparent); }
 .setup-boundary { margin: 0; padding: 12px 14px; border: 1px solid var(--setup-border); border-radius: 10px; color: var(--setup-muted); background: color-mix(in srgb, var(--setup-bg) 70%, transparent); }
 .setup-content { min-height: 330px; }
 .setup-panel { display: grid; align-content: start; gap: 14px; }
@@ -27,4 +27,5 @@ body { min-height: 100vh; margin: 0; color: var(--setup-text); background: radia
   .setup-heading > .ui-badge { grid-column: 2; justify-self: start; }
   .setup-fields, .setup-details { grid-template-columns: minmax(0, 1fr); }
   .setup-details dd { margin-bottom: 8px; }
+  .setup-workspace .ui-stepper--horizontal .ui-stepper-list { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
