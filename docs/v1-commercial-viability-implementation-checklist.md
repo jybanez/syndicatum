@@ -49,10 +49,17 @@ The acceptance harness builds project-unique images and asserts the running
 database version and strict SQL mode before application startup.
 The final 5.7 release is a legacy stabilization choice, not a claim that the
 database receives current upstream security fixes or that external production
-deployment is approved.
+deployment is approved. Internal/non-production `v1.0.0-rc.1` release run
+[35424177468](https://github.com/jybanez/syndicatum/actions/runs/35424177468)
+subsequently clean-installed the independently downloaded, hash-verified
+published archive and repeated migrations, health/recovery, backup, and
+restore on MySQL 5.7.44. Commercial Assessor message 2843 accepts this as the
+release-grade P0.2 evidence for RC1; a material later RC change reopens it.
 
-- [ ] Promote the candidate Linux/Docker deployment path to supported after its
-      clean-environment acceptance run passes against a release artifact.
+- [x] Promote the candidate Linux/Docker deployment path to the supported
+      **internal/non-production RC1** path after clean-environment acceptance
+      passed against the exact published artifact. This does not authorize
+      external/design-partner distribution or production use.
 - [x] Pin and document runtime, database, web-server, worker, and extension
       requirements.
 - [x] Provide an example production configuration without real credentials.
@@ -66,7 +73,7 @@ deployment is approved.
       records an isolated source-tree build, database mutation, logical backup,
       restore, and probe verification on the selected baseline. Published
       release-artifact acceptance remains open.
-- [ ] Expose health states that distinguish application, database,
+- [x] Expose health states that distinguish application, database,
       authentication, binding, Realtime, queue, and activation delivery health.
       The local operator-status command now reports Realtime, webhook,
       Workspace Agent, and Responses API delivery backlogs separately, including
@@ -180,6 +187,13 @@ deployment is approved.
       now asserts that a temporarily absent Realtime table yields `unknown`
       and null metrics, then returns to `ok` after restoration; the other
       failure cases and published-artifact proof remain open.
+      Those statements record the evidence state at each historical rerun.
+      Exact published-byte RC1 run 35424177468 subsequently repeated the
+      aggregate health, worker failure/recovery, due-event, retry-exhaustion,
+      uncertain-replay, canonical-versus-activation, token/binding, backup,
+      and restore checks. Commercial Assessor message 2843 closes P0.2 for
+      RC1 while keeping installed Companion/OAuth usability in P0.5 and live
+      external/production receivers out of this acceptance scope.
 - [x] Document routine operation and incident-recovery commands.
 
 **Exit evidence:** a clean machine can install, start, back up, restore, and
@@ -256,9 +270,9 @@ configuration is not interchangeable with the strict candidate baseline.
 also passed after CI packaged exact commit `a0538b6` as a checksummed archive,
 unpacked it, and repeated Docker acceptance from that copy; see the
 [archive rehearsal record](docker-acceptance-2026-09-17.md#checksummed-archive-rehearsal).
-No tagged, published immutable V1 release artifact has been recorded. The job
-does not yet cover the full PHP/JavaScript, documentation, migration, packaging,
-and security release matrix below.
+At that historical checkpoint no tagged, published immutable V1 release
+artifact had been recorded. RC1 run 35424177468 now supplies that artifact and
+packaging evidence; security disposition remains open as described below.
 The candidate `security-inventory` CI job scans the source checkout for
 dependency vulnerabilities, secrets, and configuration findings. It retains
 revision-bound counts and non-secret finding identifiers, not raw secret matches. A detected secret
@@ -274,12 +288,15 @@ after removal of inherited build headers and the unused `curl` CLI.
 Package/CVE/fix-version evidence is retained for triage; image findings remain
 informational rather than an
 enforced V1 severity policy. See the [security inventory](v1-security-inventory-2026-09-18.md).
-The proposed `.github/workflows/release-rc.yml` path requires an annotated
+The `.github/workflows/release-rc.yml` path requires an annotated
 `v1.0.0-rc.N` tag on protected `main` with reviewed release notes, reruns the
 source and Docker checks at the tag, publishes their checksummed archive as a
-prerelease, then downloads and clean-installs the published bytes. This is
-workflow preparation, not evidence of a tagged release or a passing published-
-artifact acceptance run; those gates remain open until a real RC run succeeds.
+prerelease, then downloads and clean-installs the published bytes. The first
+real run, [35424177468](https://github.com/jybanez/syndicatum/actions/runs/35424177468),
+passed for immutable internal/non-production `v1.0.0-rc.1` at protected-main
+SHA `5e9b4f4161c026cc663abd0b587ea474bf5150de`; the independently re-downloaded
+archive SHA-256 is
+`57567f70748707d98ad57100e7e1bd81e322f69be7953b8a7f9230fea912ee99`.
 At `e8a4f59`, the workflow implementation passed both existing PR checks in
 [run 35247230416](https://github.com/jybanez/syndicatum/actions/runs/35247230416).
 Jonathan approved the [V1 tag-protection policy](v1-tag-protection-proposal.md)
@@ -292,11 +309,10 @@ retained results that identify that revision, and a required branch/release
 check. GitHub branch protection on `main` now requires pull requests and the
 up-to-date `source-contract` and `docker-source-acceptance` GitHub Actions
 checks, including for administrators; force-push and deletion are disabled.
-[PR 2](https://github.com/jybanez/syndicatum/pull/2) is the current
-protected-main candidate; it is open with required checks passing, not an
-approved merge or release. Onboarding and delivery follow-ups remain separate
-draft [PR 4](https://github.com/jybanez/syndicatum/pull/4) and
-[PR 5](https://github.com/jybanez/syndicatum/pull/5). Portable fixture
+[PR 6](https://github.com/jybanez/syndicatum/pull/6) merged the reviewed
+commercial-viability candidate into protected `main`; main-push run
+[35423325090](https://github.com/jybanez/syndicatum/actions/runs/35423325090)
+passed all required jobs before the separate RC tag authorization. Portable fixture
 results must remain labeled separately from installed client evidence. The
 required release path must test at least one database mode/configuration
 representative of the supported production deployment, including strict SQL
@@ -313,18 +329,19 @@ behavior; permissive local defaults alone are insufficient.
       requires an annotated `v1.0.0-rc.N` tag on `main`, reruns contract/Docker
       checks, publishes the tested archive with checksum/provenance, and
       installs the downloaded release asset. PR CI run 35247230416 passed;
-      neither a real tag nor the new tag-triggered workflow has run yet.
+      real tag-triggered run 35424177468 then passed on `v1.0.0-rc.1`.
 - [x] Apply and read back V1 tag protection. Rulesets `23612219` and
       `23612208` are active with the approved pattern, rules, and bypass lists;
       see the [policy record](v1-tag-protection-proposal.md).
 - [x] Draft the first RC-specific release notes at
       [`docs/releases/v1.0.0-rc.1.md`](releases/v1.0.0-rc.1.md), with the
       clean-install-only boundary, candidate runtime/schema head, exact source
-      package versions, and open acceptance/security limitations. These notes
-      are not a published release or a completed release gate.
-- [ ] Produce and verify the first real RC evidence chain: exact protected-main
+      package versions, and open acceptance/security limitations. The notes are
+      now published with RC1; publication does not close the security gate.
+- [x] Produce and verify the first real RC evidence chain: exact protected-main
       commit, immutable tag, required CI run, archive/hash, published release,
-      and downloaded-artifact acceptance on the declared baseline.
+      and downloaded-artifact acceptance on the declared baseline. Evidence is
+      recorded in release run 35424177468 and Syndicatum messages 2842–2843.
 - [x] Decide the first-release support path: `v1.0.0` supports a fresh Docker
       installation only on the declared baseline. Jonathan confirmed this
       decision through the Commercial Assessor in project message 2337. The
@@ -332,9 +349,11 @@ behavior; permissive local defaults alone are insufficient.
       its in-place upgrade is not a `v1.0.0` release gate. Data migration from
       it is separate assistance, not a supported upgrade promise.
 - [ ] Define a repeatable release and rollback process.
-- [ ] Add continuous integration for PHP, JavaScript, documentation contracts,
+- [x] Add continuous integration for PHP, JavaScript, documentation contracts,
       migrations, and packaging.
-- [ ] Add dependency, secret, and baseline static-security scanning.
+- [x] Add dependency, secret, and baseline static-security scanning. Scanner
+      execution is complete; vulnerability disposition remains a separate open
+      gate below.
 - [ ] Review the security and deployment-hardening implications of using the
       terminal MySQL 5.7.44 release before any external production-readiness
       claim; keep this separate from functional compatibility on 5.7.44.
@@ -342,9 +361,9 @@ behavior; permissive local defaults alone are insufficient.
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
       acceptance. A green inventory scan is not security-gate evidence.
-- [ ] Produce immutable release artifacts with checksums.
-- [ ] Publish release notes and migration notes for each release.
-- [ ] Test clean installation of `v1.0.0` from its published artifact, not only
+- [x] Produce immutable release artifacts with checksums for RC1.
+- [x] Publish release notes and migration notes for RC1.
+- [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only
       from a working tree. For later releases, test upgrade from the immediately
       previous supported published release.
 
@@ -440,24 +459,27 @@ queue, worker restart, and a unique ingress receipt. It also checks the
 administrator Delivery
 health endpoint on both sides of that transition. This remains isolated
 candidate evidence, not a production receiver or published-artifact claim.
-P0.6 remains open for the same health and recovery checks on the exact
-published RC bytes, with artifact hash/provenance, after the protected-main
-merge and release path becomes available.
+Exact published-byte run 35424177468 repeated the health and recovery checks
+from independently downloaded `v1.0.0-rc.1`, tied to the archive hash and
+release provenance. Commercial Assessor message 2843 accepts P0.6 as achieved
+for RC1, subject to reopening if a later RC materially changes delivery or
+health code. This remains internal/non-production evidence and is not a live
+production-receiver or external installed-client claim.
 
-- [ ] Define the delivery lifecycle and terminal outcomes.
-- [ ] Record bounded metadata for each delivery attempt.
-- [ ] Classify failures as backpressure, binding, routing, authentication,
+- [x] Define the delivery lifecycle and terminal outcomes.
+- [x] Record bounded metadata for each delivery attempt.
+- [x] Classify failures as backpressure, binding, routing, authentication,
       client availability, rate limiting, or internal error where evidence
       permits.
-- [ ] Record pending count and oldest-pending age.
-- [ ] Record attempt count, last attempt, next retry, and terminal outcome.
-- [ ] Record binding health and last successful activation.
-- [ ] Retain diagnostics long enough to investigate delayed notifications.
-- [ ] Redact message contents, credentials, claim codes, and bearer tokens from
+- [x] Record pending count and oldest-pending age.
+- [x] Record attempt count, last attempt, next retry, and terminal outcome.
+- [x] Record binding health and last successful activation.
+- [x] Retain diagnostics long enough to investigate delayed notifications.
+- [x] Redact message contents, credentials, claim codes, and bearer tokens from
       operational diagnostics.
-- [ ] Expose machine-readable operational health.
-- [ ] Provide an administrator-facing delivery and binding health view.
-- [ ] Document retry, dead-letter, replay, and recovery procedures.
+- [x] Expose machine-readable operational health.
+- [x] Provide an administrator-facing delivery and binding health view.
+- [x] Document retry, dead-letter, replay, and recovery procedures.
 
 **Exit evidence:** an operator can diagnose a delayed or failed activation from
 retained product telemetry without inspecting credentials or guessing at cause.

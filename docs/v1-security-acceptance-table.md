@@ -1,18 +1,29 @@
 # V1 container security acceptance table
 
-**Status:** Triage in progress; no critical finding below is accepted or
-dispositioned. This table is a release-gate record, not a claim of practical
-exploitability. Source secret/dependency scan results are tracked separately in
+**Status:** Exact-RC CRITICAL triage recorded; Commercial Assessor review is
+pending. No residual risk is accepted by this table. The HIGH-finding review
+and the overall security-disposition gate remain open. This is a release-gate
+record, not a claim that package presence proves practical exploitability.
+Source secret/dependency scan results are tracked separately in
 [`v1-security-inventory-2026-09-18.md`](v1-security-inventory-2026-09-18.md).
 
-**Evidence baseline:** [PR CI run 35259335422](https://github.com/jybanez/syndicatum/actions/runs/35259335422)
-on the archived MySQL 5.7.44 candidate. The Docker acceptance artifact retains
+**Authoritative RC evidence baseline:** internal/non-production prerelease
+[`v1.0.0-rc.1`](https://github.com/jybanez/syndicatum/releases/tag/v1.0.0-rc.1),
+protected-main commit
+`5e9b4f4161c026cc663abd0b587ea474bf5150de`, archive SHA-256
+`57567f70748707d98ad57100e7e1bd81e322f69be7953b8a7f9230fea912ee99`,
+and [release run 35424177468](https://github.com/jybanez/syndicatum/actions/runs/35424177468).
+The exact archive was independently downloaded and hash-verified, then passed
+clean-install, health/recovery, backup, and restore acceptance on MySQL 5.7.44.
+The run's Docker acceptance artifact retains
 `image-security-findings.tsv` with scanner target, package type, package,
 installed version, scanner-listed fix version, CVE, and severity. This table
-records its 19 CRITICAL package/CVE
-findings individually. A blank scanner fix version means **not listed by the
-scanner**, not proof that no fix exists. All applicability and residual-risk
-judgments remain open until checked against the running image and advisory.
+records all 19 CRITICAL package/CVE rows individually. A blank scanner fix
+version means **not listed by Trivy**, not proof that no fix exists. The
+dispositions below reconcile the exact RC rows with the published source,
+pinned-image contents, official Debian/Go advisories, and the prior binary
+analysis. They are proposed technical dispositions pending Commercial Assessor
+review; none is an owner acceptance of residual risk.
 The earlier process probe in [PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225)
 recorded one UID 0 Apache master with three effective capabilities. The later
 [PR CI run 35264623906](https://github.com/jybanez/syndicatum/actions/runs/35264623906)
@@ -45,61 +56,76 @@ the tested baseline but is not an independent production security review.
 
 ## CRITICAL findings
 
-| CVE | Severity | Image / package | Reachable or exposed? | Fix available? | Planned action | Mitigation / residual risk | Acceptance |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| CVE-2026-13221 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `libperl5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `libperl5.36` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
-| CVE-2025-7458 | CRITICAL | app / `libsqlite3-0` | Unknown | None listed | Check whether production PHP/Apache calls SQLite | Unassessed | Open |
-| CVE-2026-6653 | CRITICAL | app / `libxml2` | Unknown | None listed | Check XML use and reachable input path | Unassessed | Open |
-| CVE-2026-13221 | CRITICAL | app / `perl` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `perl` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
-| CVE-2026-13221 | CRITICAL | app / `perl-base` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `perl-base` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl-base` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
-| CVE-2026-13221 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-42496 | CRITICAL | app / `perl-modules-5.36` | No direct runtime path observed; completeness pending | None listed | Check transitive Perl execution and advisory path | Unassessed | Open |
-| CVE-2026-8376 | CRITICAL | app / `perl-modules-5.36` | Tested image is amd64; advisory is 32-bit-only | N/A for tested architecture | Confirm supported release architectures and independent review | Proposed N/A for amd64 only | Review pending |
-| CVE-2023-45853 | CRITICAL | app / `zlib1g` | Debian says affected MiniZip code is not built into this Bookworm binary | Not applicable to this binary per Debian | Verify package lineage; obtain independent review | Proposed N/A; no compensating control claimed | Review pending |
-| CVE-2023-24538 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `html/template` symbols | Scanner lists Go 1.19.8 / 1.20.3 | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
-| CVE-2023-24540 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `html/template` symbols | Scanner lists Go 1.19.9 / 1.20.4 | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
-| CVE-2024-24790 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `net/netip` symbols | Scanner lists Go 1.21.11 / 1.22.4 | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
-| CVE-2025-68121 | CRITICAL | db / `/usr/local/bin/gosu`, Go `stdlib` | Binary-mode `govulncheck` did not report vulnerable `crypto/tls` symbols | Scanner lists newer Go versions | Independent review against exact published image | Proposed N/A for this helper; other findings remain | Review pending |
+The `Present?` column means the scanner-attributed package or binary is in the
+exact RC-built image. It does not mean the vulnerable behavior is on a
+supported execution path. Repeated Perl rows are retained because the release
+artifact reports them separately even though they share one Debian source
+package and one reachability analysis.
+
+| CVE / scanner | Exact RC image path or package | Installed / scanner fix | Present? and advisory condition | Supported-path exposure | Proposed disposition | Evidence and review state |
+| --- | --- | --- | --- | --- | --- | --- |
+| CVE-2026-13221 / Trivy Debian | app / `libperl5.36` | `5.36.0-7+deb12u3` / none listed | Package present; Debian marks Bookworm vulnerable; condition is compiling a Perl regex trie with more than 65,535 fixed-string branches | No production source invokes Perl; Apache has no CGI/Perl module or `libperl` linkage; no attacker-controlled input reaches Perl regex compilation | `unreachable` | Exact RC source search and release acceptance Perl/CGI probe; Assessor review pending |
+| CVE-2026-42496 / Trivy Debian | app / `libperl5.36` | `5.36.0-7+deb12u3` / none listed | Package present; condition is `Archive::Tar` extraction of an attacker-controlled symlink target | No production source invokes Perl or `Archive::Tar`; no supported upload/import path passes an archive to Perl | `unreachable` | Exact RC source search, Apache probe, and Debian advisory; Assessor review pending |
+| CVE-2026-8376 / Trivy Debian | app / `libperl5.36` | `5.36.0-7+deb12u3` / none listed | Package present, but the heap overflow requires a **32-bit** Perl build and attacker-controlled regex compilation | Exact RC app image is `amd64`; the architectural precondition is absent, and Perl is not a supported runtime path | `not_applicable` | Exact RC image architecture plus Debian advisory; Assessor review pending |
+| CVE-2025-7458 / Trivy Debian | app / `libsqlite3-0` | `3.40.1-2+deb12u2` / none listed | Library present; Debian marks Bookworm vulnerable; condition is ability to execute crafted arbitrary SQLite SQL with a very large `ORDER BY` expression list | Dockerfile builds `pdo_mysql`, not SQLite extensions; production source has no SQLite call or SQLite database path; supported storage is MySQL | `unreachable` | Exact RC Dockerfile and production-source search plus Debian advisory; Assessor review pending |
+| CVE-2026-6653 / Trivy Debian | app / `libxml2` | `2.9.14+dfsg-1.3~deb12u6` / none listed | Library present; Debian marks Bookworm vulnerable; condition is crafted XML reaching `xmlParseInternalSubset` entity-resolution handling | Production source has no XML parser call and no supported feature passes user-controlled XML to libxml2 | `unreachable` | Exact RC production-source search plus Debian advisory; Assessor review pending |
+| CVE-2026-13221 / Trivy Debian | app / `perl` | `5.36.0-7+deb12u3` / none listed | Package present; same Perl regex condition above | Same exact-image analysis: no production Perl execution or attacker-controlled regex compilation path | `unreachable` | Exact RC source/Apache evidence; Assessor review pending |
+| CVE-2026-42496 / Trivy Debian | app / `perl` | `5.36.0-7+deb12u3` / none listed | Package present; same `Archive::Tar` symlink condition above | Same exact-image analysis: no production Perl/archive extraction path | `unreachable` | Exact RC source/Apache evidence; Assessor review pending |
+| CVE-2026-8376 / Trivy Debian | app / `perl` | `5.36.0-7+deb12u3` / none listed | Package present; exploit condition is 32-bit-only | Exact RC is `amd64`; architectural precondition absent | `not_applicable` | Exact RC architecture plus Debian advisory; Assessor review pending |
+| CVE-2026-13221 / Trivy Debian | app / `perl-base` | `5.36.0-7+deb12u3` / none listed | Package present; same Perl regex condition above | Same exact-image analysis: no production Perl execution or attacker-controlled regex compilation path | `unreachable` | Exact RC source/Apache evidence; Assessor review pending |
+| CVE-2026-42496 / Trivy Debian | app / `perl-base` | `5.36.0-7+deb12u3` / none listed | Package present; same `Archive::Tar` symlink condition above | Same exact-image analysis: no production Perl/archive extraction path | `unreachable` | Exact RC source/Apache evidence; Assessor review pending |
+| CVE-2026-8376 / Trivy Debian | app / `perl-base` | `5.36.0-7+deb12u3` / none listed | Package present; exploit condition is 32-bit-only | Exact RC is `amd64`; architectural precondition absent | `not_applicable` | Exact RC architecture plus Debian advisory; Assessor review pending |
+| CVE-2026-13221 / Trivy Debian | app / `perl-modules-5.36` | `5.36.0-7+deb12u3` / none listed | Package present; same Perl regex condition above | Same exact-image analysis: no production Perl execution or attacker-controlled regex compilation path | `unreachable` | Exact RC source/Apache evidence; Assessor review pending |
+| CVE-2026-42496 / Trivy Debian | app / `perl-modules-5.36` | `5.36.0-7+deb12u3` / none listed | Package present; `Archive::Tar` code is in the installed Perl distribution | No supported production path invokes the module or extracts user-controlled archives through Perl | `unreachable` | Exact RC source/Apache evidence and Debian advisory; Assessor review pending |
+| CVE-2026-8376 / Trivy Debian | app / `perl-modules-5.36` | `5.36.0-7+deb12u3` / none listed | Package present; exploit condition is 32-bit-only | Exact RC is `amd64`; architectural precondition absent | `not_applicable` | Exact RC architecture plus Debian advisory; Assessor review pending |
+| CVE-2023-45853 / Trivy Debian | app / `zlib1g` | `1:1.2.13.dfsg-1` / none listed | Package present, but Debian states Bookworm's vulnerable MiniZip code was not built into any binary from this source package | Vulnerable code is absent from the exact package lineage; no compensating control is needed for this CVE | `not_applicable` | Debian security tracker package/build record; Assessor review pending |
+| CVE-2023-24538 (GO-2023-1703) / Trivy Go binary | db / `/usr/local/bin/gosu` Go `stdlib` | Go `1.18.2` / `1.19.8`, `1.20.3` | `gosu` present; advisory requires `html/template.Template.Execute*`; exact helper binary analysis reports no vulnerable symbols | `gosu` only resolves identity, drops privilege, and execs `mysqld`; it does not render HTML/JavaScript templates | `not_applicable` | Pinned digest, exact `gosu` SHA-256, binary-mode `govulncheck`, Go advisory, and gosu policy; Assessor review pending |
+| CVE-2023-24540 (GO-2023-1752) / Trivy Go binary | db / `/usr/local/bin/gosu` Go `stdlib` | Go `1.18.2` / `1.19.9`, `1.20.4` | `gosu` present; advisory requires `html/template.Template.Execute*`; exact helper binary analysis reports no vulnerable symbols | No HTML-template execution exists in the entrypoint privilege-drop helper | `not_applicable` | Pinned digest, exact binary evidence, Go advisory, and gosu policy; Assessor review pending |
+| CVE-2024-24790 (GO-2024-2887) / Trivy Go binary | db / `/usr/local/bin/gosu` Go `stdlib` | Go `1.18.2` / `1.21.11`, `1.22.4` | `gosu` present; advisory requires `net/netip.Addr.Is*`; exact helper binary analysis reports no vulnerable symbols | The privilege-drop/exec path performs no IP classification or network authorization | `not_applicable` | Pinned digest, exact binary evidence, Go advisory, and gosu policy; Assessor review pending |
+| CVE-2025-68121 (GO-2026-4337) / Trivy Go binary | db / `/usr/local/bin/gosu` Go `stdlib` | Go `1.18.2` / `1.24.13`, `1.25.7`, `1.26.0-rc.3` | `gosu` present; advisory requires TLS session resumption with a mutated `tls.Config`; exact helper binary analysis reports no vulnerable symbols | `gosu` establishes no TLS connection and only drops privilege before `exec` | `not_applicable` | Pinned digest, exact binary evidence, Go advisory, and gosu policy; Assessor review pending |
+
+**Triage result:** no CRITICAL row is currently identified as applicable and
+reachable through the supported RC1 deployment path. Ten rows are proposed
+`unreachable` and nine are proposed `not_applicable`. This is not a security
+sign-off: the Assessor must review these dispositions, the HIGH queue remains
+open, and any later change that adds Perl, SQLite, XML, or a different
+architecture/image must reopen the affected rows. No
+`accepted_residual_risk` disposition is proposed, so no owner risk decision is
+requested at this stage.
 
 ## Advisory and source-path triage notes
 
 - [Debian's CVE-2023-45853 record](https://security-tracker.debian.org/tracker/CVE-2023-45853)
   states that the vulnerable MiniZip code was not built into the Bookworm
-  `zlib1g` binary at the scanned version. This supports a proposed
-  not-applicable disposition for the one zlib finding, pending independent
-  security review of the exact image package.
+  `zlib1g` binary at the scanned version. The exact RC retains that same
+  Bookworm package lineage, supporting `not_applicable` for this row pending
+  Assessor review.
 - [CVE-2026-8376](https://security-tracker.debian.org/tracker/CVE-2026-8376)
   concerns a 32-bit Perl build and attacker-controlled regex compilation.
-  [PR CI run 35260520816](https://github.com/jybanez/syndicatum/actions/runs/35260520816)
-  recorded `amd64` for the tested application image. The four package rows
-  are proposed not applicable to that tested image; a wider multi-architecture
+  exact RC run 35424177468 recorded `amd64` for the tested application image.
+  The four package rows are proposed not applicable to RC1; a wider multi-architecture
   release claim would require separate analysis and independent review.
 - [CVE-2026-42496](https://security-tracker.debian.org/tracker/CVE-2026-42496)
   concerns Perl `Archive::Tar` extraction of attacker-controlled symlink
   targets. No direct Perl or `Archive::Tar` call was found in tracked PHP
   application code. [PR CI run 35258886273](https://github.com/jybanez/syndicatum/actions/runs/35258886273)
-  also confirms the shipped Apache runtime has no enabled CGI/Perl module or
-  `libperl` linkage. Apache's installed Perl dependency alone therefore does
-  not show reachability, but indirect CLI/transitive execution paths remain
-  to be checked.
+  first confirmed the shipped Apache runtime has no enabled CGI/Perl module or
+  `libperl` linkage; the exact RC acceptance repeats that assertion. Exact RC
+  production-source and entrypoint searches also found no indirect Perl or
+  `Archive::Tar` execution path. An operator-added extension or future feature
+  would reopen the disposition.
 - [CVE-2026-13221](https://security-tracker.debian.org/tracker/CVE-2026-13221)
   concerns compilation of a Perl regex with more than 65,535 alternatives.
-  No direct application Perl call was found; this is not yet proof of
-  unreachability.
+  The exact RC has no supported Perl execution path and therefore no path for
+  remote input to reach that compilation behavior.
 - [CVE-2025-7458](https://security-tracker.debian.org/tracker/CVE-2025-7458)
-  requires the ability to issue crafted SQLite SQL. Tracked PHP application
-  code has no direct SQLite call, but the PHP SQLite extensions are loaded and
-  Apache depends on `libsqlite3-0`; runtime exposure remains under review.
+  requires the ability to issue crafted SQLite SQL. The exact RC Dockerfile
+  builds `pdo_mysql`, not SQLite extensions; production code has no SQLite call
+  or database path, and the supported datastore is MySQL.
 - [CVE-2026-6653](https://security-tracker.debian.org/tracker/CVE-2026-6653)
-  concerns crafted XML input to libxml2. Tracked PHP application code has no
-  direct XML parser call, but PHP XML extensions are loaded; exposure remains
-  under review.
+  concerns crafted XML input reaching `xmlParseInternalSubset`. Exact RC
+  production code has no XML parser call or supported user-controlled XML
+  ingestion path.
 - The four database-image Go findings are attributed by the exact CI scan to
   `/usr/local/bin/gosu`, not to `mysqld`. The MySQL entrypoint invokes `gosu`
   to drop privileges before starting the server. The selected `mysql:5.7.44`
@@ -114,9 +140,11 @@ the tested baseline but is not an independent production security review.
   [`net/netip` address classification (CVE-2024-24790)](https://pkg.go.dev/vuln/GO-2024-2887),
   and [`crypto/tls` session resumption with mutated configuration (CVE-2025-68121)](https://pkg.go.dev/vuln/GO-2026-4337).
   `govulncheck` v1.7.0 in binary mode against the extracted `gosu` found no
-  vulnerable symbols for these four advisories. This supports proposed N/A
-  dispositions, pending independent review and repeat on the exact published
-  image. The [gosu maintainer's security policy](https://github.com/tianon/gosu/blob/master/SECURITY.md)
+  vulnerable symbols for these four advisories. RC1 pins the identical MySQL
+  digest and locally reverified the same `gosu` version, architecture, and
+  binary SHA-256, so the prior binary result applies to the exact RC base
+  image without substituting a different helper. This supports proposed N/A
+  dispositions pending Assessor review. The [gosu maintainer's security policy](https://github.com/tianon/gosu/blob/master/SECURITY.md)
   specifically recommends `govulncheck` for this distinction rather than
   assuming every vulnerable Go standard-library package is invoked. The same
   run *did* report ten other symbol-level vulnerabilities, including runc
@@ -201,8 +229,9 @@ release process, but must not be presented as production-ready while critical
 findings are unreviewed. The table is complete only when every CRITICAL and
 release-relevant HIGH row has evidence-backed disposition and an identified
 accepting authority. Green inventory CI alone does not satisfy this gate.
-Before external/design-partner approval, rerun the scan on the exact published
-RC artifact/images and reconcile every finding against this table; a branch
-candidate's scan is not a substitute. Keep the selected MySQL 5.7.44 baseline
-unless a specific applicable, reachable, unmitigated finding forces an owner
-decision.
+The exact published RC archive and its built images were scanned in run
+35424177468 and reconciled above; a branch candidate is not being substituted.
+Before external/design-partner approval, complete the prioritized HIGH review
+and obtain the required security/owner dispositions. Keep the selected MySQL
+5.7.44 baseline unless a specific applicable, reachable, unmitigated finding
+forces an owner decision.
