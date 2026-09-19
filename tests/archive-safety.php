@@ -66,10 +66,14 @@ function archiveContext($kind, $archiveSha256, $manifestJson)
             'schema_baseline' => 'baseline.1', 'schema_head' => '202609200000',
         ]);
     }
-    return ArchiveValidationContext::forBackup(
-        $archiveSha256, $manifestSha256, ['baseline.1' => ['202609200000']],
-        ['data/records.ndjson' => 'logical_data', 'metadata/recovery.json' => 'recovery_metadata']
-    );
+    $decoded = json_decode($manifestJson, true);
+    $roles = [];
+    if (is_array($decoded) && isset($decoded['files']) && is_array($decoded['files'])) {
+        foreach ($decoded['files'] as $file) {
+            if (isset($file['path'], $file['role'])) { $roles[$file['path']] = $file['role']; }
+        }
+    }
+    return ArchiveValidationContext::forBackup($archiveSha256, $manifestSha256, ['baseline.1' => ['202609200000']], $roles);
 }
 
 function zipEntries(array $payloads)
@@ -102,15 +106,16 @@ function writeRawZip(array $entries, array $options = [])
         $centralExtra = isset($entry['central_extra']) ? $entry['central_extra'] : '';
         $comment = isset($entry['comment']) ? $entry['comment'] : '';
         $crc = hexdec(hash('crc32b', $content));
+        $declaredSize = isset($entry['declared_uncompressed_size']) ? $entry['declared_uncompressed_size'] : strlen($content);
         $offset = strlen($locals);
         $locals .= pack(
             'VvvvvvVVVvv', 0x04034b50, 20, $localFlags, $method, 0, 0, $crc,
-            strlen($compressed), strlen($content), strlen($localName), strlen($localExtra)
+            strlen($compressed), $declaredSize, strlen($localName), strlen($localExtra)
         ) . $localName . $localExtra . $compressed;
         $records[] = [
             'entry' => $entry, 'name' => $name, 'flags' => $flags, 'method' => $method,
             'crc' => $crc, 'compressed' => $compressed, 'content' => $content,
-            'extra' => $centralExtra, 'comment' => $comment, 'offset' => $offset,
+            'declared_size' => $declaredSize, 'extra' => $centralExtra, 'comment' => $comment, 'offset' => $offset,
         ];
     }
     $central = '';
@@ -120,7 +125,7 @@ function writeRawZip(array $entries, array $options = [])
         $mode = isset($entry['mode']) ? $entry['mode'] : 0644;
         $offset = array_key_exists('central_local_offset', $entry) ? $entry['central_local_offset'] : $record['offset'];
         $compressedSize = !empty($entry['zip64_size']) ? 0xffffffff : strlen($record['compressed']);
-        $uncompressedSize = !empty($entry['zip64_size']) ? 0xffffffff : strlen($record['content']);
+        $uncompressedSize = !empty($entry['zip64_size']) ? 0xffffffff : $record['declared_size'];
         $central .= pack(
             'VvvvvvvVVVvvvvvVV', 0x02014b50, (3 << 8) | 20, 20, $record['flags'], $record['method'], 0, 0,
             $record['crc'], $compressedSize, $uncompressedSize,
@@ -129,7 +134,8 @@ function writeRawZip(array $entries, array $options = [])
             (($type | $mode) & 0xffff) << 16, $offset
         ) . $record['name'] . $record['extra'] . $record['comment'];
     }
-    $centralOffset = strlen($locals);
+    $gap = isset($options['gap']) ? $options['gap'] : '';
+    $centralOffset = strlen($locals) + strlen($gap);
     $disk = isset($options['disk']) ? $options['disk'] : 0;
     $eocdComment = isset($options['comment']) ? $options['comment'] : '';
     $eocd = pack(
@@ -137,7 +143,8 @@ function writeRawZip(array $entries, array $options = [])
         $centralOffset, strlen($eocdComment)
     ) . $eocdComment;
     $path = tempnam(sys_get_temp_dir(), 'syndicatum-zip-fixture-');
-    $bytes = $locals . $central . $eocd . (!empty($options['trailing']) ? 'trailing-bytes' : '');
+    $preamble = isset($options['preamble']) ? $options['preamble'] : '';
+    $bytes = $preamble . $locals . $gap . $central . $eocd . (!empty($options['trailing']) ? 'trailing-bytes' : '');
     if ($path === false || file_put_contents($path, $bytes) === false) { archiveFail('Unable to write ZIP fixture.'); }
     return $path;
 }
@@ -194,6 +201,13 @@ archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
     validateFixture($reader, $entries, $releaseManifest);
 }, 'Traversal names must fail raw inspection.');
 
+foreach (['/app/index.php', 'C:/app/index.php', 'app/CON/file.php', 'app/bad?.php'] as $unsafePath) {
+    archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest, $unsafePath) {
+        $entries = $releaseEntries; $entries[0]['name'] = $unsafePath; $entries[0]['local_name'] = $unsafePath;
+        validateFixture($reader, $entries, $releaseManifest);
+    }, 'Absolute and nonportable raw ZIP names must fail inspection.');
+}
+
 foreach ([0040000, 0120000, 0060000, 0020000, 0010000, 0140000] as $type) {
     archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest, $type) {
         $entries = $releaseEntries; $entries[0]['type'] = $type;
@@ -228,6 +242,16 @@ archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
     $entries = $releaseEntries; $entries[0]['content'] = 'tampered';
     validateFixture($reader, $entries, $releaseManifest);
 }, 'Payload digest mismatches must fail closed.');
+
+archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
+    $manifest = $releaseManifest; $manifest['content_tree_sha256'] = str_repeat('0', 64);
+    validateFixture($reader, $releaseEntries, $manifest);
+}, 'Stale or forged content-tree digests must fail closed.');
+
+archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
+    $entries = $releaseEntries; $entries[0]['declared_uncompressed_size'] = strlen($entries[0]['content']) + 1;
+    validateFixture($reader, $entries, $releaseManifest);
+}, 'Declared ZIP size and streamed-size disagreement must fail closed.');
 
 archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
     validateFixture($reader, $releaseEntries, $releaseManifest, [], 'backup');
@@ -274,6 +298,26 @@ archiveThrows(function () use ($reader, $backupPayloads) {
     validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
 }, 'Recovery-metadata objects must not masquerade as file-list arrays.');
 
+archiveThrows(function () use ($reader, $backupPayloads) {
+    $payloads = $backupPayloads; $payloads['data/records.ndjson']['content'] = "{\"id\":1,\"id\":2}\n";
+    validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
+}, 'Duplicate logical-data JSON keys must fail closed.');
+
+archiveThrows(function () use ($reader, $backupPayloads) {
+    $payloads = $backupPayloads;
+    $payloads['data/.hidden.ndjson'] = $payloads['data/records.ndjson'];
+    unset($payloads['data/records.ndjson']);
+    validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
+}, 'Hidden backup payload names must fail closed.');
+
+archiveThrows(function () use ($reader, $backupPayloads, $recoveryMetadata) {
+    $payloads = $backupPayloads;
+    $metadata = $recoveryMetadata; $metadata['asset_files'] = ['assets/avatar.png'];
+    $payloads['metadata/recovery.json']['content'] = json_encode($metadata, JSON_UNESCAPED_SLASHES);
+    $payloads['assets/avatar.png'] = ['content' => '<?php echo 1; ?>', 'role' => 'persistent_asset'];
+    validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
+}, 'Persistent-asset extension/signature mismatches must fail closed.');
+
 $densePayloads = $backupPayloads;
 $densePayloads['data/records.ndjson']['content'] = str_repeat("{}\n", 100000);
 $denseStart = microtime(true);
@@ -299,6 +343,7 @@ $rawCases = [
     'local/central name disagreement' => function ($entries) { $entries[0]['local_name'] = 'app/other.php'; return [$entries, []]; },
     'unsupported encryption flag' => function ($entries) { $entries[0]['flags'] = 1; $entries[0]['local_flags'] = 1; return [$entries, []]; },
     'local/central flag disagreement' => function ($entries) { $entries[0]['local_flags'] = 0x0800; return [$entries, []]; },
+    'data descriptor flag' => function ($entries) { $entries[0]['flags'] = 0x0008; $entries[0]['local_flags'] = 0x0008; return [$entries, []]; },
     'unsupported compression method' => function ($entries) { $entries[0]['method'] = 99; return [$entries, []]; },
     'local extra field' => function ($entries) { $entries[0]['local_extra'] = "\x01\x00"; return [$entries, []]; },
     'central extra field' => function ($entries) { $entries[0]['central_extra'] = "\x01\x00"; return [$entries, []]; },
@@ -306,6 +351,8 @@ $rawCases = [
     'multidisk marker' => function ($entries) { return [$entries, ['disk' => 1]]; },
     'ZIP64 marker' => function ($entries) { $entries[0]['zip64_size'] = true; return [$entries, []]; },
     'EOCD comment' => function ($entries) { return [$entries, ['comment' => 'comment']]; },
+    'archive preamble' => function ($entries) { return [$entries, ['preamble' => 'preamble']]; },
+    'unreferenced gap' => function ($entries) { return [$entries, ['gap' => 'gap']]; },
     'trailing polyglot bytes' => function ($entries) { return [$entries, ['trailing' => true]]; },
 ];
 foreach ($rawCases as $label => $mutator) {
