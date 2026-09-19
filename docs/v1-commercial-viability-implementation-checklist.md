@@ -356,7 +356,11 @@ behavior; permissive local defaults alone are insufficient.
       gate below.
 - [ ] Review the security and deployment-hardening implications of using the
       terminal MySQL 5.7.44 release before any external production-readiness
-      claim; keep this separate from functional compatibility on 5.7.44.
+      claim; keep this separate from functional compatibility on 5.7.44. The
+      [proposed external host/runtime baseline](v1-external-host-runtime-baseline.md)
+      records MySQL 5.7 as an internal-RC-only baseline and recommends MySQL
+      8.4 LTS compatibility/migration acceptance before normal external use;
+      Assessor and owner review remain open.
 - [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
@@ -366,6 +370,10 @@ behavior; permissive local defaults alone are insufficient.
       acceptance), closing the CRITICAL sub-gate. The prioritized HIGH queue,
       external host/runtime minimums, and MySQL 5.7 EOL treatment remain open,
       so the overall security-disposition gate stays open.
+- [ ] Approve and automate the
+      [external host/runtime baseline](v1-external-host-runtime-baseline.md),
+      including Docker/Compose, maintained containerd/runc, supported OS/kernel,
+      network boundary, operator privileges, and retained preflight evidence.
 - [x] Produce immutable release artifacts with checksums for RC1.
 - [x] Publish release notes and migration notes for RC1.
 - [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only

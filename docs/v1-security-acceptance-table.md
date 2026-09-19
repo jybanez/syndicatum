@@ -223,6 +223,32 @@ extensions, dependencies, deployment proxy settings, or the published image.
 Upstream severity can differ from the scanner's HIGH rating. None of these
 proposed dispositions changes the release gate before independent review.
 
+### Exact-binary privilege-boundary tranche
+
+Binary-mode `govulncheck` v1.7.0 against the exact RC `gosu` SHA-256 above
+reports ten symbol matches. The binary is mode `0755` (not setuid/setgid), and
+the MySQL entrypoint invokes it as root with the fixed supported form
+`gosu mysql /usr/local/bin/docker-entrypoint.sh ...`. The rows below distinguish
+the scanner's linked-symbol evidence from each advisory's actual precondition.
+
+| Go advisory / alias | Exact binary evidence | Supported-path conclusion | Proposed disposition | Review state |
+| --- | --- | --- | --- | --- |
+| GO-2026-5761 / CVE-2026-41579 | runc 1.1.0 symbols; fixed 1.3.6 | Advisory requires processing a malicious container image with a `/dev` symlink; `gosu` does not unpack, mount, or create images | `not_applicable` | Assessor review pending |
+| GO-2025-4098 / CVE-2025-52881 | runc 1.1.0 symbols; fixed 1.2.8 | Arbitrary-write/procfs behavior belongs to runc container-rootfs setup; `gosu` only resolves identity, drops privilege, and execs | `not_applicable` | Assessor review pending |
+| GO-2024-3110 / CVE-2024-45310 | runc 1.1.0 symbols; fixed 1.1.14 | Host file/directory creation requires runc container mount setup absent from `gosu` | `not_applicable` | Assessor review pending |
+| GO-2023-1683 / CVE-2023-28642 | runc 1.1.0 symbols; fixed 1.1.5 | AppArmor bypass requires symlinked container `/proc` setup; `gosu` configures neither AppArmor nor container filesystems | `not_applicable` | Assessor review pending |
+| GO-2023-1682 / CVE-2023-25809 | runc 1.1.0 symbols; fixed 1.1.5 | Rootless cgroup-namespace setup is not a `gosu` function or supported invocation | `not_applicable` | Assessor review pending |
+| GO-2023-1627 / CVE-2023-27561 | runc 1.1.0 symbols; fixed 1.1.5 | Advisory requires runc container configuration; `gosu` does not create/configure containers | `not_applicable` | Assessor review pending |
+| GO-2022-0452 / CVE-2022-29162 | runc 1.1.0 symbols; fixed 1.1.2 | Default inheritable-capability setup applies to container creation; `gosu` creates no container/process specification | `not_applicable` | Assessor review pending |
+| GO-2026-4602 / CVE-2026-27139 | Go 1.18.2 `os.File.ReadDir`/`Readdir` symbols | Advisory requires a file obtained through `os.Root`; that API did not exist in Go 1.18.2, so the affected Root escape is absent despite broad symbol matching | `not_applicable` | Assessor review pending |
+| GO-2025-3956 / CVE-2025-47906 | Go 1.18.2 `exec.LookPath`; fixed in Go 1.23.12 | Special arguments `""`, `"."`, or `".."` are required; supported MySQL entrypoint supplies the fixed absolute script path, not user input | `unreachable` | Assessor review pending |
+| GO-2023-1840 / CVE-2023-29403 | Go 1.18.2 runtime symbols; fixed in Go 1.19.10 | Advisory requires a file-mode setuid/setgid Go binary; exact `gosu` is root-owned mode `0755` and has neither bit | `not_applicable` | Assessor review pending |
+
+These proposed dispositions apply only to the statically linked helper in the
+pinned MySQL image. They do not disposition the Docker host's independent runc
+or containerd. The proposed minimum host posture is documented separately in
+the [V1 external host/runtime baseline](v1-external-host-runtime-baseline.md).
+
 The first `v1.0.0-rc.N` may be marked **internal/test only** to validate the
 release process, but must not be presented as production-ready while critical
 findings are unreviewed. The table is complete only when every CRITICAL and
