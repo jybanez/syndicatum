@@ -239,3 +239,77 @@ jobs:
             release-candidate/*.sha256
           if-no-files-found: warn
           retention-days: 30
+
+  mysql84-compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Package exact commit and verify candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mysql84-candidate/unpacked
+          archive="syndicatum-${GITHUB_SHA}.tar.gz"
+          git archive --format=tar --prefix=syndicatum/ "$GITHUB_SHA" | gzip -n > "mysql84-candidate/$archive"
+          (cd mysql84-candidate && sha256sum "$archive" > "$archive.sha256" && sha256sum --check "$archive.sha256")
+          tar -xzf "mysql84-candidate/$archive" -C mysql84-candidate/unpacked
+          test -f mysql84-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1
+      - name: Identify MySQL 8.4 compatibility environment
+        run: |
+          docker version --format '{{.Server.Version}}'
+          docker compose version
+          pwsh --version
+      - name: Run isolated MySQL 8.4.11 archived-candidate lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwsh -NoProfile -File ./mysql84-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 \
+            -MySqlImage 'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a' \
+            -ExpectedMySqlVersionPattern '^8\.4(?:$|[.-])' \
+            -DatabaseSqlMode 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' \
+            2>&1 | tee mysql84-acceptance.log
+      - name: Retain MySQL 8.4 compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql84-compatibility-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            mysql84-acceptance.log
+            mysql84-candidate/*.tar.gz
+            mysql84-candidate/*.sha256
+          if-no-files-found: warn
+          retention-days: 30
+
+  mysql57-to-84-migration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - name: Package exact commit and verify candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mysql-migration-candidate/unpacked
+          archive="syndicatum-${GITHUB_SHA}.tar.gz"
+          git archive --format=tar --prefix=syndicatum/ "$GITHUB_SHA" | gzip -n > "mysql-migration-candidate/$archive"
+          (cd mysql-migration-candidate && sha256sum "$archive" > "$archive.sha256" && sha256sum --check "$archive.sha256")
+          tar -xzf "mysql-migration-candidate/$archive" -C mysql-migration-candidate/unpacked
+          test -f mysql-migration-candidate/unpacked/syndicatum/scripts/mysql57-to-84-migration-acceptance.ps1
+      - name: Run isolated MySQL 5.7 to 8.4 migration lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwsh -NoProfile -File ./mysql-migration-candidate/unpacked/syndicatum/scripts/mysql57-to-84-migration-acceptance.ps1 \
+            2>&1 | tee mysql57-to-84-migration.log
+      - name: Retain MySQL migration evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql57-to-84-migration-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            mysql57-to-84-migration.log
+            mysql-migration-candidate/*.tar.gz
+            mysql-migration-candidate/*.sha256
+          if-no-files-found: warn
+          retention-days: 30
