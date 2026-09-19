@@ -79,6 +79,21 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  package-contract-portability:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "7.4"
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Verify canonical package bytes on Windows and PHP 7.4
+        shell: pwsh
+        run: php tests/package-contract.php
+
   source-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

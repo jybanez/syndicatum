@@ -64,6 +64,60 @@ if (!$backup['contains_data']) {
     packageContractFail('Backup manifest lost its data flag.');
 }
 
+$goldenFiles = validManifest()['files'];
+$goldenPath = __DIR__ . '/fixtures/canonical-inventory-v1.jsonl';
+$goldenBytes = file_get_contents($goldenPath);
+if (!is_string($goldenBytes) || substr($goldenBytes, 0, 3) === "\xEF\xBB\xBF" || substr($goldenBytes, -1) !== "\n") {
+    packageContractFail('Canonical inventory golden fixture must be UTF-8 without BOM and end in LF.');
+}
+if (PackageManifest::canonicalContentTreeBytes($goldenFiles) !== $goldenBytes) {
+    packageContractFail('Canonical inventory JSON-lines bytes changed.');
+}
+if (PackageManifest::calculateContentTreeSha256($goldenFiles) !== '1439d469f535dfeadd0351a2f4b64ee7b626dad81f3cc6a1f8e776834ed7d7cd') {
+    packageContractFail('Canonical inventory golden SHA-256 changed.');
+}
+
+$escapedBytes = PackageManifest::canonicalContentTreeBytes([
+    ['path' => 'app/quote"name.txt', 'type' => 'file', 'role' => 'application', 'mode' => 0644, 'size' => 0, 'sha256' => str_repeat('d', 64)],
+]);
+$escapedExpected = '{"path":"app/quote\\"name.txt","type":"file","role":"application","mode":"0644","size":0,"sha256":"' . str_repeat('d', 64) . '"}' . "\n";
+if ($escapedBytes !== $escapedExpected) {
+    packageContractFail('Canonical inventory JSON escaping changed.');
+}
+
+packageContractThrows(function () {
+    PackageManifest::canonicalContentTreeBytes([]);
+}, 'Canonical inventory cannot be empty.');
+
+packageContractThrows(function () use ($goldenFiles) {
+    PackageManifest::canonicalContentTreeBytes(array_reverse($goldenFiles));
+}, 'Canonical serializer must reject unordered paths directly.');
+
+packageContractThrows(function () use ($goldenFiles) {
+    $files = $goldenFiles;
+    $files[1] = $files[0];
+    PackageManifest::canonicalContentTreeBytes($files);
+}, 'Canonical serializer must reject duplicate paths directly.');
+
+packageContractThrows(function () {
+    PackageManifest::canonicalContentTreeBytes([
+        ['path' => 'app/File.txt', 'type' => 'file', 'role' => 'application', 'mode' => 0644, 'size' => 1, 'sha256' => str_repeat('a', 64)],
+        ['path' => 'app/file.txt', 'type' => 'file', 'role' => 'application', 'mode' => 0644, 'size' => 1, 'sha256' => str_repeat('b', 64)],
+    ]);
+}, 'Canonical serializer must reject case-fold collisions directly.');
+
+packageContractThrows(function () use ($goldenFiles) {
+    $files = $goldenFiles;
+    $files[0]['extra'] = 'unhashed';
+    PackageManifest::canonicalContentTreeBytes($files);
+}, 'Canonical serializer must reject undeclared fields directly.');
+
+packageContractThrows(function () use ($goldenFiles) {
+    $files = $goldenFiles;
+    $files[0]['sha256'] = strtoupper($files[0]['sha256']);
+    PackageManifest::canonicalContentTreeBytes($files);
+}, 'Canonical serializer must reject uppercase digest representation.');
+
 packageContractThrows(function () {
     PackageManifest::parse('{"contract_name":"syndicatum-package","contract_name":"syndicatum-package"}');
 }, 'Duplicate manifest keys must be rejected before decoding can collapse them.');
@@ -262,6 +316,7 @@ $baseline = BaselineMetadata::fromArray([
     'schema_sha256' => str_repeat('1', 64),
     'mysql' => [
         'minimum' => '8.4.0', 'maximum_exclusive' => '9.0.0',
+        'reference_version' => '8.4.11',
         'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci',
         'sql_modes' => ['STRICT_TRANS_TABLES'],
     ],
@@ -270,19 +325,23 @@ $baseline = BaselineMetadata::fromArray([
         ['id' => '202609200002', 'sha256' => str_repeat('3', 64)],
     ],
     'tables' => [
-        ['name' => 'audit_events', 'backup_policy' => 'durable', 'restore_order' => 10, 'identity_columns' => ['id']],
-        ['name' => 'oauth_attempts', 'backup_policy' => 'excluded', 'restore_order' => null, 'identity_columns' => []],
-        ['name' => 'outbox_events', 'backup_policy' => 'reset', 'restore_order' => 20, 'identity_columns' => ['id'], 'reset_strategy' => 'pause_for_reconciliation'],
-        ['name' => 'syndicatum_sessions', 'backup_policy' => 'reset', 'restore_order' => 30, 'identity_columns' => ['id'], 'reset_strategy' => 'invalidate'],
+        ['name' => 'audit_events', 'backup_policy' => 'durable', 'restore_order' => 10, 'identity_columns' => ['id'], 'sequence_state' => 'preserve', 'integrity_checks' => ['row_count', 'identity_uniqueness']],
+        ['name' => 'oauth_attempts', 'backup_policy' => 'excluded', 'restore_order' => null, 'identity_columns' => [], 'integrity_checks' => [], 'excluded_reason' => 'security_local', 'target_expectation' => 'locally_initialized'],
+        ['name' => 'outbox_events', 'backup_policy' => 'reset', 'restore_order' => 20, 'identity_columns' => ['id'], 'integrity_checks' => [], 'reset_strategy' => 'rebuild_from_durable_state'],
+        ['name' => 'syndicatum_sessions', 'backup_policy' => 'reset', 'restore_order' => 30, 'identity_columns' => ['id'], 'integrity_checks' => [], 'reset_strategy' => 'regenerate_on_start'],
     ],
 ]);
 if (!$baseline->supportsMysqlVersion('8.4.11') || $baseline->supportsMysqlVersion('9.0.0')) {
     packageContractFail('Baseline MySQL compatibility range is not enforced.');
 }
 $baseline->assertKnownTables(['audit_events', 'oauth_attempts', 'outbox_events', 'syndicatum_sessions']);
-if ($baseline->tablePolicy('outbox_events')['reset_strategy'] !== 'pause_for_reconciliation') {
+if ($baseline->tablePolicy('outbox_events')['reset_strategy'] !== 'rebuild_from_durable_state') {
     packageContractFail('Baseline recovery policy was not preserved.');
 }
+$baseline->assertBaselineTables(['audit_events', 'oauth_attempts', 'outbox_events', 'syndicatum_sessions']);
+$baseline->assertRestoreOrderSupportsForeignKeys([
+    ['parent' => 'audit_events', 'child' => 'outbox_events'],
+]);
 
 packageContractThrows(function () use ($baseline) {
     $baseline->assertKnownTables(['audit_events', 'unexpected_table']);
@@ -317,5 +376,51 @@ packageContractThrows(function () use ($baseline) {
     $metadata['mysql']['sql_modes'] = ['STRICT_TRANS_TABLES' => true];
     BaselineMetadata::fromArray($metadata);
 }, 'Baseline SQL modes must be a JSON list, not an object.');
+
+packageContractThrows(function () use ($baseline) {
+    $baseline->assertBaselineTables(['audit_events', 'oauth_attempts', 'outbox_events']);
+}, 'Trusted baseline schema tables must exactly match the policy map.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['post_baseline_migrations'][1]['sha256'] = $metadata['post_baseline_migrations'][0]['sha256'];
+    BaselineMetadata::fromArray($metadata);
+}, 'Post-baseline migrations cannot reuse a content digest.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    unset($metadata['tables'][1]['excluded_reason']);
+    BaselineMetadata::fromArray($metadata);
+}, 'Excluded tables require a machine-readable reason.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['tables'][0]['identity_columns'] = [];
+    BaselineMetadata::fromArray($metadata);
+}, 'Durable tables require identity columns.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['tables'][2]['reset_strategy'] = 'invent_at_restore_time';
+    BaselineMetadata::fromArray($metadata);
+}, 'Reset strategies must use the closed V1 vocabulary.');
+
+packageContractThrows(function () use ($baseline) {
+    $baseline->assertRestoreOrderSupportsForeignKeys([
+        ['parent' => 'syndicatum_sessions', 'child' => 'outbox_events'],
+    ]);
+}, 'Restore order must respect parent-before-child foreign-key dependencies.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['post_baseline_migrations'][0]['id'] = 'migration-one';
+    BaselineMetadata::fromArray($metadata);
+}, 'Migration identifiers must use the frozen V1 format.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['schema_head'] = '202609200003';
+    BaselineMetadata::fromArray($metadata);
+}, 'Schema head must equal the final declared migration.');
 
 echo 'Package manifest, compatibility, baseline, and installation identity contract assertions passed' . PHP_EOL;

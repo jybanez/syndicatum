@@ -107,15 +107,54 @@ class PackageManifest
 
     public static function calculateContentTreeSha256(array $files)
     {
+        return hash('sha256', self::canonicalContentTreeBytes($files));
+    }
+
+    public static function canonicalContentTreeBytes(array $files)
+    {
+        self::requireList($files, 'Package file inventory');
+        if (!$files) {
+            throw new InvalidArgumentException('Package file inventory cannot be empty.');
+        }
         $canonical = '';
-        foreach ($files as $file) {
+        $previous = null;
+        $seenCaseFolded = [];
+        foreach ($files as $index => $file) {
+            if (!is_array($file)) {
+                throw new InvalidArgumentException('Package file entry #' . $index . ' is invalid.');
+            }
+            self::assertAllowedKeys($file, ['path', 'type', 'role', 'mode', 'size', 'sha256'], 'files[' . $index . ']');
+            $path = self::requireString($file, 'path');
+            self::validateSafeRelativePath($path, 'files[' . $index . '].path');
+            if ($previous !== null && strcmp($previous, $path) >= 0) {
+                throw new InvalidArgumentException('Canonical inventory paths must be unique and bytewise ordered.');
+            }
+            $caseFolded = strtolower($path);
+            if (isset($seenCaseFolded[$caseFolded])) {
+                throw new InvalidArgumentException('Canonical inventory paths collide after ASCII case folding.');
+            }
+            $seenCaseFolded[$caseFolded] = true;
+            $previous = $path;
+            $type = self::requireString($file, 'type');
+            $role = self::requireString($file, 'role');
+            if ($type !== 'file' || !preg_match('/\A[a-z][a-z0-9_]*\z/', $role)) {
+                throw new InvalidArgumentException('Canonical inventory type or role is invalid.');
+            }
+            if (!isset($file['mode']) || !is_int($file['mode']) || $file['mode'] < 0 || $file['mode'] > 0777) {
+                throw new InvalidArgumentException('Canonical inventory mode is invalid.');
+            }
+            if (!isset($file['size']) || !is_int($file['size']) || $file['size'] < 0) {
+                throw new InvalidArgumentException('Canonical inventory size is invalid.');
+            }
+            $digest = self::requireString($file, 'sha256');
+            self::validateSha256($digest, 'files[' . $index . '].sha256');
             $record = [
-                'path' => isset($file['path']) ? (string) $file['path'] : '',
-                'type' => isset($file['type']) ? (string) $file['type'] : '',
-                'role' => isset($file['role']) ? (string) $file['role'] : '',
-                'mode' => isset($file['mode']) ? (int) $file['mode'] : -1,
-                'size' => isset($file['size']) ? (int) $file['size'] : -1,
-                'sha256' => isset($file['sha256']) ? strtolower((string) $file['sha256']) : '',
+                'path' => $path,
+                'type' => $type,
+                'role' => $role,
+                'mode' => sprintf('%04o', $file['mode']),
+                'size' => $file['size'],
+                'sha256' => $digest,
             ];
             $encoded = json_encode($record, JSON_UNESCAPED_SLASHES);
             if (!is_string($encoded)) {
@@ -123,7 +162,7 @@ class PackageManifest
             }
             $canonical .= $encoded . "\n";
         }
-        return hash('sha256', $canonical);
+        return $canonical;
     }
 
     private static function validateFormatVersion($version)
@@ -300,7 +339,7 @@ class PackageManifest
 
     private static function validateSha256($value, $field)
     {
-        if (!preg_match('/\A[a-f0-9]{64}\z/i', $value)) {
+        if (!preg_match('/\A[a-f0-9]{64}\z/', $value)) {
             throw new InvalidArgumentException($field . ' must be a SHA-256 digest.');
         }
     }
