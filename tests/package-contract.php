@@ -2,6 +2,7 @@
 
 require_once dirname(__DIR__) . '/src/PackageManifest.php';
 require_once dirname(__DIR__) . '/src/InstallationIdentity.php';
+require_once dirname(__DIR__) . '/src/PackageCompatibility.php';
 
 function packageContractFail($message)
 {
@@ -110,4 +111,36 @@ packageContractThrows(function () {
     ]);
 }, 'Unknown installation package format majors must be rejected.');
 
-echo 'Package manifest and installation identity contract assertions passed' . PHP_EOL;
+$runtime = [
+    'php_version' => '8.3.0',
+    'php_extensions' => ['PDO_MYSQL', 'json', 'curl', 'mbstring'],
+    'mysql_version' => '8.4.11',
+    'mysql_sql_modes' => ['STRICT_TRANS_TABLES', 'NO_ZERO_DATE'],
+    'mysql_charset' => 'utf8mb4',
+    'mysql_collation' => 'utf8mb4_unicode_ci',
+    'reader_version' => '1.0.0',
+];
+$compatibility = PackageCompatibility::evaluate(validManifest(), $runtime);
+if (!$compatibility['compatible']) {
+    packageContractFail('A supported runtime must pass compatibility evaluation.');
+}
+
+$missingExtension = $runtime;
+$missingExtension['php_extensions'] = ['json', 'pdo_mysql'];
+if (PackageCompatibility::evaluate(validManifest(), $missingExtension)['compatible']) {
+    packageContractFail('Missing required PHP extensions must fail compatibility.');
+}
+
+$wrongMysql = $runtime;
+$wrongMysql['mysql_version'] = '9.0.0';
+if (PackageCompatibility::evaluate(validManifest(), $wrongMysql)['compatible']) {
+    packageContractFail('The exclusive MySQL maximum must fail closed.');
+}
+
+$missingMode = $runtime;
+$missingMode['mysql_sql_modes'] = ['NO_ZERO_DATE'];
+if (PackageCompatibility::evaluate(validManifest(), $missingMode)['compatible']) {
+    packageContractFail('Missing required SQL modes must fail compatibility.');
+}
+
+echo 'Package manifest, compatibility, and installation identity contract assertions passed' . PHP_EOL;
