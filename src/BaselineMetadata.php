@@ -28,7 +28,7 @@ class BaselineMetadata
             self::requiredString($metadata, $field);
         }
         $commit = self::requiredString($metadata, 'source_commit');
-        if (!preg_match('/\A[a-f0-9]{40,64}\z/i', $commit)) {
+        if (!preg_match('/\A(?:[a-f0-9]{40}|[a-f0-9]{64})\z/i', $commit)) {
             throw new InvalidArgumentException('Baseline source commit must be a full hexadecimal identifier.');
         }
         self::validateSha256(self::requiredString($metadata, 'schema_sha256'), 'schema_sha256');
@@ -85,6 +85,7 @@ class BaselineMetadata
         if (!isset($mysql['sql_modes']) || !is_array($mysql['sql_modes'])) {
             throw new InvalidArgumentException('Baseline MySQL SQL modes are required.');
         }
+        self::requireList($mysql['sql_modes'], 'Baseline MySQL SQL modes');
         self::uniqueStringList($mysql['sql_modes'], 'Baseline MySQL SQL modes');
         if (version_compare($mysql['minimum'], $mysql['maximum_exclusive'], '>=')) {
             throw new InvalidArgumentException('Baseline MySQL version range is invalid.');
@@ -96,6 +97,7 @@ class BaselineMetadata
         if (!isset($metadata['post_baseline_migrations']) || !is_array($metadata['post_baseline_migrations'])) {
             throw new InvalidArgumentException('Post-baseline migration inventory is required.');
         }
+        self::requireList($metadata['post_baseline_migrations'], 'Post-baseline migration inventory');
         $previous = null;
         foreach ($metadata['post_baseline_migrations'] as $index => $migration) {
             if (!is_array($migration)) {
@@ -118,6 +120,7 @@ class BaselineMetadata
         if (!isset($metadata['tables']) || !is_array($metadata['tables']) || !$metadata['tables']) {
             throw new InvalidArgumentException('Baseline table classification is required.');
         }
+        self::requireList($metadata['tables'], 'Baseline table classification');
         $previous = null;
         $restoreOrders = [];
         foreach ($metadata['tables'] as $index => $table) {
@@ -138,6 +141,7 @@ class BaselineMetadata
             if (!isset($table['identity_columns']) || !is_array($table['identity_columns'])) {
                 throw new InvalidArgumentException('Baseline table identity-column policy is required.');
             }
+            self::requireList($table['identity_columns'], 'Baseline identity columns');
             self::uniqueStringList($table['identity_columns'], 'Baseline identity columns');
             if ($policy === 'excluded') {
                 if (isset($table['restore_order']) && $table['restore_order'] !== null) {
@@ -183,6 +187,17 @@ class BaselineMetadata
     {
         if (!preg_match('/\A[a-f0-9]{64}\z/i', $value)) {
             throw new InvalidArgumentException($field . ' must be a SHA-256 digest.');
+        }
+    }
+
+    private static function requireList(array $values, $label)
+    {
+        $index = 0;
+        foreach ($values as $key => $_value) {
+            if ($key !== $index) {
+                throw new InvalidArgumentException($label . ' must be a JSON list.');
+            }
+            $index++;
         }
     }
 

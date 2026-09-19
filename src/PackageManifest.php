@@ -6,9 +6,14 @@ class PackageManifest
     const SUPPORTED_FORMAT_MAJOR = 1;
     const SUPPORTED_FORMAT_MINOR = 0;
 
+    private static $supportedCapabilities = [
+        'canonical-inventory-jsonl-v1', 'regular-files-only-v1', 'sha256-v1',
+    ];
+
     private static $backupExecutableExtensions = [
         'bat', 'bin', 'cjs', 'cmd', 'com', 'dll', 'dylib', 'exe', 'jar', 'js', 'mjs',
-        'phar', 'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'ps1', 'sh', 'so',
+        'phar', 'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pl', 'ps1',
+        'py', 'rb', 'sh', 'so',
     ];
 
     public static function parse($json)
@@ -26,6 +31,13 @@ class PackageManifest
 
     public static function validate(array $manifest)
     {
+        self::assertAllowedKeys($manifest, [
+            'contract_name', 'format_version', 'package_kind', 'required_capabilities',
+            'application_version', 'source_commit', 'source_tag', 'schema_baseline', 'schema_head',
+            'source_timestamp', 'compatibility', 'minimum_reader_version', 'supported_upgrade_sources',
+            'contains_data', 'contains_persistent_assets', 'files', 'digest_algorithm',
+            'content_tree_sha256', 'detached_checksum_reference', 'provenance_reference',
+        ], 'manifest');
         self::requireString($manifest, 'contract_name');
         if ($manifest['contract_name'] !== self::CONTRACT_NAME) {
             throw new InvalidArgumentException('Unknown package contract.');
@@ -43,9 +55,10 @@ class PackageManifest
             self::requireString($manifest, $field);
         }
         $commit = self::requireString($manifest, 'source_commit');
-        if (!preg_match('/\A[a-f0-9]{40,64}\z/i', $commit)) {
+        if (!preg_match('/\A(?:[a-f0-9]{40}|[a-f0-9]{64})\z/i', $commit)) {
             throw new InvalidArgumentException('Source commit must be a full hexadecimal identifier.');
         }
+        self::validateCapabilities($manifest);
         self::validateTimestamp(self::requireString($manifest, 'source_timestamp'), 'source_timestamp');
         self::validateSha256(self::requireString($manifest, 'content_tree_sha256'), 'content_tree_sha256');
         if (self::requireString($manifest, 'digest_algorithm') !== 'sha256') {
@@ -77,13 +90,15 @@ class PackageManifest
         if (!is_string($path) || $path === '' || strlen($path) > 1024 || strpos($path, "\0") !== false) {
             throw new InvalidArgumentException($field . ' is not a safe relative path.');
         }
-        if ($path[0] === '/' || strpos($path, '\\') !== false || preg_match('/\A[A-Za-z]:/', $path)
+        if ($path[0] === '/' || strpos($path, '\\') !== false || strpos($path, ':') !== false || preg_match('/\A[A-Za-z]:/', $path)
             || preg_match('/[^\x20-\x7E]/', $path)) {
             throw new InvalidArgumentException($field . ' is not a safe relative path.');
         }
         $parts = explode('/', $path);
         foreach ($parts as $part) {
-            if ($part === '' || $part === '.' || $part === '..') {
+            $base = strtolower((string) preg_replace('/\..*\z/', '', $part));
+            if ($part === '' || $part === '.' || $part === '..' || substr($part, -1) === '.' || substr($part, -1) === ' '
+                || in_array($base, ['con', 'prn', 'aux', 'nul', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9'], true)) {
                 throw new InvalidArgumentException($field . ' is not a safe relative path.');
             }
         }
@@ -97,6 +112,7 @@ class PackageManifest
             $record = [
                 'path' => isset($file['path']) ? (string) $file['path'] : '',
                 'type' => isset($file['type']) ? (string) $file['type'] : '',
+                'role' => isset($file['role']) ? (string) $file['role'] : '',
                 'mode' => isset($file['mode']) ? (int) $file['mode'] : -1,
                 'size' => isset($file['size']) ? (int) $file['size'] : -1,
                 'sha256' => isset($file['sha256']) ? strtolower((string) $file['sha256']) : '',
@@ -129,6 +145,7 @@ class PackageManifest
             throw new InvalidArgumentException('Package compatibility is required.');
         }
         $compatibility = $manifest['compatibility'];
+        self::assertAllowedKeys($compatibility, ['php', 'mysql'], 'compatibility');
         foreach (['php', 'mysql'] as $runtime) {
             if (!isset($compatibility[$runtime]) || !is_array($compatibility[$runtime])) {
                 throw new InvalidArgumentException($runtime . ' compatibility is required.');
@@ -136,13 +153,17 @@ class PackageManifest
             self::requireString($compatibility[$runtime], 'minimum');
             self::requireString($compatibility[$runtime], 'maximum_exclusive');
         }
+        self::assertAllowedKeys($compatibility['php'], ['minimum', 'maximum_exclusive', 'extensions'], 'compatibility.php');
+        self::assertAllowedKeys($compatibility['mysql'], ['minimum', 'maximum_exclusive', 'sql_modes', 'charset', 'collation'], 'compatibility.mysql');
         if (!isset($compatibility['php']['extensions']) || !is_array($compatibility['php']['extensions'])) {
             throw new InvalidArgumentException('Required PHP extensions are missing.');
         }
+        self::requireList($compatibility['php']['extensions'], 'Required PHP extensions');
         self::validateUniqueStringList($compatibility['php']['extensions'], 'PHP extensions');
         if (!isset($compatibility['mysql']['sql_modes']) || !is_array($compatibility['mysql']['sql_modes'])) {
             throw new InvalidArgumentException('Required MySQL SQL modes are missing.');
         }
+        self::requireList($compatibility['mysql']['sql_modes'], 'Required MySQL SQL modes');
         self::validateUniqueStringList($compatibility['mysql']['sql_modes'], 'MySQL SQL modes');
         self::requireString($compatibility['mysql'], 'charset');
         self::requireString($compatibility['mysql'], 'collation');
@@ -153,10 +174,12 @@ class PackageManifest
         if (!isset($manifest['supported_upgrade_sources']) || !is_array($manifest['supported_upgrade_sources'])) {
             throw new InvalidArgumentException('Supported upgrade sources are required.');
         }
+        self::requireList($manifest['supported_upgrade_sources'], 'Supported upgrade sources');
         foreach ($manifest['supported_upgrade_sources'] as $index => $source) {
             if (!is_array($source)) {
                 throw new InvalidArgumentException('Upgrade source #' . $index . ' is invalid.');
             }
+            self::assertAllowedKeys($source, ['application_version', 'schema_baseline'], 'supported_upgrade_sources[' . $index . ']');
             self::requireString($source, 'application_version');
             self::requireString($source, 'schema_baseline');
         }
@@ -167,6 +190,7 @@ class PackageManifest
         if (!isset($manifest['files']) || !is_array($manifest['files']) || !$manifest['files']) {
             throw new InvalidArgumentException('Package file inventory is required.');
         }
+        self::requireList($manifest['files'], 'Package file inventory');
         $previous = null;
         $seen = [];
         $seenCaseFolded = [];
@@ -174,6 +198,7 @@ class PackageManifest
             if (!is_array($file)) {
                 throw new InvalidArgumentException('Package file entry #' . $index . ' is invalid.');
             }
+            self::assertAllowedKeys($file, ['path', 'type', 'role', 'mode', 'size', 'sha256'], 'files[' . $index . ']');
             $path = self::requireString($file, 'path');
             self::validateSafeRelativePath($path, 'files[' . $index . '].path');
             if ($previous !== null && strcmp($previous, $path) >= 0) {
@@ -189,6 +214,8 @@ class PackageManifest
             if (!isset($file['type']) || $file['type'] !== 'file') {
                 throw new InvalidArgumentException('V1 package inventories may contain regular files only.');
             }
+            $role = self::requireString($file, 'role');
+            self::validateEntryRole($kind, $role, $path);
             if (!isset($file['mode']) || !is_int($file['mode']) || $file['mode'] < 0 || $file['mode'] > 0777) {
                 throw new InvalidArgumentException('Package file mode is invalid.');
             }
@@ -212,6 +239,48 @@ class PackageManifest
     {
         $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
         return $extension !== '' && in_array($extension, self::$backupExecutableExtensions, true);
+    }
+
+    private static function validateEntryRole($kind, $role, $path)
+    {
+        $roles = $kind === 'release' ? [
+            'application' => 'app/',
+            'schema_baseline' => 'schema/baselines/',
+            'post_baseline_migration' => 'schema/post-baseline/',
+            'package_metadata' => 'metadata/',
+            'notice' => 'notices/',
+            'plugin' => 'plugins/',
+            'skill' => 'skills/',
+        ] : [
+            'logical_data' => 'data/',
+            'persistent_asset' => 'assets/',
+            'recovery_metadata' => 'metadata/',
+            'portable_secret' => 'secrets/',
+        ];
+        if (!isset($roles[$role]) || strpos($path, $roles[$role]) !== 0) {
+            throw new InvalidArgumentException('Package entry role does not match its allowed namespace.');
+        }
+        if ($kind === 'backup') {
+            foreach (explode('/', $path) as $segment) {
+                if (isset($segment[0]) && $segment[0] === '.') {
+                    throw new InvalidArgumentException('Backup packages cannot contain hidden or configuration entries.');
+                }
+            }
+        }
+    }
+
+    private static function validateCapabilities(array $manifest)
+    {
+        if (!isset($manifest['required_capabilities']) || !is_array($manifest['required_capabilities'])) {
+            throw new InvalidArgumentException('Required package capabilities are missing.');
+        }
+        self::requireList($manifest['required_capabilities'], 'Required package capabilities');
+        self::validateUniqueStringList($manifest['required_capabilities'], 'Required package capabilities');
+        foreach ($manifest['required_capabilities'] as $capability) {
+            if (!in_array($capability, self::$supportedCapabilities, true)) {
+                throw new InvalidArgumentException('Unsupported required package capability: ' . $capability);
+            }
+        }
     }
 
     private static function validateUniqueStringList(array $values, $label)
@@ -259,6 +328,27 @@ class PackageManifest
     {
         if (!array_key_exists($field, $source) || !is_bool($source[$field])) {
             throw new InvalidArgumentException($field . ' must be boolean.');
+        }
+    }
+
+    private static function assertAllowedKeys(array $source, array $allowed, $label)
+    {
+        $lookup = array_fill_keys($allowed, true);
+        foreach ($source as $key => $_value) {
+            if (!is_string($key) || !isset($lookup[$key])) {
+                throw new InvalidArgumentException($label . ' contains an unsupported field: ' . (string) $key);
+            }
+        }
+    }
+
+    private static function requireList(array $values, $label)
+    {
+        $index = 0;
+        foreach ($values as $key => $_value) {
+            if ($key !== $index) {
+                throw new InvalidArgumentException($label . ' must be a JSON list.');
+            }
+            $index++;
         }
     }
 

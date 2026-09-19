@@ -32,7 +32,10 @@ class InstallationIdentity
         $upgradeFields = ['last_upgrade_id', 'last_upgrade_from_version', 'last_upgrade_to_version', 'last_upgraded_at'];
         $presentUpgradeFields = 0;
         foreach ($upgradeFields as $field) {
-            if (isset($values[$field]) && trim((string) $values[$field]) !== '') {
+            if (isset($values[$field]) && (!is_string($values[$field]) || trim($values[$field]) === '')) {
+                throw new InvalidArgumentException($field . ' must be a non-empty string when present.');
+            }
+            if (isset($values[$field]) && trim($values[$field]) !== '') {
                 $presentUpgradeFields++;
             }
         }
