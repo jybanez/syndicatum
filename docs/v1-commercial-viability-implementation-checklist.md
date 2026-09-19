@@ -363,7 +363,11 @@ behavior; permissive local defaults alone are insufficient.
       The Assessor accepted that direction in project message 2859. No owner
       decision is needed to implement and test 8.4; a temporary external 5.7
       exception would require separate, time-bounded owner residual-risk
-      approval.
+      approval. Draft [PR 8](https://github.com/jybanez/syndicatum/pull/8)
+      preserves the 5.7 defaults and adds a separate pinned MySQL 8.4.11
+      clean-install compatibility job. Exact-head run 35435297688 passed that
+      job and the unchanged 5.7 lifecycle at `852a189`; Assessor review and a
+      real 5.7-to-8.4 migration exercise remain open.
 - [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
