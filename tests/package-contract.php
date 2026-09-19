@@ -22,13 +22,13 @@ function packageContractThrows(callable $callback, $message)
 
 function validManifest($kind = 'release')
 {
-    return [
-        'contract_name' => 'syndicatum.package',
+    $manifest = [
+        'contract_name' => 'syndicatum-package',
         'format_version' => '1.0',
         'package_kind' => $kind,
         'application_version' => '1.0.0',
         'source_commit' => str_repeat('a', 40),
-        'protected_tag' => 'v1.0.0',
+        'source_tag' => 'v1.0.0',
         'schema_baseline' => 'syndicatum-mysql84-1.0.0-baseline.1',
         'schema_head' => '202609200001',
         'source_timestamp' => '2026-09-20T00:00:00Z',
@@ -41,12 +41,16 @@ function validManifest($kind = 'release')
         'contains_data' => $kind === 'backup',
         'contains_persistent_assets' => $kind === 'backup',
         'files' => [
-            ['path' => $kind === 'backup' ? 'data/records.ndjson' : 'app/index.php', 'size' => 12, 'sha256' => str_repeat('b', 64)],
-            ['path' => 'metadata/package.json', 'size' => 8, 'sha256' => str_repeat('c', 64)],
+            ['path' => $kind === 'backup' ? 'data/records.ndjson' : 'app/index.php', 'type' => 'file', 'mode' => 0644, 'size' => 12, 'sha256' => str_repeat('b', 64)],
+            ['path' => 'metadata/package.json', 'type' => 'file', 'mode' => 0644, 'size' => 8, 'sha256' => str_repeat('c', 64)],
         ],
-        'content_tree_sha256' => str_repeat('d', 64),
+        'digest_algorithm' => 'sha256',
+        'content_tree_sha256' => '',
+        'detached_checksum_reference' => 'checksums/syndicatum-1.0.0.zip.sha256',
         'provenance_reference' => 'provenance/build.json',
     ];
+    $manifest['content_tree_sha256'] = PackageManifest::calculateContentTreeSha256($manifest['files']);
+    return $manifest;
 }
 
 $release = PackageManifest::validate(validManifest());
@@ -59,10 +63,24 @@ if (!$backup['contains_data']) {
 }
 
 packageContractThrows(function () {
+    PackageManifest::parse('{"contract_name":"syndicatum-package","contract_name":"syndicatum-package"}');
+}, 'Duplicate manifest keys must be rejected before decoding can collapse them.');
+
+packageContractThrows(function () {
+    PackageManifest::parse('{"contract_name":"syndicatum-package","nested":{"kind":"release","\\u006bind":"backup"}}');
+}, 'Escaped duplicate nested manifest keys must be rejected.');
+
+packageContractThrows(function () {
     $manifest = validManifest();
     $manifest['format_version'] = '2.0';
     PackageManifest::validate($manifest);
 }, 'Unknown format major must fail closed.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['format_version'] = '1.1';
+    PackageManifest::validate($manifest);
+}, 'Undeclared compatible format minors must fail closed.');
 
 packageContractThrows(function () {
     $manifest = validManifest();
@@ -77,10 +95,37 @@ packageContractThrows(function () {
 }, 'Unordered inventory must be rejected.');
 
 packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['files'] = [
+        ['path' => 'Data/file.txt', 'type' => 'file', 'mode' => 0644, 'size' => 1, 'sha256' => str_repeat('a', 64)],
+        ['path' => 'data/file.txt', 'type' => 'file', 'mode' => 0644, 'size' => 1, 'sha256' => str_repeat('b', 64)],
+    ];
+    PackageManifest::validate($manifest);
+}, 'Case-fold path collisions must be rejected.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['files'][0]['path'] = "app/control\nname.php";
+    PackageManifest::validate($manifest);
+}, 'Control characters in paths must be rejected.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['files'][0]['size']++;
+    PackageManifest::validate($manifest);
+}, 'A stale content-tree digest must be rejected after inventory mutation.');
+
+packageContractThrows(function () {
     $manifest = validManifest('backup');
     $manifest['files'][0]['path'] = 'data/restore.php';
     PackageManifest::validate($manifest);
 }, 'Executable files in backups must be rejected.');
+
+packageContractThrows(function () {
+    $manifest = validManifest('backup');
+    $manifest['files'][0]['mode'] = 0755;
+    PackageManifest::validate($manifest);
+}, 'Executable permission bits in backups must be rejected.');
 
 $identity = InstallationIdentity::fromArray([
     'application_version' => '1.0.0',
@@ -95,6 +140,13 @@ if ($identity->toArray()['installation_id'] !== '550e8400-e29b-41d4-a716-4466554
     packageContractFail('Installation identity did not preserve its identifier.');
 }
 
+$upgradedIdentity = $identity->toArray();
+$upgradedIdentity['last_upgrade_id'] = 'upgrade-20260920-1';
+$upgradedIdentity['last_upgrade_from_version'] = '1.0.0';
+$upgradedIdentity['last_upgrade_to_version'] = '1.1.0';
+$upgradedIdentity['last_upgraded_at'] = '2026-09-20T01:00:00Z';
+InstallationIdentity::fromArray($upgradedIdentity);
+
 packageContractThrows(function () {
     InstallationIdentity::fromArray([
         'application_version' => '1.0.0', 'schema_baseline' => 'baseline', 'schema_head' => 'head',
@@ -102,6 +154,16 @@ packageContractThrows(function () {
         'installation_id' => 'not-a-uuid', 'installed_at' => '2026-09-20T00:00:00Z',
     ]);
 }, 'Invalid installation identifiers must be rejected.');
+
+packageContractThrows(function () use ($upgradedIdentity) {
+    unset($upgradedIdentity['last_upgrade_to_version']);
+    InstallationIdentity::fromArray($upgradedIdentity);
+}, 'Partial upgrade transitions must be rejected.');
+
+packageContractThrows(function () use ($upgradedIdentity) {
+    $upgradedIdentity['last_upgrade_to_version'] = $upgradedIdentity['last_upgrade_from_version'];
+    InstallationIdentity::fromArray($upgradedIdentity);
+}, 'No-op upgrade transitions must be rejected.');
 
 packageContractThrows(function () {
     InstallationIdentity::fromArray([

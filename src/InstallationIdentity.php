@@ -29,13 +29,21 @@ class InstallationIdentity
             throw new InvalidArgumentException('installation_id must be a UUID.');
         }
         self::validateTimestamp($values['installed_at'], 'installed_at');
-        $hasUpgradeId = isset($values['last_upgrade_id']) && trim((string) $values['last_upgrade_id']) !== '';
-        $hasUpgradeTime = isset($values['last_upgraded_at']) && trim((string) $values['last_upgraded_at']) !== '';
-        if ($hasUpgradeId !== $hasUpgradeTime) {
-            throw new InvalidArgumentException('Last successful upgrade identifier and timestamp must be recorded together.');
+        $upgradeFields = ['last_upgrade_id', 'last_upgrade_from_version', 'last_upgrade_to_version', 'last_upgraded_at'];
+        $presentUpgradeFields = 0;
+        foreach ($upgradeFields as $field) {
+            if (isset($values[$field]) && trim((string) $values[$field]) !== '') {
+                $presentUpgradeFields++;
+            }
         }
-        if ($hasUpgradeTime) {
+        if ($presentUpgradeFields !== 0 && $presentUpgradeFields !== count($upgradeFields)) {
+            throw new InvalidArgumentException('Last successful upgrade identifier, from/to versions, and timestamp must be recorded together.');
+        }
+        if ($presentUpgradeFields === count($upgradeFields)) {
             self::validateTimestamp($values['last_upgraded_at'], 'last_upgraded_at');
+            if ($values['last_upgrade_from_version'] === $values['last_upgrade_to_version']) {
+                throw new InvalidArgumentException('Upgrade from/to versions must describe a transition.');
+            }
         }
         return new self($values);
     }
