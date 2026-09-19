@@ -601,6 +601,20 @@ This closes only that bounded transfer/orphan path; dispute/reopen,
 pagination/history/unknown baseline, edit/tombstone, mobile, accessibility,
 and overall P1.1/P1.2 remain open pending CI and Assessor review.
 
+The same exact installed image was then exercised in a fresh two-identity
+MySQL 5.7.44 stack for requester dispute and explicit reopen. The responder
+proposed resolution; the requester disputed it; the responder submitted a
+revised proposal; the requester accepted it and then reopened it with a reason.
+The installed views moved the one item through `Decisions needed`, `Disputed`,
+`Resolved`, and back to open `Waiting on others`, while the canonical timeline
+contained exactly six ordered messages and the projection retained the same
+responder. See the
+[installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#dispute-revised-resolution-and-reopen-probe).
+This closes only that bounded requester-dispute/reopen path; other role
+variants and the remaining pagination/history/unknown, edit/tombstone,
+responsive, accessibility, and overall gates remain open pending CI and
+Assessor review.
+
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
 The Commercial Assessor recommended its non-inventive policy in message #2765

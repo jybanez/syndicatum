@@ -207,6 +207,29 @@ link. This closes only the exercised offer/decline/accept, deactivation orphan,
 and owner-mediated orphan-recovery paths; it is not dispute/reopen,
 accessibility, or complete P1.1/P1.2 acceptance.
 
+## Dispute, revised resolution, and reopen probe
+
+A sixth disposable Compose stack served the same exact `771a222` application
+image and MySQL 5.7.44 at `127.0.0.1:18088`, with fresh isolated volumes and
+two independently authenticated synthetic humans. The owner created one
+direct request for the responder. In the installed Responsibility Inbox, the
+responder proposed a resolution and the owner saw it in `Decisions needed`.
+The owner disputed it with an explicit evidence note; the same request then
+appeared in the owner's `Disputed` view and remained assigned to the responder.
+The responder's `My work` view also showed the disputed item and allowed a
+revised resolution proposal.
+
+The owner accepted the revised proposal, observed the request once in
+`Resolved`, and then used the installed `Reopen` action with a reason. The
+request returned once to the owner's `Waiting on others` view as `Open`, still
+assigned to the original responder. An authenticated projection read confirmed
+one item with `state=open`, `current_responder_participant_id=2`, no pending
+decision, and latest evidence message `#6` at sequence 6. The canonical message
+list contained exactly sequences 1–6: request, first proposal, dispute, revised
+proposal, acceptance, and reopen. This closes only that installed
+dispute/re-proposal/accept/reopen path; other role variants, pagination/history,
+edit/tombstone, responsive, accessibility, and overall P1.1/P1.2 remain open.
+
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
@@ -214,8 +237,8 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
 
 ## Still open
 
-- Responder-side dispute and reopened flows under independently authenticated
-  identities. The exercised transfer/orphan recovery is one bounded path
+- Other role variants around transfer, dispute, and reopen. The exercised
+  transfer/orphan recovery and requester-dispute/reopen flows are bounded paths
   through the broader role/state matrix.
 - Broader stale HTTP 409 recovery across other roles and states, including
   refresh-failure UX. The owner-side withdrawal conflict above is exercised
