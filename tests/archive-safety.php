@@ -41,7 +41,8 @@ function archiveManifest($kind, array $payloads)
             'mysql' => ['minimum' => '8.4.0', 'maximum_exclusive' => '9.0.0', 'sql_modes' => ['STRICT_TRANS_TABLES'], 'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci'],
         ],
         'minimum_reader_version' => '1.0.0', 'supported_upgrade_sources' => [],
-        'contains_data' => $kind === 'backup', 'contains_persistent_assets' => false,
+        'contains_data' => $kind === 'backup',
+        'contains_persistent_assets' => (bool) array_filter($files, function ($file) { return $file['role'] === 'persistent_asset'; }),
         'files' => $files, 'digest_algorithm' => 'sha256', 'content_tree_sha256' => '',
         'detached_checksum_reference' => 'checksums/package.zip.sha256',
         'provenance_reference' => 'provenance/build.json',
@@ -57,7 +58,7 @@ function manifestJson(array $manifest)
     return $json;
 }
 
-function archiveContext($kind, $archiveSha256, $manifestJson)
+function archiveContext($kind, $archiveSha256, $manifestJson, $allowedBackupRoles = null, $requiredBackupPaths = null)
 {
     $manifestSha256 = hash('sha256', $manifestJson);
     if ($kind === 'release') {
@@ -73,7 +74,11 @@ function archiveContext($kind, $archiveSha256, $manifestJson)
             if (isset($file['path'], $file['role'])) { $roles[$file['path']] = $file['role']; }
         }
     }
-    return ArchiveValidationContext::forBackup($archiveSha256, $manifestSha256, ['baseline.1' => ['202609200000']], $roles);
+    if ($allowedBackupRoles !== null) { $roles = $allowedBackupRoles; }
+    if ($requiredBackupPaths === null) { $requiredBackupPaths = ['data/records.ndjson', 'metadata/recovery.json']; }
+    return ArchiveValidationContext::forBackup(
+        $archiveSha256, $manifestSha256, ['baseline.1' => ['202609200000']], $roles, $requiredBackupPaths
+    );
 }
 
 function zipEntries(array $payloads)
@@ -149,7 +154,7 @@ function writeRawZip(array $entries, array $options = [])
     return $path;
 }
 
-function validateFixture(ArchiveSafetyReader $reader, array $entries, array $manifest, array $options = [], $contextKind = null, $trustedArchiveSha = null, $trustedManifestJson = null)
+function validateFixture(ArchiveSafetyReader $reader, array $entries, array $manifest, array $options = [], $contextKind = null, $trustedArchiveSha = null, $trustedManifestJson = null, $allowedBackupRoles = null, $requiredBackupPaths = null)
 {
     $path = writeRawZip($entries, $options);
     $json = manifestJson($manifest);
@@ -157,7 +162,7 @@ function validateFixture(ArchiveSafetyReader $reader, array $entries, array $man
     $kind = $contextKind === null ? $manifest['package_kind'] : $contextKind;
     $archiveSha = $trustedArchiveSha === null ? hash_file('sha256', $path) : $trustedArchiveSha;
     try {
-        return $reader->validate($path, $json, archiveContext($kind, $archiveSha, $trustedJson));
+        return $reader->validate($path, $json, archiveContext($kind, $archiveSha, $trustedJson, $allowedBackupRoles, $requiredBackupPaths));
     } finally {
         @unlink($path);
     }
@@ -195,6 +200,23 @@ archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
     $entries = $releaseEntries; $entries[] = $entries[0]; $entries[2]['name'] = 'app/Index.php';
     validateFixture($reader, $entries, $releaseManifest);
 }, 'Case-fold aliases must fail closed.');
+
+foreach ([
+    ['app/node' => 'parent', 'app/node/child.txt' => 'child'],
+    ['app/Node' => 'parent', 'app/node/child.txt' => 'child'],
+] as $collision) {
+    archiveThrows(function () use ($reader, $collision) {
+        $payloads = [];
+        foreach ($collision as $path => $content) { $payloads[$path] = ['content' => $content, 'role' => 'application']; }
+        validateFixture($reader, zipEntries($payloads), archiveManifest('release', $payloads));
+    }, 'A file cannot be the exact or case-folded ancestor of another file.');
+}
+
+$siblingPayloads = [
+    'app/node/child-a.txt' => ['content' => 'a', 'role' => 'application'],
+    'app/node/child-b.txt' => ['content' => 'b', 'role' => 'application'],
+];
+validateFixture($reader, zipEntries($siblingPayloads), archiveManifest('release', $siblingPayloads));
 
 archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest) {
     $entries = $releaseEntries; $entries[0]['name'] = '../app/index.php'; $entries[0]['local_name'] = '../app/index.php';
@@ -278,6 +300,22 @@ $backupManifest = archiveManifest('backup', $backupPayloads);
 $backupResult = validateFixture($reader, zipEntries($backupPayloads), $backupManifest);
 if (!($backupResult instanceof ArchiveValidationReport)) { archiveFail('Trusted backup fixture did not validate.'); }
 
+$emptyTablePayloads = $backupPayloads;
+$emptyTablePayloads['data/records.ndjson']['content'] = '';
+validateFixture($reader, zipEntries($emptyTablePayloads), archiveManifest('backup', $emptyTablePayloads));
+
+archiveThrows(function () use ($reader, $backupPayloads) {
+    $payloads = $backupPayloads; unset($payloads['metadata/recovery.json']);
+    validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
+}, 'Trusted backup recovery metadata is required even when archive and manifest omit it together.');
+
+archiveThrows(function () use ($reader, $backupPayloads) {
+    $payloads = $backupPayloads; unset($payloads['data/records.ndjson']);
+    $metadata = json_decode($payloads['metadata/recovery.json']['content'], true); $metadata['data_files'] = [];
+    $payloads['metadata/recovery.json']['content'] = json_encode($metadata, JSON_UNESCAPED_SLASHES);
+    validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
+}, 'A backup cannot satisfy contains_data with metadata alone.');
+
 archiveThrows(function () use ($reader, $backupPayloads) {
     $payloads = $backupPayloads;
     $metadata = json_decode($payloads['metadata/recovery.json']['content'], true);
@@ -317,6 +355,41 @@ archiveThrows(function () use ($reader, $backupPayloads, $recoveryMetadata) {
     $payloads['assets/avatar.png'] = ['content' => '<?php echo 1; ?>', 'role' => 'persistent_asset'];
     validateFixture($reader, zipEntries($payloads), archiveManifest('backup', $payloads));
 }, 'Persistent-asset extension/signature mismatches must fail closed.');
+
+$assetMetadata = $recoveryMetadata;
+$assetMetadata['asset_files'] = ['assets/avatar.png'];
+$assetPayloads = $backupPayloads;
+$assetPayloads['metadata/recovery.json']['content'] = json_encode($assetMetadata, JSON_UNESCAPED_SLASHES);
+$assetPayloads['assets/avatar.png'] = ['content' => "\x89PNG\x0d\x0a\x1a\x0a", 'role' => 'persistent_asset'];
+validateFixture($reader, zipEntries($assetPayloads), archiveManifest('backup', $assetPayloads));
+
+$assetCatalog = [
+    'data/records.ndjson' => 'logical_data',
+    'metadata/recovery.json' => 'recovery_metadata',
+    'assets/avatar.png' => 'persistent_asset',
+];
+validateFixture(
+    $reader, zipEntries($backupPayloads), archiveManifest('backup', $backupPayloads),
+    [], null, null, null, $assetCatalog, ['data/records.ndjson', 'metadata/recovery.json']
+);
+
+archiveThrows(function () use ($reader, $backupPayloads, $assetCatalog) {
+    validateFixture(
+        $reader, zipEntries($backupPayloads), archiveManifest('backup', $backupPayloads),
+        [], null, null, null, $assetCatalog,
+        ['data/records.ndjson', 'metadata/recovery.json', 'assets/avatar.png']
+    );
+}, 'A trusted required asset cannot be omitted from both archive and manifest.');
+
+archiveThrows(function () use ($reader, $backupPayloads) {
+    $manifest = archiveManifest('backup', $backupPayloads); $manifest['contains_persistent_assets'] = true;
+    validateFixture($reader, zipEntries($backupPayloads), $manifest);
+}, 'The persistent-asset flag cannot be true without an asset payload.');
+
+archiveThrows(function () use ($reader, $assetPayloads) {
+    $manifest = archiveManifest('backup', $assetPayloads); $manifest['contains_persistent_assets'] = false;
+    validateFixture($reader, zipEntries($assetPayloads), $manifest);
+}, 'The persistent-asset flag cannot be false when asset payloads exist.');
 
 $densePayloads = $backupPayloads;
 $densePayloads['data/records.ndjson']['content'] = str_repeat("{}\n", 100000);

@@ -27,6 +27,13 @@ authenticated-encryption envelope after successful authentication; defining
 that envelope/decryption producer is a later gate. The current API does not grant
 restore authority to an unauthenticated uploaded archive.
 
+The trusted backup catalog distinguishes required payload paths from optional
+allowed paths. Every backup requires `metadata/recovery.json` and at least one
+declared logical-data file, even when that file represents an empty table and is
+zero bytes. Persistent assets remain optional, but the manifest presence flag
+must exactly match whether asset-role files exist. Removing a required file from
+both archive and manifest therefore still fails against trusted context.
+
 ## Configured resource limits
 
 | Resource | V1 limit | Enforcement point |
@@ -60,6 +67,7 @@ structures are exercised at the archive layer rather than mocked above it.
 | Absolute/drive paths | Raw `/app/index.php` and `C:/app/index.php` rejected |
 | Portable aliases | Windows-reserved `CON` and invalid `?` path rejected; package suite covers all frozen invalid characters |
 | Case collision | `app/index.php` plus `app/Index.php` rejected |
+| File/ancestor collision | Exact and case-folded `app/node` plus `app/node/child` rejected; sibling files pass |
 | Duplicate name | Duplicate central-directory logical name rejected |
 | Hardlink/local alias | Two central records pointing at one local offset rejected as aliased/overlapping records |
 | Special UNIX types | Directory, symlink, block device, character device, FIFO, and socket modes rejected |
@@ -88,6 +96,7 @@ structures are exercised at the archive layer rather than mocked above it.
 | Malformed NDJSON | BOM/shebang, PHP line, missing final LF, non-object, and empty-record forms reject |
 | NDJSON amplification | 100,000 dense short records validate within the regression budget; 100,001 or a lower configured budget rejects |
 | Media disguise | `.png` containing PHP instead of PNG signature rejects |
+| Backup completeness | Missing required recovery metadata or logical-data path rejects even if manifest agrees; zero-byte empty-table file and absent optional assets pass |
 | Schema-authority smuggling | Recovery metadata containing `ddl` or any unknown policy key rejects |
 | Trusted-operation mismatch | Release manifest under backup context rejects |
 | Trusted archive mismatch | Archive SHA different from trusted context rejects |
@@ -97,6 +106,12 @@ The package suite separately pins exact manifest/archive role namespaces,
 regular-files-only inventory, portable path policy, canonical JSONL bytes, and
 content-tree golden hashes. The independent Python verifier reproduces the
 canonical fixtures without using the PHP implementation.
+
+Media prefix checks establish only that an allowlisted extension has its expected
+file signature. They do not fully decode an image or prove that arbitrary asset
+bytes are safe to interpret in every downstream context. Restored assets remain
+untrusted data and must be served with fixed non-executable permissions, safe
+content types, and no script execution from the asset location.
 
 ## Verification commands
 

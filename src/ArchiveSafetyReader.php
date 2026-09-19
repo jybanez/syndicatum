@@ -29,8 +29,9 @@ final class ArchiveValidationContext
     private $releaseIdentity;
     private $backupBaselines;
     private $backupPaths;
+    private $requiredBackupPaths;
 
-    private function __construct($kind, $archiveSha256, $manifestSha256, array $releaseIdentity, array $backupBaselines, array $backupPaths)
+    private function __construct($kind, $archiveSha256, $manifestSha256, array $releaseIdentity, array $backupBaselines, array $backupPaths, array $requiredBackupPaths)
     {
         if (!preg_match('/\A[a-f0-9]{64}\z/', $archiveSha256) || !preg_match('/\A[a-f0-9]{64}\z/', $manifestSha256)) {
             throw new InvalidArgumentException('Trusted archive and sidecar-manifest SHA-256 values are required.');
@@ -41,6 +42,7 @@ final class ArchiveValidationContext
         $this->releaseIdentity = $releaseIdentity;
         $this->backupBaselines = $backupBaselines;
         $this->backupPaths = $backupPaths;
+        $this->requiredBackupPaths = $requiredBackupPaths;
     }
 
     public static function forRelease($archiveSha256, $manifestSha256, array $identity)
@@ -50,12 +52,12 @@ final class ArchiveValidationContext
                 throw new InvalidArgumentException('Trusted release identity requires ' . $field . '.');
             }
         }
-        return new self('release', $archiveSha256, $manifestSha256, $identity, [], []);
+        return new self('release', $archiveSha256, $manifestSha256, $identity, [], [], []);
     }
 
-    public static function forBackup($archiveSha256, $manifestSha256, array $allowedBaselineHeads, array $allowedPayloadRoles)
+    public static function forBackup($archiveSha256, $manifestSha256, array $allowedBaselineHeads, array $allowedPayloadRoles, array $requiredPayloadPaths)
     {
-        if (!$allowedBaselineHeads || !$allowedPayloadRoles) {
+        if (!$allowedBaselineHeads || !$allowedPayloadRoles || !$requiredPayloadPaths) {
             throw new InvalidArgumentException('Trusted backup recovery catalog cannot be empty.');
         }
         foreach ($allowedBaselineHeads as $baseline => $heads) {
@@ -65,11 +67,19 @@ final class ArchiveValidationContext
         }
         foreach ($allowedPayloadRoles as $path => $role) {
             PackageManifest::validateSafeRelativePath($path, 'trusted backup payload path');
-            if (!is_string($role) || $role === '') {
+            if (!is_string($role) || PackageManifest::expectedRoleForPath('backup', $path) !== $role) {
                 throw new InvalidArgumentException('Trusted backup payload role is invalid.');
             }
         }
-        return new self('backup', $archiveSha256, $manifestSha256, [], $allowedBaselineHeads, $allowedPayloadRoles);
+        $required = [];
+        foreach ($requiredPayloadPaths as $path) {
+            PackageManifest::validateSafeRelativePath($path, 'required trusted backup payload path');
+            if (!isset($allowedPayloadRoles[$path]) || isset($required[$path])) {
+                throw new InvalidArgumentException('Required backup payload must be unique and present in the trusted catalog.');
+            }
+            $required[$path] = true;
+        }
+        return new self('backup', $archiveSha256, $manifestSha256, [], $allowedBaselineHeads, $allowedPayloadRoles, $required);
     }
 
     public function assertArchiveSha256($sha256)
@@ -107,6 +117,13 @@ final class ArchiveValidationContext
         foreach ($manifest['files'] as $file) {
             if (!isset($this->backupPaths[$file['path']]) || $this->backupPaths[$file['path']] !== $file['role']) {
                 throw new InvalidArgumentException('Backup payload is absent from the trusted recovery catalog.');
+            }
+        }
+        $manifestPaths = [];
+        foreach ($manifest['files'] as $file) { $manifestPaths[$file['path']] = true; }
+        foreach ($this->requiredBackupPaths as $path => $_required) {
+            if (!isset($manifestPaths[$path])) {
+                throw new InvalidArgumentException('Backup omits a required payload from the trusted recovery catalog.');
             }
         }
     }
@@ -535,8 +552,8 @@ final class ArchiveSafetyReader
         if ($readBytes !== $expectedSize) {
             throw new InvalidArgumentException('Archive stream size differs from inspected metadata.');
         }
-        if ($kind === 'backup' && $role === 'logical_data' && ($lineBuffer !== '' || $recordCount < 1)) {
-            throw new InvalidArgumentException('Backup logical data must be nonempty NDJSON with a final LF.');
+        if ($kind === 'backup' && $role === 'logical_data' && $lineBuffer !== '') {
+            throw new InvalidArgumentException('Backup logical data must use NDJSON records with a final LF.');
         }
         return ['sha256' => hash_final($hash), 'captured' => $captured, 'prefix' => $prefix, 'logical_records' => $recordCount];
     }

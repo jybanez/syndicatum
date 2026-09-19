@@ -275,6 +275,7 @@ class PackageManifest
         $previous = null;
         $seen = [];
         $seenCaseFolded = [];
+        $roleCounts = [];
         foreach ($manifest['files'] as $index => $file) {
             if (!is_array($file)) {
                 throw new InvalidArgumentException('Package file entry #' . $index . ' is invalid.');
@@ -297,6 +298,7 @@ class PackageManifest
             }
             $role = self::requireString($file, 'role');
             self::validateEntryRole($kind, $role, $path);
+            $roleCounts[$role] = isset($roleCounts[$role]) ? $roleCounts[$role] + 1 : 1;
             if (!isset($file['mode']) || !is_int($file['mode']) || $file['mode'] < 0 || $file['mode'] > 0777) {
                 throw new InvalidArgumentException('Package file mode is invalid.');
             }
@@ -313,6 +315,28 @@ class PackageManifest
             $seen[$path] = true;
             $seenCaseFolded[$caseFolded] = true;
             $previous = $path;
+        }
+        foreach ($manifest['files'] as $file) {
+            $parts = explode('/', strtolower($file['path']));
+            array_pop($parts);
+            while ($parts) {
+                if (isset($seenCaseFolded[implode('/', $parts)])) {
+                    throw new InvalidArgumentException('Package file paths cannot contain another file as an ancestor.');
+                }
+                array_pop($parts);
+            }
+        }
+        if ($kind === 'backup') {
+            if (!isset($roleCounts['logical_data']) || $roleCounts['logical_data'] < 1) {
+                throw new InvalidArgumentException('Backup packages require at least one logical-data file.');
+            }
+            if (!isset($seen['metadata/recovery.json']) || !isset($roleCounts['recovery_metadata']) || $roleCounts['recovery_metadata'] !== 1) {
+                throw new InvalidArgumentException('Backup packages require exactly metadata/recovery.json as recovery metadata.');
+            }
+            $hasAssets = isset($roleCounts['persistent_asset']) && $roleCounts['persistent_asset'] > 0;
+            if ($manifest['contains_persistent_assets'] !== $hasAssets) {
+                throw new InvalidArgumentException('Backup persistent-asset flag must match the actual payload roles.');
+            }
         }
     }
 

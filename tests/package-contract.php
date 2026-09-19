@@ -41,10 +41,10 @@ function validManifest($kind = 'release')
         'minimum_reader_version' => '1.0.0',
         'supported_upgrade_sources' => [],
         'contains_data' => $kind === 'backup',
-        'contains_persistent_assets' => $kind === 'backup',
+        'contains_persistent_assets' => false,
         'files' => [
             ['path' => $kind === 'backup' ? 'data/records.ndjson' : 'app/index.php', 'type' => 'file', 'role' => $kind === 'backup' ? 'logical_data' : 'application', 'mode' => 0644, 'size' => 12, 'sha256' => str_repeat('b', 64)],
-            ['path' => 'metadata/build.json', 'type' => 'file', 'role' => $kind === 'backup' ? 'recovery_metadata' : 'package_metadata', 'mode' => 0644, 'size' => 8, 'sha256' => str_repeat('c', 64)],
+            ['path' => $kind === 'backup' ? 'metadata/recovery.json' : 'metadata/build.json', 'type' => 'file', 'role' => $kind === 'backup' ? 'recovery_metadata' : 'package_metadata', 'mode' => 0644, 'size' => 8, 'sha256' => str_repeat('c', 64)],
         ],
         'digest_algorithm' => 'sha256',
         'content_tree_sha256' => '',
