@@ -8,6 +8,9 @@ require_once dirname(__DIR__) . '/src/SettingsService.php';
 require_once dirname(__DIR__) . '/src/ExpansionMigrator.php';
 require_once dirname(__DIR__) . '/src/RateLimiter.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
+require_once dirname(__DIR__) . '/src/ProjectRepository.php';
+require_once dirname(__DIR__) . '/src/ResponsibilityInboxService.php';
+require_once dirname(__DIR__) . '/src/ResponsibilityMigrationAssessment.php';
 
 class ExpansionTestSuite
 {
@@ -112,21 +115,108 @@ try {
     $pdo->prepare("INSERT INTO chat_agents (project_name, token_prefix, token_hash, token_secret_version, role, is_active, created_at, updated_at) VALUES ('Legacy Agent', ?, ?, 'primary', 'agent', 1, ?, ?)")
         ->execute([substr($token, 0, 24), Db::hashToken($token), $now, $now]);
     $agentId = (int) $pdo->lastInsertId();
+    $recipientToken = 'legacy-recipient-' . bin2hex(random_bytes(20));
+    $pdo->prepare("INSERT INTO chat_agents (project_name, token_prefix, token_hash, token_secret_version, role, is_active, created_at, updated_at) VALUES ('Legacy Recipient', ?, ?, 'primary', 'agent', 1, ?, ?)")
+        ->execute([substr($recipientToken, 0, 24), Db::hashToken($recipientToken), $now, $now]);
+    $recipientAgentId = (int) $pdo->lastInsertId();
     $pdo->prepare('INSERT INTO chat_entries (entry_uuid, sender_agent_id, message_timestamp, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-        ->execute(['00000000-0000-4000-8000-000000000001', $agentId, $now, 'Migrated broadcast', $now, $now]);
+        ->execute(['00000000-0000-4000-8000-000000000001', $agentId, $now, 'Migrated direct message', $now, $now]);
     $entryId = (int) $pdo->lastInsertId();
+    $pdo->prepare('INSERT INTO chat_entry_recipients (entry_id, target_agent_id, created_at) VALUES (?, ?, ?)')
+        ->execute([$entryId, $recipientAgentId, $now]);
     $pdo->prepare('INSERT INTO chat_entry_revisions (entry_id, edited_by_agent_id, previous_body, new_body, edited_at) VALUES (?, ?, ?, ?, ?)')
-        ->execute([$entryId, $agentId, 'Earlier body', 'Migrated broadcast', $now]);
+        ->execute([$entryId, $agentId, 'Earlier body', 'Migrated direct message', $now]);
 
-    $suite->test('legacy migration preserves identities, tokens, messages, and revisions', function () use ($suite, $pdo, $administrator, $token) {
+    $suite->test('legacy migration preserves identities, tokens, messages, and revisions', function () use ($suite, $pdo, $administrator, $token, $recipientAgentId, $entryId) {
         $migration = new ExpansionMigrator($pdo);
         $result = $migration->migrateLegacyData($administrator['id'], 'PBB Coordination');
         $suite->same(true, $result['matches']['agents']);
         $suite->same(true, $result['matches']['messages']);
         $suite->same(true, $result['matches']['revisions']);
+        $suite->same(true, $result['matches']['direct_recipients']);
         $suite->truthy((new ChatRepository($pdo))->authenticate($token));
         $rerun = $migration->migrateLegacyData($administrator['id'], 'PBB Coordination');
         $suite->same(1, $rerun['canonical']['messages']);
+        $projectId = $migration->defaultProjectId();
+        $preflight = new ResponsibilityMigrationAssessment($pdo);
+        $assessment = $preflight->report($projectId);
+        $suite->same(1, $assessment['legacy_direct_items']);
+        $suite->same(1, $assessment['legacy_unverified_baselines']);
+        $suite->same(0, $assessment['events_on_unverified_baselines']);
+        $suite->same(['active' => 1, 'inactive' => 0, 'missing' => 0],
+            $assessment['current_addressee_validity']);
+        $suite->same(1, $assessment['unverified_range']['oldest_project_sequence']);
+        $suite->same(1, $assessment['unverified_range']['newest_project_sequence']);
+        $suite->same(1, $preflight->summary()['affected_projects']);
+        $suite->same(1, $preflight->summary()['legacy_unverified_direct_items']);
+        $recipient = $pdo->prepare('SELECT id FROM project_participants
+            WHERE project_id = ? AND agent_id = ?');
+        $recipient->execute([$projectId, $recipientAgentId]);
+        $recipientParticipantId = (int) $recipient->fetchColumn();
+        $inbox = (new ResponsibilityInboxService($pdo))->page([
+            'project_id' => $projectId,
+            'participant_id' => $recipientParticipantId,
+        ], ['view' => 'unknown']);
+        $suite->same(1, count($inbox['data']));
+        $suite->same('RESPONSIBILITY_BASELINE_UNAVAILABLE',
+            $inbox['data'][0]['projection_error']);
+        $source = $pdo->prepare('SELECT id FROM messages WHERE legacy_entry_id = ?');
+        $source->execute([$entryId]);
+        $requestId = (int) $source->fetchColumn();
+        $messageCount = (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn();
+        $suite->throws('RESPONSIBILITY_BASELINE_UNAVAILABLE',
+            function () use ($pdo, $projectId, $recipientParticipantId, $requestId) {
+                (new ProjectRepository($pdo))->createMessage([
+                    'project_id' => $projectId,
+                    'participant_id' => $recipientParticipantId,
+                    'project_status' => 'active',
+                    'identity' => ['kind' => 'agent'],
+                    'role' => 'agent',
+                ], [
+                    'body' => 'Cannot retroactively start unverified work',
+                    'idempotency_key' => 'legacy-unverified-event',
+                    'responsibility_event' => [
+                        'kind' => 'work_started',
+                        'request_message_id' => $requestId,
+                        'initial_responder_participant_id' => $recipientParticipantId,
+                        'expected_event_id' => $requestId,
+                    ],
+                ]);
+            });
+        $suite->same($messageCount,
+            (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn(),
+            'Rejected historical responsibility write left a message.');
+        $owner = $pdo->prepare('SELECT id FROM project_participants
+            WHERE project_id = ? AND user_id = ?');
+        $owner->execute([$projectId, $administrator['id']]);
+        $ownerParticipantId = (int) $owner->fetchColumn();
+        $newRequest = (new ProjectRepository($pdo))->createMessage([
+            'project_id' => $projectId,
+            'participant_id' => $ownerParticipantId,
+            'project_status' => 'active',
+            'identity' => ['kind' => 'human'],
+            'role' => 'owner',
+        ], [
+            'body' => 'New explicit current responsibility request',
+            'direct_participant_ids' => [$recipientParticipantId],
+        ]);
+        $newId = $newRequest['message']['id'];
+        $anchor = $pdo->prepare('SELECT responsibility_status_generation
+            FROM message_addressees WHERE message_id = ? AND participant_id = ?');
+        $anchor->execute([$newId, $recipientParticipantId]);
+        $suite->truthy($anchor->fetchColumn() !== null,
+            'New explicit direct request lacks a verified membership anchor.');
+        $current = (new ResponsibilityInboxService($pdo))->page([
+            'project_id' => $projectId,
+            'participant_id' => $recipientParticipantId,
+        ], ['view' => 'mine']);
+        $suite->same([$newId], array_column($current['data'], 'request_message_id'));
+        $suite->same('open', $current['data'][0]['state']);
+        $migration->migrateLegacyData($administrator['id'], 'PBB Coordination');
+        $afterRerun = $preflight->report($projectId);
+        $suite->same(1, $afterRerun['legacy_unverified_baselines']);
+        $suite->same(1, $afterRerun['verified_baselines']);
+        $suite->same(0, $afterRerun['events_on_unverified_baselines']);
     });
 
     $suite->test('legacy agent writes mirror into the migrated project without changing its token', function () use ($suite, $pdo, $token) {

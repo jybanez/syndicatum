@@ -495,6 +495,187 @@ and can complete a real cross-provider handoff without privileged intervention.
 
 ### P1.1 Explicit responsibility signals
 
+**Scoped P1.1 sub-gates reviewed by Commercial Assessor:**
+[`v1-responsibility-state-proposal.md`](v1-responsibility-state-proposal.md)
+defines an append-only, canonical-message-backed event model and explicit
+conflict/correction behavior. The Assessor approved these semantics for draft
+PR #6 head `7cf0a07` in project message #2726. The Assessor separately
+accepted the pure reducer transition/role matrix at `7c0eabc` (#2738), the
+bounded persistence and canonical-message atomicity/idempotency paths at
+`2acdad9` (#2740), and genuine concurrent two-writer serialization plus HTTP
+409 conflict mapping at `a8a6241` (#2743), and the bounded API foreign-ID /
+exercised-role paths at `d3d3705` (#2751), all at **source/CI scope only**.
+The Assessor later accepted the broader persisted/API authorization matrix
+and pure derived inbox/shared-projector read contract at draft PR #6 head
+`aad3489` (#2764), also at bounded source/API/CI scope. The historical
+responsibility-baseline migration and non-inventive read-only preflight at
+`3595eae` were accepted at source/CI scope in #2771. These decisions do
+not close P1.1: installed-client/UI acceptance remains open. The implementation
+items below remain unchecked until their full exit evidence is reviewed.
+
+The Assessor accepted the Responsibility Inbox source-client architecture and
+action contract at `5a33613` (#2775), with the navigation qualification in
+#2776. The client fetches exact canonical evidence and attempts to focus its
+mounted row in the existing Helper timeline. When virtualization or filters
+leave the row unmounted, the source client now provides a read-only evidence
+dialog with project sequence, reply context, revision/tombstone state, and
+explicit navigation without changing timeline filters. This initially had
+source-only evidence; the narrow installed probe below now confirms the
+mounted and filtered-out navigation paths. Broader authenticated behavior,
+keyboard/focus/accessibility, and full P1.1/P1.2 remain open.
+
+The Assessor accepted **P1.2 canonical evidence navigation/deep-link fallback
+at source-client/CI scope** for exact head `7f69fda` in message #2779. This
+closes the source-level qualification in #2776, not the installed or
+accessibility gate. The authenticated probe below supplied bounded installed
+evidence for mounted-row focus and filtered-out dialog fallback with unchanged
+filters; dialog focus trap, Escape/return focus, and keyboard activation still
+need installed accessibility acceptance.
+
+The first [isolated installed-client probe](v1-responsibility-installed-acceptance-2026-09-19.md)
+at `7f69fda` verified a direct request in the owner’s waiting view, mounted
+and filtered-out canonical evidence navigation, and an owner withdrawal that
+updated the inbox and appended one canonical timeline event. A second
+authenticated participant then exercised acknowledgment, start, block,
+resolution proposal, and owner acceptance. It is a narrow positive probe;
+the remaining role/state, conflict, history, responsive, and accessibility
+acceptance cases are still open. The Assessor accepted the owner-side positive
+path and installed evidence navigation at isolated-probe scope in #2781,
+then the two-identity positive path in #2783. At exact head `af483a3`, CI run
+`35389996471` passed all required jobs, allowing the historical `Previously
+blocked` label correction at source/CI scope (#2785). At that checkpoint it
+had not yet been verified in an installed image. The later isolated wording
+probe below closes only that observation. The checkboxes remain
+unchecked pending full evidence. Other installed checks include HTTP 409
+conflict/recovery UX, transfer/orphan and dispute/reopen paths, realistic
+pagination/history and unknown baseline, edit/tombstone navigation, mobile,
+keyboard/focus accessibility, and the resolved historical-label recheck.
+
+At exact head `5e6ea70`, a second isolated installed-client probe recorded
+owner withdrawal reconstructed after browser reload, exact request `#1` to
+evidence `#2` linkage, and a same-key/same-content retry returning the original
+message without a duplicate. The same item was then reopened with evidence
+`#3`, and an installed API write using stale event `#2` correctly returned
+HTTP 409 without changing the one open item. See [the installed acceptance
+record](v1-responsibility-installed-acceptance-2026-09-19.md). This narrows the
+reload/linkage/replay and server conflict evidence only. The Assessor accepted
+installed canonical-state reconstruction and idempotent retry for the exercised
+owner-side path, plus stale-conflict semantics at installed API scope, in #2791;
+exact-head docs-only CI support was accepted in #2793. P1.1/P1.2 remained open.
+
+A two-browser owner-side conflict probe then found that `5e6ea70` correctly
+returned 409, refreshed the stale waiting list, and wrote no duplicate, but
+routine live polling quickly replaced the specific `nothing was posted`
+notice. Client commit `d9ccd63` preserves that conflict notice until explicit
+refresh/view change and does not claim a successful refresh when it fails. An
+exact-archive installed image of `d9ccd63` reproduced the 409 with two
+authenticated views: the refreshed list and persistent notice were visible,
+switching to `Resolved` showed the same withdrawn request, and canonical
+sequence remained at four successful events with no stale-write message.
+See [the installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md).
+The Assessor accepted installed browser stale-action conflict refresh/no-side-
+effect UX for this exercised owner-side path in #2795. Exact docs/evidence
+head `92cbb1a` passed all required CI jobs in run `35398146572` (#2796).
+Broader roles/states, transfer, dispute, pagination/history, edit/tombstone,
+and accessibility remain open; neither P1.1 nor P1.2 is closed overall.
+
+The [installed wording probe](v1-responsibility-installed-acceptance-2026-09-19.md)
+then used the exact `d9ccd63` application image with fresh MySQL 5.7.44 data
+and two authenticated synthetic humans. Its blocked-then-accepted request
+appeared in `Resolved` as `Previously blocked · Work started`, including after
+a full reload. The authenticated projection retained `blocked=true` and one
+resolved request. The Assessor accepted this exercised installed historical-
+qualifier wording sub-gate in #2803; evidence/checklist head `e961a95` passed
+all three required V1 CI jobs in run `35401728565` (#2804). This is not
+historical-baseline, accessibility, P1.1/P1.2, or release acceptance.
+
+The subsequent three-identity installed transfer/orphan probe found and fixed
+an asymmetric responder-generation defect. Exact image `771a222` now preserves
+the reduced responder when recording transfer acceptance. In a fresh MySQL
+5.7.44 stack, the installed browser exercised offer, decline, re-offer,
+acceptance, member removal to `Orphaned`, owner-mediated recovery offer, and
+acceptance by a different active responder. The recovered request appeared
+once as open in that responder's `My work` view. See the
+[installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#transfer-and-orphan-recovery-probe).
+The Assessor accepted installed transfer, orphan derivation, and explicit
+reassignment/recovery for this exercised three-human path in #2809. Exact
+evidence head `db45f36` passed all required jobs in run `35408890560`.
+Pagination/history/unknown baseline, edit/tombstone, mobile, accessibility,
+and overall P1.1/P1.2 remain open.
+
+The same exact installed image was then exercised in a fresh two-identity
+MySQL 5.7.44 stack for requester dispute and explicit reopen. The responder
+proposed resolution; the requester disputed it; the responder submitted a
+revised proposal; the requester accepted it and then reopened it with a reason.
+The installed views moved the one item through `Decisions needed`, `Disputed`,
+`Resolved`, and back to open `Waiting on others`, while the canonical timeline
+contained exactly six ordered messages and the projection retained the same
+responder. See the
+[installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#dispute-revised-resolution-and-reopen-probe).
+The Assessor accepted requester dispute, revised proposal, acceptance, and
+explicit reopen for this exercised two-human path in #2811. Exact evidence
+head `4595cb9` passed all required jobs in run `35410305194`. Other role
+variants and the remaining pagination/history/unknown, edit/tombstone,
+responsive, accessibility, and overall gates remain open.
+
+The next exact-image installed probe created 55 direct requests in one fresh
+MySQL 5.7.44 project and reproduced one unverified historical baseline. The
+installed API paginated 50 + 5 with 55 unique request IDs; the historical row
+projected as `unknown` with no invented owner or evidence. The installed Inbox
+showed 50 items plus `Load older work`, then 55 unique cards after paging. Its
+`Historical / unknown` filter preserved the older-page affordance when the
+first page had zero matches, then showed only request `#1` as `Unknown` / `Not
+verified` with explicit guidance that it was not an active assignment. See the
+[installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#pagination-history-and-unknown-baseline-probe).
+This closes only the exercised single-project 50+5 pagination/no-duplicate and
+unknown-baseline presentation path. Broader multi-project scale,
+edit/tombstone, responsive/accessibility, and overall gates remain open. The
+Commercial Assessor accepted this bounded installed sub-gate in project message
+#2815; exact evidence head `a3f0d86` passed all required jobs in GitHub Actions
+run `35412134767`.
+
+The next exact-image installed probe exercised edit and soft-delete fidelity on
+an offscreen canonical request. One request plus 51 newer direct requests put
+the exercised message outside the timeline's first 50 rows. After one edit,
+the Inbox loaded the older card and its canonical fallback preserved message
+ID, sequence, sender, addressee, timestamp, thread identity, the edited body,
+and `1 revision; Current visible revision`. After soft-delete, the same card
+retained the responsibility projection and showed the removal timestamp,
+`historical evidence retained`, and explicit non-destructive tombstone wording.
+The authenticated API returned one revision, a non-null deletion timestamp,
+and one retained responsibility row across its 50 + 2 cursor pages. This
+closes the exercised one-edit/soft-delete/offscreen-fallback path. Commercial
+Assessor accepted that bounded installed path in project message #2825 after
+exact-head `d46151c` passed all required V1 CI jobs in run `35417530872`.
+Multiple edits, reply-parent tombstones, and other role-specific evidence paths
+remain future hardening rather than claims of this acceptance.
+
+The next exact-image installed probe exercised the owner-side Inbox at 1440 x
+1000 desktop and 390 x 844 mobile viewports with 52 direct requests. Both
+viewports had zero document-level horizontal overflow; the 330px mobile card
+and 352px canonical dialog stayed within the 390px viewport. Keyboard Enter
+opened the Inbox and evidence dialog, the dialog initially focused its Back
+action, Escape closed it, and focus returned to the exact evidence trigger.
+The Inbox exposed a named region and uniquely labelled view select; its status
+was a polite live region; the dialog was title-linked; and the empty candidate
+page explicitly retained the load-older continuation instead of claiming
+global exhaustion. No browser console errors occurred. After exact-head
+`0d9bc91` passed all required V1 CI jobs in run `35419811071`, Commercial
+Assessor accepted in project message #2827 the installed responsive/mobile
+usability and keyboard/focus/semantic-status behavior for the exercised
+owner-side path and declared the remaining required installed P1.2 usability
+matrix complete for the bounded V1 scope. This is not a WCAG conformance claim
+or accessibility certification. Named screen-reader speech,
+high-contrast/forced-colors, 200% zoom, an exhaustive browser/device matrix,
+and every actor role remain future hardening outside the accepted scope.
+
+Historical-baseline handling and a read-only migration preflight are described
+in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
+The Commercial Assessor recommended its non-inventive policy in message #2765,
+accepted the source/CI evidence in #2771, and accepted the exercised installed
+unknown-baseline presentation path in #2815. Broader historical-scale evidence
+remains open, and automatic backfill is not authorized.
+
 - [ ] Define the minimum explicit state needed to represent waiting, unresolved,
       resolved, blocked, and responsibility transfer without inferring it from
       acknowledgement time.
@@ -509,17 +690,24 @@ auditable timeline evidence and can be corrected without rewriting history.
 
 ### P1.2 Responsibility Inbox
 
-- [ ] Show work addressed to the current participant.
-- [ ] Show unacknowledged addressed work.
-- [ ] Show work waiting on another participant.
-- [ ] Show acknowledged but explicitly unresolved work.
-- [ ] Support filtering by project, participant, state, and age where useful.
-- [ ] Link every item to its canonical timeline message and context.
-- [ ] Provide clear empty, loading, stale, and error states.
-- [ ] Verify keyboard, screen-reader, desktop, and mobile usability.
+- [x] Show work addressed to the current participant.
+- [x] Show unacknowledged addressed work.
+- [x] Show work waiting on another participant.
+- [x] Show acknowledged but explicitly unresolved work.
+- [x] Support filtering by project, participant, state, and age where useful.
+- [x] Link every item to its canonical timeline message and context.
+- [x] Provide clear empty, loading, stale, and error states.
+- [x] Verify keyboard, screen-reader, desktop, and mobile usability within the
+      accepted bounded V1 scope; this is not a WCAG certification or an
+      exhaustive assistive-technology/browser/device matrix.
 
 **Exit evidence:** a normal user can determine what they own, what is waiting,
 and what needs attention without reconstructing a long chronological timeline.
+
+**V1 disposition:** the Commercial Assessor closed the remaining required
+installed P1.2 usability matrix for the bounded owner-side scope in project
+message #2827 after exact-head `0d9bc91` passed all required jobs in run
+`35419811071`. The narrower limitations recorded above remain future hardening.
 
 ### P1.3 Recent handoffs and compact context
 

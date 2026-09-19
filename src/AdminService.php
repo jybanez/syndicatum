@@ -212,8 +212,11 @@ class AdminService
             }
             $this->pdo->prepare("UPDATE project_agents SET status = ?, updated_at = ? WHERE agent_id = ?")
                 ->execute([$suspended ? 'suspended' : 'active', $now, (int) $agentId]);
-            $this->pdo->prepare("UPDATE project_participants SET status = ?, updated_at = ? WHERE agent_id = ?")
-                ->execute([$suspended ? 'suspended' : 'active', $now, (int) $agentId]);
+            $participantStatus = $suspended ? 'suspended' : 'active';
+            $this->pdo->prepare('UPDATE project_participants
+                SET status_generation = status_generation + CASE WHEN status <> ? THEN 1 ELSE 0 END,
+                    status = ?, updated_at = ? WHERE agent_id = ?')
+                ->execute([$participantStatus, $participantStatus, $now, (int) $agentId]);
             $this->auth->audit($actorUserId, $revokeToken ? 'agent.suspended_and_revoked' : 'agent.status_changed', 'agent', (string) ((int) $agentId), ['suspended' => (bool) $suspended]);
             $this->pdo->commit();
         } catch (Exception $exception) {

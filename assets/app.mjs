@@ -1,4 +1,6 @@
 import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
+import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
+import { showCanonicalEvidence } from "./responsibility-evidence.mjs";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
@@ -15,6 +17,8 @@ const API = {
   participants: "api/v1/project-participants.php",
   messages: "api/v1/project-messages.php",
   acknowledge: "api/v1/project-message-acknowledge.php",
+  responsibilityInbox: "api/v1/project-responsibility-inbox.php",
+  message: "api/v1/project-message.php",
   settings: "api/v1/admin/settings.php",
   integrationTest: "api/v1/admin/integration-test.php",
   profile: "api/v1/profile.php",
@@ -46,6 +50,7 @@ const state = {
   project: null,
   participants: [],
   messages: [],
+  projectView: "timeline",
   filters: { primary: "all", q: "", sender: "", from: "", to: "" },
   draft: { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
@@ -74,7 +79,8 @@ const el = Object.fromEntries([
   "participant-search", "project-actions-trigger", "project-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
-  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
+  "timeline-notice", "timeline-host", "timeline-scroll", "timeline-filter-bar", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
+  "project-view-switch", "show-timeline", "show-responsibility", "responsibility-host",
   "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
@@ -581,6 +587,7 @@ function renderIdentity() {
 
 function renderProjectHeader() {
   const project = state.project || {};
+  el.project_view_switch.hidden = state.mode !== "expanded";
   el.project_title.textContent = project.name || "PBB Coordination";
   el.project_description.textContent = project.description || (state.mode === "legacy" ? "The existing shared Syndicatum coordination timeline." : "No project description has been added yet.");
   const instructions = project.instructions || project.operating_instructions || "";
@@ -877,6 +884,7 @@ async function loadMessages(mode = "initial", generation = state.generation, mes
     const incoming = rows.map(normalizeMessage);
     const existing = new Set(state.messages.map((message) => message.id));
     const fresh = sortAndDedupe(incoming.filter((message) => !existing.has(message.id)));
+    if (mode === "newer" && fresh.length) state.components.responsibilityInbox?.markStale();
     const page = payload?.page || source?.page || payload?.meta?.page || {};
     if (mode === "initial") state.messages = sortAndDedupe(incoming);
     else state.messages = sortAndDedupe([...state.messages, ...incoming]);
@@ -1629,6 +1637,9 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   const generation = ++state.generation;
   const messageGeneration = ++state.messageGeneration;
   state.messages = [];
+  state.components.responsibilityInbox?.destroy();
+  state.components.responsibilityInbox = null;
+  state.projectView = "timeline";
   state.oldestCursor = "";
   state.newestCursor = "";
   state.hasOlder = false;
@@ -1662,6 +1673,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   setMobilePanel("right");
   updateApplicationRoute("project", state.project.public_id || nextId, historyMode);
   renderProjectHeader();
+  showProjectView("timeline");
   rebuildParticipantControls();
   renderComposerControls();
   await loadMessages("initial", generation, messageGeneration);
@@ -1699,6 +1711,7 @@ async function refreshParticipants(projectGeneration = state.generation) {
     || state.project.current_participant;
   const activeIds = new Set(state.participants.map((participant) => participant.id));
   state.draft.addressees = state.draft.addressees.filter((participantId) => activeIds.has(participantId));
+  state.components.responsibilityInbox?.markStale();
   rebuildParticipantControls();
 }
 
@@ -1847,6 +1860,86 @@ async function acknowledgeMessage(message) {
     state.components.toast.success("Message acknowledged.");
   } catch (error) {
     state.components.toast.warn(error.message, { title: "Acknowledgement failed" });
+  }
+}
+
+function showProjectView(view) {
+  if (state.mode !== "expanded" || state.surface !== "project") return;
+  state.projectView = view === "responsibility" ? "responsibility" : "timeline";
+  const inbox = state.projectView === "responsibility";
+  el.show_timeline.classList.toggle("is-active", !inbox);
+  el.show_responsibility.classList.toggle("is-active", inbox);
+  el.show_timeline.setAttribute("aria-pressed", String(!inbox));
+  el.show_responsibility.setAttribute("aria-pressed", String(inbox));
+  el.composer_shell.hidden = inbox || !can("messages.write");
+  el.timeline_filter_bar.hidden = inbox;
+  el.timeline_notice.hidden = inbox || !el.timeline_notice.textContent;
+  el.timeline_scroll.hidden = inbox;
+  el.responsibility_host.hidden = !inbox;
+  if (inbox && !state.components.responsibilityInbox) {
+    state.components.responsibilityInbox = createResponsibilityInbox(el.responsibility_host, {
+      participants: () => state.participants,
+      actorId: () => state.project?.current_participant?.id,
+      moderator: () => ["owner", "admin"].includes(state.project?.current_participant?.role),
+      newKey: makeIdempotencyKey,
+      async fetchPage(view, before) {
+        const query = new URLSearchParams({ project_id: selectedProjectId(), view, limit: "50" });
+        if (before) query.set("before", before);
+        return request(`${API.responsibilityInbox}?${query}`);
+      },
+      async writeEvent(body, responsibilityEvent, key) {
+        return request(`${API.messages}?${new URLSearchParams({ project_id: selectedProjectId() })}`, {
+          method: "POST",
+          headers: csrfHeaders({ "Idempotency-Key": key }),
+          body: JSON.stringify({ body, idempotency_key: key, responsibility_event: responsibilityEvent }),
+        });
+      },
+      async acknowledge(item) {
+        return request(`${API.acknowledge}?${new URLSearchParams({ project_id: selectedProjectId(), id: item.request_message_id })}`, {
+          method: "POST", headers: csrfHeaders(), body: JSON.stringify({}),
+        });
+      },
+      openMessage: (messageId) => void openResponsibilityMessage(messageId),
+    });
+    void state.components.responsibilityInbox.load();
+  }
+}
+
+async function openResponsibilityMessage(messageId) {
+  const projectId = selectedProjectId();
+  const generation = state.generation;
+  try {
+    const payload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: messageId })}`);
+    if (generation !== state.generation || projectId !== selectedProjectId()) return;
+    const message = normalizeMessage(unwrap(payload));
+    if (!message.id) throw new Error("The canonical message was unavailable.");
+    const existing = state.messages.findIndex((entry) => entry.id === message.id);
+    if (existing >= 0) {
+      state.messages[existing] = message;
+      renderTimeline();
+      const row = el.timeline_host.querySelector(`[data-item-id="${CSS.escape(message.id)}"]`);
+      if (row) {
+        showProjectView("timeline");
+        row.setAttribute("tabindex", "-1");
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+        row.focus({ preventScroll: true });
+        return;
+      }
+    }
+    let parent = null;
+    if (message.reply_to_message_id) {
+      try {
+        const parentPayload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: message.reply_to_message_id })}`);
+        if (generation !== state.generation || projectId !== selectedProjectId()) return;
+        parent = normalizeMessage(unwrap(parentPayload));
+      } catch (_error) { /* Keep the exact child evidence visible when parent context is unavailable. */ }
+    }
+    showCanonicalEvidence(message, { parent, onTimeline: () => {
+      showProjectView("timeline");
+      el.show_timeline.focus();
+    } });
+  } catch (error) {
+    state.components.toast.warn(error.message, { title: "Canonical message unavailable" });
   }
 }
 
@@ -2121,6 +2214,7 @@ function messageMatchesFilters(message) {
 function receiveRealtimeMessage(source) {
   const message = normalizeMessage(source);
   if (!message.id || state.messages.some((entry) => entry.id === message.id)) return;
+  state.components.responsibilityInbox?.markStale();
   const highest = state.messages.reduce((value, entry) => Math.max(value, Number(entry.sequence || 0)), 0);
   if (highest && message.sequence > highest + 1) {
     void loadMessages("newer").catch(handleLoadError);
@@ -2306,6 +2400,8 @@ async function bootstrap() {
     void reloadForFilters();
   });
   el.refresh_button.addEventListener("click", () => void reloadForFilters());
+  el.show_timeline.addEventListener("click", () => showProjectView("timeline"));
+  el.show_responsibility.addEventListener("click", () => showProjectView("responsibility"));
   el.edit_profile_button.addEventListener("click", openProfileModal);
   el.change_password_button.addEventListener("click", () => accountUsesNativePassword() ? openPasswordModal() : openAccountProfile());
   el.rename_workspace_button.addEventListener("click", openRenameWorkspaceModal);
