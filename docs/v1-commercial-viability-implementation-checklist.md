@@ -361,9 +361,11 @@ behavior; permissive local defaults alone are insufficient.
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
       acceptance. A green inventory scan is not security-gate evidence.
-      Commercial Assessor message 2851 approves exact-RC CRITICAL rows 1–7
-      (six `unreachable`, one `not_applicable`); rows 8–19 and the HIGH queue
-      remain under review, so the overall security-disposition gate stays open.
+      Commercial Assessor messages 2851–2853 approve all 19 exact-RC CRITICAL
+      rows (ten `unreachable`, nine `not_applicable`, no residual-risk
+      acceptance), closing the CRITICAL sub-gate. The prioritized HIGH queue,
+      external host/runtime minimums, and MySQL 5.7 EOL treatment remain open,
+      so the overall security-disposition gate stays open.
 - [x] Produce immutable release artifacts with checksums for RC1.
 - [x] Publish release notes and migration notes for RC1.
 - [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only
