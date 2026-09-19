@@ -1648,6 +1648,9 @@ function renderBackupRestoreSurface() {
             backupRestorePlaceholder("Latest backup", "Backup history will appear after verified backup creation is implemented.", "View backup history", [
               ["Last successful backup"], ["Verified restore point"], ["Storage target"],
             ]),
+            backupRestorePlaceholder("Recent operations", "Package retrieval, backup, and restore audit events will appear here after the Helper-backed operation service is connected.", "View audit events", [
+              ["Package retrieval"], ["Backup operation"], ["Restore operation"],
+            ]),
           );
           host.appendChild(grid);
         },
@@ -2143,6 +2146,11 @@ async function openSettings() {
       google_client_secret: "",
     },
     rows: [
+      [{ type: "text", content: "Installation identity" }],
+      [{ type: "text", content: "Preview only — identity is read-only and will be populated by the future installation-state service." }],
+      [{ type: "input", name: "installation_id", label: "Installation ID", placeholder: "Not yet available", disabled: true }, { type: "input", name: "installed_release", label: "Installed release", placeholder: "Not yet available", disabled: true }],
+      [{ type: "input", name: "installed_baseline", label: "Schema baseline", placeholder: "Not yet available", disabled: true }, { type: "input", name: "installation_provenance", label: "Release provenance", placeholder: "Not yet available", disabled: true }],
+      [{ type: "divider" }],
       [{ type: "text", content: "General and messaging" }],
       [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
       [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],

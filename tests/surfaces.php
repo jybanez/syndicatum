@@ -341,6 +341,9 @@ try {
         $suite->true(strpos($source, 'stateLabel.textContent = "Not yet available";') !== false, 'Unavailable operations must be explicitly identified.');
         $suite->true(strpos($source, 'action.disabled = true;') !== false, 'Placeholder operation buttons must remain disabled.');
         $suite->true(strpos($source, 'No package, backup, or restore command can be run from this preview.') !== false, 'The preview needs a non-deceptive capability boundary.');
+        $suite->true(strpos($source, 'Package retrieval, backup, and restore audit events will appear here') !== false, 'The overview must reserve an honest recent-operations audit state.');
+        $suite->true(strpos($source, 'content: "Installation identity"') !== false && strpos($source, 'name: "installation_id"') !== false, 'Settings must expose the installation identity area.');
+        $suite->true(strpos($source, 'identity is read-only and will be populated by the future installation-state service') !== false, 'Settings identity placeholders must identify their service boundary.');
         $suite->true(strpos($source, 'API.adminBackup') === false && strpos($source, 'API.adminRestore') === false, 'The UI-first slice must not invent backend endpoints.');
         $suite->true(strpos($styles, '.backup-restore-overview-grid') !== false, 'The preview needs responsive workflow layout styling.');
     });
