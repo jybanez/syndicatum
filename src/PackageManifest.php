@@ -21,6 +21,11 @@ class PackageManifest
         if (!is_string($json) || trim($json) === '') {
             throw new InvalidArgumentException('Package manifest JSON is required.');
         }
+        $wire = json_decode($json, false, 64, JSON_BIGINT_AS_STRING);
+        if (!($wire instanceof stdClass) || json_last_error() !== JSON_ERROR_NONE) {
+            throw new InvalidArgumentException('Package manifest JSON must be an object.');
+        }
+        self::assertWireManifestShape($wire);
         $decoded = json_decode($json, true, 64, JSON_BIGINT_AS_STRING);
         if (!is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
             throw new InvalidArgumentException('Package manifest JSON is invalid.');
@@ -90,7 +95,7 @@ class PackageManifest
         if (!is_string($path) || $path === '' || strlen($path) > 1024 || strpos($path, "\0") !== false) {
             throw new InvalidArgumentException($field . ' is not a safe relative path.');
         }
-        if ($path[0] === '/' || strpos($path, '\\') !== false || strpos($path, ':') !== false || preg_match('/\A[A-Za-z]:/', $path)
+        if ($path[0] === '/' || strpos($path, '\\') !== false || strpos($path, ':') !== false || preg_match('/[<>"|?*]/', $path)
             || preg_match('/[^\x20-\x7E]/', $path)) {
             throw new InvalidArgumentException($field . ' is not a safe relative path.');
         }
@@ -371,6 +376,50 @@ class PackageManifest
             if (!is_string($key) || !isset($lookup[$key])) {
                 throw new InvalidArgumentException($label . ' contains an unsupported field: ' . (string) $key);
             }
+        }
+    }
+
+    private static function assertWireManifestShape(stdClass $manifest)
+    {
+        self::assertWireListProperty($manifest, 'required_capabilities', 'required_capabilities');
+        self::assertWireListProperty($manifest, 'supported_upgrade_sources', 'supported_upgrade_sources');
+        self::assertWireListProperty($manifest, 'files', 'files');
+        self::assertWireObjectProperty($manifest, 'compatibility', 'compatibility');
+
+        if (isset($manifest->compatibility) && $manifest->compatibility instanceof stdClass) {
+            self::assertWireObjectProperty($manifest->compatibility, 'php', 'compatibility.php');
+            self::assertWireObjectProperty($manifest->compatibility, 'mysql', 'compatibility.mysql');
+            if (isset($manifest->compatibility->php) && $manifest->compatibility->php instanceof stdClass) {
+                self::assertWireListProperty($manifest->compatibility->php, 'extensions', 'compatibility.php.extensions');
+            }
+            if (isset($manifest->compatibility->mysql) && $manifest->compatibility->mysql instanceof stdClass) {
+                self::assertWireListProperty($manifest->compatibility->mysql, 'sql_modes', 'compatibility.mysql.sql_modes');
+            }
+        }
+
+        foreach (['supported_upgrade_sources', 'files'] as $field) {
+            if (!isset($manifest->{$field}) || !is_array($manifest->{$field})) {
+                continue;
+            }
+            foreach ($manifest->{$field} as $index => $entry) {
+                if (!($entry instanceof stdClass)) {
+                    throw new InvalidArgumentException($field . '[' . $index . '] must be a JSON object.');
+                }
+            }
+        }
+    }
+
+    private static function assertWireListProperty(stdClass $object, $field, $label)
+    {
+        if (property_exists($object, $field) && !is_array($object->{$field})) {
+            throw new InvalidArgumentException($label . ' must be a JSON list.');
+        }
+    }
+
+    private static function assertWireObjectProperty(stdClass $object, $field, $label)
+    {
+        if (property_exists($object, $field) && !($object->{$field} instanceof stdClass)) {
+            throw new InvalidArgumentException($label . ' must be a JSON object.');
         }
     }
 

@@ -35,5 +35,15 @@ verify_fixture(
     "1439d469f535dfeadd0351a2f4b64ee7b626dad81f3cc6a1f8e776834ed7d7cd",
     ["path", "type", "role", "mode", "size", "sha256"],
 )
+verify_fixture(
+    "canonical-inventory-helper-role-reference.jsonl",
+    "0360cff4f62a664df3c2a552e0d200cdf684586bf65a3895fe930872bed8dd42",
+    ["path", "type", "role", "mode", "size", "sha256"],
+)
+verify_fixture(
+    "canonical-inventory-v1-single.jsonl",
+    "a3451d1a2752e46c566116e83ad2caee65d6ccc9f7d828ce73f6a2fe9ac09723",
+    ["path", "type", "role", "mode", "size", "sha256"],
+)
 
 print("Independent canonical inventory golden fixtures passed")

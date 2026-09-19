@@ -78,9 +78,9 @@ if (PackageManifest::calculateContentTreeSha256($goldenFiles) !== '1439d469f535d
 }
 
 $escapedBytes = PackageManifest::canonicalContentTreeBytes([
-    ['path' => 'app/quote"name.txt', 'type' => 'file', 'role' => 'application', 'mode' => 0644, 'size' => 0, 'sha256' => str_repeat('d', 64)],
+    ['path' => 'app/portable name-[1].txt', 'type' => 'file', 'role' => 'application', 'mode' => 0644, 'size' => 0, 'sha256' => str_repeat('d', 64)],
 ]);
-$escapedExpected = '{"path":"app/quote\\"name.txt","type":"file","role":"application","mode":"0644","size":0,"sha256":"' . str_repeat('d', 64) . '"}' . "\n";
+$escapedExpected = '{"path":"app/portable name-[1].txt","type":"file","role":"application","mode":"0644","size":0,"sha256":"' . str_repeat('d', 64) . '"}' . "\n";
 if ($escapedBytes !== $escapedExpected) {
     packageContractFail('Canonical inventory JSON escaping changed.');
 }
@@ -125,6 +125,36 @@ packageContractThrows(function () {
 packageContractThrows(function () {
     PackageManifest::parse('{"contract_name":"syndicatum-package","nested":{"kind":"release","\\u006bind":"backup"}}');
 }, 'Escaped duplicate nested manifest keys must be rejected.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['files'] = (object) $manifest['files'];
+    PackageManifest::parse(json_encode($manifest));
+}, 'Numeric-key JSON objects cannot masquerade as the files list.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['required_capabilities'] = (object) [];
+    PackageManifest::parse(json_encode($manifest));
+}, 'An empty JSON object cannot masquerade as required_capabilities.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['compatibility']['php']['extensions'] = (object) $manifest['compatibility']['php']['extensions'];
+    PackageManifest::parse(json_encode($manifest));
+}, 'A JSON object cannot masquerade as compatibility extensions.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['compatibility']['mysql']['sql_modes'] = (object) [];
+    PackageManifest::parse(json_encode($manifest));
+}, 'An empty JSON object cannot masquerade as SQL modes.');
+
+packageContractThrows(function () {
+    $manifest = validManifest();
+    $manifest['supported_upgrade_sources'] = (object) [];
+    PackageManifest::parse(json_encode($manifest));
+}, 'An empty JSON object cannot masquerade as supported upgrade sources.');
 
 packageContractThrows(function () {
     $manifest = validManifest();
@@ -192,6 +222,20 @@ foreach (['data/payload.php:stream', 'data/payload.php.', 'data/.htaccess', 'dat
         PackageManifest::validate($manifest);
     }, 'Unsafe backup path must be rejected: ' . $unsafeBackupPath);
 }
+
+foreach (['data/a?.txt', 'data/a*.txt', 'data/a|b.txt', 'data/a"b.txt', 'data/a<b.txt', 'data/a>b.txt'] as $unsafePortablePath) {
+    packageContractThrows(function () use ($unsafePortablePath) {
+        $manifest = validManifest('backup');
+        $manifest['files'][0]['path'] = $unsafePortablePath;
+        $manifest['content_tree_sha256'] = PackageManifest::calculateContentTreeSha256($manifest['files']);
+        PackageManifest::validate($manifest);
+    }, 'Windows-invalid portable path must be rejected: ' . $unsafePortablePath);
+}
+
+$portableControl = validManifest('backup');
+$portableControl['files'][0]['path'] = 'data/customer_records-2026.09.txt';
+$portableControl['content_tree_sha256'] = PackageManifest::calculateContentTreeSha256($portableControl['files']);
+PackageManifest::validate($portableControl);
 
 packageContractThrows(function () {
     $manifest = validManifest();
