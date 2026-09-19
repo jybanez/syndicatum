@@ -51,6 +51,12 @@ networks, and volumes. It verified:
 Exact-head CI repeated this clean-install lifecycle from a checksummed archive
 and retained the archive checksum and acceptance log. The separately recorded
 [MySQL 5.7-to-8.4 migration acceptance](mysql-5.7-to-8.4-migration-acceptance-2026-09-19.md)
-now exercises the logical export/restore transition. That migration record is
-still preliminary until its exact-head CI job passes; neither result authorizes
-production migration or changes the V1.0.0 clean-install-only support promise.
+exercises the logical export/restore transition. PR and protected-main CI have
+now repeated both paths from checksummed archives, and the Commercial Assessor
+closed both database sub-gates for their documented scope. Neither result
+authorizes production migration or changes the V1.0.0 clean-install-only
+support promise.
+
+The dedicated [MySQL 8.4 image security inventory](mysql-8.4-security-inventory-2026-09-19.md)
+records the exact candidate image and its remaining package findings. A
+successful inventory is evidence collection, not security approval.
