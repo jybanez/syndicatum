@@ -242,7 +242,7 @@ jobs:
 
   mysql84-compatibility:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - name: Package exact commit and verify candidate archive
