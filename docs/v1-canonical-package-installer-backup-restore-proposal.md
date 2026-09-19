@@ -1,8 +1,8 @@
 # Syndicatum V1 Canonical Package, Web Installer, Backup, and Restore Proposal
 
-**Status:** Proposed for owner review; no implementation authorized  
-**Prepared:** 2026-09-20  
-**Architecture reference:** protected `main` at `f7e9497d0d08955c3bcc6fc35085725429f46bfd`  
+**Status:** Proposed for owner review; no implementation authorized
+**Prepared:** 2026-09-20
+**Architecture reference:** protected `main` at `f7e9497d0d08955c3bcc6fc35085725429f46bfd`
 **Decision record:** Syndicatum messages #2930, #2931, and #2933
 
 ## Executive summary
@@ -730,4 +730,3 @@ If approved:
 5. resume the Docker external-host gate only after adapter equivalence is proven.
 
 If not approved, no code or release-policy state should change, and the previous Docker-first external-host gate remains the active path.
-
