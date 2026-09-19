@@ -125,6 +125,11 @@ The ZIP cannot contain its own ZIP checksum because that would be self-referenti
 
 Unknown package-format major versions are rejected. A reader may ignore explicitly optional fields introduced in a compatible minor version, but never ignores a new package kind, required capability, or unknown security rule.
 
+### Canonical content-tree byte contract
+
+V1 hashes the UTF-8, no-BOM bytes of a canonical JSON-lines inventory. Each file produces exactly one JSON object followed by a mandatory LF byte, including the final record. Keys appear in this exact order: `path,type,role,mode,size,sha256`. Paths are already-normalized ASCII relative paths and are sorted using bytewise `strcmp` order; the serializer never rewrites them. `role` is the closed V1 package-entry role, `mode` is a four-character lowercase octal string such as `0644`, `size` is a decimal JSON integer, and `sha256` is lowercase 64-character hexadecimal. JSON uses standard escaping with unescaped forward slashes. Empty inventories, unordered or aliasing paths, uppercase digests, and undeclared entry fields fail closed. A checked-in golden JSON-lines fixture and digest are exercised on Linux/PHP 8.2 and Windows/PHP 7.4.
+
+
 ### Deterministic build rules
 
 Trusted CI builds the ZIP from an exact protected tag with:
@@ -391,6 +396,19 @@ All durable business and audit data required for recovery is retained. On restor
 - durable delivery/audit history remains available.
 
 The final table classification must be generated from the baseline and reviewed as an explicit artifact. Unknown tables fail the backup rather than being silently skipped.
+
+### Trusted baseline recovery policy
+
+The trusted release baseline—not the backup—defines the target schema and table policies. Backup metadata may identify its released baseline/schema head to select a supported path, but it cannot introduce DDL or reclassify tables.
+
+V1 freezes three table policies:
+
+- `durable`: data is portable and restored; metadata requires a unique restore order, non-empty identity columns, an explicit `preserve` or `recompute` sequence-state rule, and closed-enum integrity checks.
+- `reset`: schema exists but live contents are rebuilt using one declared strategy: `truncate`, `recreate_default_row`, `regenerate_on_start`, or `rebuild_from_durable_state`.
+- `excluded`: data is outside portable recovery; metadata requires a reason (`environment_local`, `security_local`, `non_portable`, or `deprecated`) and a target expectation (`absent`, `empty`, `locally_initialized`, or `operator_supplied`).
+
+The policy map must exactly match the trusted baseline schema inventory. Duplicate tables, restore-order collisions, unknown integrity/reset/exclusion values, migration ID or digest reuse, and parent-after-child foreign-key restore order fail closed. Baseline metadata is versioned and published release identity is immutable.
+
 
 ### Backup encryption envelope
 
@@ -728,18 +746,6 @@ These do not block the architectural decision but must be resolved during Phase 
 - Release notes must declare the package format, baseline, supported installation paths, supported upgrade sources, and restore limitations.
 - A package-era release is not ready merely because CI builds a ZIP. It must pass published-artifact installation, encrypted backup, staged restore, adapter-equivalence, and Assessor review.
 
-## Recommended owner decision
+## Owner decision recorded
 
-Approve the architecture and authorize Phase 1 only: package contract, threat model, payload/table classification, fixtures, and acceptance-test skeletons.
-
-This is a go/no-go decision on the direction, not authorization to ship or to claim the V1 deployment gate is closed. After Phase 1 produces an exact contract, each implementation phase should proceed in a focused branch with evidence-backed Commercial Assessor review before merge.
-
-If approved:
-
-1. record this proposal as the new Phase 0 deployment/release plan;
-2. keep the external-host Docker acceptance gate paused;
-3. implement the package/baseline contract before installer UI or backup code;
-4. preserve all existing CI, security, migration, and RC1 evidence;
-5. resume the Docker external-host gate only after adapter equivalence is proven.
-
-If not approved, no code or release-policy state should change, and the previous Docker-first external-host gate remains the active path.
+Jonathan approved the refactor in Syndicatum message #2957 and superseded the original contracts-before-UI sequence. Implementation is UI-first with explicit, non-deceptive placeholders, then Helper-first services beneath those surfaces, followed by package/baseline, encrypted backup/staged restore, and finally Docker adapter integration. The external-host Docker gate remains paused until adapter equivalence is proven. Existing CI, security, migration, and RC1 evidence remains immutable, and no placeholder may claim that a real install, package retrieval, checksum verification, backup, or restore has completed.
