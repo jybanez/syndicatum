@@ -1,10 +1,14 @@
 # V1 container security acceptance table
 
 **Status:** Exact-RC CRITICAL review is closed (19/19), as are the bounded
-bundled-`gosu` and application-`libcurl4` HIGH tranches. No residual risk is
-accepted by this table. The remaining HIGH/package review and the overall
-security-disposition gate remain open. This is a release-gate record, not a
-claim that package presence proves practical exploitability.
+bundled-`gosu` and application-`libcurl4` HIGH tranches. The subsequent-release
+MySQL 8.4 image-security tranche is also closed: fixed OpenSSL/libevent package
+versions replace the vulnerable versions, unused `mysql-shell` and its private
+Python environment are absent, and the exact remaining `gosu` CRITICAL/HIGH
+rows are approved `not_applicable` for the reviewed binary. No residual risk is
+accepted by this table. External host/runtime acceptance and the overall
+external-promotion gate remain open. This is a release-gate record, not a claim
+that package presence proves practical exploitability.
 Source secret/dependency scan results are tracked separately in
 [`v1-security-inventory-2026-09-18.md`](v1-security-inventory-2026-09-18.md).
 
@@ -25,6 +29,15 @@ dispositions below reconcile the exact RC rows with the published source,
 pinned-image contents, official Debian/Go advisories, and the prior binary
 analysis. The CRITICAL dispositions were approved in Syndicatum messages
 2851–2853; none is an owner acceptance of residual risk.
+The MySQL 8.4 successor-image evidence is recorded separately in
+[`mysql-8.4-security-inventory-2026-09-19.md`](mysql-8.4-security-inventory-2026-09-19.md).
+Commercial Assessor messages 2883 and 2885 close that exact image-security
+scope with zero residual-risk acceptances. PR 9 merged the reviewed head to
+protected main as `9b564fc514451af9784fd72b5e8657a7b24c4ca1`; main-push run
+[35452115230](https://github.com/jybanez/syndicatum/actions/runs/35452115230)
+passed source, source-security, MySQL 5.7 lifecycle, MySQL 8.4 lifecycle/image
+inventory, and 5.7-to-8.4 migration jobs. This does not alter RC1 provenance
+and does not approve the external Docker/containerd/runc/kernel host stack.
 The earlier process probe in [PR CI run 35261244225](https://github.com/jybanez/syndicatum/actions/runs/35261244225)
 recorded one UID 0 Apache master with three effective capabilities. The later
 [PR CI run 35264623906](https://github.com/jybanez/syndicatum/actions/runs/35264623906)

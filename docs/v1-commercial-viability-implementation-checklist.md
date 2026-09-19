@@ -372,9 +372,15 @@ behavior; permissive local defaults alone are insufficient.
       not the branch head in isolation. PR 8 then merged through protected main
       as `27d8010`; main-push run 35442123805 passed source, security inventory,
       5.7 lifecycle, 8.4 clean install, and 5.7-to-8.4 migration jobs. The
-      **external host/runtime baseline** and **overall external promotion**
-      gates remain open; RC1 remains the immutable 5.7.44 internal candidate,
-      and the merged 8.4 work belongs to a subsequent release chain.
+      subsequent MySQL 8.4 image-hardening work merged through protected main
+      as `9b564fc` after exact-head run 35449991246 and passed main-push run
+      35452115230. It pins fixed OpenSSL/libevent packages, removes unused
+      `mysql-shell` and its private Python environment, and leaves only the
+      exact `gosu` CRITICAL/HIGH tranche approved `not_applicable` by the
+      Commercial Assessor in messages 2883 and 2885. The **external
+      host/runtime baseline** and **overall external promotion** gates remain
+      open; RC1 remains the immutable 5.7.44 internal candidate, and the merged
+      8.4 work belongs to a subsequent release chain.
 - [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
@@ -386,10 +392,14 @@ behavior; permissive local defaults alone are insufficient.
       one `unreachable`, no residual-risk acceptance), closing that bundled-
       helper sub-gate. Message 2871 approves all five application `libcurl4`
       HIGH rows (one `not_applicable`, four `unreachable`, no residual-risk
-      acceptance), closing that exact-call-contract sub-gate. The remaining
-      prioritized HIGH queue,
-      external host/runtime minimums, and MySQL 5.7 EOL treatment remain open,
-      so the overall security-disposition gate stays open.
+      acceptance), closing that exact-call-contract sub-gate. Messages 2883
+      and 2885 close the future MySQL 8.4 image-security tranche after fixed
+      OpenSSL/libevent package refresh, removal of unused `mysql-shell` Python
+      tooling, and exact-binary `gosu` review; protected-main run 35452115230
+      verifies that result after PR 9 merged as `9b564fc`. Residual-risk
+      acceptances remain zero. MySQL 5.7 stays confined to immutable internal
+      RC1 evidence; the external host/runtime minimums and overall external
+      promotion gate remain open.
 - [ ] Approve and automate the
       [external host/runtime baseline](v1-external-host-runtime-baseline.md),
       including Docker/Compose, maintained containerd/runc, supported OS/kernel,
