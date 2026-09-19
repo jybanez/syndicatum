@@ -801,10 +801,35 @@ final class ArchiveSafetyReader
             || !is_int($owner) || $owner !== posix_geteuid()) {
             throw new InvalidArgumentException('Trusted staging root must be a non-symlink directory owned by this process with no group/world access.');
         }
+        $this->assertStableDirectoryChain($staging);
         if ($this->pathIsWithin($staging, $public) || $this->pathIsWithin($public, $staging)) {
             throw new InvalidArgumentException('Archive staging and public web roots must be fully disjoint.');
         }
         return rtrim($staging, DIRECTORY_SEPARATOR);
+    }
+
+    private function assertStableDirectoryChain($path)
+    {
+        $effectiveUser = posix_geteuid();
+        $current = $path;
+        while (true) {
+            $stat = @lstat($current);
+            if (!is_array($stat) || (($stat['mode'] & 0170000) !== 0040000)) {
+                throw new InvalidArgumentException('Trusted staging path must have a stable non-symlink directory chain.');
+            }
+            $owner = isset($stat['uid']) ? $stat['uid'] : @fileowner($current);
+            if (!is_int($owner) || ($owner !== 0 && $owner !== $effectiveUser)) {
+                throw new InvalidArgumentException('Trusted staging ancestors must be owned by root or the extraction process user.');
+            }
+            $writableByOthers = ($stat['mode'] & 0022) !== 0;
+            $sticky = ($stat['mode'] & 01000) !== 0;
+            if ($writableByOthers && !$sticky) {
+                throw new InvalidArgumentException('Trusted staging ancestors must not permit untrusted rename or replacement.');
+            }
+            $parent = dirname($current);
+            if ($parent === $current) { break; }
+            $current = $parent;
+        }
     }
 
     private function pathIsWithin($candidate, $parent)

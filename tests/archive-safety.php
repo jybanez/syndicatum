@@ -463,6 +463,46 @@ if (DIRECTORY_SEPARATOR === '\\') {
         archiveFail('Unable to create extraction test roots.');
     }
     try {
+        $insidePublic = $publicRoot . DIRECTORY_SEPARATOR . 'private-stage';
+        mkdir($insidePublic, 0700);
+        archiveRejects(function () use ($reader, $releaseEntries, $releaseManifest, $insidePublic, $publicRoot) {
+            $path = writeRawZip($releaseEntries); $json = manifestJson($releaseManifest);
+            try {
+                $reader->extractToNewStage(
+                    $path, $json, archiveContext('release', hash_file('sha256', $path), $json), $insidePublic, $publicRoot
+                );
+            } finally { @unlink($path); }
+        }, 'A staging root inside the public web root must fail before mutation.');
+        @rmdir($insidePublic);
+
+        $stagingAlias = $testRoot . DIRECTORY_SEPARATOR . 'staging-alias';
+        if (!symlink($publicRoot, $stagingAlias)) { archiveFail('Unable to create staging alias fixture.'); }
+        archiveRejects(function () use ($reader, $releaseEntries, $releaseManifest, $stagingAlias, $publicRoot) {
+            $path = writeRawZip($releaseEntries); $json = manifestJson($releaseManifest);
+            try {
+                $reader->extractToNewStage(
+                    $path, $json, archiveContext('release', hash_file('sha256', $path), $json), $stagingAlias, $publicRoot
+                );
+            } finally { @unlink($path); }
+        }, 'A staging symlink resolving inside the public web root must fail before mutation.');
+        @unlink($stagingAlias);
+
+        $unstableParent = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-unstable-' . bin2hex(random_bytes(8));
+        $unstableStage = $unstableParent . DIRECTORY_SEPARATOR . 'private';
+        mkdir($unstableParent, 0700); chmod($unstableParent, 0777); mkdir($unstableStage, 0700);
+        try {
+            archiveRejects(function () use ($reader, $releaseEntries, $releaseManifest, $unstableStage, $publicRoot) {
+                $path = writeRawZip($releaseEntries); $json = manifestJson($releaseManifest);
+                try {
+                    $reader->extractToNewStage(
+                        $path, $json, archiveContext('release', hash_file('sha256', $path), $json), $unstableStage, $publicRoot
+                    );
+                } finally { @unlink($path); }
+            }, 'A non-sticky group/world-writable staging ancestor must fail before mutation.');
+        } finally {
+            @rmdir($unstableStage); @chmod($unstableParent, 0700); @rmdir($unstableParent);
+        }
+
         $path = writeRawZip($releaseEntries);
         $json = manifestJson($releaseManifest);
         try {
@@ -474,7 +514,10 @@ if (DIRECTORY_SEPARATOR === '\\') {
         }
         if (!($stage instanceof ArchiveExtractionStage)
             || file_get_contents($stage->path() . '/app/index.php') !== $releasePayloads['app/index.php']['content']
-            || file_get_contents($stage->path() . '/metadata/build.json') !== $releasePayloads['metadata/build.json']['content']) {
+            || file_get_contents($stage->path() . '/metadata/build.json') !== $releasePayloads['metadata/build.json']['content']
+            || (fileperms($stage->path()) & 0777) !== 0700
+            || (fileperms($stage->path() . '/app') & 0777) !== 0700
+            || (fileperms($stage->path() . '/app/index.php') & 0777) !== 0644) {
             archiveFail('Controlled release extraction did not preserve accepted bytes.');
         }
         @unlink($stage->path() . '/app/index.php');

@@ -28,6 +28,14 @@ The trusted staging root must:
 - be writable by the process;
 - be canonically disjoint from the public web root in both directions.
 
+The complete canonical chain from the staging root to the filesystem root is
+also checked. Every component must be a real directory owned by root or the
+effective process user. Group/world-writable ancestors are rejected unless the
+sticky bit supplies the POSIX rename boundary. This admits the conventional
+root-owned sticky `/tmp` test parent and the intended root-owned Docker chain,
+while rejecting a writable non-sticky parent that lets another UID rename the
+private leaf and replace it with a symlink.
+
 Docker provides `/var/lib/syndicatum/staging`, owned by `www-data` with mode
 `0700`; the web root remains `/var/www/html`. Archive snapshots for extraction
 are created inside this trusted root with mode `0600`.
@@ -73,7 +81,11 @@ The archive contract suite proves:
 - Windows controlled extraction is rejected;
 - release extraction preserves accepted bytes;
 - backup extraction preserves accepted bytes and forces mode `0600`;
-- staging/public root overlap is rejected;
+- the stage and created directories remain `0700`, while release files receive
+  only their validated safe mode;
+- staging/public equality, nesting, and realpath/symlink aliasing are rejected;
+- a non-sticky group/world-writable staging ancestor is rejected before any
+  snapshot or stage mutation;
 - injected inaccessible-parent snapshot deletion failure prevents success and
   preserves the residual path for remediation;
 - validation remains side-effect free and cross-platform;
