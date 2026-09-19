@@ -265,6 +265,22 @@ button, input, textarea { font: inherit; }
 .admin-surface { min-height: 0; overflow: auto; padding: 20px; box-sizing: border-box; align-self: stretch; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-panel); box-shadow: var(--app-shadow); }
 .admin-card { display: grid; gap: 7px; padding: 15px; }
 .admin-card p { margin: 0; color: var(--app-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.backup-restore-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px; }
+.backup-restore-intro h2, .backup-restore-operation h2 { margin: 0; }
+.backup-restore-intro .ui-eyebrow { margin: 0 0 6px; }
+.backup-restore-intro p:not(.ui-eyebrow), .backup-restore-operation p, .backup-restore-note { margin: 7px 0 0; color: var(--app-muted); line-height: 1.5; }
+.backup-restore-preview-status, .backup-restore-unavailable { flex: 0 0 auto; }
+.backup-restore-note { padding: 0 4px; }
+.backup-restore-tabs { min-width: 0; }
+.backup-restore-tabs .ui-tabpanel { padding-top: 16px; }
+.backup-restore-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.backup-restore-operation { display: grid; align-content: start; gap: 16px; padding: 18px; }
+.backup-restore-operation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.backup-restore-details { display: grid; grid-template-columns: minmax(140px, max-content) minmax(0, 1fr); gap: 8px 16px; margin: 0; padding: 14px 0; border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
+.backup-restore-details dt { color: var(--app-muted); }
+.backup-restore-details dd { margin: 0; overflow-wrap: anywhere; }
+.backup-restore-operation .ui-button { justify-self: start; }
+.backup-restore-operation .ui-button:disabled { cursor: not-allowed; opacity: .58; }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
 .connection-label { color: var(--app-muted); font-size: 12px; }
 
@@ -312,6 +328,7 @@ button, input, textarea { font: inherit; }
   .surface-column { display: none; border-radius: 16px; }
   .surface-column.is-mobile-active { display: block; }
   .project-messages-column.is-mobile-active { display: grid; }
+  .backup-restore-overview-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 640px) {
@@ -325,4 +342,7 @@ button, input, textarea { font: inherit; }
   .message-card-header time { white-space: normal; text-align: right; }
   .message-card-footer { align-items: stretch; }
   .message-actions { width: 100%; justify-content: flex-end; }
+  .backup-restore-intro, .backup-restore-operation-heading { display: grid; }
+  .backup-restore-details { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .backup-restore-details dd { margin-bottom: 8px; }
 }

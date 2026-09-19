@@ -226,7 +226,7 @@ function applicationPath(path = "") {
 
 function routeForSurface(surface, projectId = "") {
   if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
-  if (["users", "agents", "audit", "delivery-health"].includes(surface)) return applicationPath(surface);
+  if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(surface)) return applicationPath(surface);
   return applicationPath();
 }
 
@@ -239,7 +239,7 @@ function currentApplicationRoute() {
     try { return { surface: "project", projectId: decodeURIComponent(parts[1]) }; }
     catch (_error) { return { surface: "workspace", projectId: "" }; }
   }
-  if (["users", "agents", "audit", "delivery-health"].includes(parts[0])) return { surface: parts[0], projectId: "" };
+  if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(parts[0])) return { surface: parts[0], projectId: "" };
   const legacyProjectId = new URLSearchParams(location.search).get("project") || "";
   return legacyProjectId ? { surface: "project", projectId: legacyProjectId } : { surface: "workspace", projectId: "" };
 }
@@ -321,6 +321,7 @@ function mountNavbar() {
   if (state.mode === "expanded" && capability("admin.agents")) items.push({ id: "agents", label: "Agents", icon: helperIconHtml("comms.radio"), className: "ui-button-borderless" });
   if (state.mode === "expanded" && capability("admin.audit")) items.push({ id: "audit", label: "Audit", icon: helperIconHtml("time.history"), className: "ui-button-borderless" });
   if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "delivery-health", label: "Delivery health", icon: helperIconHtml("actions.settings"), className: "ui-button-borderless" });
+  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "backup-restore", label: "Backup / Restore", icon: helperIconHtml("actions.download"), className: "ui-button-borderless" });
   const actions = [];
   if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) actions.push({
     id: "settings",
@@ -377,7 +378,7 @@ function mountNavbar() {
     mobileLayout: "scroll",
     onNavigate(item) {
       if (item?.id === "brand" || item?.id === "workspace") showWorkspaceSurface();
-      else if (["users", "agents", "audit", "delivery-health"].includes(item?.id)) void showAdminSurface(item.id);
+      else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
     },
     onAction(action) { if (action?.id === "settings") void openSettings(); },
     onActionMenuSelect(_action, item) {
@@ -934,7 +935,7 @@ function setSurface(name) {
   state.surface = name;
   el.workspace_surface.hidden = name !== "workspace";
   el.project_surface.hidden = name !== "project";
-  el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health"].includes(name);
+  el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health", "backup-restore"].includes(name);
   el.mobile_panel_switcher.hidden = !["workspace", "project"].includes(name);
   const labels = name === "project" ? ["Participants", "Timeline"] : ["Profile", "Projects"];
   panelButtons.forEach((button, index) => { button.textContent = labels[index] || button.textContent; });
@@ -1568,11 +1569,142 @@ function adminRows(payload, kind) {
   return Array.isArray(rows) ? rows : [];
 }
 
+function backupRestorePlaceholder(titleText, descriptionText, actionLabel, details = []) {
+  const panel = document.createElement("section");
+  panel.className = "backup-restore-operation ui-panel";
+  const heading = document.createElement("div");
+  heading.className = "backup-restore-operation-heading";
+  const copy = document.createElement("div");
+  const title = document.createElement("h2");
+  title.textContent = titleText;
+  const description = document.createElement("p");
+  description.textContent = descriptionText;
+  copy.append(title, description);
+  const stateLabel = document.createElement("span");
+  stateLabel.className = "ui-badge backup-restore-unavailable";
+  stateLabel.textContent = "Not yet available";
+  heading.append(copy, stateLabel);
+  panel.appendChild(heading);
+  if (details.length) {
+    const list = document.createElement("dl");
+    list.className = "backup-restore-details";
+    details.forEach(([label, value = "Not yet available"]) => {
+      const term = document.createElement("dt"); term.textContent = label;
+      const detail = document.createElement("dd"); detail.textContent = value;
+      list.append(term, detail);
+    });
+    panel.appendChild(list);
+  }
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = "ui-button ui-button-primary";
+  action.disabled = true;
+  action.setAttribute("aria-describedby", "backup-restore-preview-note");
+  action.textContent = actionLabel;
+  panel.appendChild(action);
+  return panel;
+}
+
+function renderBackupRestoreSurface() {
+  el.admin_list.replaceChildren();
+  const intro = document.createElement("section");
+  intro.className = "backup-restore-intro ui-panel";
+  const introCopy = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "ui-eyebrow";
+  eyebrow.textContent = "UI preview";
+  const title = document.createElement("h2");
+  title.textContent = "Installation portability and recovery";
+  const description = document.createElement("p");
+  description.textContent = "Review the planned package, backup, and restore workflows. Operations remain disabled until the Helper-backed service and verification contracts are connected.";
+  introCopy.append(eyebrow, title, description);
+  const status = document.createElement("span");
+  status.className = "ui-badge backup-restore-preview-status";
+  status.textContent = "Preview only";
+  intro.append(introCopy, status);
+
+  const note = document.createElement("p");
+  note.id = "backup-restore-preview-note";
+  note.className = "backup-restore-note";
+  note.textContent = "No package, backup, or restore command can be run from this preview.";
+
+  const tabsHost = document.createElement("div");
+  tabsHost.className = "backup-restore-tabs";
+  el.admin_list.append(intro, note, tabsHost);
+  state.components.adminTabs = state.factories.createTabs(tabsHost, {
+    ariaLabel: "Backup and restore workflows",
+    activeId: "overview",
+    tabs: [
+      {
+        id: "overview",
+        label: "Overview",
+        render(host) {
+          const grid = document.createElement("div");
+          grid.className = "backup-restore-overview-grid";
+          grid.append(
+            backupRestorePlaceholder("Installation identity", "Identity will be recorded when the package service is connected.", "View installation details", [
+              ["Installation ID"], ["Installed version"], ["Package baseline"],
+            ]),
+            backupRestorePlaceholder("Latest backup", "Backup history will appear after verified backup creation is implemented.", "View backup history", [
+              ["Last successful backup"], ["Verified restore point"], ["Storage target"],
+            ]),
+          );
+          host.appendChild(grid);
+        },
+      },
+      {
+        id: "clean-package",
+        label: "Clean package",
+        render(host) {
+          host.appendChild(backupRestorePlaceholder(
+            "Create a clean installation package",
+            "This will build a fresh-install artifact without customer data, runtime secrets, or machine-specific state.",
+            "Create clean package",
+            [["Source version"], ["Target platform"], ["Output artifact"]],
+          ));
+        },
+      },
+      {
+        id: "backup",
+        label: "Build backup",
+        render(host) {
+          host.appendChild(backupRestorePlaceholder(
+            "Build a verified backup",
+            "This will capture supported data and configuration, then verify the artifact before it is offered for download.",
+            "Build backup",
+            [["Backup scope"], ["Estimated size"], ["Verification state"]],
+          ));
+        },
+      },
+      {
+        id: "restore",
+        label: "Restore",
+        render(host) {
+          host.appendChild(backupRestorePlaceholder(
+            "Restore from a verified backup",
+            "A future guided restore will validate compatibility, require an explicit confirmation, and preserve a rollback point.",
+            "Select backup to restore",
+            [["Selected backup"], ["Compatibility"], ["Rollback point"]],
+          ));
+        },
+      },
+    ],
+  });
+}
+
 async function showAdminSurface(kind, { historyMode = "push" } = {}) {
-  if (kind === "delivery-health" ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
+  const settingsSurface = ["delivery-health", "backup-restore"].includes(kind);
+  if (settingsSurface ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
   updateApplicationRoute(kind, "", historyMode);
-  el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : kind[0].toUpperCase() + kind.slice(1);
+  state.components.adminTabs?.destroy();
+  state.components.adminTabs = null;
+  el.admin_refresh_button.hidden = kind === "backup-restore";
+  el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : (kind === "backup-restore" ? "Backup / Restore" : kind[0].toUpperCase() + kind.slice(1));
+  if (kind === "backup-restore") {
+    renderBackupRestoreSurface();
+    return;
+  }
   el.admin_list.replaceChildren(); const loading = document.createElement("p"); loading.textContent = "Loading…"; el.admin_list.append(loading);
   const endpoint = { users: API.adminUsers, agents: API.adminAgents, audit: API.adminAudit, "delivery-health": API.adminDeliveryHealth }[kind];
   try {
@@ -2101,8 +2233,8 @@ async function loadExpanded() {
     : null;
   if (requestedProject) {
     await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
-  } else if (["users", "agents", "audit", "delivery-health"].includes(requestedRoute.surface)
-      && (requestedRoute.surface === "delivery-health" ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
+  } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
+      && (["delivery-health", "backup-restore"].includes(requestedRoute.surface) ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
     await showAdminSurface(requestedRoute.surface, { historyMode: "replace" });
   } else {
     showWorkspaceSurface({ historyMode: "replace" });
@@ -2335,7 +2467,7 @@ function startPolling() {
 async function bootstrap() {
   uiLoader.setPreferBundles(true);
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover", "ui.tabs"];
   await uiLoader.loadMany(names, options);
   state.factories = {
     createNavbar: await uiLoader.get("ui.navbar", options),
@@ -2352,6 +2484,7 @@ async function bootstrap() {
     uiAlert: await uiLoader.get("ui.dialog.alert", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
     createPopover: await uiLoader.get("ui.popover", options),
+    createTabs: await uiLoader.get("ui.tabs", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
@@ -2417,7 +2550,8 @@ async function bootstrap() {
       : null;
     if (routeProject) {
       void switchProject(routeProject.id, { initial: true, historyMode: "none" }).catch(handleLoadError);
-    } else if (["users", "agents", "audit"].includes(route.surface) && capability(`admin.${route.surface}`)) {
+    } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(route.surface)
+        && (["delivery-health", "backup-restore"].includes(route.surface) ? capability("admin.settings", isAdministrator()) : capability(`admin.${route.surface}`))) {
       void showAdminSurface(route.surface, { historyMode: "none" });
     } else {
       showWorkspaceSurface({ historyMode: "none" });

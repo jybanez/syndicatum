@@ -329,6 +329,19 @@ try {
         $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.174";') !== false, 'The vendored Helper bundle must include the approved agent-icon release.');
     });
 
+    $suite->test('Backup and restore preview is Helper-first and cannot imply working operations', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, 'label: "Backup / Restore"') !== false, 'Administrators need a visible Backup / Restore navigation entry.');
+        $suite->true(strpos($source, 'createTabs: await uiLoader.get("ui.tabs", options)') !== false, 'The workflow must use the native Helper tabs component.');
+        $suite->true(strpos($source, 'state.components.adminTabs = state.factories.createTabs') !== false, 'The Helper tabs component must mount the workflow sections.');
+        $suite->true(strpos($source, 'stateLabel.textContent = "Not yet available";') !== false, 'Unavailable operations must be explicitly identified.');
+        $suite->true(strpos($source, 'action.disabled = true;') !== false, 'Placeholder operation buttons must remain disabled.');
+        $suite->true(strpos($source, 'No package, backup, or restore command can be run from this preview.') !== false, 'The preview needs a non-deceptive capability boundary.');
+        $suite->true(strpos($source, 'API.adminBackup') === false && strpos($source, 'API.adminRestore') === false, 'The UI-first slice must not invent backend endpoints.');
+        $suite->true(strpos($styles, '.backup-restore-overview-grid') !== false, 'The preview needs responsive workflow layout styling.');
+    });
+
     $suite->test('Reply context cannot widen the message composer', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
