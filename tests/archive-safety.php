@@ -19,6 +19,16 @@ function archiveThrows(callable $callback, $message)
     archiveFail($message);
 }
 
+function archiveRejects(callable $callback, $message)
+{
+    try {
+        $callback();
+    } catch (Throwable $exception) {
+        return;
+    }
+    archiveFail($message);
+}
+
 function archiveManifest($kind, array $payloads)
 {
     ksort($payloads, SORT_STRING);
@@ -435,4 +445,98 @@ foreach ($rawCases as $label => $mutator) {
     }, $label . ' must fail raw ZIP inspection.');
 }
 
-echo 'Raw archive safety, sidecar trust, NDJSON, and zero-extraction assertions passed' . PHP_EOL;
+if (DIRECTORY_SEPARATOR === '\\') {
+    archiveRejects(function () use ($reader, $releaseEntries, $releaseManifest) {
+        $path = writeRawZip($releaseEntries);
+        $json = manifestJson($releaseManifest);
+        try {
+            $reader->extractToNewStage($path, $json, archiveContext('release', hash_file('sha256', $path), $json), 'C:\\staging', 'C:\\public');
+        } finally {
+            @unlink($path);
+        }
+    }, 'Windows extraction must fail closed until private ACL semantics are enforceable.');
+} else {
+    $testRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-extract-test-' . bin2hex(random_bytes(8));
+    $stagingRoot = $testRoot . DIRECTORY_SEPARATOR . 'private';
+    $publicRoot = $testRoot . DIRECTORY_SEPARATOR . 'public';
+    if (!mkdir($testRoot, 0700) || !mkdir($stagingRoot, 0700) || !mkdir($publicRoot, 0755)) {
+        archiveFail('Unable to create extraction test roots.');
+    }
+    try {
+        $path = writeRawZip($releaseEntries);
+        $json = manifestJson($releaseManifest);
+        try {
+            $stage = $reader->extractToNewStage(
+                $path, $json, archiveContext('release', hash_file('sha256', $path), $json), $stagingRoot, $publicRoot
+            );
+        } finally {
+            @unlink($path);
+        }
+        if (!($stage instanceof ArchiveExtractionStage)
+            || file_get_contents($stage->path() . '/app/index.php') !== $releasePayloads['app/index.php']['content']
+            || file_get_contents($stage->path() . '/metadata/build.json') !== $releasePayloads['metadata/build.json']['content']) {
+            archiveFail('Controlled release extraction did not preserve accepted bytes.');
+        }
+        @unlink($stage->path() . '/app/index.php');
+        @unlink($stage->path() . '/metadata/build.json');
+        @rmdir($stage->path() . '/app');
+        @rmdir($stage->path() . '/metadata');
+        @rmdir($stage->path());
+
+        $path = writeRawZip(zipEntries($backupPayloads));
+        $json = manifestJson($backupManifest);
+        try {
+            $backupStage = $reader->extractToNewStage(
+                $path, $json, archiveContext('backup', hash_file('sha256', $path), $json), $stagingRoot, $publicRoot
+            );
+        } finally {
+            @unlink($path);
+        }
+        $backupFile = $backupStage->path() . '/data/records.ndjson';
+        if ((fileperms($backupFile) & 0777) !== 0600 || file_get_contents($backupFile) !== $backupPayloads['data/records.ndjson']['content']) {
+            archiveFail('Extracted backup payload must retain exact bytes with mode 0600.');
+        }
+        @unlink($backupStage->path() . '/data/records.ndjson');
+        @unlink($backupStage->path() . '/metadata/recovery.json');
+        @rmdir($backupStage->path() . '/data');
+        @rmdir($backupStage->path() . '/metadata');
+        @rmdir($backupStage->path());
+
+        archiveThrows(function () use ($reader, $releaseEntries, $releaseManifest, $stagingRoot) {
+            $path = writeRawZip($releaseEntries); $json = manifestJson($releaseManifest);
+            try {
+                $reader->extractToNewStage(
+                    $path, $json, archiveContext('release', hash_file('sha256', $path), $json), $stagingRoot, $stagingRoot
+                );
+            } finally { @unlink($path); }
+        }, 'Staging and public roots must be fully disjoint.');
+
+        $cleanupProbeDirectory = $testRoot . '/cleanup-probe';
+        $cleanupProbe = $cleanupProbeDirectory . '/snapshot.zip';
+        mkdir($cleanupProbeDirectory, 0700);
+        file_put_contents($cleanupProbe, 'private-archive-bytes');
+        chmod($cleanupProbeDirectory, 0000);
+        $cleanupFailure = null;
+        try {
+            $method = new ReflectionMethod(ArchiveSafetyReader::class, 'finalizeSnapshot');
+            $method->setAccessible(true);
+            $cleanupFailure = $method->invoke($reader, null, $cleanupProbe, null);
+        } finally {
+            chmod($cleanupProbeDirectory, 0700);
+        }
+        try {
+            if (!($cleanupFailure instanceof Throwable) || !is_file($cleanupProbe)) {
+                archiveFail('An inaccessible snapshot parent must not hide a residual private archive or report success.');
+            }
+        } finally {
+            @unlink($cleanupProbe);
+            @rmdir($cleanupProbeDirectory);
+        }
+    } finally {
+        @rmdir($stagingRoot);
+        @rmdir($publicRoot);
+        @rmdir($testRoot);
+    }
+}
+
+echo 'Raw archive safety, sidecar trust, and controlled-extraction assertions passed' . PHP_EOL;

@@ -117,7 +117,7 @@ class PackageManifest
         $parts = explode('/', $path);
         foreach ($parts as $part) {
             $base = strtolower((string) preg_replace('/\..*\z/', '', $part));
-            if ($part === '' || $part === '.' || $part === '..' || substr($part, -1) === '.' || substr($part, -1) === ' '
+            if ($part === '' || strlen($part) > 255 || $part === '.' || $part === '..' || substr($part, -1) === '.' || substr($part, -1) === ' '
                 || in_array($base, ['con', 'prn', 'aux', 'nul', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9'], true)) {
                 throw new InvalidArgumentException($field . ' is not a safe relative path.');
             }

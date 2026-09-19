@@ -153,6 +153,22 @@ final class ArchiveValidationReport
     public function verifiedEntries() { return $this->verifiedEntries; }
 }
 
+/** Staging access only; this object grants no install, cutover, or restore authority. */
+final class ArchiveExtractionStage
+{
+    private $path;
+    private $validationReport;
+
+    public function __construct($path, ArchiveValidationReport $validationReport)
+    {
+        $this->path = $path;
+        $this->validationReport = $validationReport;
+    }
+
+    public function path() { return $this->path; }
+    public function validationReport() { return $this->validationReport; }
+}
+
 interface ArchiveEntrySource
 {
     public function inspection();
@@ -180,8 +196,17 @@ final class ZipArchiveEntrySource implements ArchiveEntrySource
 
     public function __destruct()
     {
+        try { $this->close(); } catch (Throwable $ignored) {}
+    }
+
+    public function close()
+    {
         if ($this->archive instanceof ZipArchive) {
-            $this->archive->close();
+            $closed = $this->archive->close();
+            $this->archive = null;
+            if ($closed === false) {
+                throw new RuntimeException('Validated ZIP session could not be closed cleanly.');
+            }
         }
     }
 
@@ -374,12 +399,69 @@ final class ArchiveSafetyReader
     public function validate($archivePath, $manifestJson, ArchiveValidationContext $context)
     {
         $snapshot = $this->snapshotArchive($archivePath);
+        $source = null;
+        $report = null;
+        $failure = null;
         try {
             $inspection = (new RawZipInspector($this->limits))->inspect($snapshot);
-            return $this->validateSource(new ZipArchiveEntrySource($inspection), $manifestJson, $context);
-        } finally {
-            @unlink($snapshot);
+            $source = new ZipArchiveEntrySource($inspection);
+            $report = $this->validateSource($source, $manifestJson, $context);
+        } catch (Throwable $exception) {
+            $failure = $exception;
         }
+        $failure = $this->finalizeSnapshot($source, $snapshot, $failure);
+        if ($failure instanceof Throwable) { throw $failure; }
+        return $report;
+    }
+
+    public function extractToNewStage($archivePath, $manifestJson, ArchiveValidationContext $context, $stagingRoot, $publicWebRoot)
+    {
+        $trustedStagingRoot = $this->resolveTrustedStagingRoot($stagingRoot, $publicWebRoot);
+        $snapshot = $this->snapshotArchive($archivePath, $trustedStagingRoot);
+        $source = null;
+        $stagePath = null;
+        $createdPaths = [];
+        $stage = null;
+        $failure = null;
+        try {
+            $inspection = (new RawZipInspector($this->limits))->inspect($snapshot);
+            $source = new ZipArchiveEntrySource($inspection);
+            $report = $this->validateSource($source, $manifestJson, $context);
+            $stagePath = $this->createPrivateStage($trustedStagingRoot);
+            $this->extractSourceToStage($source, $report, $stagePath, $createdPaths);
+            $context->assertArchiveSha256(hash_file('sha256', $snapshot));
+            $stage = new ArchiveExtractionStage($stagePath, $report);
+        } catch (Throwable $exception) {
+            $failure = $exception;
+        }
+        $failure = $this->finalizeSnapshot($source, $snapshot, $failure);
+        if ($failure instanceof Throwable) {
+            if (is_string($stagePath)) {
+                try {
+                    $this->removeCreatedStagePaths($stagePath, $trustedStagingRoot, $createdPaths);
+                } catch (Throwable $cleanupFailure) {
+                    throw new RuntimeException(
+                        'Extraction failed and private-stage cleanup is incomplete at ' . $stagePath . ': ' . $cleanupFailure->getMessage(),
+                        0,
+                        $failure
+                    );
+                }
+            }
+            throw $failure;
+        }
+        return $stage;
+    }
+
+    private function finalizeSnapshot($source, $snapshot, $failure)
+    {
+        if ($source instanceof ZipArchiveEntrySource) {
+            try {
+                $source->close();
+            } catch (Throwable $closeFailure) {
+                $failure = new RuntimeException('Archive operation failed to close its private snapshot session.', 0, $failure ?: $closeFailure);
+            }
+        }
+        return $this->deletePrivateSnapshot($snapshot, $failure);
     }
 
     private function validateSource(ArchiveEntrySource $source, $manifestJson, ArchiveValidationContext $context)
@@ -459,7 +541,10 @@ final class ArchiveSafetyReader
                 'path' => $entry['name'], 'type' => 'file', 'role' => $derivedRole,
                 'mode' => $entry['mode'], 'size' => $entry['size'], 'sha256' => $result['sha256'],
             ];
-            $verified[] = ['path' => $entry['name'], 'size' => $entry['size'], 'sha256' => $result['sha256']];
+            $verified[] = [
+                'path' => $entry['name'], 'size' => $entry['size'], 'sha256' => $result['sha256'],
+                'mode' => $entry['mode'], 'role' => $derivedRole, 'index' => $entry['index'],
+            ];
         }
         if (!hash_equals($manifest['content_tree_sha256'], PackageManifest::calculateContentTreeSha256($actualCanonical))) {
             throw new InvalidArgumentException('Verified archive facts do not reproduce the manifest content-tree digest.');
@@ -619,7 +704,7 @@ final class ArchiveSafetyReader
         }
     }
 
-    private function snapshotArchive($archivePath)
+    private function snapshotArchive($archivePath, $snapshotRoot = null)
     {
         if (!is_string($archivePath) || !is_file($archivePath)) {
             throw new InvalidArgumentException('Archive path must identify a regular file.');
@@ -630,38 +715,219 @@ final class ArchiveSafetyReader
         }
         $stat = fstat($source);
         if (!is_array($stat) || (($stat['mode'] & 0170000) !== 0100000)) {
-            fclose($source);
-            throw new InvalidArgumentException('Archive input must be a regular file.');
+            $failure = $this->closeStream($source, 'Archive input could not be closed cleanly.', new InvalidArgumentException('Archive input must be a regular file.'));
+            throw $failure;
         }
-        $snapshot = tempnam(sys_get_temp_dir(), 'syndicatum-archive-');
-        if ($snapshot === false || @chmod($snapshot, 0600) === false) {
-            fclose($source);
-            if (is_string($snapshot)) { @unlink($snapshot); }
-            throw new RuntimeException('Private archive snapshot could not be allocated.');
+        $snapshotDirectory = is_string($snapshotRoot) ? $snapshotRoot : sys_get_temp_dir();
+        $snapshot = tempnam($snapshotDirectory, 'syndicatum-archive-');
+        if ($snapshot === false) {
+            $failure = $this->closeStream($source, 'Archive input could not be closed cleanly.', new RuntimeException('Private archive snapshot could not be allocated.'));
+            throw $failure;
+        }
+        if (@chmod($snapshot, 0600) === false) {
+            $failure = new RuntimeException('Private archive snapshot could not be restricted.');
+            $failure = $this->closeStream($source, 'Archive input could not be closed cleanly.', $failure);
+            throw $this->deletePrivateSnapshot($snapshot, $failure);
         }
         $target = fopen($snapshot, 'w+b');
         if (!is_resource($target)) {
-            fclose($source);
-            @unlink($snapshot);
-            throw new RuntimeException('Private archive snapshot could not be opened.');
+            $failure = $this->closeStream($source, 'Archive input could not be closed cleanly.', new RuntimeException('Private archive snapshot could not be opened.'));
+            throw $this->deletePrivateSnapshot($snapshot, $failure);
         }
+        $failure = null;
         try {
             $copied = stream_copy_to_stream($source, $target, $this->limits['maximum_archive_bytes'] + 1);
             $extra = fread($source, 1);
             if (!is_int($copied) || $copied < 1 || $copied > $this->limits['maximum_archive_bytes'] || $extra !== '') {
                 throw new InvalidArgumentException('Archive input exceeds the V1 byte limit or changed while being read.');
             }
-            fflush($target);
-            if (function_exists('fsync')) { fsync($target); }
+            if (!fflush($target) || (function_exists('fsync') && !fsync($target))) {
+                throw new RuntimeException('Private archive snapshot could not be flushed durably.');
+            }
         } catch (Throwable $exception) {
-            fclose($source);
-            fclose($target);
-            @unlink($snapshot);
-            throw $exception;
+            $failure = $exception;
         }
-        fclose($source);
-        fclose($target);
+        $failure = $this->closeStream($source, 'Archive input could not be closed cleanly.', $failure);
+        $failure = $this->closeStream($target, 'Private archive snapshot could not be closed cleanly.', $failure);
+        if ($failure instanceof Throwable) {
+            throw $this->deletePrivateSnapshot($snapshot, $failure);
+        }
         return $snapshot;
+    }
+
+    private function closeStream($stream, $message, $failure)
+    {
+        if (!is_resource($stream)) { return $failure; }
+        try {
+            if (!fclose($stream)) {
+                $closeFailure = new RuntimeException($message);
+                return new RuntimeException($message, 0, $failure ?: $closeFailure);
+            }
+        } catch (Throwable $closeFailure) {
+            return new RuntimeException($message, 0, $failure ?: $closeFailure);
+        }
+        return $failure;
+    }
+
+    private function deletePrivateSnapshot($snapshot, $failure)
+    {
+        try {
+            if (!@unlink($snapshot)) {
+                $deleteFailure = new RuntimeException('Private archive snapshot cleanup is incomplete at ' . $snapshot . '.');
+                return new RuntimeException($deleteFailure->getMessage(), 0, $failure ?: $deleteFailure);
+            }
+        } catch (Throwable $deleteFailure) {
+            return new RuntimeException('Private archive snapshot cleanup is incomplete at ' . $snapshot . '.', 0, $failure ?: $deleteFailure);
+        }
+        return $failure;
+    }
+
+    private function resolveTrustedStagingRoot($stagingRoot, $publicWebRoot)
+    {
+        if (DIRECTORY_SEPARATOR !== '/' || !function_exists('posix_geteuid')) {
+            throw new RuntimeException('V1 controlled extraction requires a POSIX private staging filesystem.');
+        }
+        $staging = is_string($stagingRoot) ? realpath($stagingRoot) : false;
+        $public = is_string($publicWebRoot) ? realpath($publicWebRoot) : false;
+        if (!is_string($staging) || !is_dir($staging) || !is_writable($staging)
+            || !is_string($public) || !is_dir($public)) {
+            throw new InvalidArgumentException('Trusted staging and public-web roots must be existing directories.');
+        }
+        $stagingStat = @lstat($stagingRoot);
+        $permissions = @fileperms($staging);
+        $owner = @fileowner($staging);
+        if (!is_array($stagingStat) || (($stagingStat['mode'] & 0170000) !== 0040000)
+            || !is_int($permissions) || ($permissions & 0077) !== 0
+            || !is_int($owner) || $owner !== posix_geteuid()) {
+            throw new InvalidArgumentException('Trusted staging root must be a non-symlink directory owned by this process with no group/world access.');
+        }
+        if ($this->pathIsWithin($staging, $public) || $this->pathIsWithin($public, $staging)) {
+            throw new InvalidArgumentException('Archive staging and public web roots must be fully disjoint.');
+        }
+        return rtrim($staging, DIRECTORY_SEPARATOR);
+    }
+
+    private function pathIsWithin($candidate, $parent)
+    {
+        $candidate = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $candidate);
+        $parent = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $parent), DIRECTORY_SEPARATOR);
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $candidate = strtolower($candidate);
+            $parent = strtolower($parent);
+        }
+        return $candidate === $parent || strpos($candidate, $parent . DIRECTORY_SEPARATOR) === 0;
+    }
+
+    private function createPrivateStage($stagingRoot)
+    {
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $path = $stagingRoot . DIRECTORY_SEPARATOR . 'syndicatum-stage-' . bin2hex(random_bytes(16));
+            if (@mkdir($path, 0700, false)) {
+                @chmod($path, 0700);
+                $resolved = realpath($path);
+                if (!is_string($resolved) || $resolved !== $path || !$this->pathIsWithin($resolved, $stagingRoot)) {
+                    @rmdir($path);
+                    throw new RuntimeException('New private stage failed canonical containment verification.');
+                }
+                return $path;
+            }
+        }
+        throw new RuntimeException('A new private extraction stage could not be created.');
+    }
+
+    private function extractSourceToStage(ZipArchiveEntrySource $source, ArchiveValidationReport $report, $stagePath, array &$createdPaths)
+    {
+        $kind = $report->manifest()['package_kind'];
+        foreach ($report->verifiedEntries() as $entry) {
+            $segments = explode('/', $entry['path']);
+            $fileName = array_pop($segments);
+            $directory = $stagePath;
+            foreach ($segments as $segment) {
+                $directory .= DIRECTORY_SEPARATOR . $segment;
+                $stat = @lstat($directory);
+                if ($stat === false) {
+                    if (!@mkdir($directory, 0700, false)) {
+                        throw new RuntimeException('Private staging directory could not be created.');
+                    }
+                    @chmod($directory, 0700);
+                    $createdPaths[] = $directory;
+                } elseif (($stat['mode'] & 0170000) !== 0040000) {
+                    throw new InvalidArgumentException('A staging path already exists and is not a directory.');
+                }
+            }
+            $target = $directory . DIRECTORY_SEPARATOR . $fileName;
+            if (@lstat($target) !== false) {
+                throw new InvalidArgumentException('A staging target already exists.');
+            }
+            $input = $source->openStream($entry['index']);
+            $output = @fopen($target, 'xb');
+            if (!is_resource($output)) {
+                fclose($input);
+                throw new RuntimeException('A staging file could not be created exclusively.');
+            }
+            $createdPaths[] = $target;
+            $hash = hash_init('sha256');
+            $writtenBytes = 0;
+            $failure = null;
+            try {
+                while (!feof($input)) {
+                    $chunk = fread($input, 65536);
+                    if (!is_string($chunk)) {
+                        throw new RuntimeException('Validated archive stream failed during extraction.');
+                    }
+                    if ($chunk === '') { continue; }
+                    $offset = 0;
+                    while ($offset < strlen($chunk)) {
+                        $written = fwrite($output, substr($chunk, $offset));
+                        if (!is_int($written) || $written < 1) {
+                            throw new RuntimeException('Staging file write failed.');
+                        }
+                        $offset += $written;
+                    }
+                    $writtenBytes += strlen($chunk);
+                    if ($writtenBytes > $entry['size']) {
+                        throw new InvalidArgumentException('Extracted bytes exceed the accepted validation report.');
+                    }
+                    hash_update($hash, $chunk);
+                }
+                if ($writtenBytes !== $entry['size'] || !hash_equals($entry['sha256'], hash_final($hash))) {
+                    throw new InvalidArgumentException('Extracted bytes differ from the accepted validation report.');
+                }
+                if (!fflush($output) || (function_exists('fsync') && !fsync($output))) {
+                    throw new RuntimeException('Staging file could not be flushed durably.');
+                }
+            } catch (Throwable $exception) {
+                $failure = $exception;
+            }
+            $failure = $this->closeStream($input, 'Validated archive stream could not be closed cleanly.', $failure);
+            $failure = $this->closeStream($output, 'Staging file could not be closed cleanly.', $failure);
+            if ($failure instanceof Throwable) { throw $failure; }
+            $mode = $kind === 'backup' ? 0600 : $entry['mode'];
+            if (!@chmod($target, $mode)) {
+                throw new RuntimeException('Staging file permissions could not be applied.');
+            }
+        }
+    }
+
+    private function removeCreatedStagePaths($stagePath, $trustedStagingRoot, array $createdPaths)
+    {
+        if (!$this->pathIsWithin($stagePath, $trustedStagingRoot) || $stagePath === $trustedStagingRoot) {
+            throw new RuntimeException('Refusing unsafe staging cleanup.');
+        }
+        usort($createdPaths, function ($left, $right) { return strlen($right) <=> strlen($left); });
+        foreach ($createdPaths as $path) {
+            if (!$this->pathIsWithin($path, $stagePath) || $path === $stagePath) {
+                throw new RuntimeException('Refusing cleanup of an unrecorded staging path.');
+            }
+            $stat = @lstat($path);
+            if ($stat === false) { continue; }
+            if (($stat['mode'] & 0170000) === 0040000) {
+                if (!@rmdir($path)) { throw new RuntimeException('Staging cleanup could not remove a recorded directory.'); }
+            } elseif (!@unlink($path)) {
+                throw new RuntimeException('Staging cleanup could not remove a recorded file.');
+            }
+        }
+        if (!@rmdir($stagePath)) { throw new RuntimeException('Staging cleanup could not remove the private stage.'); }
     }
 
     private function validateLogicalDataLine($line)
