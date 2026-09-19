@@ -12,6 +12,27 @@ permissions:
   contents: read
 
 jobs:
+  external-host-preflight-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate external-host preflight contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/external-host-preflight.sh
+          bash scripts/external-host-preflight.sh --self-test | tee external-host-preflight-self-test.txt
+          shellcheck scripts/external-host-preflight.sh
+      - name: Retain preflight contract evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: external-host-preflight-contract-${{ github.sha }}-${{ github.run_attempt }}
+          path: external-host-preflight-self-test.txt
+          if-no-files-found: warn
+          retention-days: 30
+
   security-inventory:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
