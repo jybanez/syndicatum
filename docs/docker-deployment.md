@@ -215,6 +215,37 @@ harness on a host with a running Docker engine:
 pwsh ./scripts/docker-acceptance.ps1
 ```
 
+The default command remains the declared MySQL 5.7.44 internal-RC baseline.
+To exercise the separate MySQL 8.4 LTS compatibility gate, use an explicitly
+pinned image and the 8.4-compatible strict-mode list:
+
+```powershell
+pwsh ./scripts/docker-acceptance.ps1 `
+  -MySqlImage 'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a' `
+  -ExpectedMySqlVersionPattern '^8\.4(?:$|[.-])' `
+  -DatabaseSqlMode 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+```
+
+Passing the compatibility command does not by itself change the supported V1
+database baseline or prove migration from an existing MySQL 5.7 deployment.
+It proves a clean 8.4 lifecycle for the exact candidate bytes and pinned image.
+
+Exercise the separate logical export/restore transition from the pinned MySQL
+5.7.44 baseline into the pinned MySQL 8.4 image with:
+
+```powershell
+pwsh ./scripts/mysql57-to-84-migration-acceptance.ps1
+```
+
+The migration harness creates only a generated, project-scoped source and
+target environment. It applies the complete schema on 5.7, seeds representative
+identity, membership, participant, message, and addressee data, exports it,
+destroys the source environment, restores it into a fresh 8.4 database, and
+verifies migrations, relational state, application health, and cleanup. It
+must never be pointed at an existing deployment and is not authorization for an
+automatic production migration or an in-place database upgrade. See
+[`mysql-5.7-to-8.4-migration-acceptance-2026-09-19.md`](mysql-5.7-to-8.4-migration-acceptance-2026-09-19.md).
+
 The harness generates temporary secrets, a unique Compose project name, an
 isolated database, and project-scoped volumes. It validates rendered
 configuration, clean startup, ordered migrations and checksums, the health
