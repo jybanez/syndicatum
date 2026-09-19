@@ -4,6 +4,12 @@ param(
     [string]$AppService = 'app',
     [string]$DatabaseService = 'db',
     [string]$WorkerService = 'worker',
+    [ValidateNotNullOrEmpty()]
+    [string]$MySqlImage = 'mysql:5.7.44',
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedMySqlVersionPattern = '^5\.7\.44(?:$|[.-])',
+    [ValidateNotNullOrEmpty()]
+    [string]$DatabaseSqlMode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION',
     [string]$BaseUrl = '',
     [ValidateRange(1, 65535)]
     [int]$HttpPort = 18080,
@@ -195,7 +201,8 @@ $environment = @(
     "COMPOSE_PROJECT_NAME=$projectName"
     "SYNDICATUM_IMAGE=$applicationImage"
     "SYNDICATUM_DB_IMAGE=$databaseImage"
-    'SYNDICATUM_MYSQL_IMAGE=mysql:5.7.44'
+    "SYNDICATUM_MYSQL_IMAGE=$MySqlImage"
+    "SYNDICATUM_MYSQL_SQL_MODE=$DatabaseSqlMode"
     'SYNDICATUM_HTTP_BIND=127.0.0.1'
     "SYNDICATUM_HTTP_PORT=$HttpPort"
     "MYSQL_DATABASE=$databaseName"
@@ -233,8 +240,8 @@ try {
     if ($renderedConfig.services.$DatabaseService.image -ne $databaseImage -or
         $renderedConfig.services.$AppService.image -ne $applicationImage -or
         $renderedConfig.services.$WorkerService.image -ne $applicationImage -or
-        $renderedConfig.services.$DatabaseService.build.args.MYSQL_IMAGE -ne 'mysql:5.7.44') {
-        throw 'Acceptance images do not match the isolated MySQL 5.7.44 candidate baseline.'
+        $renderedConfig.services.$DatabaseService.build.args.MYSQL_IMAGE -ne $MySqlImage) {
+        throw "Acceptance images do not match the isolated $MySqlImage candidate baseline."
     }
     foreach ($volumeProperty in @($renderedConfig.volumes.PSObject.Properties)) {
         $volume = $volumeProperty.Value
@@ -248,7 +255,7 @@ try {
         }
     }
 
-    Write-Step "Starting isolated MySQL 5.7.44 database for $projectName"
+    Write-Step "Starting isolated $MySqlImage database for $projectName"
     $started = $true
     try {
         Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), $DatabaseService)
@@ -256,8 +263,8 @@ try {
         $databaseProbe = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --batch --skip-column-names -uroot -e "SELECT VERSION(), @@GLOBAL.sql_mode"'
         $databaseDetails = (Invoke-Compose -Arguments @('exec', '-T', $DatabaseService, 'sh', '-lc', $databaseProbe) -Capture).Trim()
         $databaseParts = $databaseDetails -split "`t", 2
-        if ($databaseParts.Count -ne 2 -or $databaseParts[0] -notmatch '^5\.7\.44(?:$|[.-])') {
-            throw "Acceptance requires MySQL 5.7.44; observed: $databaseDetails"
+        if ($databaseParts.Count -ne 2 -or $databaseParts[0] -notmatch $ExpectedMySqlVersionPattern) {
+            throw "Acceptance requires a database version matching '$ExpectedMySqlVersionPattern' from $MySqlImage; observed: $databaseDetails"
         }
         $sqlModes = @($databaseParts[1].Split(',') | ForEach-Object { $_.Trim() })
         if ($sqlModes -notcontains 'STRICT_TRANS_TABLES' -and $sqlModes -notcontains 'STRICT_ALL_TABLES') {
