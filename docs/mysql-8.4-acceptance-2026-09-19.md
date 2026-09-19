@@ -48,9 +48,9 @@ networks, and volumes. It verified:
 
 ## Remaining acceptance
 
-The local run used working-tree changes, so exact-head CI must repeat it from a
-checksummed archive before this evidence is reviewable as a candidate gate.
-The separate CI job pins the digest above and retains the archive checksum and
-acceptance log. A real MySQL 5.7-to-8.4 data migration exercise remains a
-separate requirement; clean-install compatibility alone does not prove that
-migration path.
+Exact-head CI repeated this clean-install lifecycle from a checksummed archive
+and retained the archive checksum and acceptance log. The separately recorded
+[MySQL 5.7-to-8.4 migration acceptance](mysql-5.7-to-8.4-migration-acceptance-2026-09-19.md)
+now exercises the logical export/restore transition. That migration record is
+still preliminary until its exact-head CI job passes; neither result authorizes
+production migration or changes the V1.0.0 clean-install-only support promise.

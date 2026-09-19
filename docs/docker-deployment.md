@@ -230,6 +230,22 @@ Passing the compatibility command does not by itself change the supported V1
 database baseline or prove migration from an existing MySQL 5.7 deployment.
 It proves a clean 8.4 lifecycle for the exact candidate bytes and pinned image.
 
+Exercise the separate logical export/restore transition from the pinned MySQL
+5.7.44 baseline into the pinned MySQL 8.4 image with:
+
+```powershell
+pwsh ./scripts/mysql57-to-84-migration-acceptance.ps1
+```
+
+The migration harness creates only a generated, project-scoped source and
+target environment. It applies the complete schema on 5.7, seeds representative
+identity, membership, participant, message, and addressee data, exports it,
+destroys the source environment, restores it into a fresh 8.4 database, and
+verifies migrations, relational state, application health, and cleanup. It
+must never be pointed at an existing deployment and is not authorization for an
+automatic production migration or an in-place database upgrade. See
+[`mysql-5.7-to-8.4-migration-acceptance-2026-09-19.md`](mysql-5.7-to-8.4-migration-acceptance-2026-09-19.md).
+
 The harness generates temporary secrets, a unique Compose project name, an
 isolated database, and project-scoped volumes. It validates rendered
 configuration, clean startup, ordered migrations and checksums, the health
