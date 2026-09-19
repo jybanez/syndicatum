@@ -597,9 +597,11 @@ acceptance, member removal to `Orphaned`, owner-mediated recovery offer, and
 acceptance by a different active responder. The recovered request appeared
 once as open in that responder's `My work` view. See the
 [installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#transfer-and-orphan-recovery-probe).
-This closes only that bounded transfer/orphan path; dispute/reopen,
-pagination/history/unknown baseline, edit/tombstone, mobile, accessibility,
-and overall P1.1/P1.2 remain open pending CI and Assessor review.
+The Assessor accepted installed transfer, orphan derivation, and explicit
+reassignment/recovery for this exercised three-human path in #2809. Exact
+evidence head `db45f36` passed all required jobs in run `35408890560`.
+Pagination/history/unknown baseline, edit/tombstone, mobile, accessibility,
+and overall P1.1/P1.2 remain open.
 
 The same exact installed image was then exercised in a fresh two-identity
 MySQL 5.7.44 stack for requester dispute and explicit reopen. The responder
@@ -610,10 +612,11 @@ The installed views moved the one item through `Decisions needed`, `Disputed`,
 contained exactly six ordered messages and the projection retained the same
 responder. See the
 [installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#dispute-revised-resolution-and-reopen-probe).
-This closes only that bounded requester-dispute/reopen path; other role
+The Assessor accepted requester dispute, revised proposal, acceptance, and
+explicit reopen for this exercised two-human path in #2811. Exact evidence
+head `4595cb9` passed all required jobs in run `35410305194`. Other role
 variants and the remaining pagination/history/unknown, edit/tombstone,
-responsive, accessibility, and overall gates remain open pending CI and
-Assessor review.
+responsive, accessibility, and overall gates remain open.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).

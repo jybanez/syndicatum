@@ -275,3 +275,12 @@ the exercised resolved path and exact `d9ccd63` image in project message
 #2803. Evidence/checklist head `e961a95` then passed all three required V1 CI
 jobs in run `35401728565` (#2804). This does not close the broader historical,
 accessibility, P1.1/P1.2, merge, or release gates.
+
+The Assessor accepted installed transfer, orphan derivation, and explicit
+reassignment/recovery for the exercised three-human path in #2809. Exact
+evidence head `db45f36` passed all required jobs in run `35408890560`.
+The Assessor then accepted requester dispute, revised proposal, acceptance,
+and explicit reopen for the exercised two-human path in #2811. Exact evidence
+head `4595cb9` passed all required jobs in run `35410305194`. These decisions
+do not close additional role variants, pagination/history/unknown baseline,
+edit/tombstone, responsive/accessibility, full P1.1/P1.2, merge, or release.
