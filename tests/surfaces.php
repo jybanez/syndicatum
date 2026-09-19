@@ -342,6 +342,19 @@ try {
         $suite->true(strpos($styles, '.backup-restore-overview-grid') !== false, 'The preview needs responsive workflow layout styling.');
     });
 
+    $suite->test('First-run setup preview uses the Helper stepper without enabling installation', function () use ($suite, $root) {
+        $page = file_get_contents($root . '/setup.php');
+        $source = file_get_contents($root . '/assets/setup.mjs');
+        $routes = file_get_contents($root . '/.htaccess');
+        $suite->true(strpos($routes, 'RewriteRule ^setup/?$ setup.php') !== false, 'The setup preview needs a stable route.');
+        $suite->true(strpos($page, 'First-run setup · UI preview') !== false, 'The setup shell must identify itself as a preview.');
+        $suite->true(strpos($page, 'This preview cannot create a database, administrator, package, or installation.') !== false, 'The setup shell must state its capability boundary.');
+        $suite->true(strpos($source, 'await uiLoader.get("ui.stepper", options)') !== false, 'The setup flow must use the native Helper stepper.');
+        $suite->true(strpos($source, 'next.textContent = currentIndex === steps.length - 1 ? "Begin installation" : "Next";') !== false, 'The final action needs an explicit installation label.');
+        $suite->true(strpos($source, 'next.disabled = currentIndex === steps.length - 1;') !== false, 'The unimplemented installation action must remain disabled.');
+        $suite->true(strpos($source, 'fetch(') === false, 'The UI-first setup preview must not call an invented backend.');
+    });
+
     $suite->test('Reply context cannot widen the message composer', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');

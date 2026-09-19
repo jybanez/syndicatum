@@ -1,0 +1,30 @@
+:root { color-scheme: dark; --setup-bg: #07101d; --setup-panel: #0d192b; --setup-border: #263b59; --setup-text: #e8eef9; --setup-muted: #9dafc9; }
+* { box-sizing: border-box; }
+body { min-height: 100vh; margin: 0; color: var(--setup-text); background: radial-gradient(circle at top right, #0b3038 0, transparent 42%), var(--setup-bg); font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }
+.setup-shell { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 42px 0; }
+.setup-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 18px; margin-bottom: 20px; }
+.setup-heading h1, .setup-panel h2 { margin: 0; }
+.setup-heading p { margin: 7px 0 0; color: var(--setup-muted); }
+.setup-heading .ui-eyebrow { margin: 0 0 5px; }
+.setup-brand { width: 48px; height: 48px; }
+.setup-workspace { display: grid; gap: 18px; padding: 22px; border-color: var(--setup-border); background: color-mix(in srgb, var(--setup-panel) 96%, transparent); }
+.setup-boundary { margin: 0; padding: 12px 14px; border: 1px solid var(--setup-border); border-radius: 10px; color: var(--setup-muted); background: color-mix(in srgb, var(--setup-bg) 70%, transparent); }
+.setup-content { min-height: 330px; }
+.setup-panel { display: grid; align-content: start; gap: 14px; }
+.setup-panel > p { max-width: 760px; margin: 0; color: var(--setup-muted); }
+.setup-unavailable { justify-self: start; }
+.setup-details { display: grid; grid-template-columns: minmax(170px, max-content) minmax(0, 1fr); gap: 9px 20px; margin: 6px 0 0; padding: 18px; border: 1px solid var(--setup-border); border-radius: 12px; }
+.setup-details dt { color: var(--setup-muted); }
+.setup-details dd { margin: 0; }
+.setup-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 6px; }
+.setup-fields label { display: grid; gap: 7px; color: var(--setup-muted); }
+.setup-fields .ui-input:disabled { cursor: not-allowed; opacity: .68; }
+.setup-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; border-top: 1px solid var(--setup-border); }
+.setup-actions .ui-button:disabled { cursor: not-allowed; opacity: .58; }
+@media (max-width: 700px) {
+  .setup-shell { width: min(100% - 20px, 1100px); padding: 18px 0; }
+  .setup-heading { grid-template-columns: auto minmax(0, 1fr); }
+  .setup-heading > .ui-badge { grid-column: 2; justify-self: start; }
+  .setup-fields, .setup-details { grid-template-columns: minmax(0, 1fr); }
+  .setup-details dd { margin-bottom: 8px; }
+}

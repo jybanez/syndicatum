@@ -21,9 +21,10 @@ RewriteRule ^privacy/?$ privacy.php [L,QSA]
 RewriteRule ^terms/?$ terms.php [L,QSA]
 RewriteRule ^support/?$ support.php [L,QSA]
 RewriteRule ^license/?$ license.php [L,QSA]
+RewriteRule ^setup/?$ setup.php [L,QSA]
 
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-RewriteRule ^(?:users|agents|audit|delivery-health|projects/[^/]+)/?$ index.php [L,QSA]
+RewriteRule ^(?:users|agents|audit|delivery-health|backup-restore|projects/[^/]+)/?$ index.php [L,QSA]
