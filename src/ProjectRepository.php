@@ -118,8 +118,23 @@ class ProjectRepository
         }
 
         $statement = $this->pdo->prepare(
-            "SELECT pp.id, pp.project_id, pp.kind, pp.status,
+            "SELECT pp.id, pp.project_id, pp.kind, pp.status, pp.created_at AS joined_at,
+                    (SELECT COUNT(*) FROM messages participant_messages
+                     WHERE participant_messages.project_id = pp.project_id
+                       AND participant_messages.sender_participant_id = pp.id
+                       AND participant_messages.deleted_at IS NULL) AS message_count,
+                    (SELECT MAX(participant_messages.created_at) FROM messages participant_messages
+                     WHERE participant_messages.project_id = pp.project_id
+                       AND participant_messages.sender_participant_id = pp.id
+                       AND participant_messages.deleted_at IS NULL) AS last_message_at,
                     u.id AS user_id, u.display_name AS user_display_name, u.avatar_url AS user_avatar_url,
+                    u.normalized_email AS user_email,
+                    CASE
+                        WHEN u.google_subject IS NOT NULL THEN 'google'
+                        WHEN u.pbb_user_id IS NOT NULL THEN 'pbb_account'
+                        WHEN u.password_hash IS NOT NULL THEN 'password'
+                        ELSE NULL
+                    END AS authentication_source,
                     pm.role AS human_role,
                     a.id AS agent_id, pa.display_name AS agent_display_name, pa.avatar_url AS agent_avatar_url,
                     pa.provider, pa.runtime_name, pa.capabilities_json
@@ -132,13 +147,28 @@ class ProjectRepository
              ORDER BY COALESCE(u.display_name, pa.display_name), pp.id"
         );
         $statement->execute($parameters);
-        return array_map([$this, 'normalizeParticipant'], $statement->fetchAll());
+        $identity = isset($access['identity']) && is_array($access['identity']) ? $access['identity'] : [];
+        $viewerIsHuman = isset($identity['kind']) && $identity['kind'] === 'human';
+        $viewerUserId = $viewerIsHuman && isset($identity['user']['id']) ? (int) $identity['user']['id'] : 0;
+        $viewerCanManage = $viewerIsHuman && in_array($access['role'], ['owner', 'admin'], true);
+        return array_map(function ($row) use ($viewerUserId, $viewerCanManage) {
+            $participant = $this->normalizeParticipant($row);
+            if ($row['kind'] === 'human' && ($viewerCanManage || (int) $row['user_id'] === $viewerUserId)) {
+                $participant['email'] = $row['user_email'];
+                $participant['authentication_source'] = $row['authentication_source'];
+            }
+            return $participant;
+        }, $statement->fetchAll());
     }
 
     public function messagePage(array $access, array $filters = [])
     {
         $projectId = (int) $access['project_id'];
-        $limit = isset($filters['limit']) ? (int) $filters['limit'] : 100;
+        $acknowledged = isset($filters['acknowledged']) ? trim((string) $filters['acknowledged']) : '';
+        if ($acknowledged !== '' && $acknowledged !== 'false') {
+            throw new InvalidArgumentException('acknowledged only supports false.');
+        }
+        $limit = isset($filters['limit']) ? (int) $filters['limit'] : 50;
         $limit = max(1, min(200, $limit));
         $before = empty($filters['before']) ? null : $this->decodeCursor($filters['before'], $projectId);
         $after = empty($filters['after']) ? null : $this->decodeCursor($filters['after'], $projectId);
@@ -179,9 +209,9 @@ class ProjectRepository
             $where[] = 'm.created_at <= ?';
             $parameters[] = $this->validatedDate($filters['to'], 'to', true);
         }
-        if (!empty($filters['addressed_to_me']) || !empty($filters['acknowledged'])) {
+        if (!empty($filters['addressed_to_me']) || $acknowledged === 'false') {
             $where[] = 'EXISTS (SELECT 1 FROM message_addressees mine WHERE mine.message_id = m.id AND mine.participant_id = ?'
-                . ((!empty($filters['acknowledged']) && $filters['acknowledged'] === 'false') ? ' AND mine.acknowledged_at IS NULL' : '') . ')';
+                . ($acknowledged === 'false' ? ' AND mine.acknowledged_at IS NULL' : '') . ')';
             $parameters[] = (int) $access['participant_id'];
         }
 
@@ -270,15 +300,17 @@ class ProjectRepository
         if (strlen($idempotencyKey) > 160) {
             throw new InvalidArgumentException('idempotency_key exceeds 160 characters.');
         }
+        $requestFingerprint = $idempotencyKey === '' ? null : $this->messageRequestFingerprint($senderId, $body, $input);
 
         if ($idempotencyKey !== '') {
             $existing = $this->pdo->prepare(
-                'SELECT id FROM messages WHERE project_id = ? AND sender_participant_id = ? AND client_idempotency_key = ? LIMIT 1'
+                'SELECT id, request_fingerprint FROM messages WHERE project_id = ? AND sender_participant_id = ? AND client_idempotency_key = ? LIMIT 1'
             );
             $existing->execute([$projectId, $senderId, $idempotencyKey]);
-            $existingId = $existing->fetchColumn();
-            if ($existingId !== false) {
-                return ['message' => $this->message($access, $existingId), 'created' => false];
+            $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
+            if ($existingRow !== false) {
+                $this->assertMatchingMessageRequest($existingRow, $requestFingerprint);
+                return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
             }
         }
 
@@ -306,12 +338,13 @@ class ProjectRepository
             $insert = $this->pdo->prepare(
                 'INSERT INTO messages
                  (message_uuid, project_id, project_sequence, sender_participant_id, reply_to_message_id, body,
-                  client_idempotency_key, correlation_id, reply_depth, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                  client_idempotency_key, request_fingerprint, correlation_id, reply_depth, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
                 $uuid, $projectId, $sequence, $senderId, $replyTo, $body,
                 $idempotencyKey === '' ? null : $idempotencyKey,
+                $requestFingerprint,
                 empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
                 $replyDepth, $now, $now,
             ]);
@@ -340,12 +373,13 @@ class ProjectRepository
             }
             if ($idempotencyKey !== '' && $exception->getCode() === '23000') {
                 $existing = $this->pdo->prepare(
-                    'SELECT id FROM messages WHERE project_id = ? AND sender_participant_id = ? AND client_idempotency_key = ? LIMIT 1'
+                    'SELECT id, request_fingerprint FROM messages WHERE project_id = ? AND sender_participant_id = ? AND client_idempotency_key = ? LIMIT 1'
                 );
                 $existing->execute([$projectId, $senderId, $idempotencyKey]);
-                $existingId = $existing->fetchColumn();
-                if ($existingId !== false) {
-                    return ['message' => $this->message($access, $existingId), 'created' => false];
+                $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
+                if ($existingRow !== false) {
+                    $this->assertMatchingMessageRequest($existingRow, $requestFingerprint);
+                    return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
                 }
             }
             throw $exception;
@@ -355,6 +389,46 @@ class ProjectRepository
             }
             throw $exception;
         }
+    }
+
+    private function assertMatchingMessageRequest(array $existing, $requestFingerprint)
+    {
+        // Pre-migration messages have no original request fingerprint. Preserve
+        // their historical replay behavior rather than comparing edited content.
+        if ($existing['request_fingerprint'] !== null
+            && !hash_equals($existing['request_fingerprint'], $requestFingerprint)) {
+            throw new RuntimeException('IDEMPOTENCY_KEY_CONFLICT');
+        }
+    }
+
+    private function messageRequestFingerprint($senderId, $body, array $input)
+    {
+        $broadcast = !empty($input['broadcast']);
+        $direct = [];
+        $mention = [];
+        if (!$broadcast) {
+            foreach (['direct_participant_ids', 'mention_participant_ids'] as $field) {
+                foreach (isset($input[$field]) && is_array($input[$field]) ? $input[$field] : [] as $value) {
+                    $id = (int) $value;
+                    if ($id > 0 && $id !== $senderId) {
+                        if ($field === 'direct_participant_ids') { $direct[$id] = $id; }
+                        else { $mention[$id] = $id; }
+                    }
+                }
+            }
+            foreach ($direct as $id) { unset($mention[$id]); }
+            if (!$direct && !$mention) { $broadcast = true; }
+        }
+        sort($direct, SORT_NUMERIC);
+        sort($mention, SORT_NUMERIC);
+        return hash('sha256', json_encode([
+            'body' => $body,
+            'reply_to_message_id' => !empty($input['reply_to_message_id']) ? (int) $input['reply_to_message_id'] : null,
+            'correlation_id' => empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
+            'broadcast' => $broadcast,
+            'direct_participant_ids' => $broadcast ? [] : array_values($direct),
+            'mention_participant_ids' => $broadcast ? [] : array_values($mention),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
     public function acknowledge(array $access, $messageId)
@@ -525,6 +599,9 @@ class ProjectRepository
             'avatar_url' => $isHuman ? $row['user_avatar_url'] : $row['agent_avatar_url'],
             'status' => $row['status'],
             'role' => $isHuman ? $row['human_role'] : 'agent',
+            'joined_at' => $row['joined_at'],
+            'last_message_at' => $row['last_message_at'],
+            'message_count' => (int) $row['message_count'],
             'provider' => $isHuman ? null : $row['provider'],
             'runtime' => $isHuman ? null : $row['runtime_name'],
             'capabilities' => is_array($capabilities) ? $capabilities : [],

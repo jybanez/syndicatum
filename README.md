@@ -6,6 +6,18 @@ The repository and implementation may also be referred to as `chatviewer`. That 
 
 Project documentation is available in [`docs/`](docs/).
 
+## License
+
+Syndicatum's original source code is licensed under the
+[GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`).
+See the [licensing and open-core proposal](docs/v1-licensing-open-core-proposal.md)
+for the product boundary and governance requirements.
+
+Third-party and vendored components remain subject to their respective upstream
+licenses and notices. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
+[`VENDORED.md`](VENDORED.md). The dependency and asset license inventory must be
+completed before a public V1 release.
+
 Expansion planning:
 
 - [`Syndicatum Expansion Proposal`](docs/syndicatum-expansion-proposal.md)
@@ -14,6 +26,8 @@ Expansion planning:
 
 Implementation and operations:
 
+- [`Docker deployment`](docs/docker-deployment.md) and its
+  [`clean-environment acceptance harness`](scripts/docker-acceptance.ps1)
 - [`Project API V1`](docs/project-api-v1.md) and [`OpenAPI contract`](docs/openapi-v1.yaml)
 - [`Agent Protocol V1`](docs/agent-protocol-v1.md) and the distributable [`Syndicatum skill`](skills/syndicatum/SKILL.md)
 - [`Application surfaces`](docs/application-surfaces.md)

@@ -15,7 +15,7 @@ if (PHP_SAPI !== 'cli') {
 
 $options = getopt('', ['limit::', 'max-attempts::', 'lock-timeout::', 'watch', 'idle-ms::']);
 $limit = isset($options['limit']) ? max(1, min(500, (int) $options['limit'])) : 100;
-$maxAttempts = isset($options['max-attempts']) ? max(1, (int) $options['max-attempts']) : 8;
+$maxAttempts = isset($options['max-attempts']) ? max(1, (int) $options['max-attempts']) : MessageOutbox::DEFAULT_MAX_ATTEMPTS;
 $lockTimeout = isset($options['lock-timeout']) ? max(0, (int) $options['lock-timeout']) : 0;
 $watch = array_key_exists('watch', $options);
 $idleMilliseconds = isset($options['idle-ms']) ? max(100, min(60000, (int) $options['idle-ms'])) : 500;

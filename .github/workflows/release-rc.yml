@@ -1,0 +1,122 @@
+name: V1 release candidate
+
+on:
+  push:
+    tags:
+      - 'v1.0.0-rc.*'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Require an immutable-style annotated RC tag on protected main
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" =~ ^v1\.0\.0-rc\.[1-9][0-9]*$ ]]
+          test "$(git cat-file -t "refs/tags/$tag")" = tag
+          test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          test -s "docs/releases/$tag.md"
+          printf 'Verified tag %s at %s on main with release notes.\n' "$tag" "$GITHUB_SHA"
+
+  contract-and-docker:
+    needs: verify-tag
+    uses: ./.github/workflows/contract-ci.yml
+    permissions:
+      contents: read
+
+  publish-rc:
+    needs: [verify-tag, contract-and-docker]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: docker-source-acceptance-${{ github.sha }}-${{ github.run_attempt }}
+          path: downloaded-acceptance
+      - name: Verify the exact Docker-tested archive and record provenance
+        id: artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="syndicatum-${GITHUB_SHA}.tar.gz"
+          archive="$(find downloaded-acceptance -type f -name "$archive_name" -print -quit)"
+          test -n "$archive"
+          checksum="${archive}.sha256"
+          test -f "$checksum"
+          (cd "$(dirname "$archive")" && sha256sum --check "$(basename "$checksum")")
+          digest="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+          migration_head="$(find migrations -maxdepth 1 -type f -name '*.php' -printf '%f\n' | sort | tail -n 1)"
+          test -n "$migration_head"
+          contract_sha256="$(sha256sum docs/v1-coordination-contract.md | cut -d ' ' -f 1)"
+          printf 'archive=%s\nchecksum=%s\n' "$archive" "$checksum" >> "$GITHUB_OUTPUT"
+          {
+            printf 'repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'tag=%s\ncommit=%s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
+            printf 'producing_and_verifying_workflow=%s\nrun_id=%s\nrun_attempt=%s\n' \
+              "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'run_url=https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'archive=%s\nsha256=%s\n' "$archive_name" "$digest"
+            printf 'migration_head=%s\n' "${migration_head%.php}"
+            printf 'coordination_contract_sha256=%s\n' "$contract_sha256"
+            printf 'runtime_baseline=PHP 8.2 Apache on Debian Bookworm\n'
+            printf 'database_baseline=MySQL 5.7.44 strict mode\n'
+          } > release-provenance.txt
+      - name: Publish new prerelease without replacing an existing tag or release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.artifact.outputs.archive }}
+          CHECKSUM: ${{ steps.artifact.outputs.checksum }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" "$ARCHIVE" "$CHECKSUM" release-provenance.txt \
+            --verify-tag --prerelease --title "Syndicatum $GITHUB_REF_NAME" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+      - name: Verify published files and release identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          gh release download "$GITHUB_REF_NAME" --dir published
+          (cd published && sha256sum --check "syndicatum-${GITHUB_SHA}.tar.gz.sha256")
+          test -s published/release-provenance.txt
+          test "$(gh release view "$GITHUB_REF_NAME" --json tagName --jq '.tagName')" = "$GITHUB_REF_NAME"
+          test "$(gh release view "$GITHUB_REF_NAME" --json isPrerelease --jq '.isPrerelease')" = true
+      - name: Clean-install the downloaded published archive on MySQL 5.7.44
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p published-install
+          tar -xzf "published/syndicatum-${GITHUB_SHA}.tar.gz" -C published-install
+          test -f published-install/syndicatum/scripts/docker-acceptance.ps1
+          pwsh -NoProfile -File published-install/syndicatum/scripts/docker-acceptance.ps1 2>&1 \
+            | tee published-install-acceptance.log
+      - name: Retain published-artifact installation evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: published-rc-acceptance-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            release-provenance.txt
+            published-install-acceptance.log
+          if-no-files-found: warn
+          retention-days: 30

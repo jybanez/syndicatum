@@ -23,9 +23,10 @@ try {
     Api::json(['error' => true, 'code' => 'VALIDATION_FAILED', 'message' => $exception->getMessage()], 422);
 } catch (RuntimeException $exception) {
     $code = $exception->getMessage();
-    $status = $code === 'AUTHENTICATION_REQUIRED' ? 401 : 404;
+    $status = $code === 'AUTHENTICATION_REQUIRED' ? 401 : ($code === 'IDEMPOTENCY_KEY_CONFLICT' ? 409 : 404);
     Api::json(['error' => true, 'code' => $code, 'message' => $status === 401
-        ? 'Connector authentication is required.' : 'The bound notification was not found.'], $status);
+        ? 'Connector authentication is required.' : ($status === 409
+            ? 'A different response was already posted for this notification.' : 'The bound notification was not found.')], $status);
 } catch (Exception $exception) {
     error_log('Connector agent reply error: ' . $exception->getMessage());
     Api::json(['error' => true, 'code' => 'INTERNAL_ERROR', 'message' => 'The captured agent response could not be posted.'], 500);

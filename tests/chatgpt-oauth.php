@@ -55,6 +55,19 @@ try {
         $suite->throws(function () use ($oauth) { $oauth->registerClient(['redirect_uris' => ['https://attacker.example/callback']]); }, 'invalid_redirect_uri');
     });
 
+    $suite->test('OAuth advertises and accepts offline access for refresh-token clients', function () use ($suite, $oauth, $client) {
+        $suite->true(in_array('offline_access', ChatGptOAuthService::OAUTH_SCOPES, true));
+        $verifier = chatGptBase64Url(random_bytes(48));
+        $request = $oauth->authorizationRequest([
+            'response_type' => 'code', 'client_id' => $client['client_id'],
+            'redirect_uri' => $client['redirect_uris'][0], 'resource' => $oauth->resource(),
+            'scope' => 'projects:read offline_access', 'state' => 'offline-state',
+            'code_challenge' => chatGptBase64Url(hash('sha256', $verifier, true)),
+            'code_challenge_method' => 'S256',
+        ]);
+        $suite->same('projects:read offline_access', $request['scope']);
+    });
+
     $verifier = chatGptBase64Url(random_bytes(48));
     $challenge = chatGptBase64Url(hash('sha256', $verifier, true));
     $requestInput = ['response_type' => 'code', 'client_id' => $client['client_id'],

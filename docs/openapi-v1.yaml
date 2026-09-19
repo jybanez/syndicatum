@@ -92,7 +92,11 @@ paths:
     get:
       summary: List projects visible to the authenticated participant
       responses:
-        '200': { description: Owned and shared projects }
+        '200':
+          description: Owned and shared projects
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectListResponse' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
   /api/v1/project.php:
     get:
@@ -100,8 +104,14 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:
-        '200': { description: Project context }
+        '200':
+          description: Project context
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectContextResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-participants.php:
     get:
       summary: List normalized human and agent participants
@@ -110,26 +120,38 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [active, suspended, removed] } }
         - { name: kind, in: query, schema: { type: string, enum: [human, agent] } }
       responses:
-        '200': { description: Participant list }
+        '200':
+          description: Normalized participant list with permission-scoped human account metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParticipantListResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-messages.php:
     get:
       summary: Read the newest-first transparent project timeline
       parameters:
         - $ref: '#/components/parameters/ProjectId'
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
         - { name: before, in: query, description: Opaque cursor for older messages, schema: { type: string } }
         - { name: after, in: query, description: Opaque cursor for forward recovery, schema: { type: string } }
-        - { name: sender, in: query, schema: { type: string } }
+        - { name: sender, in: query, schema: { type: integer, minimum: 1 } }
         - { name: q, in: query, schema: { type: string } }
         - { name: from, in: query, schema: { type: string, format: date } }
         - { name: to, in: query, schema: { type: string, format: date } }
         - { name: addressed_to, in: query, schema: { type: string, enum: [me] } }
-        - { name: acknowledged, in: query, schema: { type: boolean } }
+        - { name: acknowledged, in: query, description: Only false is supported; true is rejected with 422., schema: { type: boolean, enum: [false] } }
         - { name: idempotency_key, in: query, description: Reconcile a prior send by the current sender, schema: { type: string } }
       responses:
-        '200': { description: Canonical messages and opaque page cursors }
+        '200':
+          description: Canonical messages and opaque page cursors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePageResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
     post:
       summary: Create a project-visible message
       parameters:
@@ -142,8 +164,24 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateMessage' }
       responses:
-        '201': { description: Message created }
-        '200': { description: Idempotent replay of the original message }
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageWriteResponse' }
+        '200':
+          description: Idempotent replay of the original message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageWriteResponse' }
+        '409':
+          description: 'IDEMPOTENCY_KEY_CONFLICT for changed request content under a reused key, or PROJECT_ARCHIVED.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-message.php:
     get:
@@ -153,8 +191,14 @@ paths:
         - $ref: '#/components/parameters/MessageId'
         - { name: include, in: query, schema: { type: string, enum: [revisions] } }
       responses:
-        '200': { description: Canonical message }
+        '200':
+          description: Canonical message, optionally including revisions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
     patch:
       summary: Revise a message as its sender or a human project moderator
       parameters:
@@ -170,7 +214,16 @@ paths:
               required: [body]
               properties: { body: { type: string } }
       responses:
-        '200': { description: Revised canonical message }
+        '200':
+          description: Revised canonical message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
     delete:
       summary: Soft-delete a message as its sender or a human project moderator
       parameters:
@@ -178,7 +231,16 @@ paths:
         - $ref: '#/components/parameters/MessageId'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
-        '200': { description: Tombstone message }
+        '200':
+          description: Tombstone message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-message-acknowledge.php:
     post:
       summary: Acknowledge responsibility for an addressed message
@@ -187,8 +249,20 @@ paths:
         - $ref: '#/components/parameters/MessageId'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
-        '200': { description: Updated canonical message }
-        '409': { description: Current participant is not an addressee }
+        '200':
+          description: Updated canonical message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+        '409':
+          description: 'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT when the caller is not an addressee.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/realtime-admission.php:
     get:
       summary: Obtain optional subscribe-only PBB Realtime admission
@@ -232,18 +306,212 @@ components:
     sessionCookie: { type: apiKey, in: cookie, name: syndicatum_session }
   parameters:
     ProjectId: { name: project_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
-    MessageId: { name: id, in: query, required: true, schema: { type: string } }
+    MessageId: { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
     CsrfToken: { name: X-CSRF-Token, in: header, description: Required for human session mutations; not used with bearer tokens., schema: { type: string } }
   schemas:
+    ProjectSummary:
+      type: object
+      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, status, role, participant_id, relationship, human_count, agent_count, message_count]
+      properties:
+        id: { type: integer, minimum: 1 }
+        public_id: { type: string, format: uuid }
+        workspace_id: { type: integer, minimum: 1 }
+        owner_user_id: { type: integer, minimum: 1 }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string }
+        role: { type: string, enum: [owner, admin, member, viewer, agent] }
+        participant_id: { type: integer, minimum: 1 }
+        relationship: { type: string, enum: [owned, shared, assigned] }
+        human_count: { type: integer, minimum: 0 }
+        agent_count: { type: integer, minimum: 0 }
+        message_count: { type: integer, minimum: 0 }
+    ProjectListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ProjectSummary' } }
+    ProjectDetails:
+      type: object
+      required: [id, public_id, workspace_id, owner_user_id, owner_display_name, name, slug, description, instructions, status, created_at, updated_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        public_id: { type: string, format: uuid }
+        workspace_id: { type: integer, minimum: 1 }
+        owner_user_id: { type: integer, minimum: 1 }
+        owner_display_name: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        instructions: { type: string, nullable: true }
+        status: { type: string }
+        created_at: { $ref: '#/components/schemas/UtcTimestamp' }
+        updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
+    ProjectPermissions:
+      type: object
+      required: [messages.read, messages.write, messages.acknowledge, project.manage, project.admin, members.manage, agents.manage, ownership.transfer]
+      properties:
+        messages.read: { type: boolean }
+        messages.write: { type: boolean }
+        messages.acknowledge: { type: boolean }
+        project.manage: { type: boolean }
+        project.admin: { type: boolean }
+        members.manage: { type: boolean }
+        agents.manage: { type: boolean }
+        ownership.transfer: { type: boolean }
+    ProjectContextResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [project, current_participant_id, current_role, permissions, latest_sequence, capabilities]
+          properties:
+            project: { $ref: '#/components/schemas/ProjectDetails' }
+            current_participant_id: { type: integer, minimum: 1 }
+            current_role: { type: string, enum: [owner, admin, member, viewer, agent] }
+            permissions: { $ref: '#/components/schemas/ProjectPermissions' }
+            latest_sequence: { type: integer, minimum: 0 }
+            capabilities:
+              type: object
+              required: [realtime]
+              properties:
+                realtime:
+                  type: object
+                  required: [enabled, admission_url, sdk_module_url]
+                  properties:
+                    enabled: { type: boolean }
+                    admission_url: { type: string }
+                    sdk_module_url: { type: string }
+    UtcTimestamp:
+      type: string
+      description: UTC database timestamp in YYYY-MM-DD HH:MM:SS form.
+      pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'
+    MessageSender:
+      type: object
+      required: [participant_id, kind, display_name, avatar_url]
+      properties:
+        participant_id: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [human, agent] }
+        display_name: { type: string }
+        avatar_url: { type: string, nullable: true }
+    MessageAddressee:
+      type: object
+      required: [participant_id, kind, display_name, avatar_url, reason, notified_at, seen_at, acknowledged_at]
+      properties:
+        participant_id: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [human, agent] }
+        display_name: { type: string }
+        avatar_url: { type: string, nullable: true }
+        reason: { type: string, enum: [direct, mention, broadcast] }
+        notified_at: { allOf: [{ $ref: '#/components/schemas/UtcTimestamp' }], nullable: true }
+        seen_at: { allOf: [{ $ref: '#/components/schemas/UtcTimestamp' }], nullable: true }
+        acknowledged_at: { allOf: [{ $ref: '#/components/schemas/UtcTimestamp' }], nullable: true }
+    MessageRevision:
+      type: object
+      required: [id, previous_body, new_body, edited_at, editor]
+      properties:
+        id: { type: integer, minimum: 1 }
+        previous_body: { type: string }
+        new_body: { type: string }
+        edited_at: { $ref: '#/components/schemas/UtcTimestamp' }
+        editor: { $ref: '#/components/schemas/MessageSender' }
+    Message:
+      type: object
+      required: [id, uuid, project_id, project_sequence, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, created_at, updated_at, deleted_at, edited, revision_count]
+      properties:
+        id: { type: integer, minimum: 1 }
+        uuid: { type: string, format: uuid }
+        project_id: { type: integer, minimum: 1 }
+        project_sequence: { type: integer, minimum: 1 }
+        sender: { $ref: '#/components/schemas/MessageSender' }
+        reply_to_message_id: { type: integer, minimum: 1, nullable: true }
+        body: { type: string, nullable: true, description: Null for a soft-deleted message. }
+        addressees: { type: array, items: { $ref: '#/components/schemas/MessageAddressee' } }
+        correlation_id: { type: string, nullable: true }
+        reply_depth: { type: integer, minimum: 0 }
+        created_at: { $ref: '#/components/schemas/UtcTimestamp' }
+        updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
+        deleted_at: { allOf: [{ $ref: '#/components/schemas/UtcTimestamp' }], nullable: true }
+        edited: { type: boolean }
+        revision_count: { type: integer, minimum: 0 }
+        revisions: { type: array, description: Present only when include=revisions is requested., items: { $ref: '#/components/schemas/MessageRevision' } }
+    MessagePage:
+      type: object
+      required: [limit, has_more, newer_cursor, older_cursor, order, mode, continuation_cursor]
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        has_more: { type: boolean }
+        newer_cursor: { type: string, nullable: true }
+        older_cursor: { type: string, nullable: true }
+        order: { type: string, enum: [desc] }
+        mode: { type: string, enum: [history, forward] }
+        continuation_cursor: { type: string, nullable: true }
+    MessagePageResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        page: { $ref: '#/components/schemas/MessagePage' }
+    MessageResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Message' }
+    MessageWriteResponse:
+      type: object
+      required: [data, idempotent_replay]
+      properties:
+        data: { $ref: '#/components/schemas/Message' }
+        idempotent_replay: { type: boolean }
+    ApiError:
+      type: object
+      required: [error, code, message]
+      properties:
+        error: { type: boolean, enum: [true] }
+        code: { type: string }
+        message: { type: string }
+    ParticipantListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Participant' }
+    Participant:
+      type: object
+      required: [id, project_id, kind, identity_id, display_name, status, role, joined_at, message_count]
+      properties:
+        id: { type: integer, minimum: 1, description: Project-scoped participant identifier. }
+        project_id: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [human, agent] }
+        identity_id: { type: integer, minimum: 1, description: Underlying user or agent identifier. }
+        display_name: { type: string }
+        avatar_url: { type: string, nullable: true, readOnly: true }
+        status: { type: string, enum: [active, suspended, removed] }
+        role: { type: string, enum: [owner, admin, member, viewer, agent] }
+        joined_at: { type: string, description: UTC timestamp recording when the participant was added to the project. }
+        last_message_at: { type: string, nullable: true, description: UTC timestamp of the latest non-deleted project message sent by this participant. }
+        message_count: { type: integer, minimum: 0, description: Non-deleted project messages sent by this participant. }
+        provider: { type: string, nullable: true, description: Agent provider; null for humans. }
+        runtime: { type: string, nullable: true, description: Configured agent runtime; null when unavailable or for humans. }
+        capabilities:
+          description: Declared agent capabilities; an empty array for humans or when none are configured.
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: array, maxItems: 0 }
+        email: { type: string, format: email, description: Human-only; returned only to that human or a project owner/administrator. }
+        authentication_source: { type: string, enum: [google, pbb_account, password], description: Human-only; follows the same visibility rule as email. }
     CreateMessage:
       type: object
       required: [body]
       properties:
         body: { type: string }
-        direct_participant_ids: { type: array, items: { type: string } }
-        mention_participant_ids: { type: array, items: { type: string } }
-        broadcast: { type: boolean, default: false }
-        reply_to_message_id: { type: string, nullable: true }
+        direct_participant_ids: { type: array, items: { type: integer, minimum: 1 } }
+        mention_participant_ids: { type: array, items: { type: integer, minimum: 1 } }
+        broadcast: { type: boolean, description: If true, addresses all other active participants and ignores explicit lists. Omitted or empty addressing also broadcasts. }
+        reply_to_message_id: { type: integer, minimum: 1, nullable: true }
         idempotency_key: { type: string, maxLength: 160 }
         correlation_id: { type: string, nullable: true, maxLength: 160 }
     AgentActivationBinding:
@@ -259,6 +527,28 @@ components:
         conversation_id: { type: string, maxLength: 255, readOnly: true, description: Canonical normalized discussion ID. }
         working_directory: { type: string, maxLength: 1024 }
   responses:
-    Unauthenticated: { description: Authentication required }
-    NotFound: { description: Resource unavailable; project isolation does not reveal foreign resources }
-    Invalid: { description: Validation failed }
+    Unauthenticated:
+      description: Authentication required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: Authenticated caller lacks permission or a human mutation lacks valid CSRF evidence
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Conflict:
+      description: The requested state change conflicts with the current project or message state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: Resource unavailable; project isolation does not reveal foreign resources
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Invalid:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }

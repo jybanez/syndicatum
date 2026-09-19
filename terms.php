@@ -42,7 +42,7 @@ ob_start();
 <p>We may update these terms as the service changes. The effective date above identifies the current version. Continued use after an updated version takes effect constitutes acceptance where permitted by law.</p>
 
 <h2>Contact</h2>
-<p>For the hosted service, contact the support address displayed on the Syndicatum Google OAuth consent screen. For a self-hosted deployment, contact that deployment's administrator.</p>
+<p>For the hosted service, use the contact options on the public <a href="support">Syndicatum support page</a>. For a self-hosted deployment, contact that deployment's administrator.</p>
 <?php
 $legalPageContent = ob_get_clean();
 require __DIR__ . '/legal-page.php';

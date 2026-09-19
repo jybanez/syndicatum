@@ -1,0 +1,229 @@
+name: V1 contract candidate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  security-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare private scanner output directory
+        run: mkdir -p ci-security
+      - name: Scan source dependencies, secrets, and configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: json
+          output: ci-security/trivy.json
+          exit-code: '0'
+      - name: Retain safe finding summary and reject detected secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ci-security/trivy.json
+          secret_count="$(jq '[.Results[]? | .Secrets[]?] | length' ci-security/trivy.json)"
+          vulnerability_count="$(jq '[.Results[]? | .Vulnerabilities[]?] | length' ci-security/trivy.json)"
+          misconfiguration_count="$(jq '[.Results[]? | .Misconfigurations[]?] | length' ci-security/trivy.json)"
+          printf 'commit=%s\nsecret_findings=%s\nvulnerability_findings=%s\nmisconfiguration_findings=%s\n' \
+            "$GITHUB_SHA" "$secret_count" "$vulnerability_count" "$misconfiguration_count" \
+            | tee ci-security/summary.txt
+          jq -r '.Results[]? as $result | $result.Misconfigurations[]? |
+            ["configuration", $result.Target, .ID, .Severity] | @tsv' \
+            ci-security/trivy.json | sort -u | tee -a ci-security/summary.txt
+          jq -r '.Results[]? as $result | $result.Vulnerabilities[]? |
+            ["dependency", $result.Target, .PkgName, .VulnerabilityID, .Severity] | @tsv' \
+            ci-security/trivy.json | sort -u | tee -a ci-security/summary.txt
+          if [ "$secret_count" -ne 0 ]; then
+            echo 'Secret findings require private triage and credential rotation where applicable.' >&2
+            exit 1
+          fi
+      - name: Retain revision-bound summary without raw secret findings
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: security-inventory-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-security/summary.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:5.7.44
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: curl, gd, mbstring, pdo_mysql
+          coverage: none
+        env:
+          fail-fast: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install OpenAPI validator dependencies
+        run: python -m pip install 'PyYAML==6.0.3' 'jsonschema==4.26.0'
+      - name: Check tracked PHP and JavaScript syntax
+        run: |
+          set -euo pipefail
+          php_count=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" >/dev/null
+            php_count=$((php_count + 1))
+          done < <(git ls-files -z -- '*.php')
+          js_count=0
+          while IFS= read -r -d '' file; do
+            node --check "$file" >/dev/null
+            js_count=$((js_count + 1))
+          done < <(git ls-files -z -- '*.js' '*.mjs')
+          printf 'Syntax passed: %s PHP files and %s JavaScript files.\n' "$php_count" "$js_count"
+      - name: Identify tested revision and database mode
+        run: |
+          set -euo pipefail
+          mkdir -p ci-evidence
+          printf 'repository=%s\ncommit=%s\nrun_id=%s\nrun_attempt=%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            > ci-evidence/revision.txt
+          php tests/ci-database-mode.php | tee ci-evidence/database-mode.txt
+      - name: Check migrations and server-side coordination contract
+        run: |
+          set -euo pipefail
+          php tests/migrations.php | tee ci-evidence/migrations.txt
+          php tests/agent-activation.php | tee ci-evidence/agent-activation.txt
+          php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
+          php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
+          php tests/operational-health.php | tee ci-evidence/operational-health.txt
+          php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
+          php tests/outbox-retry-contract.php | tee ci-evidence/outbox-retry-contract.txt
+          python tests/openapi-message-contract.py --php php | tee ci-evidence/openapi-message-contract.txt
+      - name: Check portable Codex and Companion adapter contracts
+        run: |
+          set -euo pipefail
+          node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs | tee ci-evidence/codex-portable.txt
+          node --test companion/test/package.test.mjs | tee ci-evidence/companion-portable.txt
+      - name: Retain source-contract test evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: source-contract-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  docker-source-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - name: Package exact commit and verify candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-candidate/unpacked
+          archive="syndicatum-${GITHUB_SHA}.tar.gz"
+          git archive --format=tar --prefix=syndicatum/ "$GITHUB_SHA" | gzip -n > "release-candidate/$archive"
+          (cd release-candidate && sha256sum "$archive" > "$archive.sha256" && sha256sum --check "$archive.sha256")
+          tar -xzf "release-candidate/$archive" -C release-candidate/unpacked
+          test -f release-candidate/unpacked/syndicatum/compose.yaml
+          test -f release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1
+      - name: Identify Docker acceptance environment
+        run: |
+          docker version --format '{{.Server.Version}}'
+          docker compose version
+          pwsh --version
+      - name: Run isolated MySQL 5.7.44 archived-candidate lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwsh -NoProfile -File ./release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
+      - name: Identify the exact acceptance images
+        id: acceptance-images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t app_images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' |
+            grep -E '^syndicatum-acceptance-[a-f0-9]{12}-app:acceptance$' || true)
+          mapfile -t db_images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' |
+            grep -E '^syndicatum-acceptance-[a-f0-9]{12}-db:acceptance$' || true)
+          test "${#app_images[@]}" -eq 1
+          test "${#db_images[@]}" -eq 1
+          printf 'app=%s\ndb=%s\n' "${app_images[0]}" "${db_images[0]}" >> "$GITHUB_OUTPUT"
+      - name: Inventory built application image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.acceptance-images.outputs.app }}
+          scanners: vuln
+          format: json
+          output: application-image-scan.json
+          exit-code: '0'
+      - name: Inventory built database image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.acceptance-images.outputs.db }}
+          scanners: vuln
+          format: json
+          output: database-image-scan.json
+          exit-code: '0'
+      - name: Retain image vulnerability inventory without raw reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > image-security-findings.tsv
+          for component in application database; do
+            report="${component}-image-scan.json"
+            test -s "$report"
+            result_count="$(jq '.Results | length' "$report")"
+            test "$result_count" -gt 0
+            critical="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' "$report")"
+            high="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "HIGH")] | length' "$report")"
+            medium="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' "$report")"
+            printf '%s_image_results=%s\n%s_critical=%s\n%s_high=%s\n%s_medium=%s\n' \
+              "$component" "$result_count" "$component" "$critical" "$component" "$high" "$component" "$medium" \
+              | tee -a image-security-summary.txt
+            jq -r --arg component "$component" '.Results[]? as $result | $result.Vulnerabilities[]? |
+              [$component, $result.Target, $result.Type, .PkgName, .InstalledVersion, .FixedVersion, .VulnerabilityID, .Severity] | @tsv' \
+              "$report" >> image-security-findings.tsv
+          done
+          sort -u image-security-findings.tsv -o image-security-findings.tsv
+      - name: Retain Docker source-tree acceptance log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: docker-source-acceptance-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            docker-acceptance.log
+            image-security-summary.txt
+            image-security-findings.tsv
+            release-candidate/*.tar.gz
+            release-candidate/*.sha256
+          if-no-files-found: warn
+          retention-days: 30

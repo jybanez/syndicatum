@@ -4,6 +4,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5) {
+    throw 'Canonical Companion release builds require Windows PowerShell 5.1 (powershell.exe). PowerShell 7 uses different ZIP container metadata and would produce a different checksum.'
+}
 $companionRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $extensionRoot = Join-Path $companionRoot 'extension'
 $manifestPath = Join-Path $extensionRoot 'manifest.json'
@@ -32,6 +35,8 @@ if (Test-Path -LiteralPath $checksumPath) {
 
 Add-Type -AssemblyName System.IO.Compression
 $fixedTimestamp = [DateTimeOffset]::Parse('2000-01-01T00:00:00Z')
+$utf8WithoutBom = [Text.UTF8Encoding]::new($false)
+$normalizedTextExtensions = @('.css', '.html', '.js', '.json', '.md', '.mjs', '.txt')
 $files = @(Get-ChildItem -LiteralPath $extensionRoot -File -Recurse | ForEach-Object {
     [pscustomobject]@{
         FullName = $_.FullName
@@ -46,11 +51,18 @@ try {
         foreach ($file in $files) {
             $entry = $archive.CreateEntry($file.RelativePath, [IO.Compression.CompressionLevel]::NoCompression)
             $entry.LastWriteTime = $fixedTimestamp
-            $input = [IO.File]::OpenRead($file.FullName)
+            $output = $entry.Open()
             try {
-                $output = $entry.Open()
-                try { $input.CopyTo($output) } finally { $output.Dispose() }
-            } finally { $input.Dispose() }
+                $extension = [IO.Path]::GetExtension($file.FullName).ToLowerInvariant()
+                if ($normalizedTextExtensions -contains $extension) {
+                    $text = [IO.File]::ReadAllText($file.FullName).Replace("`r`n", "`n").Replace("`r", "`n")
+                    $bytes = $utf8WithoutBom.GetBytes($text)
+                    $output.Write($bytes, 0, $bytes.Length)
+                } else {
+                    $input = [IO.File]::OpenRead($file.FullName)
+                    try { $input.CopyTo($output) } finally { $input.Dispose() }
+                }
+            } finally { $output.Dispose() }
         }
     } finally { $archive.Dispose() }
 } finally { $stream.Dispose() }

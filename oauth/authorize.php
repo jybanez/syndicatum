@@ -3,6 +3,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/Api.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/ChatGptOAuthService.php';
+require_once dirname(__DIR__) . '/src/RateLimiter.php';
 $pdo = Db::pdo(); $auth = new AuthService($pdo); $oauth = new ChatGptOAuthService($pdo);
 try { $request = $oauth->authorizationRequest(Api::method() === 'POST' ? $_POST : $_GET); }
 catch (Exception $e) { http_response_code(400); echo 'Invalid OAuth authorization request.'; exit; }
@@ -14,6 +15,7 @@ if (!$user) {
 $error = '';
 if (Api::method() === 'POST') {
     try {
+        (new RateLimiter($pdo))->hit('oauth.authorize', (int) $user['id'] . ':' . (string) ($_SERVER['REMOTE_ADDR'] ?? ''), 30, 300, 300);
         $auth->validateCsrf($user, (string) ($_POST['csrf_token'] ?? ''));
         if (isset($_POST['deny'])) {
             $query = http_build_query(['error' => 'access_denied', 'state' => $request['state']]);
@@ -22,7 +24,10 @@ if (Api::method() === 'POST') {
         $code = $oauth->issueAuthorizationCode($request, $user['id']);
         $query = http_build_query(['code' => $code, 'state' => $request['state']]);
         header('Location: ' . $request['redirect_uri'] . (strpos($request['redirect_uri'], '?') === false ? '?' : '&') . $query, true, 302); exit;
-    } catch (Exception $e) { $error = 'Authorization could not be completed.'; }
+    } catch (Exception $e) {
+        if ($e->getMessage() === 'RATE_LIMITED') { http_response_code(429); $error = 'Too many authorization attempts. Please wait five minutes and try again.'; }
+        else { $error = 'Authorization could not be completed.'; }
+    }
 }
 $csrf = isset($_COOKIE[AuthService::CSRF_COOKIE]) ? (string) $_COOKIE[AuthService::CSRF_COOKIE] : '';
 ?><!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

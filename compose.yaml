@@ -1,0 +1,128 @@
+name: syndicatum
+
+x-syndicatum-environment: &syndicatum-environment
+  PBB_AGENTCHAT_DB_HOST: db
+  PBB_AGENTCHAT_DB_NAME: ${PBB_AGENTCHAT_DB_NAME:-pbb_agentchat}
+  PBB_AGENTCHAT_DB_USER: ${PBB_AGENTCHAT_DB_USER:-syndicatum}
+  PBB_AGENTCHAT_DB_PASS: ${PBB_AGENTCHAT_DB_PASS:?Set PBB_AGENTCHAT_DB_PASS in .env}
+  PBB_AGENTCHAT_SECRET: ${PBB_AGENTCHAT_SECRET:?Set PBB_AGENTCHAT_SECRET in .env}
+  PBB_AGENTCHAT_PREVIOUS_SECRET: ${PBB_AGENTCHAT_PREVIOUS_SECRET:-}
+  SYNDICATUM_MASTER_KEY: ${SYNDICATUM_MASTER_KEY:?Set SYNDICATUM_MASTER_KEY in .env}
+  SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST: ${SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST:-}
+  SYNDICATUM_AVATAR_DIR: /var/lib/syndicatum/avatars
+  SYNDICATUM_WORKER_STALE_SECONDS: ${SYNDICATUM_WORKER_STALE_SECONDS:-120}
+  TZ: ${TZ:-UTC}
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: docker/mysql.Dockerfile
+      args:
+        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:5.7.44}
+    image: ${SYNDICATUM_DB_IMAGE:-syndicatum-db:local}
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${PBB_AGENTCHAT_DB_NAME:-pbb_agentchat}
+      MYSQL_USER: ${PBB_AGENTCHAT_DB_USER:-syndicatum}
+      MYSQL_PASSWORD: ${PBB_AGENTCHAT_DB_PASS:?Set PBB_AGENTCHAT_DB_PASS in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      TZ: ${TZ:-UTC}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --log-bin-trust-function-creators=1
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+    volumes:
+      - syndicatum_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    build:
+      context: .
+      args:
+        PHP_IMAGE: ${SYNDICATUM_PHP_IMAGE:-php:8.2-apache-bookworm}
+    image: ${SYNDICATUM_IMAGE:-syndicatum:local}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,mode=1777
+      - /var/run/apache2:rw,nosuid,nodev,uid=33,gid=33,mode=0755
+      - /var/lock/apache2:rw,nosuid,nodev,uid=33,gid=33,mode=0755
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *syndicatum-environment
+    ports:
+      - "${SYNDICATUM_HTTP_BIND:-127.0.0.1}:${SYNDICATUM_HTTP_PORT:-8080}:8080"
+    volumes:
+      - syndicatum_avatars:/var/lib/syndicatum/avatars
+    healthcheck:
+      test:
+        - CMD
+        - php
+        - -r
+        - '$$r=@file_get_contents("http://127.0.0.1:8080/api/v1/health.php");$$d=$$r===false?null:json_decode($$r,true);exit(is_array($$d)&&($$d["data"]["core"]["status"]??null)==="ok"&&($$d["data"]["core"]["database"]??false)===true&&($$d["data"]["core"]["expanded_schema"]??false)===true?0:1);'
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    networks:
+      - frontend
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  worker:
+    image: ${SYNDICATUM_IMAGE:-syndicatum:local}
+    user: www-data
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,mode=1777
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    environment:
+      <<: *syndicatum-environment
+      SYNDICATUM_WORKER_INTERVAL_SECONDS: ${SYNDICATUM_WORKER_INTERVAL_SECONDS:-5}
+      SYNDICATUM_WEBHOOK_BATCH_SIZE: ${SYNDICATUM_WEBHOOK_BATCH_SIZE:-100}
+      SYNDICATUM_OUTBOX_BATCH_SIZE: ${SYNDICATUM_OUTBOX_BATCH_SIZE:-100}
+    command: ["syndicatum-worker"]
+    volumes:
+      - syndicatum_avatars:/var/lib/syndicatum/avatars
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/syndicatum-worker-heartbeat && test $$(($$(date +%s) - $$(stat -c %Y /tmp/syndicatum-worker-heartbeat))) -le $${SYNDICATUM_WORKER_STALE_SECONDS:-120}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - frontend
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  syndicatum_db:
+  syndicatum_avatars:
+
+networks:
+  frontend:
+  backend:
+    internal: true

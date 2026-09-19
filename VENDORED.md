@@ -4,6 +4,11 @@ This project vendors minimal runtime subsets of the official PBB Helper and PBB
 Realtime libraries so Syndicatum can use their supported browser components
 without a cross-origin module dependency.
 
+These independently sourced files remain subject to their upstream copyright
+and license terms. The repository-level `AGPL-3.0-only` declaration does not
+replace those terms. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for
+the outstanding public-release license audit.
+
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`

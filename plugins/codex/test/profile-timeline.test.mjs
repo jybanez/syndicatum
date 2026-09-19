@@ -33,6 +33,21 @@ test("profile timeline requests authenticate internally and never return the tok
   assert.match(calls.at(-1).url, /project_id=3/);
 });
 
+test("profile timeline defaults to 50 messages and permits explicit 200-message recovery", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+    return response([]);
+  };
+  const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+  await client.messages(profile.profile_id);
+  await client.messages(profile.profile_id, { limit: 200 });
+  const messageCalls = calls.filter(url => url.includes("/project-messages.php"));
+  assert.equal(new URL(messageCalls[0]).searchParams.get("limit"), "50");
+  assert.equal(new URL(messageCalls[1]).searchParams.get("limit"), "200");
+});
+
 test("profile timeline posts as the selected profile with stable idempotency", async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {

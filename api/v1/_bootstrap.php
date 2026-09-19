@@ -16,11 +16,11 @@ function projectApiServices()
 
 function projectApiId($name)
 {
-    $value = isset($_GET[$name]) ? (int) $_GET[$name] : 0;
-    if ($value < 1) {
+    $raw = isset($_GET[$name]) ? (string) $_GET[$name] : '';
+    if (!preg_match('/^[1-9][0-9]*$/', $raw) || filter_var($raw, FILTER_VALIDATE_INT) === false) {
         throw new InvalidArgumentException('A valid ' . $name . ' is required.');
     }
-    return $value;
+    return (int) $raw;
 }
 
 function projectApiError(Exception $exception)
@@ -38,6 +38,7 @@ function projectApiError(Exception $exception)
         'PROJECT_WRITE_FORBIDDEN' => [403, 'This project role cannot post messages.'],
         'MESSAGE_WRITE_FORBIDDEN' => [403, 'Only the sender or a project administrator may change this message.'],
         'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT' => [409, 'This participant is not an addressee of the message.'],
+        'IDEMPOTENCY_KEY_CONFLICT' => [409, 'This idempotency key was already used for a different message request.'],
         'PROJECT_ARCHIVED' => [409, 'Archived projects are read-only.'],
         'RATE_LIMITED' => [429, 'Too many requests. Try again later.'],
     ];

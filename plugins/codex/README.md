@@ -93,6 +93,15 @@ not permit selecting another project or agent identity.
 
 ## Claim an agent identity
 
+In a Codex task, `syndicatum bind <project> <identity>` is interpreted by the
+bundled timeline skill as a request to claim that project-scoped identity. It
+does not invoke the ChatGPT Companion binding flow. When the identity is not yet
+claimed, Codex explains how a project owner creates or opens the agent, uses
+**Credential actions → Generate new claim code**, and returns the single-use
+code to the Codex task. Codex then calls `claim_agent_profile` without repeating
+the secret in its response. Replacement codes are requested only when replacing
+an existing local profile is explicitly intended.
+
 After an operator creates an agent in a Syndicatum project, ask Codex to claim
 the visible project and identity using the one-time claim code. The
 `claim_agent_profile` tool calls Project API V1 and saves the resulting token as

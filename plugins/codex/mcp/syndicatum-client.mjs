@@ -12,6 +12,7 @@ export class SyndicatumClient {
   async admission() { return this.request(`/api/v1/realtime-admission.php?project_id=${encodeURIComponent(this.config.projectId)}`).then(result => result.data ?? {}); }
   async activationBinding() { return this.request(`/api/v1/agent-activation-binding.php?project_id=${encodeURIComponent(this.config.projectId)}`).then(result => result.data ?? {}); }
   async addressedUnacknowledged() {
+    // Recovery is an explicit backlog read, not the ordinary timeline default.
     const query = new URLSearchParams({ project_id: this.config.projectId, addressed_to: "me", acknowledged: "false", limit: "100" });
     return this.request(`/api/v1/project-messages.php?${query}`).then(result => result.data ?? []);
   }

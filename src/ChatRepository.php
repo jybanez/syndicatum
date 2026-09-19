@@ -312,7 +312,7 @@ class ChatRepository
 
     public function messagePage(array $filters = [])
     {
-        $limit = isset($filters['limit']) ? (int) $filters['limit'] : 100;
+        $limit = isset($filters['limit']) ? (int) $filters['limit'] : 50;
         $limit = max(1, min(200, $limit));
         if (!empty($filters['before']) && !empty($filters['after'])) {
             throw new InvalidArgumentException('Use either before or after, not both.');

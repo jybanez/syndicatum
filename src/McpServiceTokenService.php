@@ -25,9 +25,9 @@ class McpServiceTokenService
     {
         if (!Db::tableExists($this->pdo, 'mcp_service_tokens')) { return null; }
         $statement = $this->pdo->prepare(
-            "SELECT mst.id AS service_token_id, mst.project_id, a.id AS authenticated_agent_id,
+            "SELECT mst.id AS service_token_id, mst.project_id, a.id, a.id AS authenticated_agent_id,
                     a.project_name, a.description, a.role, a.is_active,
-                    pa.status AS project_agent_status, pp.id AS participant_id,
+                    pa.status AS project_agent_status, pa.display_name, pp.id AS participant_id,
                     pp.status AS participant_status, p.status AS project_status
              FROM mcp_service_tokens mst
              JOIN chat_agents a ON a.id = mst.agent_id
@@ -40,10 +40,27 @@ class McpServiceTokenService
         $row = $statement->fetch();
         if (!$row || !$row['is_active'] || $row['project_agent_status'] !== 'active'
             || $row['participant_status'] !== 'active' || $row['project_status'] !== 'active') { return null; }
+        $scopeQuery = $this->pdo->prepare('SELECT scope FROM agent_credential_scopes WHERE agent_id = ?');
+        $scopeQuery->execute([(int) $row['authenticated_agent_id']]);
+        $agentScopes = $scopeQuery->fetchAll(PDO::FETCH_COLUMN);
+        if (!$agentScopes) {
+            $agentScopes = ['profile:read', 'messages:read', 'messages:write', 'messages:acknowledge'];
+        }
+        $scopeMap = [
+            'projects:read' => 'profile:read',
+            'participants:read' => 'profile:read',
+            'messages:read' => 'messages:read',
+            'messages:write' => 'messages:write',
+            'messages:acknowledge' => 'messages:acknowledge',
+        ];
+        $grantedScopes = [];
+        foreach ($scopeMap as $mcpScope => $agentScope) {
+            if (in_array($agentScope, $agentScopes, true)) { $grantedScopes[] = $mcpScope; }
+        }
         $this->pdo->prepare('UPDATE mcp_service_tokens SET last_used_at = ? WHERE id = ?')
             ->execute([Db::now(), $row['service_token_id']]);
         return ['project_id' => (int) $row['project_id'], 'participant_id' => (int) $row['participant_id'],
-            'role' => 'agent', 'project_status' => $row['project_status'], 'scope' => ChatGptOAuthService::SCOPES,
+            'role' => 'agent', 'project_status' => $row['project_status'], 'scope' => $grantedScopes,
             'identity' => ['kind' => 'agent', 'agent' => $row]];
     }
 }

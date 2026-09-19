@@ -6,6 +6,7 @@ class MessageOutbox
 {
     const EVENT_MESSAGE_CREATED = 'syndicatum.message.created';
     const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
+    const DEFAULT_MAX_ATTEMPTS = 8;
 
     private $pdo;
 
@@ -162,9 +163,14 @@ class MessageOutbox
 
     public static function retryDelay($attemptCount)
     {
-        $delays = [5, 30, 120, 600, 1800, 3600];
+        $delays = self::retryScheduleSeconds();
         $index = max(0, min(count($delays) - 1, (int) $attemptCount - 1));
         return $delays[$index];
+    }
+
+    public static function retryScheduleSeconds()
+    {
+        return [5, 30, 120, 600, 1800, 3600];
     }
 
     private function findById($id)

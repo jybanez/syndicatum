@@ -26,7 +26,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
             <img src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="">
             <span>Syndicatum</span>
         </a>
-        <nav aria-label="Legal pages"><a href="privacy">Privacy</a><a href="terms">Terms</a></nav>
+        <nav aria-label="Information pages"><a href="support">Support</a><a href="privacy">Privacy</a><a href="terms">Terms</a><a href="license">Source &amp; License</a></nav>
     </header>
     <main class="legal-shell">
         <article class="legal-card">
