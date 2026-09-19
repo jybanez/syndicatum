@@ -4,6 +4,7 @@
 **Prepared:** 2026-09-20
 **Architecture reference:** protected `main` at `f7e9497d0d08955c3bcc6fc35085725429f46bfd`
 **Decision record:** Syndicatum messages #2930, #2931, and #2933
+**Companion UI specification:** `docs/v1-package-installer-admin-ui-proposal.md`
 
 ## Executive summary
 
