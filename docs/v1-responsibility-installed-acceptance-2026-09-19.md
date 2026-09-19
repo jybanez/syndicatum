@@ -171,6 +171,42 @@ This verifies only the installed historical wording for an accepted resolution
 that retained a blocked-history flag. It does not verify other historical
 baselines, screen-reader presentation, or full P1.1/P1.2 acceptance.
 
+## Transfer and orphan-recovery probe
+
+A fifth disposable Compose stack first exercised the installed `d9ccd63`
+image with three independently authenticated synthetic humans. A responder
+offered a direct request to a second responder, who declined once and then
+accepted a second offer. Removing the new responder correctly placed the
+request in the owner's `Unassigned` view with `No active owner`. The owner
+then offered that orphaned request back to the still-active former responder,
+who accepted it. The acceptance event was canonical, but the installed inbox
+still projected the request as orphaned and omitted it from the recipient's
+`My work` view.
+
+The defect was in `ResponsibilityEventService`: transition validation used the
+pure reducer's return value only for validation and discarded the resulting
+state before choosing the responder status-generation anchor. A normal
+generation-zero transfer masked the error; orphan recovery across responders
+with different status generations exposed it. Commit `771a222` retains the
+reduced state and anchors an accepted transfer to the newly selected responder.
+A focused MySQL integration regression recreates that asymmetric-generation
+case and passed with the broader responsibility persistence/concurrency suite.
+
+The exact `771a222` worktree was built as
+`syndicatum-acceptance-771a222-app:acceptance` (image ID
+`sha256:43fa66719429fa56cce232fac25e39585af8ebd994733555c6f8592f6cd28443`).
+A fresh isolated stack served that image at `127.0.0.1:18087` with MySQL
+5.7.44; health reported core `ok`, database connected, and expanded schema
+available. In the installed browser, the initial responder offered request
+`#1` to the target and the target accepted it into `My work`. Removing that
+target placed the same request in `Unassigned` as `Orphaned` with `No active
+owner`. The owner offered it to the active former responder. After that
+responder accepted through the installed browser, `My work` showed exactly one
+open `Request #1` owned by `Fix Responder`, with its latest canonical evidence
+link. This closes only the exercised offer/decline/accept, deactivation orphan,
+and owner-mediated orphan-recovery paths; it is not dispute/reopen,
+accessibility, or complete P1.1/P1.2 acceptance.
+
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
@@ -178,9 +214,9 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
 
 ## Still open
 
-- Responder-side dispute, handoff, orphaned/transfer, and reopened flows under
-  independently authenticated identities. The observed acknowledge/start/
-  blocked/propose/accept sequence is only one path through the matrix.
+- Responder-side dispute and reopened flows under independently authenticated
+  identities. The exercised transfer/orphan recovery is one bounded path
+  through the broader role/state matrix.
 - Broader stale HTTP 409 recovery across other roles and states, including
   refresh-failure UX. The owner-side withdrawal conflict above is exercised
   and accepted at narrow scope.

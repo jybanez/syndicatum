@@ -589,6 +589,18 @@ qualifier wording sub-gate in #2803; evidence/checklist head `e961a95` passed
 all three required V1 CI jobs in run `35401728565` (#2804). This is not
 historical-baseline, accessibility, P1.1/P1.2, or release acceptance.
 
+The subsequent three-identity installed transfer/orphan probe found and fixed
+an asymmetric responder-generation defect. Exact image `771a222` now preserves
+the reduced responder when recording transfer acceptance. In a fresh MySQL
+5.7.44 stack, the installed browser exercised offer, decline, re-offer,
+acceptance, member removal to `Orphaned`, owner-mediated recovery offer, and
+acceptance by a different active responder. The recovered request appeared
+once as open in that responder's `My work` view. See the
+[installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#transfer-and-orphan-recovery-probe).
+This closes only that bounded transfer/orphan path; dispute/reopen,
+pagination/history/unknown baseline, edit/tombstone, mobile, accessibility,
+and overall P1.1/P1.2 remain open pending CI and Assessor review.
+
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
 The Commercial Assessor recommended its non-inventive policy in message #2765
