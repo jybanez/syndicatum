@@ -8,6 +8,8 @@ require_once dirname(__DIR__) . '/src/ProjectRepository.php';
 require_once dirname(__DIR__) . '/src/AvatarService.php';
 require_once dirname(__DIR__) . '/src/AgentWebhookService.php';
 require_once dirname(__DIR__) . '/src/AgentWebhookWorker.php';
+require_once dirname(__DIR__) . '/src/MessageDeliveryStatus.php';
+require_once dirname(__DIR__) . '/src/AdminDeliveryHealth.php';
 
 class AvatarWebhookTests
 {
@@ -91,9 +93,80 @@ try {
         $suite->true((bool) array_filter($captured[0]['headers'], function ($h) { return strpos($h, 'Idempotency-Key: ') === 0; }));
         $statuses = $pdo->query('SELECT agent_id, status FROM agent_webhook_deliveries ORDER BY agent_id')->fetchAll(PDO::FETCH_KEY_PAIR);
         $suite->same('succeeded', $statuses[$agentOne['agent_id']]); $suite->same('retry', $statuses[$agentTwo['agent_id']]);
+        $failure = $pdo->query("SELECT last_failure_code, last_error, last_attempt_at
+            FROM agent_webhook_deliveries WHERE status = 'retry' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        $suite->same('upstream_error', $failure['last_failure_code']);
+        $suite->same('Delivery failed: upstream_error (HTTP 500).', $failure['last_error']);
+        $suite->true($failure['last_attempt_at'] !== null);
+        $deliveryStatus = MessageDeliveryStatus::inspect($pdo, $message['message']['id']);
+        $agentStatus = null;
+        foreach ($deliveryStatus['addressees'] as $addressee) {
+            if (isset($addressee['agent_id']) && (int) $addressee['agent_id'] === (int) $agentTwo['agent_id']) {
+                $agentStatus = $addressee['activation']['webhook'];
+            }
+        }
+        $suite->same('upstream_error', $agentStatus['failure_code']);
+        $suite->true($agentStatus['next_retry_at'] !== null);
         $query = $pdo->prepare('SELECT pp.agent_id, ma.notified_at FROM message_addressees ma JOIN project_participants pp ON pp.id = ma.participant_id WHERE ma.message_id = ? ORDER BY pp.agent_id');
         $query->execute([$message['message']['id']]); $notified = $query->fetchAll(PDO::FETCH_KEY_PAIR);
         $suite->true($notified[$agentOne['agent_id']] !== null); $suite->same(null, $notified[$agentTwo['agent_id']]);
+    });
+    $suite->test('administrator delivery health separates retry from category without disclosing content', function () use ($suite, $pdo) {
+        $report = AdminDeliveryHealth::snapshot($pdo);
+        $webhook = $report['paths']['webhook'];
+        $suite->same(1, $webhook['pending']);
+        $suite->same(1, $webhook['retrying']);
+        $suite->same(0, $webhook['terminal']);
+        $suite->same('upstream_error', $webhook['diagnostic_sample']['latest_failed_attempt']['failure_code']);
+        $suite->same('retry', $webhook['diagnostic_sample']['latest_failed_attempt']['queue_state']);
+        $suite->same('unknown', $report['worker']['state']);
+        $suite->same('unknown', $report['state']);
+        $suite->true(strpos(json_encode($report), 'Notify both agents') === false);
+        $suite->true(strpos(json_encode($report), 'signing_secret') === false);
+    });
+    $suite->test('recent terminal transition is counted even when the delivery was created earlier', function () use ($suite, $pdo) {
+        $row = $pdo->query("SELECT id, created_at FROM agent_webhook_deliveries WHERE status = 'retry' LIMIT 1")
+            ->fetch(PDO::FETCH_ASSOC);
+        $suite->true((bool) $row, 'Expected retrying webhook fixture.');
+        try {
+            $pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'dead',
+                created_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY), terminal_at = UTC_TIMESTAMP()
+                WHERE id = ?")->execute([(int) $row['id']]);
+            $health = AdminDeliveryHealth::snapshot($pdo);
+            $suite->same(1, $health['paths']['webhook']['terminal_last_24h']);
+            $suite->same('degraded', $health['paths']['webhook']['state']);
+            $suite->same('unknown', $health['state']); // Worker heartbeat is absent in this fixture.
+        } finally {
+            $pdo->prepare("UPDATE agent_webhook_deliveries SET status = 'retry', created_at = ?,
+                terminal_at = NULL WHERE id = ?")->execute([$row['created_at'], (int) $row['id']]);
+        }
+    });
+    $suite->test('administrator health does not hide a stale worker or missing diagnostics', function () use ($suite, $pdo) {
+        $pdo->exec("INSERT INTO delivery_worker_heartbeats (worker_name, last_success_at)
+            VALUES ('delivery', DATE_SUB(UTC_TIMESTAMP(), INTERVAL 180 SECOND))");
+        $stale = AdminDeliveryHealth::snapshot($pdo);
+        $suite->same('degraded', $stale['worker']['state']);
+        $suite->same('degraded', $stale['state']);
+        $pdo->exec("UPDATE delivery_worker_heartbeats SET last_success_at = UTC_TIMESTAMP()
+            WHERE worker_name = 'delivery'");
+        $recovered = AdminDeliveryHealth::snapshot($pdo);
+        $suite->same('ok', $recovered['worker']['state']);
+        $previousThreshold = getenv('SYNDICATUM_WORKER_STALE_SECONDS');
+        putenv('SYNDICATUM_WORKER_STALE_SECONDS=invalid');
+        try {
+            $invalid = AdminDeliveryHealth::snapshot($pdo);
+            $suite->same('unknown', $invalid['worker']['state']);
+            $suite->same('unknown', $invalid['state']);
+        } finally {
+            putenv($previousThreshold === false ? 'SYNDICATUM_WORKER_STALE_SECONDS'
+                : 'SYNDICATUM_WORKER_STALE_SECONDS=' . $previousThreshold);
+        }
+        $pdo->exec('ALTER TABLE agent_webhook_deliveries DROP COLUMN last_failure_code');
+        $missing = AdminDeliveryHealth::snapshot($pdo);
+        $suite->same('unknown', $missing['paths']['webhook']['state']);
+        $suite->same('diagnostic_migration_missing', $missing['paths']['webhook']['unavailable_reason']);
+        $suite->same(null, $missing['paths']['webhook']['pending']);
+        $suite->same('unknown', $missing['state']);
     });
     exit($suite->finish());
 } finally {

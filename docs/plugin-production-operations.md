@@ -69,10 +69,13 @@ Run the credential-free public preflight with
 rate-limit blocks, Realtime backlog/recent failures, webhook backlog/recent
 dead letters, Workspace Agent trigger deliveries, and Responses API activation
 deliveries. The latter two include queued/retrying (and, for Responses API,
-waiting) work, dead entries created within the last 24 hours, and oldest
-pending age. The delivery tables do not record a separate time of transition
-to `dead`, so this counter must not be read as the number that *became* dead
-within the last 24 hours.
+waiting) work, dead transitions within the last 24 hours, and oldest pending
+age. Realtime uses `failed_at`; webhook, Workspace Agent, and Responses API
+deliveries use `terminal_at`. For rows already dead before the terminal-time
+migration, the backfill uses the last attempt, the prior disable timestamp,
+or row creation in that order, so historical counts can be approximate. The
+backfill also clears `delivered_at` on dead rows previously stamped by the
+disabled-path migration, so they no longer masquerade as successful delivery.
 Each delivery path now reports `ok`, `degraded`, or `unknown` and the last
 successful publish/delivery timestamp (UTC, or `null` when none is recorded).
 Missing tables produce `unknown` with null counts, and the overall state is
@@ -90,6 +93,25 @@ above the configured worker interval. Status JSON reports the effective
 as the aggregate so a known failure is not hidden by another unknown path.
 This contract does not yet assert freshness of delivery `last_success_at`, so
 an idle queue with no success history is not proof of a successful delivery.
+Each path also includes a `diagnostic_sample` from at most its newest 50
+delivery rows. It reports sampled retry/terminal counts and the newest failed
+attempt in that sample with only bounded category, numeric HTTP status, queue
+state, attempt count, and timing. This sample is not a fleet-wide total or the
+current path health: a failure can be historical while a later row succeeded.
+Use the path-wide state and backlog/dead counters for current attention. A
+sample marked `unavailable` means the diagnostic migration or table is absent;
+do not infer healthy delivery from it. The command remains host-operator-only
+and read-only; it does not expose message bodies or remote error payloads.
+System administrators can also open **Delivery health** in the application.
+Its read-only endpoint requires an administrator session and shows each path's
+current state, global pending/retry/terminal counts, oldest pending age, last
+attempt and success, a bounded recent failure sample, and worker heartbeat.
+Missing tables or diagnostic columns are `unknown`/`unavailable`, not zero.
+Workspace Agent and Responses API are explicitly labeled disabled in V1 at
+the activation dependency boundary; queue health does not imply activation.
+The last failure is historical context and does not by itself set current
+health. Times from database `DATETIME` columns are shown as server values
+without an invented timezone offset.
 Exit code `0` is healthy, `2` requires operator attention, and `3` means the
 database status could not be read. Pair this with
 `scripts/status-realtime-outbox.ps1` for process and Scheduled Task state.
@@ -146,8 +168,58 @@ destination accepted a delivery, not that the agent read or acted on it;
 `acknowledged` records the participant's explicit handling acknowledgement.
 `not_enqueued` does not by itself imply a failed path; check binding and
 routing configuration. A missing delivery table is `unknown`, not zero work.
+For Realtime outbox events, `attempt_count`, `last_attempt_at`, and
+`next_retry_at` show the retry position; `terminal_outcome` is set only after
+acceptance or terminal failure. `failure_code` is a bounded category derived
+from the HTTP status or local failure type, not a copy of a remote response.
+`authentication`, `routing`, and `rate_limiting` reflect observed HTTP codes;
+other paths can remain `rejected`, `transport`, or `upstream_error` without a
+more specific causal claim. These Realtime fields do not prove addressee
+notification or agent handling. The outbox timestamps are database `DATETIME`
+values without a stored timezone offset; correlate them with the deployment's
+database/PHP timezone configuration before comparing across hosts.
+Webhook, Workspace Agent, and Responses API delivery rows use the same
+bounded HTTP/transport categories where those facts are observable, while
+retaining their provider-specific queue states. Their per-message activation
+projections include last attempt, next retry/poll, last success, terminal
+outcome, HTTP status, and failure category. An unclassified local failure is
+`internal_error`; this does not assert that the remote provider caused it.
+The [cross-provider mapping](v1-delivery-failure-taxonomy.md) records which
+categories actually align and where provider-specific state remains separate.
+Raw provider error bodies, cURL strings, and exception messages are not
+retained in delivery or binding `last_error` fields. Workspace Agent and
+Responses API activation remain disabled by V1 policy; this schema and source
+coverage do not imply those paths are supported for proactive activation.
 
 ## Incident response
+
+### Delivery-worker recovery check
+
+When delivery is delayed, a system administrator should open **Delivery
+health** and record the affected path, current queue state, pending and retry
+counts, oldest pending age, worker heartbeat state, last attempt, last success,
+and bounded failure category. A missing metric or heartbeat is `unknown`, not
+healthy. Do not open raw delivery payloads, provider response bodies, or
+credentials to diagnose the path.
+
+For a stale or stopped delivery worker, first verify its process/service state
+and the deployment's configuration. Restart the worker through the deployment's
+normal supervisor (for a Docker deployment, `docker compose up --detach
+--wait worker` from the correct release directory). Then reopen **Delivery
+health**: the heartbeat must become current, due queue items should drain,
+and the affected path must return to `ok`. Reconcile a specific item using
+`scripts/plugin-message-delivery-status.php --message-id=NUMBER` and the
+receiver's stable delivery identity when available. A healthy heartbeat alone
+does not prove receiver acceptance; verify a last-success transition and, for
+an external receiver, its receipt or audit record. A future-scheduled item can
+remain pending without making the path degraded.
+
+If a row is terminal/dead, do not reset its status or blindly replay it.
+Preserve its sanitized attempt metadata, determine whether the receiver may
+already have applied the effect, and reconcile by the stable UUID before any
+manual redelivery. There is no general V1 production-safe replay command or
+cross-provider deduplication guarantee. Escalate unresolved terminal work for
+an incident-specific recovery decision.
 
 1. Preserve timestamps, request IDs, sanitized logs, process state, deployment
    commit, and recent configuration changes.
