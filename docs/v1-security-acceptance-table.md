@@ -201,11 +201,11 @@ before an independent reviewer accepts any N/A disposition.
 | CVE-2025-31133 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` rootfs masking; `gosu` does not set up rootfs | runc 1.2.8 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
 | CVE-2025-52565 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` console bind mounts; `gosu` does not create mounts | runc 1.2.8 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
 | CVE-2025-52881 | HIGH | db / `gosu` / `github.com/opencontainers/runc` | Advisory concerns `runc` procfs/LSM setup; `gosu` does not configure containers | runc 1.2.8 listed | Verify affected path is absent from bundled helper | Proposed N/A for `gosu`, not Docker host runtime | Review pending |
-| CVE-2026-12064 | HIGH (scanner) | app / `libcurl4` | Upstream describes a curl CLI-only path; CLI was purged, but library remains | No Debian fix listed in scan | Independently confirm CLI-only scope and published image contents | Proposed N/A for library; no acceptance yet | Review pending |
-| CVE-2026-6276 | HIGH (scanner) | app / `libcurl4` | Requires reuse of one easy handle after a custom Host header; application PHP call sites create and close a handle per request | No Debian fix listed in scan | Verify all reachable call paths and upstream preconditions | Proposed N/A for current app paths; library remains | Review pending |
-| CVE-2026-8286 | HIGH (scanner) | app / `libcurl4` | Requires cleartext mail/FTP/LDAP STARTTLS connection reuse; identified PHP call sites use HTTP(S) | No Debian fix listed in scan | Verify configured URL schemes and indirect callers | Proposed N/A for current app paths; library remains | Review pending |
-| CVE-2026-8458 | HIGH (scanner) | app / `libcurl4` | Requires HTTP Negotiate service-name use; no `CURLOPT_SERVICE_NAME` found in application source | No Debian fix listed in scan | Verify indirect callers and runtime configuration | Proposed N/A for current app paths; library remains | Review pending |
-| CVE-2026-8927 | HIGH (scanner) | app / `libcurl4` | Requires reuse of one handle across different Digest-authenticating proxies; application PHP call sites create and close per request | No Debian fix listed in scan | Verify indirect callers and proxy configuration | Proposed N/A for current app paths; library remains | Review pending |
+| CVE-2026-12064 | HIGH (scanner; upstream LOW) | app / `libcurl4` `7.88.1-10+deb12u15` | Curl states the flaw affects only the command-line tool, not libcurl; the exact candidate build purges the `curl` package after compiling PHP's extension | No Debian fix listed in scan; upstream fixed in 8.21.0 | Preserve the runtime CLI-absence check and re-evaluate if the tool is restored | `not_applicable` proposed: the affected tool layer is absent | Assessor review pending |
+| CVE-2026-6276 | HIGH (scanner; upstream LOW) | app / `libcurl4` `7.88.1-10+deb12u15` | Requires a custom `Host:` request followed by a second transfer on the same easy handle; all seven production callers create one handle, perform one transfer, and close it, and none sets a custom Host header | No Debian fix listed in scan; upstream fixed in 8.20.0 | Preserve one-transfer-per-handle behavior; reopen on handle reuse or custom Host support | `unreachable` proposed: affected library is present, but the required supported call sequence is absent | Assessor review pending |
+| CVE-2026-8286 | HIGH (scanner; upstream LOW) | app / `libcurl4` `7.88.1-10+deb12u15` | Requires STARTTLS connection reuse for IMAP, POP3, SMTP, FTP, or LDAP; supported settings restrict integration URLs to HTTP(S), and every call uses a fresh easy handle | No Debian fix listed in scan; upstream fixed in 8.21.0 | Preserve HTTP(S)-only URL validation and one-transfer-per-handle behavior | `unreachable` proposed: affected library is present, but no supported STARTTLS/reuse path exists | Assessor review pending |
+| CVE-2026-8458 | HIGH (scanner; upstream LOW) | app / `libcurl4` `7.88.1-10+deb12u15` | Requires Negotiate-authenticated connection reuse with different `CURLOPT_SERVICE_NAME` or proxy-service values; source uses neither option, no Negotiate configuration, and no handle reuse | No Debian fix listed in scan; upstream fixed in 8.21.0 | Reopen if Negotiate or custom service-name support is added | `unreachable` proposed: affected library is present, but the required auth/options/reuse path is absent | Assessor review pending |
+| CVE-2026-8927 | HIGH (scanner; upstream MEDIUM) | app / `libcurl4` `7.88.1-10+deb12u15` | Requires sequential transfers on one handle while environment-selected Digest proxies change; every production call creates and closes a fresh handle, and declared Docker/Compose configuration sets no proxy variables | No Debian fix listed in scan; upstream fixed in 8.21.0 | Reject proxy-enabled or handle-reuse deployments unless re-reviewed | `unreachable` proposed for the supported baseline; operator-added proxy/handle behavior would reopen the row | Assessor review pending |
 
 The [gosu maintainer](https://github.com/tianon/gosu) describes the helper as
 switching user/group and then `exec`-ing the target process. The
@@ -217,11 +217,20 @@ are invoked. Independent review must verify each proposed N/A and separately
 assess the Docker host runtime version; this table concerns the bundled helper.
 
 The [curl upstream advisories](https://curl.se/docs/security.html) specify the
-preconditions for the five `libcurl4` rows. Source inspection covered the
-application's PHP cURL call sites in `src/`; it is not yet a complete audit of
-extensions, dependencies, deployment proxy settings, or the published image.
-Upstream severity can differ from the scanner's HIGH rating. None of these
-proposed dispositions changes the release gate before independent review.
+preconditions for the five `libcurl4` rows. The exact CI inventory and build
+log from run 35431565206 confirm `libcurl4` `7.88.1-10+deb12u15`, the compiled
+PHP curl extension, and removal of the curl CLI package. Exact-source inspection
+covered all seven PHP cURL callers: `AccountIntegration`, `AgentWebhookWorker`,
+`GoogleIntegration`, `IntegrationHealth`, `RealtimeIntegration`,
+`ResponsesApiActivationService`, and `WorkspaceAgentTriggerService`. Each
+creates a fresh easy handle, performs one transfer, and closes it; no
+`curl_multi`, share handle, reset/copy, service-name, proxy, proxy-auth, or
+custom Host option appears. `SettingsService` restricts supported integration
+URLs to HTTP(S), and the declared Docker/Compose environment sets no proxy
+variable. Upstream severity differs from the scanner's HIGH rating as recorded
+per row. Operator-added proxy environment or future handle/option behavior is
+outside this evidence and must reopen the relevant row. Independent Assessor
+review remains required before these proposals change the release gate.
 
 ### Exact-binary privilege-boundary tranche
 
