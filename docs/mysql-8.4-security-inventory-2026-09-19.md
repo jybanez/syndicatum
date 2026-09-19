@@ -1,8 +1,8 @@
 # MySQL 8.4 image security inventory — 2026-09-19
 
 This record compares the accepted MySQL 8.4 functional candidate with the
-legacy MySQL 5.7 image on retained scanner evidence. It is an inventory, not an
-external-deployment approval or a finding disposition.
+legacy MySQL 5.7 image on retained scanner evidence and records the subsequent
+package hardening. It is not an external-deployment approval.
 
 ## Exact candidate evidence
 
@@ -51,10 +51,57 @@ The HIGH groups are:
 | Python `urllib3` | 2 | Determine whether any supported runtime performs attacker-influenced HTTP through this package. |
 | Python `pyOpenSSL` | 1 | Determine whether the supported MySQL runtime imports it; prefer removal/update if it is tooling-only. |
 
+## Exact helper review
+
+The pinned upstream image contains `gosu` 1.19 built with Go 1.24.6 for
+linux/amd64. The extracted helper SHA-256 is
+`52c8749d0142edd234e9d6bd5237dff2d81e71f43537e2f4f66f75dd4b243dd0`.
+Binary-mode `govulncheck` v1.7.0 against those exact bytes reported zero called
+vulnerable symbols and zero vulnerabilities affecting the binary. It separately
+reported vulnerable imported packages/modules; that package-level context is
+not a claim that the executable calls their vulnerable symbols.
+
+Commercial Assessor message 2883 approved `not_applicable` for the one scanner
+CRITICAL row and all 21 scanner HIGH Go-stdlib rows for this exact helper. The
+approval does not cover the host's Docker/containerd/runc, and any change to the
+pinned image, helper bytes, architecture, version, or build reopens the tranche.
+
+## Hardened candidate
+
+The maintained `mysql:8.4` tag still resolved to the already pinned digest, so
+there was no newer upstream image to adopt. Oracle Linux's maintained repository
+did contain the scanner-listed fixes. The derived image therefore:
+
+- pins the upgrade to `libevent-2.1.13-1.el9_8`;
+- pins `openssl` and `openssl-libs` to `1:3.5.8-1.0.1.el9_8`; and
+- removes the unused `mysql-shell` package and its private Python environment.
+
+Syndicatum runs `mysqld`, not MySQL Shell. The removed administrative client was
+514.3 MB and contained every Python `cryptography`, `urllib3`, and `pyOpenSSL`
+HIGH row. The MySQL entrypoint still retains the OpenSSL command needed for its
+supported initialization behavior, while `mysqld` retains its patched OpenSSL
+libraries. The 5.7 base has no `microdnf`, so this conditional hardening step is
+a no-op on the immutable RC1 compatibility path.
+
+Full exact-merge-candidate CI run `35448870803` passed source contracts, the
+unchanged 5.7 lifecycle, 5.7-to-8.4 migration, and the hardened 8.4 lifecycle.
+Its MySQL 8.4 job `105912435630` tested merge-ref
+`373abee34d02a9e42a57bbcf95785c60e18a850d` (parents protected main `27d8010`
+and branch head `25192f5`) from archive SHA-256
+`26f3c463df714ca26e49c2a7862e62402df514165cfa607fd3eb458aa358905f`.
+The built amd64/Linux database image ID was
+`sha256:dac6b1c1585fce8ff0a5b862604577c4d2813b0af53785fc64b68f0bb278b161`.
+
+The post-hardening inventory is 1 CRITICAL, 21 HIGH, and 22 MEDIUM findings.
+Every remaining CRITICAL/HIGH row is one of the exact `gosu` Go-stdlib rows
+approved `not_applicable` in message 2883. The OpenSSL/libevent and MySQL Shell
+Python CRITICAL/HIGH rows fell to zero; no residual-risk acceptance is proposed.
+
 ## Gate status
 
 The MySQL 8.4 functional and logical-migration sub-gates remain closed for
-their tested scope. The image-security and external-host/runtime gates remain
-open. Wider promotion requires row-level disposition and either a maintained
-upstream image/package refresh or evidence-backed reachability conclusions; a
-green scanner job and lower counts are not substitutes for that review.
+their tested scope. All remaining CRITICAL/HIGH rows in the hardened candidate
+have an exact-binary approved disposition, so the MySQL 8.4 image-security
+sub-gate is ready for independent closure review. The external-host/runtime and
+overall promotion gates remain open; a green scanner job and lower counts do
+not substitute for those separate controls.
