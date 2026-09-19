@@ -34,6 +34,16 @@ identity, expired code, and reused code intentionally receive the same generic
 rejection. Generate a new claim code from the agent's credential menu when a
 handoff expires or has been exposed.
 
+For an already claimed project agent, use **Generate replacement claim code**
+only after confirming the exact project and identity. Issuing a new code
+invalidates any earlier unclaimed code but leaves the existing bearer token
+valid. A successful claim replaces that token and keeps the same project agent
+and participant IDs; devices holding the previous token then need authorized
+credential recovery. An expired replacement code cannot be used and does not
+revoke the existing token. If immediate cutoff is required because a token may
+be compromised, do not rely on an unclaimed replacement code; use the
+authorized revocation/suspension path and plan for temporary unavailability.
+
 ## Token Storage
 
 Each claimed identity is stored outside the project and web root:

@@ -28,22 +28,16 @@ class DiscussionBindingIntentService
             throw new InvalidArgumentException('project_name and agent_name are required; agent_name may contain at most 120 characters.');
         }
 
-        $project = $this->pdo->prepare("SELECT p.id, p.name FROM projects p JOIN project_members pm ON pm.project_id = p.id
-            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')
-              AND LOWER(p.name) = LOWER(?)");
-        $project->execute([$userId, $projectName]);
-        $projects = $project->fetchAll();
+        $projects = $this->authorizedProjectsNamed($userId, $projectName);
         if (count($projects) !== 1) { throw new RuntimeException(count($projects) ? 'PROJECT_NAME_AMBIGUOUS' : 'PROJECT_NOT_FOUND'); }
         $project = $projects[0];
 
-        $agent = $this->pdo->prepare("SELECT pa.agent_id, pa.display_name FROM project_agents pa
-            WHERE pa.project_id = ? AND pa.status = 'active' AND LOWER(pa.display_name) = LOWER(?)");
-        $agent->execute([(int) $project['id'], $agentName]);
-        $agents = $agent->fetchAll();
+        $agents = $this->activeAgentsNamed((int) $project['id'], $agentName);
         if (count($agents) > 1) { throw new RuntimeException('AGENT_NAME_AMBIGUOUS'); }
         if ($agents && strtolower((string) $this->agentProvider((int) $project['id'], (int) $agents[0]['agent_id'])) !== 'chatgpt') {
             throw new RuntimeException('AGENT_PROVIDER_MISMATCH');
         }
+        if ($agents) { $agentName = $agents[0]['display_name']; }
 
         $intentId = $this->uuid();
         $contextToken = 'syndicatum_context_' . AuthService::randomToken(32);
@@ -81,18 +75,15 @@ class DiscussionBindingIntentService
             throw new InvalidArgumentException('project_name and agent_name are required; agent_name may contain at most 120 characters.');
         }
 
-        $statement = $this->pdo->prepare("SELECT p.id AS project_id, p.name AS project_name, pa.agent_id, pa.display_name
-            FROM projects p
-            JOIN project_members pm ON pm.project_id = p.id
-            JOIN project_agents pa ON pa.project_id = p.id
-            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')
-              AND pa.status = 'active' AND pa.provider = 'chatgpt'
-              AND LOWER(p.name) = LOWER(?) AND LOWER(pa.display_name) = LOWER(?)");
-        $statement->execute([$userId, $projectName, $agentName]);
-        $matches = $statement->fetchAll();
-        if (!$matches) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
-        if (count($matches) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
-        $match = $matches[0];
+        $projects = $this->authorizedProjectsNamed($userId, $projectName);
+        if (!$projects) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
+        if (count($projects) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
+        $project = $projects[0];
+        $agents = $this->activeAgentsNamed((int) $project['id'], $agentName, true);
+        if (!$agents) { throw new RuntimeException('INTERACTIVE_CONTEXT_NOT_FOUND'); }
+        if (count($agents) !== 1) { throw new RuntimeException('INTERACTIVE_CONTEXT_AMBIGUOUS'); }
+        $match = ['project_id' => $project['id'], 'project_name' => $project['name']]
+            + $agents[0];
 
         $intentId = $this->uuid();
         $contextToken = 'syndicatum_context_' . AuthService::randomToken(32);
@@ -163,6 +154,24 @@ class DiscussionBindingIntentService
             if (!$intent || $intent['status'] !== 'pending' || strtotime($intent['expires_at']) <= time()) {
                 throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT');
             }
+            // Resolve the stored IDs only. A pending intent must not outlive the
+            // user's management access or the selected project/agent identity.
+            $access = $this->pdo->prepare("SELECT p.id FROM projects p
+                JOIN project_members pm ON pm.project_id = p.id
+                WHERE p.id = ? AND p.status = 'active' AND pm.user_id = ?
+                  AND pm.status = 'active' AND pm.role IN ('owner','admin') FOR UPDATE");
+            $access->execute([(int) $intent['project_id'], (int) $device['user_id']]);
+            if (!$access->fetch()) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
+            if ($intent['requested_agent_id'] !== null) {
+                $agent = $this->pdo->prepare("SELECT pa.agent_id FROM project_agents pa
+                    JOIN chat_agents a ON a.id = pa.agent_id
+                    JOIN project_participants pp ON pp.project_id = pa.project_id
+                        AND pp.agent_id = pa.agent_id AND pp.kind = 'agent'
+                    WHERE pa.project_id = ? AND pa.agent_id = ? AND pa.status = 'active'
+                      AND pa.provider = 'chatgpt' AND a.is_active = 1 AND pp.status = 'active' FOR UPDATE");
+                $agent->execute([(int) $intent['project_id'], (int) $intent['requested_agent_id']]);
+                if (!$agent->fetch()) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
+            }
             $conflict = $this->pdo->prepare("SELECT COUNT(*) FROM agent_activation_bindings
                 WHERE runtime_type = 'chatgpt' AND activation_driver = 'browser_companion' AND conversation_id = ?
                   AND enabled = 1 AND created_by_user_id = ? AND (? IS NULL OR agent_id <> ?)");
@@ -181,6 +190,12 @@ class DiscussionBindingIntentService
             $configured = (new AgentActivationService($this->pdo))->configure((int) $intent['project_id'], $agentId,
                 (int) $device['user_id'], ['provider' => 'chatgpt', 'activation_driver' => 'browser_companion',
                     'enabled' => true, 'discussion_reference' => $normalized['canonical_reference'], 'working_directory' => '']);
+            $names = $this->pdo->prepare('SELECT p.name AS project_name, pa.display_name AS agent_name
+                FROM projects p JOIN project_agents pa ON pa.project_id = p.id
+                WHERE p.id = ? AND pa.agent_id = ? LIMIT 1');
+            $names->execute([(int) $intent['project_id'], $agentId]);
+            $confirmedNames = $names->fetch(PDO::FETCH_ASSOC);
+            if (!$confirmedNames) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
             $this->pdo->prepare("UPDATE connector_discussion_binding_intents SET status = 'confirmed', confirmed_agent_id = ?,
                 discussion_id = ?, discussion_reference = ?, resolved_by_device_id = ?, resolved_at = ? WHERE id = ?")
                 ->execute([$agentId, $normalized['discussion_id'], $normalized['canonical_reference'], $device['id'], Db::now(), $intent['id']]);
@@ -188,7 +203,9 @@ class DiscussionBindingIntentService
                 'project_id' => (int) $intent['project_id'], 'intent_id' => $intent['id'], 'device_id' => $device['id'],
             ]);
             $this->pdo->commit();
-            return $configured + ['intent_id' => $intent['id'], 'discussion_binding' => 'Successful', 'device_id' => $device['id']];
+            return $configured + ['intent_id' => $intent['id'], 'discussion_binding' => 'Successful',
+                'project_name' => $confirmedNames['project_name'], 'agent_name' => $confirmedNames['agent_name'],
+                'device_id' => $device['id']];
         } catch (Exception $exception) {
             if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $exception;
@@ -249,6 +266,54 @@ class DiscussionBindingIntentService
         }
         if ($row['status'] === 'pending') { return ['state' => 'pending']; }
         return ['state' => 'unusable'];
+    }
+
+    private function authorizedProjectsNamed($userId, $name)
+    {
+        $sql = "SELECT p.id, p.name FROM projects p JOIN project_members pm ON pm.project_id = p.id
+            WHERE p.status = 'active' AND pm.user_id = ? AND pm.status = 'active' AND pm.role IN ('owner','admin')";
+        $exact = $this->pdo->prepare($sql . ' AND LOWER(p.name) = LOWER(?)');
+        $exact->execute([(int) $userId, $name]);
+        $matches = $exact->fetchAll(PDO::FETCH_ASSOC);
+        if ($matches) { return $matches; }
+        $candidates = $this->pdo->prepare($sql);
+        $candidates->execute([(int) $userId]);
+        return $this->normalizedMatches($candidates, 'name', $name);
+    }
+
+    private function activeAgentsNamed($projectId, $name, $chatGptOnly = false)
+    {
+        $sql = "SELECT pa.agent_id, pa.display_name FROM project_agents pa
+            WHERE pa.project_id = ? AND pa.status = 'active'";
+        if ($chatGptOnly) { $sql .= " AND pa.provider = 'chatgpt'"; }
+        $exact = $this->pdo->prepare($sql . ' AND LOWER(pa.display_name) = LOWER(?)');
+        $exact->execute([(int) $projectId, $name]);
+        $matches = $exact->fetchAll(PDO::FETCH_ASSOC);
+        if ($matches) { return $matches; }
+        $candidates = $this->pdo->prepare($sql);
+        $candidates->execute([(int) $projectId]);
+        return $this->normalizedMatches($candidates, 'display_name', $name);
+    }
+
+    private function normalizedMatches(PDOStatement $candidates, $field, $name)
+    {
+        $key = $this->bindingNameKey($name);
+        $matches = [];
+        while ($row = $candidates->fetch(PDO::FETCH_ASSOC)) {
+            if ($this->bindingNameKey($row[$field]) === $key) {
+                $matches[] = $row;
+                if (count($matches) > 1) { break; }
+            }
+        }
+        $candidates->closeCursor();
+        return $matches;
+    }
+
+    private function bindingNameKey($name)
+    {
+        $collapsed = preg_replace('/[\p{Z}\s]+/u', ' ', (string) $name);
+        if ($collapsed === null) { throw new InvalidArgumentException('Invalid binding name.'); }
+        return mb_convert_case(trim($collapsed), MB_CASE_FOLD, 'UTF-8');
     }
 
     private function agentProvider($projectId, $agentId)

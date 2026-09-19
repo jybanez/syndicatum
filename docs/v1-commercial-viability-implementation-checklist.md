@@ -351,6 +351,36 @@ releases must additionally pass prior-release upgrade and rollback acceptance.
 
 ### P0.5 Permission-safe onboarding and binding
 
+**Current source/CI progress:** draft PR #4 keeps onboarding work separate from
+the V1 merge candidate. Pre-binding protected-tool denial and confidentiality,
+permission-scoped Unicode casefolding plus collapsed-whitespace resolution,
+and confirmation-time revalidation of the stored project/agent IDs have passing
+source tests and required PR checks. The Companion candidate now keeps the
+canonical bound server, project, and agent visible after confirmation and
+separates successful binding from submission of an MCP status-check request.
+The Commercial Assessor accepted that post-bind identity and status behavior
+at source/CI scope, not as an installed-client result.
+The foreign-project normalized-binding regression at `dbdf14f` confirms that
+an unauthorized account receives generic not-found results for both binding
+preparation and interactive context, without creating an intent or revealing
+the real foreign project/agent. The Commercial Assessor accepted this bounded
+confidentiality sub-gate at source/CI scope in project message 2662;
+[run 35330007628](https://github.com/jybanez/syndicatum/actions/runs/35330007628)
+passed source-contract, archived-candidate Docker/MySQL 5.7 acceptance, and
+security-inventory at that exact head.
+Commercial Assessor messages 2688 and 2695 additionally accept claim-code
+replacement/same-identity recovery and target-identity isolation at
+documentation/source/CI scope, including real same-project and foreign-project
+competing agents at `5ea44d7`. The
+[installed-client procedure](v1-companion-installed-acceptance.md#separate-codex-profile-recovery-check)
+now specifies a separate disposable Codex recovery sequence; it has not run.
+These are not installed-client or published-artifact results. The items below
+remain open until the actual Companion/discussion flow, usability, identity
+isolation, and exact release bytes are accepted.
+The installed-client test procedure is
+[`v1-companion-installed-acceptance.md`](v1-companion-installed-acceptance.md);
+it is not a passing acceptance record.
+
 - [ ] Preserve pre-binding confidentiality: an unbound discussion cannot
       enumerate projects or participant identities.
 - [ ] Replace byte-for-byte project-name guessing with normalized matching or an
@@ -360,7 +390,14 @@ releases must additionally pass prior-release upgrade and rollback acceptance.
 - [ ] Present the bound project and agent identity clearly after completion.
 - [ ] Prevent accidental replacement or reuse of an existing protected identity.
 - [ ] Preserve isolated credentials per agent profile.
-- [ ] Document claim-code expiry, single use, replacement, and recovery.
+- [x] Document claim-code expiry, single use, replacement, and recovery.
+      The [Codex operator guide](codex-plugin.md) distinguishes an unclaimed
+      code from an explicitly authorized replacement, states that the old token
+      remains valid until the replacement is claimed, and describes same-identity
+      recovery and immediate-revocation caution. The expansion regression
+      verifies superseded/expired replacement codes, old-token invalidation on
+      claim, and stable project participant identity. Installed recovery remains
+      part of P0.5's separate acceptance gate.
 - [ ] Add negative tests for cross-project, cross-participant, expired-code,
       reused-code, and unauthorized enumeration attempts.
 - [ ] Test onboarding with a user who has no repository or database knowledge.

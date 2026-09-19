@@ -15,7 +15,10 @@ class AgentActivationTests
     public function test($name, callable $callback) { try { $callback(); $this->passed++; echo "PASS  $name\n"; } catch (Exception $e) { $this->failed++; echo "FAIL  $name: {$e->getMessage()}\n"; } }
     public function same($expected, $actual) { if ($expected !== $actual) { throw new RuntimeException('Expected ' . var_export($expected, true) . ', got ' . var_export($actual, true)); } }
     public function true($value, $message = 'Expected true.') { if (!$value) { throw new RuntimeException($message); } }
-    public function throws(callable $callback) { try { $callback(); } catch (Exception $e) { return; } throw new RuntimeException('Expected exception.'); }
+    public function throws(callable $callback, $expectedMessage = null) { try { $callback(); } catch (Exception $e) {
+        if ($expectedMessage !== null) { $this->same($expectedMessage, $e->getMessage()); }
+        return;
+    } throw new RuntimeException('Expected exception.'); }
     public function finish() { echo "\n{$this->passed} passed, {$this->failed} failed.\n"; return $this->failed ? 1 : 0; }
 }
 
@@ -210,6 +213,10 @@ try {
         $service = new DiscussionBindingIntentService($pdo);
         $suite->same('missing', $service->contextHealth($access, '')['state']);
         $suite->same('invalid', $service->contextHealth($access, 'not-a-binding-context')['state']);
+        $normalizedInteractive = $service->prepareInteractiveContext($access,
+            '  activation   PROJECT  ', ' oAuTh   Placeholder ');
+        $suite->same('Activation Project', $normalizedInteractive['project']['name']);
+        $suite->same('OAuth Placeholder', $normalizedInteractive['agent']['name']);
         $activationCount = (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn();
         $interactive = $service->prepareInteractiveContext($access, 'Activation Project', 'OAuth Placeholder');
         $suite->same('interactive', $interactive['context_type']);
@@ -226,6 +233,26 @@ try {
         $suite->throws(function () use ($service, $access) {
             $service->prepareInteractiveContext($access, 'Activation Project', 'Missing Agent');
         }, 'INTERACTIVE_CONTEXT_NOT_FOUND');
+
+        $foreignUser = (new AuthService($pdo))->register([
+            'email' => 'activation-foreign@example.test', 'username' => 'activation-foreign',
+            'display_name' => 'Foreign Project Owner', 'password' => 'foreign project test password',
+            'password_confirmation' => 'foreign project test password',
+        ])['user'];
+        $foreignProject = (new ProjectManagementService($pdo))->createProject($foreignUser['id'],
+            ['name' => 'Foreign Binding Project']);
+        (new ProjectManagementService($pdo))->createAgent($foreignProject['id'], $foreignUser['id'],
+            ['display_name' => 'Foreign ChatGPT Agent', 'provider' => 'chatgpt']);
+        $intentCount = (int) $pdo->query('SELECT COUNT(*) FROM connector_discussion_binding_intents')->fetchColumn();
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, '  FOREIGN   binding PROJECT  ', 'Foreign ChatGPT Agent');
+        }, 'PROJECT_NOT_FOUND');
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, '  FOREIGN   binding PROJECT  ', 'Foreign ChatGPT Agent');
+        }, 'INTERACTIVE_CONTEXT_NOT_FOUND');
+        $suite->same($intentCount,
+            (int) $pdo->query('SELECT COUNT(*) FROM connector_discussion_binding_intents')->fetchColumn(),
+            'Unauthorized project lookup must not create a binding intent');
 
         $prepared = $service->prepare($access, 'Activation Project', 'Intent Created Agent');
         $suite->same('create_on_confirmation', $prepared['agent']['action']);
@@ -244,6 +271,8 @@ try {
             ->execute(['realtime.enabled', 'true', Db::now()]);
         $confirmed = $service->confirm($device, $prepared['intent_id'], 'https://chatgpt.com/c/intent_created_agent?model=test');
         $suite->same('Successful', $confirmed['discussion_binding']);
+        $suite->same('Activation Project', $confirmed['project_name']);
+        $suite->same('Intent Created Agent', $confirmed['agent_name']);
         $suite->same(true, $confirmed['enabled']);
         $participantEvent = $pdo->query("SELECT event_type, payload_json FROM message_events_outbox
             WHERE event_type = 'syndicatum.participants.changed' ORDER BY id DESC LIMIT 1")->fetch();
@@ -274,9 +303,110 @@ try {
 
         $cancel = $service->prepare($access, 'Activation Project', 'Cancelled Agent');
         $service->cancel($device, $cancel['intent_id']);
+        $suite->throws(function () use ($service, $device, $cancel) {
+            $service->confirm($device, $cancel['intent_id'], 'https://chatgpt.com/c/cancelled_intent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
         $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Cancelled Agent'")->fetchColumn());
         $suite->same(null, $service->context($access, $cancel['binding_context_id']));
         $suite->same('revoked', $service->contextHealth($access, $cancel['binding_context_id'])['state']);
+
+        $revokedAccess = $service->prepare($access, 'Activation Project', 'No Access Agent');
+        $pdo->prepare("UPDATE project_members SET status = 'removed' WHERE project_id = ? AND user_id = ?")
+            ->execute([$project['id'], $owner['id']]);
+        $suite->throws(function () use ($service, $device, $revokedAccess) {
+            $service->confirm($device, $revokedAccess['intent_id'], 'https://chatgpt.com/c/revoked_access');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'No Access Agent'")->fetchColumn());
+        $pdo->prepare("UPDATE project_members SET status = 'active' WHERE project_id = ? AND user_id = ?")
+            ->execute([$project['id'], $owner['id']]);
+        $service->cancel($device, $revokedAccess['intent_id']);
+
+        $inactiveProject = $service->prepare($access, 'Activation Project', 'Inactive Project Agent');
+        $pdo->prepare("UPDATE projects SET status = 'archived' WHERE id = ?")->execute([$project['id']]);
+        $suite->throws(function () use ($service, $device, $inactiveProject) {
+            $service->confirm($device, $inactiveProject['intent_id'], 'https://chatgpt.com/c/inactive_project');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Inactive Project Agent'")->fetchColumn());
+        $pdo->prepare("UPDATE projects SET status = 'active' WHERE id = ?")->execute([$project['id']]);
+        $service->cancel($device, $inactiveProject['intent_id']);
+
+        $staleAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $bindingsBefore = (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn();
+        $pdo->prepare("UPDATE project_participants SET status = 'suspended' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $suite->throws(function () use ($service, $device, $staleAgent) {
+            $service->confirm($device, $staleAgent['intent_id'], 'https://chatgpt.com/c/stale_agent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same($bindingsBefore, (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn());
+        $pdo->prepare("UPDATE project_participants SET status = 'active' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $service->cancel($device, $staleAgent['intent_id']);
+
+        $inactiveAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $pdo->prepare("UPDATE project_agents SET status = 'suspended' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $suite->throws(function () use ($service, $device, $inactiveAgent) {
+            $service->confirm($device, $inactiveAgent['intent_id'], 'https://chatgpt.com/c/inactive_agent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same($bindingsBefore, (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn());
+        $pdo->prepare("UPDATE project_agents SET status = 'active' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $service->cancel($device, $inactiveAgent['intent_id']);
+
+        $disabledAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $pdo->prepare('UPDATE chat_agents SET is_active = 0 WHERE id = ?')->execute([$placeholder['agent_id']]);
+        $suite->throws(function () use ($service, $device, $disabledAgent) {
+            $service->confirm($device, $disabledAgent['intent_id'], 'https://chatgpt.com/c/disabled_agent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same($bindingsBefore, (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn());
+        $pdo->prepare('UPDATE chat_agents SET is_active = 1 WHERE id = ?')->execute([$placeholder['agent_id']]);
+        $service->cancel($device, $disabledAgent['intent_id']);
+
+        $expired = $service->prepare($access, 'Activation Project', 'Expired Agent');
+        $pdo->prepare("UPDATE connector_discussion_binding_intents SET expires_at = DATE_SUB(?, INTERVAL 1 SECOND) WHERE id = ?")
+            ->execute([Db::now(), $expired['intent_id']]);
+        $suite->throws(function () use ($service, $device, $expired) {
+            $service->confirm($device, $expired['intent_id'], 'https://chatgpt.com/c/expired_intent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Expired Agent'")->fetchColumn());
+
+        $stableIds = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $suite->same((int) $project['id'], $stableIds['project']['id']);
+        $suite->same((int) $placeholder['agent_id'], $stableIds['agent']['id']);
+        $pdo->prepare("UPDATE project_agents SET display_name = 'Renamed After Preparation' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+        $bound = $service->confirm($device, $stableIds['intent_id'], 'https://chatgpt.com/c/stable_ids');
+        $suite->same((int) $placeholder['agent_id'], $bound['agent_id']);
+        $suite->same('Activation Project', $bound['project_name']);
+        $suite->same('Renamed After Preparation', $bound['agent_name']);
+        $suite->same((int) $placeholder['agent_id'], $service->context($access, $stableIds['binding_context_id'])['identity']['agent']['id']);
+        $pdo->prepare("UPDATE project_agents SET display_name = 'OAuth Placeholder' WHERE project_id = ? AND agent_id = ?")
+            ->execute([$project['id'], $placeholder['agent_id']]);
+
+        $normalized = $service->prepare($access, 'ACTIVATION   project', 'oAuTh   Placeholder');
+        $suite->same('Activation Project', $normalized['project']['name']);
+        $suite->same('OAuth Placeholder', $normalized['agent']['name']);
+        $suite->same('use_existing', $normalized['agent']['action']);
+        $service->cancel($device, $normalized['intent_id']);
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Unknown   Project', 'OAuth Placeholder');
+        }, 'PROJECT_NOT_FOUND');
+        (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'],
+            ['display_name' => 'OAuth  Placeholder', 'provider' => 'chatgpt']);
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Activation Project', 'OAuth   Placeholder');
+        }, 'AGENT_NAME_AMBIGUOUS');
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, 'Activation Project', 'OAuth   Placeholder');
+        }, 'INTERACTIVE_CONTEXT_AMBIGUOUS');
+        (new ProjectManagementService($pdo))->createProject($owner['id'],
+            ['name' => 'Activation  Project', 'slug' => 'activation-double-space']);
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Activation   Project', 'OAuth Placeholder');
+        }, 'PROJECT_NAME_AMBIGUOUS');
+        $suite->throws(function () use ($service, $access) {
+            $service->prepareInteractiveContext($access, 'Activation   Project', 'OAuth Placeholder');
+        }, 'INTERACTIVE_CONTEXT_AMBIGUOUS');
     });
 
     exit($suite->finish());
