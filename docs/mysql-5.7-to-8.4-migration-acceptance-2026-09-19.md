@@ -1,7 +1,7 @@
 # MySQL 5.7-to-8.4 migration acceptance — 2026-09-19
 
-This record captures a preliminary local logical export/restore transition from
-the declared MySQL 5.7.44 internal-RC baseline into a fresh MySQL 8.4 database.
+This record captures the accepted logical export/restore transition from the
+declared MySQL 5.7.44 internal-RC baseline into a fresh MySQL 8.4 database.
 It does not authorize production migration, automatic data movement, or an
 in-place database upgrade. The V1.0.0 commercial support promise remains a
 fresh Docker installation only.
@@ -35,17 +35,18 @@ The isolated harness:
 10. removed the generated target containers, networks, volumes, environment
     file, and database dump.
 
-## Preliminary local result
+## Result
 
-The local exercise passed. The 5.7.44 export restored into MySQL 8.4.11 with
+The local exercise and archived-candidate PR/protected-main CI passed. The
+5.7.44 export restored into MySQL 8.4.11 with
 the expected `1|1|1|1|2|1|1` state, all 30 migrations valid, and healthy
 application behavior. Cleanup completed using only the generated project name.
 
 ## Remaining acceptance boundary
 
-The local run used working-tree changes. The dedicated exact-head CI job must
-package the commit, verify its archive checksum, run the same transition from
-the unpacked bytes, and retain the acceptance log before this sub-gate can be
-reviewed for closure. Even after that pass, an operator must separately review
-the exact source deployment, protected backups, downtime, credentials, and
-cutover/recovery plan before any real migration.
+The dedicated CI job packages the candidate, verifies its archive checksum,
+runs the transition from the unpacked bytes, and retains the acceptance log.
+Commercial Assessor message 2877 closed the migration sub-gate for the tested
+schema/data shape and exact merge candidate. An operator must still separately
+review the exact source deployment, protected backups, downtime, credentials,
+and cutover/recovery plan before any real migration.
