@@ -96,13 +96,22 @@ An uninstalled public URL cannot grant ownership to its first visitor. Installer
 For release `1.0.0`, trusted CI produces:
 
 - `syndicatum-1.0.0.zip` — canonical application package;
+- `syndicatum-1.0.0.manifest.json` — trusted sidecar manifest for the ZIP payload;
 - `syndicatum-1.0.0.zip.sha256` — detached whole-package checksum;
 - `syndicatum-1.0.0.provenance.json` — source, workflow, and build identity;
 - release notes and applicable notices.
 
 Optional signing may be added later. V1 integrity is based on protected release automation, a detached SHA-256, per-file hashes, and retained provenance.
 
-The ZIP cannot contain its own ZIP checksum because that would be self-referential. The manifest contains hashes of its content tree; the detached checksum covers the final ZIP bytes.
+The ZIP cannot contain its own ZIP checksum because that would be self-referential. The manifest is also a trusted sidecar rather than an entry inside the ZIP: every ZIP entry is therefore payload and must appear exactly once in the manifest, with no embedded-manifest exception. The sidecar manifest contains hashes of the content tree; the detached checksum covers the exact final ZIP bytes. Protected provenance binds the sidecar manifest, checksum, release identity, and trusted operation context.
+
+### Archive validation and extraction boundary
+
+The V1 reader validates without extracting. It first inspects the raw ZIP structure and rejects unsupported ZIP features, local/central-header disagreement, duplicate or case-aliasing names, preambles, gaps, overlaps, aliased local records, trailing bytes, unsafe paths, non-regular UNIX file types, unknown permissions, excessive entry counts or sizes, and per-file or aggregate compression ratios above the fixed limits. It then requires the actual archive inventory to equal the trusted sidecar manifest exactly, streams each entry to verify its declared byte size and SHA-256, derives namespace roles from actual paths, and reconstructs the canonical content-tree digest from verified facts.
+
+Release validation is bound to trusted source commit, tag, baseline, and schema head. Backup validation is bound to a trusted recovery catalog; backup metadata uses a closed non-authoritative schema, cannot carry DDL or recovery policy, and executable signatures or executable-role extensions fail closed. Validation executes no SQL and mutates no application state.
+
+Opening or validating an archive never extracts it. Controlled extraction is a separate, explicit future operation that may run only after full validation into a private staging directory. A validation result is evidence, not a reusable authorization token: extraction must re-establish the trusted archive identity and prevent path races before writing any file. Release and backup producers remain deferred until this reader contract and its adversarial fixtures are accepted.
 
 ### Required manifest fields
 
