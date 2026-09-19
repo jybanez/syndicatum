@@ -269,6 +269,43 @@ jobs:
             -ExpectedMySqlVersionPattern '^8\.4(?:$|[.-])' \
             -DatabaseSqlMode 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' \
             2>&1 | tee mysql84-acceptance.log
+      - name: Identify the exact MySQL 8.4 acceptance image
+        id: mysql84-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t db_images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' |
+            grep -E '^syndicatum-acceptance-[a-f0-9]{12}-db:acceptance$' || true)
+          test "${#db_images[@]}" -eq 1
+          printf 'db=%s\n' "${db_images[0]}" >> "$GITHUB_OUTPUT"
+          docker image inspect "${db_images[0]}" \
+            --format 'image_id={{.Id}} architecture={{.Architecture}} os={{.Os}}' \
+            | tee mysql84-image-identity.txt
+      - name: Inventory the built MySQL 8.4 image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.mysql84-image.outputs.db }}
+          scanners: vuln
+          format: json
+          output: mysql84-image-scan.json
+          exit-code: '0'
+      - name: Retain the MySQL 8.4 vulnerability inventory without raw reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s mysql84-image-scan.json
+          result_count="$(jq '.Results | length' mysql84-image-scan.json)"
+          test "$result_count" -gt 0
+          critical="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' mysql84-image-scan.json)"
+          high="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "HIGH")] | length' mysql84-image-scan.json)"
+          medium="$(jq '[.Results[]? | .Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' mysql84-image-scan.json)"
+          printf 'mysql84_image_results=%s\nmysql84_critical=%s\nmysql84_high=%s\nmysql84_medium=%s\n' \
+            "$result_count" "$critical" "$high" "$medium" \
+            | tee mysql84-image-security-summary.txt
+          jq -r '.Results[]? as $result | $result.Vulnerabilities[]? |
+            ["database-mysql84", $result.Target, $result.Type, .PkgName, .InstalledVersion, .FixedVersion, .VulnerabilityID, .Severity] | @tsv' \
+            mysql84-image-scan.json | sort -u > mysql84-image-security-findings.tsv
       - name: Retain MySQL 8.4 compatibility evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -276,6 +313,9 @@ jobs:
           name: mysql84-compatibility-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             mysql84-acceptance.log
+            mysql84-image-identity.txt
+            mysql84-image-security-summary.txt
+            mysql84-image-security-findings.tsv
             mysql84-candidate/*.tar.gz
             mysql84-candidate/*.sha256
           if-no-files-found: warn
