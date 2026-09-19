@@ -367,7 +367,11 @@ behavior; permissive local defaults alone are insufficient.
       preserves the 5.7 defaults and adds a separate pinned MySQL 8.4.11
       clean-install compatibility job. Exact-head run 35435297688 passed that
       job and the unchanged 5.7 lifecycle at `852a189`; Assessor review and a
-      real 5.7-to-8.4 migration exercise remain open.
+      real 5.7-to-8.4 migration exercise remain open. Commercial Assessor
+      message 2869 closes the **MySQL 8.4 clean-install compatibility** sub-
+      gate at that exact head and digest. The **MySQL 5.7-to-8.4 migration**,
+      **external host/runtime baseline**, and **overall external promotion**
+      gates remain open; RC1 remains the immutable 5.7.44 internal candidate.
 - [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
@@ -377,7 +381,10 @@ behavior; permissive local defaults alone are insufficient.
       acceptance), closing the CRITICAL sub-gate. Message 2864 additionally
       approves the ten exact-binary `gosu` HIGH rows (nine `not_applicable`,
       one `unreachable`, no residual-risk acceptance), closing that bundled-
-      helper sub-gate. The remaining prioritized HIGH queue,
+      helper sub-gate. Message 2871 approves all five application `libcurl4`
+      HIGH rows (one `not_applicable`, four `unreachable`, no residual-risk
+      acceptance), closing that exact-call-contract sub-gate. The remaining
+      prioritized HIGH queue,
       external host/runtime minimums, and MySQL 5.7 EOL treatment remain open,
       so the overall security-disposition gate stays open.
 - [ ] Approve and automate the
