@@ -288,6 +288,39 @@ offscreen canonical-fallback path. Multiple edits, reply-parent tombstones,
 other actor/role variants, responsive/accessibility, and overall P1.1/P1.2
 remain open pending Assessor review.
 
+## Responsive, keyboard, and semantic-accessibility probe
+
+A ninth disposable Compose stack served the same exact `771a222` application
+image and MySQL 5.7.44 at `127.0.0.1:18091`, with fresh isolated volumes and
+two independently authenticated synthetic humans. The owner created one direct
+request plus 51 newer requests so the exercised card also covered older-page
+navigation and canonical fallback under responsive conditions.
+
+At a 1440 x 1000 desktop viewport, the installed project and Responsibility
+Inbox produced zero document-level horizontal overflow. Keyboard Enter opened
+the Inbox from its named button, then opened the offscreen canonical evidence
+from `View original message`. The dialog exposed
+`aria-labelledby=responsibility-evidence-title`, initially focused `Back to
+Responsibility Inbox`, closed with Escape, and returned focus to the exact
+`View original message` trigger. The Inbox was a named region; its view select
+had the unique accessible label `Responsibility view`; and its progress/status
+element exposed `role=status` with `aria-live=polite`.
+
+The empty filtered page did not falsely claim global exhaustion: it announced
+`No matches in this page. Load older work to continue.` At a 390 x 844 mobile
+viewport, the document still had zero horizontal overflow. The exercised card
+fit inside the viewport at x=30 with width 330, and the canonical dialog fit at
+x=19 with width 352 and height about 568. It retained canonical identity and
+both explicit navigation actions. The browser emitted no console errors during
+the exercised flow.
+
+This closes only the exercised owner-side desktop/mobile layout,
+keyboard-open/Escape/focus-return, accessible-name/live-region, continuation
+empty-state, and canonical-dialog path. It does not claim hands-on speech
+output from a specific screen reader, high-contrast or 200% zoom acceptance,
+every mobile/browser combination, or other actor/role variants; overall
+P1.1/P1.2 remain pending Assessor review.
+
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
@@ -306,8 +339,10 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
 - Broader evidence-history variants beyond the exercised one-edit,
   soft-delete, and offscreen canonical-fallback path, including multiple edits
   and reply-parent tombstones.
-- Responsive-density, keyboard, focus, and screen-reader acceptance on the
-  installed client.
+- Broader assistive-technology and responsive variants beyond the exercised
+  desktop/mobile, keyboard/focus, accessible-name/live-region path, including
+  hands-on screen-reader speech, high-contrast/200% zoom, other browsers, and
+  other actor/role variants.
 - Assessor review of the remaining acceptance matrix.
 
 The disposable environment is local test data. Its credentials and one-time

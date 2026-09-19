@@ -649,6 +649,21 @@ multiple edits, reply-parent tombstones, other role variants,
 responsive/accessibility, and overall gates remain open pending CI and
 Assessor review.
 
+The next exact-image installed probe exercised the owner-side Inbox at 1440 x
+1000 desktop and 390 x 844 mobile viewports with 52 direct requests. Both
+viewports had zero document-level horizontal overflow; the 330px mobile card
+and 352px canonical dialog stayed within the 390px viewport. Keyboard Enter
+opened the Inbox and evidence dialog, the dialog initially focused its Back
+action, Escape closed it, and focus returned to the exact evidence trigger.
+The Inbox exposed a named region and uniquely labelled view select; its status
+was a polite live region; the dialog was title-linked; and the empty candidate
+page explicitly retained the load-older continuation instead of claiming
+global exhaustion. No browser console errors occurred. This closes only the
+exercised layout, keyboard/focus, semantic-label/live-region, continuation
+state, and canonical-dialog path. Hands-on speech output from a particular
+screen reader, high-contrast/200% zoom, other browsers/roles, and overall gates
+remain open pending CI and Assessor review.
+
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
 The Commercial Assessor recommended its non-inventive policy in message #2765,
