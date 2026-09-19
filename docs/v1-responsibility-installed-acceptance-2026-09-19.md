@@ -276,7 +276,7 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
 - Evidence navigation after edit and soft-delete, including an offscreen row.
 - Responsive-density, keyboard, focus, and screen-reader acceptance on the
   installed client.
-- Assessor review of this installed probe and the remaining acceptance matrix.
+- Assessor review of the remaining acceptance matrix.
 
 The disposable environment is local test data. Its credentials and one-time
 agent claim code are intentionally excluded from this record.
@@ -313,3 +313,10 @@ and explicit reopen for the exercised two-human path in #2811. Exact evidence
 head `4595cb9` passed all required jobs in run `35410305194`. These decisions
 do not close additional role variants, pagination/history/unknown baseline,
 edit/tombstone, responsive/accessibility, full P1.1/P1.2, merge, or release.
+
+The Assessor accepted the installed single-project cursor-pagination and
+historical unknown-baseline sub-gate for the exercised 50+5 path in #2815.
+Exact evidence head `a3f0d86` passed all required jobs in run `35412134767`.
+The acceptance is deliberately bounded: it does not prove multi-project scale,
+very large histories, edit/tombstone fidelity, responsive/accessibility, full
+P1.1/P1.2, protected-main merge, or release.

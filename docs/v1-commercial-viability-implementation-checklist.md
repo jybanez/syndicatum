@@ -629,14 +629,17 @@ verified` with explicit guidance that it was not an active assignment. See the
 [installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#pagination-history-and-unknown-baseline-probe).
 This closes only the exercised single-project 50+5 pagination/no-duplicate and
 unknown-baseline presentation path. Broader multi-project scale,
-edit/tombstone, responsive/accessibility, and overall gates remain open pending
-CI and Assessor review.
+edit/tombstone, responsive/accessibility, and overall gates remain open. The
+Commercial Assessor accepted this bounded installed sub-gate in project message
+#2815; exact evidence head `a3f0d86` passed all required jobs in GitHub Actions
+run `35412134767`.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
-The Commercial Assessor recommended its non-inventive policy in message #2765
-and accepted the source/CI evidence in #2771; installed-client evidence remains
-open, and automatic backfill is not authorized.
+The Commercial Assessor recommended its non-inventive policy in message #2765,
+accepted the source/CI evidence in #2771, and accepted the exercised installed
+unknown-baseline presentation path in #2815. Broader historical-scale evidence
+remains open, and automatic backfill is not authorized.
 
 - [ ] Define the minimum explicit state needed to represent waiting, unresolved,
       resolved, blocked, and responsibility transfer without inferring it from
