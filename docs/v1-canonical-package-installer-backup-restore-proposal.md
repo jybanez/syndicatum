@@ -111,6 +111,8 @@ The V1 reader validates without extracting. It first inspects the raw ZIP struct
 
 Release validation is bound to trusted source commit, tag, baseline, and schema head. Backup validation is bound to a trusted recovery catalog; backup metadata uses a closed non-authoritative schema, cannot carry DDL or recovery policy, and executable signatures or executable-role extensions fail closed. Validation executes no SQL and mutates no application state.
 
+Parsing is not trust. The exact sidecar-manifest SHA-256 must match protected provenance/context before its inventory becomes authoritative, and canonical releases likewise require the expected whole-archive SHA-256. A future uploaded backup has no independently pre-known archive hash; its exact archive and sidecar identities must therefore come from a successfully authenticated encryption envelope before restore authority is granted. A structural/content validation report is evidence only and must never be treated as equivalent to authenticated release or restore authority.
+
 Opening or validating an archive never extracts it. Controlled extraction is a separate, explicit future operation that may run only after full validation into a private staging directory. A validation result is evidence, not a reusable authorization token: extraction must re-establish the trusted archive identity and prevent path races before writing any file. Release and backup producers remain deferred until this reader contract and its adversarial fixtures are accepted.
 
 ### Required manifest fields
