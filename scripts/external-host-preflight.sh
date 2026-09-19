@@ -148,19 +148,21 @@ docker_version="$(docker version --format '{{.Server.Version}}' 2>/dev/null || t
 if [[ -n "$docker_version" ]] && version_ge "$docker_version" "$MIN_DOCKER_VERSION"; then pass docker_engine "$docker_version"; else fail docker_engine "requires >=$MIN_DOCKER_VERSION; observed ${docker_version:-unavailable}"; fi
 
 compose_version="$(docker compose version --short 2>/dev/null | extract_version || true)"
-if [[ -n "$compose_version" ]] && version_ge "$compose_version" 2.0.0; then pass docker_compose "$compose_version"; else fail docker_compose "maintained Compose v2 required; observed ${compose_version:-unavailable}"; fi
+if [[ -n "$compose_version" && "${compose_version%%.*}" == 2 ]] && version_ge "$compose_version" 2.0.0; then pass docker_compose "$compose_version"; else fail docker_compose "maintained Compose v2 required; observed ${compose_version:-unavailable}"; fi
 
 runc_version="$(runc --version 2>/dev/null | extract_version || true)"
 if [[ -n "$runc_version" ]] && version_ge "$runc_version" "$MIN_RUNC_VERSION"; then pass runc "$runc_version"; else fail runc "requires >=$MIN_RUNC_VERSION; observed ${runc_version:-unavailable}"; fi
 
 containerd_version="$(containerd --version 2>/dev/null | extract_version || true)"
-if [[ -n "$containerd_version" ]] && version_ge "$containerd_version" "$MIN_CONTAINERD_VERSION"; then pass containerd "$containerd_version"; else fail containerd "requires maintained 2.x floor >=$MIN_CONTAINERD_VERSION; observed ${containerd_version:-unavailable}"; fi
+if [[ -n "$containerd_version" && "${containerd_version%%.*}" == 2 ]] && version_ge "$containerd_version" "$MIN_CONTAINERD_VERSION"; then pass containerd "$containerd_version"; else fail containerd "requires maintained 2.x floor >=$MIN_CONTAINERD_VERSION; observed ${containerd_version:-unavailable}"; fi
 
-if grep -q 'download.docker.com' "$evidence_dir/commands/apt-policy.txt" && grep -Eq '^  Installed: [^ (]' "$evidence_dir/commands/apt-policy.txt"; then
-  pass docker_package_source "official Docker repository is present"
-else
-  fail docker_package_source "docker-ce/containerd.io must be installed from download.docker.com"
-fi
+official_packages=true
+for package in docker-ce containerd.io; do
+  if ! dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null | grep -q '^ii'; then
+    official_packages=false
+  fi
+done
+if $official_packages && grep -q 'download.docker.com' "$evidence_dir/commands/apt-policy.txt"; then pass docker_package_source "docker-ce and containerd.io are installed from the configured official repository"; else fail docker_package_source "docker-ce and containerd.io must both be installed from download.docker.com"; fi
 
 conflicting_runtime=""
 for package in containerd runc; do
@@ -190,7 +192,7 @@ require_recent_date() {
 
 require_recent_date host_patch_date "$host_patch_date" 31
 require_recent_date backup_restore_exercise "$backup_verified_at" 31
-require_value operator_network "$operator_network"
+if [[ "$operator_network" =~ ^[0-9A-Fa-f:.]+/[0-9]{1,3}$ ]]; then pass operator_network "$operator_network"; else fail operator_network "a CIDR value is required"; fi
 require_value encrypted_storage "$encrypted_storage_evidence"
 require_value disk_monitoring "$disk_monitor_evidence"
 require_value off_host_backup "$backup_target"
