@@ -30,30 +30,37 @@ An external V1 host must satisfy all of the following before installation:
    stable repository, not the convenience script or an untracked distribution
    fork. Docker documents its supported Linux platforms and bundles
    `containerd`/`runc` through `containerd.io`.
-3. **Validated floor:** Docker Engine `28.0.4` or later and Compose `2.38.2` or
-   later. The actual candidate host must rerun `scripts/docker-acceptance.ps1`;
-   version comparison alone is not acceptance.
-4. **OCI runtime:** `runc` `1.3.6` or later on a maintained release line. RC1 CI
+3. **Security floor:** Docker Engine `29.5.1` or later on a maintained stable
+   line, because 29.3.1 fixes the AuthZ-plugin bypass and 29.5.1 fixes the later
+   `docker cp`/archive host-root and host-filesystem issues. Do not downgrade
+   below this floor without explicit security review. The actual candidate host
+   must rerun `scripts/docker-acceptance.ps1`; version comparison alone is not
+   acceptance.
+4. **Compose reference:** Compose `2.38.2` is the version exercised by immutable
+   RC1 CI, not a security minimum. Use the maintained Compose v2 plugin bundled
+   for the selected Docker release and require the rendered-configuration and
+   lifecycle acceptance checks to pass.
+5. **OCI runtime:** `runc` `1.3.6` or later on a maintained release line. RC1 CI
    used `1.5.1`. This host-runtime rule is separate from the older runc library
    statically linked into the MySQL image's `gosu` helper.
-5. **containerd:** use the Docker-bundled `containerd.io` package on an upstream
+6. **containerd:** use the Docker-bundled `containerd.io` package on an upstream
    maintained branch. As of 2026-09-19, containerd 1.6 and 2.1 are EOL, and the
    1.7 extension is narrowly maintained for specific GKE releases; a new
    standalone design-partner host should use a currently maintained 2.x line.
    Do not install conflicting standalone `containerd` or `runc` packages beside
    Docker's bundle.
-6. **Kernel and patching:** use the vendor kernel for the supported OS, apply
+7. **Kernel and patching:** use the vendor kernel for the supported OS, apply
    security updates before onboarding, enable unattended security updates or a
    documented monthly patch window, and rerun acceptance after Docker,
    containerd, runc, or kernel upgrades.
-7. **Network boundary:** publish only the HTTPS reverse-proxy endpoint. Do not
+8. **Network boundary:** publish only the HTTPS reverse-proxy endpoint. Do not
    publish MySQL. Restrict administrative access to the designated operator
    network, and put explicit host policy in the `DOCKER-USER` chain because
    Docker-published ports can bypass common host-firewall expectations.
-8. **Privilege boundary:** only designated administrators may access the Docker
+9. **Privilege boundary:** only designated administrators may access the Docker
    socket or Docker group. Retain the Compose non-root, zero-capability, and
    `no-new-privileges` assertions exercised by acceptance.
-9. **Operations:** require UTC time synchronization, monitored disk capacity,
+10. **Operations:** require UTC time synchronization, monitored disk capacity,
    encrypted host storage, off-host encrypted backups, and a successful restore
    exercise before external activation.
 
@@ -61,6 +68,8 @@ Primary references:
 
 - [Docker Engine Ubuntu installation and supported-platform requirements](https://docs.docker.com/engine/install/ubuntu/)
 - [Docker Engine installation channels and upgrade policy](https://docs.docker.com/engine/install/)
+- [Docker Engine 29 security release notes](https://docs.docker.com/engine/release-notes/29/)
+- [Docker Engine 29.5.1 archive-upload advisory](https://github.com/moby/moby/security/advisories/GHSA-x86f-5xw2-fm2r)
 - [containerd release lifecycle](https://github.com/containerd/containerd/blob/main/RELEASES.md)
 - [runc releases](https://github.com/opencontainers/runc/releases)
 
