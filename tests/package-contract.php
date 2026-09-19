@@ -44,7 +44,7 @@ function validManifest($kind = 'release')
         'contains_persistent_assets' => $kind === 'backup',
         'files' => [
             ['path' => $kind === 'backup' ? 'data/records.ndjson' : 'app/index.php', 'type' => 'file', 'role' => $kind === 'backup' ? 'logical_data' : 'application', 'mode' => 0644, 'size' => 12, 'sha256' => str_repeat('b', 64)],
-            ['path' => 'metadata/package.json', 'type' => 'file', 'role' => $kind === 'backup' ? 'recovery_metadata' : 'package_metadata', 'mode' => 0644, 'size' => 8, 'sha256' => str_repeat('c', 64)],
+            ['path' => 'metadata/build.json', 'type' => 'file', 'role' => $kind === 'backup' ? 'recovery_metadata' : 'package_metadata', 'mode' => 0644, 'size' => 8, 'sha256' => str_repeat('c', 64)],
         ],
         'digest_algorithm' => 'sha256',
         'content_tree_sha256' => '',
@@ -73,7 +73,7 @@ if (!is_string($goldenBytes) || substr($goldenBytes, 0, 3) === "\xEF\xBB\xBF" ||
 if (PackageManifest::canonicalContentTreeBytes($goldenFiles) !== $goldenBytes) {
     packageContractFail('Canonical inventory JSON-lines bytes changed.');
 }
-if (PackageManifest::calculateContentTreeSha256($goldenFiles) !== '1439d469f535dfeadd0351a2f4b64ee7b626dad81f3cc6a1f8e776834ed7d7cd') {
+if (PackageManifest::calculateContentTreeSha256($goldenFiles) !== 'ad20f7949b4e49cc97ae81f304266d12d5a450eaccb2851e4a51ac72ab3a897c') {
     packageContractFail('Canonical inventory golden SHA-256 changed.');
 }
 
@@ -233,9 +233,18 @@ foreach (['data/a?.txt', 'data/a*.txt', 'data/a|b.txt', 'data/a"b.txt', 'data/a<
 }
 
 $portableControl = validManifest('backup');
-$portableControl['files'][0]['path'] = 'data/customer_records-2026.09.txt';
+$portableControl['files'][0]['path'] = 'data/customer_records-2026.09.ndjson';
 $portableControl['content_tree_sha256'] = PackageManifest::calculateContentTreeSha256($portableControl['files']);
 PackageManifest::validate($portableControl);
+
+foreach (['manifest.json', 'metadata/manifest.json', 'metadata/package.json'] as $embeddedManifestPath) {
+    packageContractThrows(function () use ($embeddedManifestPath) {
+        $manifest = validManifest();
+        $manifest['files'][1]['path'] = $embeddedManifestPath;
+        $manifest['content_tree_sha256'] = PackageManifest::calculateContentTreeSha256($manifest['files']);
+        PackageManifest::validate($manifest);
+    }, 'Package manifests must remain trusted sidecars: ' . $embeddedManifestPath);
+}
 
 packageContractThrows(function () {
     $manifest = validManifest();

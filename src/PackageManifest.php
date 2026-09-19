@@ -13,7 +13,14 @@ class PackageManifest
     private static $backupExecutableExtensions = [
         'bat', 'bin', 'cjs', 'cmd', 'com', 'dll', 'dylib', 'exe', 'jar', 'js', 'mjs',
         'phar', 'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pl', 'ps1',
-        'py', 'rb', 'sh', 'so',
+        'py', 'rb', 'sh', 'so', 'sql',
+    ];
+
+    private static $backupRoleExtensions = [
+        'logical_data' => ['ndjson', 'jsonl'],
+        'persistent_asset' => ['gif', 'jpeg', 'jpg', 'png', 'webp'],
+        'recovery_metadata' => ['json'],
+        'portable_secret' => ['json'],
     ];
 
     public static function parse($json)
@@ -32,6 +39,14 @@ class PackageManifest
         }
         self::assertNoDuplicateObjectKeys($json);
         return self::validate($decoded);
+    }
+
+    public static function assertNoDuplicateJsonObjectKeys($json)
+    {
+        if (!is_string($json) || trim($json) === '') {
+            throw new InvalidArgumentException('JSON document is required.');
+        }
+        self::assertNoDuplicateObjectKeys($json);
     }
 
     public static function validate(array $manifest)
@@ -113,6 +128,34 @@ class PackageManifest
     public static function calculateContentTreeSha256(array $files)
     {
         return hash('sha256', self::canonicalContentTreeBytes($files));
+    }
+
+    public static function expectedRoleForPath($kind, $path)
+    {
+        if (!in_array($kind, ['release', 'backup'], true)) {
+            throw new InvalidArgumentException('Unknown package kind.');
+        }
+        self::validateSafeRelativePath($path, 'package entry path');
+        $roles = $kind === 'release' ? [
+            'application' => 'app/',
+            'schema_baseline' => 'schema/baselines/',
+            'post_baseline_migration' => 'schema/post-baseline/',
+            'package_metadata' => 'metadata/',
+            'notice' => 'notices/',
+            'plugin' => 'plugins/',
+            'skill' => 'skills/',
+        ] : [
+            'logical_data' => 'data/',
+            'persistent_asset' => 'assets/',
+            'recovery_metadata' => 'metadata/',
+            'portable_secret' => 'secrets/',
+        ];
+        foreach ($roles as $role => $prefix) {
+            if (strpos($path, $prefix) === 0) {
+                return $role;
+            }
+        }
+        throw new InvalidArgumentException('Package entry path is outside the allowed namespace.');
     }
 
     public static function canonicalContentTreeBytes(array $files)
@@ -281,21 +324,10 @@ class PackageManifest
 
     private static function validateEntryRole($kind, $role, $path)
     {
-        $roles = $kind === 'release' ? [
-            'application' => 'app/',
-            'schema_baseline' => 'schema/baselines/',
-            'post_baseline_migration' => 'schema/post-baseline/',
-            'package_metadata' => 'metadata/',
-            'notice' => 'notices/',
-            'plugin' => 'plugins/',
-            'skill' => 'skills/',
-        ] : [
-            'logical_data' => 'data/',
-            'persistent_asset' => 'assets/',
-            'recovery_metadata' => 'metadata/',
-            'portable_secret' => 'secrets/',
-        ];
-        if (!isset($roles[$role]) || strpos($path, $roles[$role]) !== 0) {
+        if (in_array(strtolower($path), ['manifest.json', 'metadata/manifest.json', 'metadata/package.json'], true)) {
+            throw new InvalidArgumentException('Package manifests are trusted sidecars and cannot be archive payload entries.');
+        }
+        if (self::expectedRoleForPath($kind, $path) !== $role) {
             throw new InvalidArgumentException('Package entry role does not match its allowed namespace.');
         }
         if ($kind === 'backup') {
@@ -303,6 +335,10 @@ class PackageManifest
                 if (isset($segment[0]) && $segment[0] === '.') {
                     throw new InvalidArgumentException('Backup packages cannot contain hidden or configuration entries.');
                 }
+            }
+            $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+            if (!isset(self::$backupRoleExtensions[$role]) || !in_array($extension, self::$backupRoleExtensions[$role], true)) {
+                throw new InvalidArgumentException('Backup package entry extension is not allowed for its role.');
             }
         }
     }

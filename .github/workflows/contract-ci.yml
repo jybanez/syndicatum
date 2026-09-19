@@ -90,9 +90,11 @@ jobs:
           coverage: none
         env:
           fail-fast: true
-      - name: Verify canonical package bytes on Windows and PHP 7.4
+      - name: Verify package and archive reader contracts on Windows and PHP 7.4
         shell: pwsh
-        run: php tests/package-contract.php
+        run: |
+          php tests/package-contract.php
+          php tests/archive-safety.php
 
   source-contract:
     runs-on: ubuntu-24.04
@@ -163,6 +165,7 @@ jobs:
           php tests/operational-health.php | tee ci-evidence/operational-health.txt
           php tests/package-contract.php | tee ci-evidence/package-contract.txt
           python tests/canonical-inventory-contract.py | tee ci-evidence/canonical-inventory-contract.txt
+          php tests/archive-safety.php | tee ci-evidence/archive-safety.txt
           php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
           php tests/delivery-failure-taxonomy.php | tee ci-evidence/delivery-failure-taxonomy.txt
           php tests/delivery-operator-view.php | tee ci-evidence/delivery-operator-view.txt

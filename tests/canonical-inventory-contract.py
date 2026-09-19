@@ -32,7 +32,7 @@ verify_fixture(
 )
 verify_fixture(
     "canonical-inventory-v1.jsonl",
-    "1439d469f535dfeadd0351a2f4b64ee7b626dad81f3cc6a1f8e776834ed7d7cd",
+    "ad20f7949b4e49cc97ae81f304266d12d5a450eaccb2851e4a51ac72ab3a897c",
     ["path", "type", "role", "mode", "size", "sha256"],
 )
 verify_fixture(
