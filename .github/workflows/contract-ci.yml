@@ -146,6 +146,7 @@ jobs:
           php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
           php tests/operational-health.php | tee ci-evidence/operational-health.txt
+          php tests/package-contract.php | tee ci-evidence/package-contract.txt
           php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
           php tests/delivery-failure-taxonomy.php | tee ci-evidence/delivery-failure-taxonomy.txt
           php tests/delivery-operator-view.php | tee ci-evidence/delivery-operator-view.txt
