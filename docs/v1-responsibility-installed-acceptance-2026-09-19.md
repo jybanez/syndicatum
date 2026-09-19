@@ -283,10 +283,15 @@ responsibility evidence remain.` The authenticated API independently returned
 one revision row, a non-null `deleted_at`, and exactly one retained
 responsibility projection for request `#1` across the 50 + 2 cursor pages.
 
-This closes only the exercised installed edit/one-revision/soft-delete and
-offscreen canonical-fallback path. Multiple edits, reply-parent tombstones,
-other actor/role variants, responsive/accessibility, and overall P1.1/P1.2
-remain open pending Assessor review.
+Commercial Assessor accepted **installed single-edit + soft-delete/tombstone
+evidence fidelity with offscreen canonical fallback: achieved for the
+exercised owner-side path** in project message #2825 after exact-head
+`d46151c` passed all required V1 jobs in GitHub Actions run `35417530872`.
+The bounded acceptance covers preserved identity and revision history, visible
+tombstone state, retained responsibility linkage, offscreen canonical access,
+and the authenticated revision/deletion/projection checks above. It does not
+cover multiple successive edits, reply-parent tombstone navigation, or every
+actor/role-specific evidence path.
 
 ## Responsive, keyboard, and semantic-accessibility probe
 
@@ -314,12 +319,21 @@ x=19 with width 352 and height about 568. It retained canonical identity and
 both explicit navigation actions. The browser emitted no console errors during
 the exercised flow.
 
-This closes only the exercised owner-side desktop/mobile layout,
-keyboard-open/Escape/focus-return, accessible-name/live-region, continuation
-empty-state, and canonical-dialog path. It does not claim hands-on speech
-output from a specific screen reader, high-contrast or 200% zoom acceptance,
-every mobile/browser combination, or other actor/role variants; overall
-P1.1/P1.2 remain pending Assessor review.
+After exact-head `0d9bc91` passed all required V1 jobs in GitHub Actions run
+`35419811071`, Commercial Assessor accepted in project message #2827:
+
+- **installed P1.2 responsive/mobile usability: achieved for the exercised
+  owner-side desktop/mobile path**;
+- **installed keyboard/focus/semantic-status accessibility behavior: achieved
+  for the exercised owner-side path**; and
+- **remaining required installed P1.2 usability matrix: complete for V1
+  bounded scope**.
+
+This is deliberately not a WCAG conformance claim or accessibility
+certification. It does not claim hands-on speech output from a named screen
+reader, high-contrast/forced-colors or 200% zoom validation, an exhaustive
+browser/device matrix, or proof for every actor role. Those are future
+hardening items outside the accepted bounded V1 P1.2 installed scope.
 
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
@@ -336,14 +350,13 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
   and accepted at narrow scope.
 - Broader multi-project scale beyond the exercised single-project 50+5
   pagination/no-duplicate and historical unknown-baseline path.
-- Broader evidence-history variants beyond the exercised one-edit,
+- Future evidence-history hardening beyond the accepted one-edit,
   soft-delete, and offscreen canonical-fallback path, including multiple edits
   and reply-parent tombstones.
-- Broader assistive-technology and responsive variants beyond the exercised
-  desktop/mobile, keyboard/focus, accessible-name/live-region path, including
-  hands-on screen-reader speech, high-contrast/200% zoom, other browsers, and
-  other actor/role variants.
-- Assessor review of the remaining acceptance matrix.
+- Future assistive-technology and responsive hardening beyond the accepted
+  bounded V1 P1.2 path, including named screen-reader speech,
+  high-contrast/forced-colors, 200% zoom, more browsers/devices, and other
+  actor/role variants.
 
 The disposable environment is local test data. Its credentials and one-time
 agent claim code are intentionally excluded from this record.

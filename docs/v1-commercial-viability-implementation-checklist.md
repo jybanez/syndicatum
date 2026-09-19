@@ -644,10 +644,11 @@ retained the responsibility projection and showed the removal timestamp,
 `historical evidence retained`, and explicit non-destructive tombstone wording.
 The authenticated API returned one revision, a non-null deletion timestamp,
 and one retained responsibility row across its 50 + 2 cursor pages. This
-closes only the exercised one-edit/soft-delete/offscreen-fallback path;
-multiple edits, reply-parent tombstones, other role variants,
-responsive/accessibility, and overall gates remain open pending CI and
-Assessor review.
+closes the exercised one-edit/soft-delete/offscreen-fallback path. Commercial
+Assessor accepted that bounded installed path in project message #2825 after
+exact-head `d46151c` passed all required V1 CI jobs in run `35417530872`.
+Multiple edits, reply-parent tombstones, and other role-specific evidence paths
+remain future hardening rather than claims of this acceptance.
 
 The next exact-image installed probe exercised the owner-side Inbox at 1440 x
 1000 desktop and 390 x 844 mobile viewports with 52 direct requests. Both
@@ -658,11 +659,15 @@ action, Escape closed it, and focus returned to the exact evidence trigger.
 The Inbox exposed a named region and uniquely labelled view select; its status
 was a polite live region; the dialog was title-linked; and the empty candidate
 page explicitly retained the load-older continuation instead of claiming
-global exhaustion. No browser console errors occurred. This closes only the
-exercised layout, keyboard/focus, semantic-label/live-region, continuation
-state, and canonical-dialog path. Hands-on speech output from a particular
-screen reader, high-contrast/200% zoom, other browsers/roles, and overall gates
-remain open pending CI and Assessor review.
+global exhaustion. No browser console errors occurred. After exact-head
+`0d9bc91` passed all required V1 CI jobs in run `35419811071`, Commercial
+Assessor accepted in project message #2827 the installed responsive/mobile
+usability and keyboard/focus/semantic-status behavior for the exercised
+owner-side path and declared the remaining required installed P1.2 usability
+matrix complete for the bounded V1 scope. This is not a WCAG conformance claim
+or accessibility certification. Named screen-reader speech,
+high-contrast/forced-colors, 200% zoom, an exhaustive browser/device matrix,
+and every actor role remain future hardening outside the accepted scope.
 
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
@@ -685,17 +690,24 @@ auditable timeline evidence and can be corrected without rewriting history.
 
 ### P1.2 Responsibility Inbox
 
-- [ ] Show work addressed to the current participant.
-- [ ] Show unacknowledged addressed work.
-- [ ] Show work waiting on another participant.
-- [ ] Show acknowledged but explicitly unresolved work.
-- [ ] Support filtering by project, participant, state, and age where useful.
-- [ ] Link every item to its canonical timeline message and context.
-- [ ] Provide clear empty, loading, stale, and error states.
-- [ ] Verify keyboard, screen-reader, desktop, and mobile usability.
+- [x] Show work addressed to the current participant.
+- [x] Show unacknowledged addressed work.
+- [x] Show work waiting on another participant.
+- [x] Show acknowledged but explicitly unresolved work.
+- [x] Support filtering by project, participant, state, and age where useful.
+- [x] Link every item to its canonical timeline message and context.
+- [x] Provide clear empty, loading, stale, and error states.
+- [x] Verify keyboard, screen-reader, desktop, and mobile usability within the
+      accepted bounded V1 scope; this is not a WCAG certification or an
+      exhaustive assistive-technology/browser/device matrix.
 
 **Exit evidence:** a normal user can determine what they own, what is waiting,
 and what needs attention without reconstructing a long chronological timeline.
+
+**V1 disposition:** the Commercial Assessor closed the remaining required
+installed P1.2 usability matrix for the bounded owner-side scope in project
+message #2827 after exact-head `0d9bc91` passed all required jobs in run
+`35419811071`. The narrower limitations recorded above remain future hardening.
 
 ### P1.3 Recent handoffs and compact context
 
