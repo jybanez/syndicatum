@@ -3,6 +3,7 @@
 require_once dirname(__DIR__) . '/src/PackageManifest.php';
 require_once dirname(__DIR__) . '/src/InstallationIdentity.php';
 require_once dirname(__DIR__) . '/src/PackageCompatibility.php';
+require_once dirname(__DIR__) . '/src/BaselineMetadata.php';
 
 function packageContractFail($message)
 {
@@ -205,4 +206,53 @@ if (PackageCompatibility::evaluate(validManifest(), $missingMode)['compatible'])
     packageContractFail('Missing required SQL modes must fail compatibility.');
 }
 
-echo 'Package manifest, compatibility, and installation identity contract assertions passed' . PHP_EOL;
+$baseline = BaselineMetadata::fromArray([
+    'contract_name' => 'syndicatum-baseline',
+    'format_version' => '1.0',
+    'baseline_id' => 'syndicatum-mysql84-1.0.0-baseline.1',
+    'application_version' => '1.0.0',
+    'schema_head' => '202609200002',
+    'migration_cutover' => '202609200000',
+    'source_commit' => str_repeat('f', 40),
+    'schema_sha256' => str_repeat('1', 64),
+    'mysql' => [
+        'minimum' => '8.4.0', 'maximum_exclusive' => '9.0.0',
+        'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci',
+        'sql_modes' => ['STRICT_TRANS_TABLES'],
+    ],
+    'post_baseline_migrations' => [
+        ['id' => '202609200001', 'sha256' => str_repeat('2', 64)],
+        ['id' => '202609200002', 'sha256' => str_repeat('3', 64)],
+    ],
+    'tables' => [
+        ['name' => 'audit_events', 'backup_policy' => 'durable', 'restore_order' => 10, 'identity_columns' => ['id']],
+        ['name' => 'oauth_attempts', 'backup_policy' => 'excluded', 'restore_order' => null, 'identity_columns' => []],
+        ['name' => 'outbox_events', 'backup_policy' => 'reset', 'restore_order' => 20, 'identity_columns' => ['id'], 'reset_strategy' => 'pause_for_reconciliation'],
+        ['name' => 'syndicatum_sessions', 'backup_policy' => 'reset', 'restore_order' => 30, 'identity_columns' => ['id'], 'reset_strategy' => 'invalidate'],
+    ],
+]);
+if (!$baseline->supportsMysqlVersion('8.4.11') || $baseline->supportsMysqlVersion('9.0.0')) {
+    packageContractFail('Baseline MySQL compatibility range is not enforced.');
+}
+$baseline->assertKnownTables(['audit_events', 'oauth_attempts', 'outbox_events', 'syndicatum_sessions']);
+if ($baseline->tablePolicy('outbox_events')['reset_strategy'] !== 'pause_for_reconciliation') {
+    packageContractFail('Baseline recovery policy was not preserved.');
+}
+
+packageContractThrows(function () use ($baseline) {
+    $baseline->assertKnownTables(['audit_events', 'unexpected_table']);
+}, 'Unknown tables must fail the baseline recovery contract.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['post_baseline_migrations'] = array_reverse($metadata['post_baseline_migrations']);
+    BaselineMetadata::fromArray($metadata);
+}, 'Unordered post-baseline migrations must be rejected.');
+
+packageContractThrows(function () use ($baseline) {
+    $metadata = $baseline->toArray();
+    $metadata['tables'][3]['restore_order'] = 20;
+    BaselineMetadata::fromArray($metadata);
+}, 'Duplicate restore orders must be rejected.');
+
+echo 'Package manifest, compatibility, baseline, and installation identity contract assertions passed' . PHP_EOL;
