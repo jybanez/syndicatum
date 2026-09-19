@@ -175,7 +175,7 @@ This is a full administration surface using the current global header and panel 
 +------------------------------------------------------------------------+
 ```
 
-The release summary shows application version, schema baseline/head, shortened package digest with copy-details action, verification/health status, known update status, and last successful backup time.
+The release summary shows application version, schema baseline/head, shortened package digest with copy-details action, verification/health status, known update status, last successful backup time, mandatory backup-encryption status, and registered persistent-asset/storage status.
 
 ### Get clean package
 
@@ -198,16 +198,19 @@ This is a guided in-page workflow.
 
 #### Configure
 
+- current data is fixed to **Included** for this action;
 - recovery password and confirmation;
 - optional operator note;
 - required persistent assets listed as included and not uncheckable in V1;
 - warning that Syndicatum cannot recover the password.
 
+Required persistent assets cannot be omitted in minimum V1 because doing so would knowingly create an incomplete recovery package. A future redacted/export package may use a different contract; it must not weaken the recovery-package guarantee.
+
 #### Review and authorize
 
 The page summarizes included data classes/assets, source version/baseline, and estimated size when available. It never previews secret values.
 
-**Build encrypted backup** opens the native re-authentication dialog, followed by a bounded confirmation naming the audited operation.
+**Build encrypted backup** opens the native re-authentication dialog, followed by a bounded confirmation naming the audited operation. Download also requires a sufficiently recent re-authentication; otherwise the same native dialog is shown again.
 
 #### Build and download
 
@@ -220,7 +223,7 @@ Step-based progress is used instead of a fake percentage:
 - verify;
 - ready for download.
 
-The result shows filename, creation time, source identity, encrypted size, non-secret package identifier, **Download backup**, single-use expiry, and **Delete now**. Reloading the browser does not cancel or duplicate server work.
+The result shows filename, creation time, source identity, encrypted size, ciphertext/archive SHA-256, non-secret package identifier, **Download backup**, single-use expiry, and **Delete now**. Reloading the browser does not cancel or duplicate server work.
 
 ### Restore backup package
 
@@ -277,6 +280,35 @@ Success provides source/target identities, verification and migration results, d
 The landing page lists package, backup, validation, and staged-restore operations with type, initiating administrator, timestamps, status, non-secret identifier, and **View**.
 
 Statuses are queued, running, succeeded, failed, expired, or deleted. Audit remains authoritative; this list never exposes passwords, credentials, decrypted manifests, sensitive notes, or internal paths.
+
+## Supporting Settings changes
+
+Backup and restore are not hidden inside Settings. Settings remains focused on runtime configuration and may gain a read-only **Installation identity** group showing:
+
+- installed application version;
+- schema baseline and schema head;
+- package identity/provenance link;
+- database host/name and TLS summary, never username secrets or password;
+- installer locked status.
+
+The group links to **Package / Backup / Restore** for package operations rather than duplicating its controls.
+
+## Audit additions
+
+The existing Audit surface records and can display:
+
+- canonical package download initiated and completed/failed;
+- backup build initiated and completed/failed;
+- backup download completed or expired;
+- backup validation attempted and accepted/rejected;
+- staged restore initiated and completed/failed;
+- temporary backup deleted;
+- actor/administrator identity;
+- source and target application/schema identities;
+- non-secret package checksum/reference;
+- timestamps and sanitized failure category.
+
+Audit metadata never includes recovery passwords, database credentials, portable secrets, decrypted content, or public temporary-download URLs.
 
 ## Dialogs and notifications
 
