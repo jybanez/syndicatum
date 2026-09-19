@@ -618,6 +618,20 @@ head `4595cb9` passed all required jobs in run `35410305194`. Other role
 variants and the remaining pagination/history/unknown, edit/tombstone,
 responsive, accessibility, and overall gates remain open.
 
+The next exact-image installed probe created 55 direct requests in one fresh
+MySQL 5.7.44 project and reproduced one unverified historical baseline. The
+installed API paginated 50 + 5 with 55 unique request IDs; the historical row
+projected as `unknown` with no invented owner or evidence. The installed Inbox
+showed 50 items plus `Load older work`, then 55 unique cards after paging. Its
+`Historical / unknown` filter preserved the older-page affordance when the
+first page had zero matches, then showed only request `#1` as `Unknown` / `Not
+verified` with explicit guidance that it was not an active assignment. See the
+[installed acceptance record](v1-responsibility-installed-acceptance-2026-09-19.md#pagination-history-and-unknown-baseline-probe).
+This closes only the exercised single-project 50+5 pagination/no-duplicate and
+unknown-baseline presentation path. Broader multi-project scale,
+edit/tombstone, responsive/accessibility, and overall gates remain open pending
+CI and Assessor review.
+
 Historical-baseline handling and a read-only migration preflight are described
 in [the responsibility migration rule](v1-responsibility-baseline-migration.md).
 The Commercial Assessor recommended its non-inventive policy in message #2765

@@ -230,6 +230,34 @@ proposal, acceptance, and reopen. This closes only that installed
 dispute/re-proposal/accept/reopen path; other role variants, pagination/history,
 edit/tombstone, responsive, accessibility, and overall P1.1/P1.2 remain open.
 
+## Pagination, history, and unknown-baseline probe
+
+A seventh disposable Compose stack served the same exact `771a222` application
+image and MySQL 5.7.44 at `127.0.0.1:18089`, with fresh isolated volumes and
+two independently authenticated synthetic humans. The owner created 55 direct
+requests for the responder through the installed session/CSRF-protected API.
+The oldest request's responsibility generation anchor was then set to null in
+the isolated database to reproduce the documented historical direct-message
+condition without inventing a current assignment.
+
+The authenticated installed API returned the `All direct work` data as 50 + 5
+items, with `has_more` true only on the first page and 55 unique request IDs
+across both cursors. The oldest item was explicitly projected as `unknown`,
+with no current or last responder, no latest responsibility evidence, and
+`projection_error=RESPONSIBILITY_BASELINE_UNAVAILABLE`.
+
+The real installed owner browser showed 50 cards and `Load older work`. After
+loading the second page it showed 55 unique request headings, including request
+`#1`, with no remaining older-page control. Selecting `Historical / unknown`
+correctly showed zero matches on the newest page while preserving `more
+available` and explaining `No matches in this page. Load older work to
+continue.` Loading older then displayed only request `#1` as `Unknown`, `Not
+verified`, and stated that the historical message is not an active assignment
+and that new direct work must be sent to assign current responsibility. This
+closes only the exercised 50+5 pagination/no-duplicate and unknown-baseline
+presentation path; multi-project scale, edit/tombstone, responsive,
+accessibility, and overall P1.1/P1.2 remain open.
+
 These probes exercised authenticated installed browsers against running
 Docker apps and databases. The source/CI workflow for the first probe's commit
 `7f69fda` also passed `source-contract`, `security-inventory`, and Docker
@@ -243,7 +271,8 @@ Docker apps and databases. The source/CI workflow for the first probe's commit
 - Broader stale HTTP 409 recovery across other roles and states, including
   refresh-failure UX. The owner-side withdrawal conflict above is exercised
   and accepted at narrow scope.
-- Paginated multi-project/no-duplication behavior and historical/unknown data.
+- Broader multi-project scale beyond the exercised single-project 50+5
+  pagination/no-duplicate and historical unknown-baseline path.
 - Evidence navigation after edit and soft-delete, including an offscreen row.
 - Responsive-density, keyboard, focus, and screen-reader acceptance on the
   installed client.
