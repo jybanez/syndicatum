@@ -359,15 +359,21 @@ behavior; permissive local defaults alone are insufficient.
       claim; keep this separate from functional compatibility on 5.7.44. The
       [proposed external host/runtime baseline](v1-external-host-runtime-baseline.md)
       records MySQL 5.7 as an internal-RC-only baseline and recommends MySQL
-      8.4 LTS compatibility/migration acceptance before normal external use;
-      Assessor and owner review remain open.
+      8.4 LTS compatibility/migration acceptance before normal external use.
+      The Assessor accepted that direction in project message 2859. No owner
+      decision is needed to implement and test 8.4; a temporary external 5.7
+      exception would require separate, time-bounded owner residual-risk
+      approval.
 - [ ] Complete the [security acceptance table](v1-security-acceptance-table.md)
       for every CRITICAL and release-relevant HIGH container finding, including
       runtime exposure, compatible fix, mitigation, residual risk, and explicit
       acceptance. A green inventory scan is not security-gate evidence.
       Commercial Assessor messages 2851–2853 approve all 19 exact-RC CRITICAL
       rows (ten `unreachable`, nine `not_applicable`, no residual-risk
-      acceptance), closing the CRITICAL sub-gate. The prioritized HIGH queue,
+      acceptance), closing the CRITICAL sub-gate. Message 2864 additionally
+      approves the ten exact-binary `gosu` HIGH rows (nine `not_applicable`,
+      one `unreachable`, no residual-risk acceptance), closing that bundled-
+      helper sub-gate. The remaining prioritized HIGH queue,
       external host/runtime minimums, and MySQL 5.7 EOL treatment remain open,
       so the overall security-disposition gate stays open.
 - [ ] Approve and automate the
