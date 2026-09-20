@@ -143,6 +143,25 @@ jobs:
             "$GITHUB_SHA" "candidate-${GITHUB_SHA}" \
             syndicatum-mysql84-1.0.0-baseline.1 202609180004 \
             | tee canonical-candidate/first/roundtrip.json
+      - name: Clean-install the exact candidate artifact on empty MySQL 8.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$(jq -r '.stage' canonical-candidate/first/roundtrip.json)"
+          test -d "$package_root/app"
+          install_root="$(mktemp -d)"
+          cp -a "$package_root/app/." "$install_root/"
+          mkdir -p "$install_root/schema"
+          cp -a "$package_root/schema/baselines/mysql84" "$install_root/schema/mysql84"
+          cp -a "$package_root/plugins" "$install_root/plugins"
+          cp -a "$package_root/skills" "$install_root/skills"
+          package_sha="$(cut -d ' ' -f 1 canonical-candidate/first/syndicatum-v1.0.0.sha256)"
+          export SYNDICATUM_ACCEPTANCE_INGRESS_FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/realtime-acceptance-ingress.php"
+          pwsh -NoProfile -File scripts/docker-acceptance.ps1 \
+            -ComposeFile "$install_root/compose.yaml" \
+            -PackageSha256 "$package_sha" \
+            -ReleaseSourceCommit "$GITHUB_SHA" \
+            2>&1 | tee canonical-candidate/first/mysql84-install.log
       - name: Retain non-authoritative candidate evidence
         if: always()
         uses: actions/upload-artifact@v6
