@@ -254,6 +254,13 @@
       "mode": 420
     },
     {
+      "source": "api/v1/admin/_recovery.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/_recovery.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "api/v1/admin/agents.php",
       "action": "ship",
       "path": "app/api/v1/admin/agents.php",
@@ -261,9 +268,30 @@
       "mode": 420
     },
     {
+      "source": "api/v1/admin/artifact-download.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/artifact-download.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "api/v1/admin/audit.php",
       "action": "ship",
       "path": "app/api/v1/admin/audit.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/backups.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/backups.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/backup-downloads.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/backup-downloads.php",
       "role": "application",
       "mode": 420
     },
@@ -282,9 +310,37 @@
       "mode": 420
     },
     {
+      "source": "api/v1/admin/recovery-status.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/recovery-status.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/release-package.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/release-package.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/restore-inspections.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/restore-inspections.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "api/v1/admin/settings.php",
       "action": "ship",
       "path": "app/api/v1/admin/settings.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/staged-restores.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/staged-restores.php",
       "role": "application",
       "mode": 420
     },
@@ -1724,6 +1780,13 @@
       "mode": 420
     },
     {
+      "source": "src/AdminRecoveryService.php",
+      "action": "ship",
+      "path": "app/src/AdminRecoveryService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/AdminService.php",
       "action": "ship",
       "path": "app/src/AdminService.php",
@@ -2000,6 +2063,13 @@
       "source": "src/RealtimeIntegration.php",
       "action": "ship",
       "path": "app/src/RealtimeIntegration.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/RecoveryOperationStore.php",
+      "action": "ship",
+      "path": "app/src/RecoveryOperationStore.php",
       "role": "application",
       "mode": 420
     },

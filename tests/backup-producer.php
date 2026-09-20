@@ -112,6 +112,51 @@ try {
 
     $restoreTarget = new FixtureRestoreTarget($baseline, $database);
     $restorer = new StagedBackupRestore($restoreTarget, $baseline, $temporary, $public);
+    $targetBeforeInspection = serialize([
+        $restoreTarget->counts, $restoreTarget->rows, $restoreTarget->transaction, $restoreTarget->sequences,
+    ]);
+    $inspected = $restorer->inspect($destination, $key, [
+        'PBB_AGENTCHAT_SECRET' => str_repeat('c', 32),
+        'SYNDICATUM_MASTER_KEY' => str_repeat('d', 32),
+    ]);
+    backupProducerAssert($inspected['target_ready'] === true && $inspected['cutover_performed'] === false,
+        'Inspection must prove target readiness without claiming cutover.');
+    backupProducerAssert($inspected['schema_baseline'] === $baselineArray['baseline_id']
+        && $inspected['schema_head'] === $baselineArray['schema_head']
+        && $inspected['archive_sha256'] === $result['archive_sha256']
+        && $inspected['manifest_sha256'] === $result['manifest_sha256']
+        && $inspected['content_tree_sha256'] === $result['content_tree_sha256'],
+        'Inspection did not return the authenticated compatibility and hash identities.');
+    backupProducerAssert($inspected['backup_policy']['durable']['count'] === 28
+        && $inspected['backup_policy']['reset']['count'] === 17
+        && $inspected['backup_policy']['excluded']['count'] === 3
+        && $inspected['file_role_counts']['logical_data'] === 28
+        && $inspected['file_role_counts']['persistent_asset'] === 1
+        && $inspected['sequence_table_count'] === 28,
+        'Inspection did not return the trusted policy and inventory counts.');
+    backupProducerAssert(serialize([
+        $restoreTarget->counts, $restoreTarget->rows, $restoreTarget->transaction, $restoreTarget->sequences,
+    ]) === $targetBeforeInspection, 'Inspection mutated the restore target.');
+    $inspectionJson = json_encode($inspected, JSON_UNESCAPED_SLASHES);
+    backupProducerAssert(is_string($inspectionJson) && strpos($inspectionJson, str_repeat('c', 32)) === false
+        && strpos($inspectionJson, str_repeat('d', 32)) === false
+        && strpos($inspectionJson, str_replace('\\', '/', $root)) === false
+        && !array_key_exists('asset_stage_path', $inspected),
+        'Inspection exposed a secret or private server path.');
+    backupProducerAssert(count(glob($temporary . DIRECTORY_SEPARATOR . 'backup-stage-*')) === 0
+        && count(glob($temporary . DIRECTORY_SEPARATOR . 'syndicatum-stage-*')) === 0,
+        'Successful inspection left authenticated plaintext behind.');
+
+    backupProducerThrows(function () use ($restorer, $destination, $key) {
+        $restorer->inspect($destination, $key, [
+            'PBB_AGENTCHAT_SECRET' => str_repeat('x', 32),
+            'SYNDICATUM_MASTER_KEY' => str_repeat('d', 32),
+        ]);
+    }, 'Inspection must reject target secrets that do not match the authenticated backup.');
+    backupProducerAssert(count(glob($temporary . DIRECTORY_SEPARATOR . 'backup-stage-*')) === 0
+        && count(glob($temporary . DIRECTORY_SEPARATOR . 'syndicatum-stage-*')) === 0,
+        'Rejected inspection left authenticated plaintext behind.');
+
     $restored = $restorer->restore($destination, $key, [
         'PBB_AGENTCHAT_SECRET' => str_repeat('c', 32),
         'SYNDICATUM_MASTER_KEY' => str_repeat('d', 32),
@@ -126,6 +171,12 @@ try {
     $nonEmptyTarget = new FixtureRestoreTarget($baseline, $database);
     $nonEmptyTarget->counts['users'] = 1;
     $nonEmptyRestorer = new StagedBackupRestore($nonEmptyTarget, $baseline, $temporary, $public);
+    backupProducerThrows(function () use ($nonEmptyRestorer, $destination, $key) {
+        $nonEmptyRestorer->inspect($destination, $key, [
+            'PBB_AGENTCHAT_SECRET' => str_repeat('c', 32),
+            'SYNDICATUM_MASTER_KEY' => str_repeat('d', 32),
+        ]);
+    }, 'Inspection must reject a non-empty durable target.');
     backupProducerThrows(function () use ($nonEmptyRestorer, $destination, $key) {
         $nonEmptyRestorer->restore($destination, $key, [
             'PBB_AGENTCHAT_SECRET' => str_repeat('c', 32),

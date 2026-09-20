@@ -92,41 +92,12 @@ final class StagedBackupRestore
     {
         $opened = null; $extracted = null; $assetStage = null; $transaction = false;
         try {
-            $opened = BackupEnvelope::decryptToPrivateStage($envelopePath, $this->stagingRoot, $encryptionKey);
-            $manifest = PackageManifest::parse($opened['manifest_json']);
-            $baselineArray = $this->baseline->toArray();
-            foreach (['application_version' => 'application_version','schema_baseline' => 'baseline_id','schema_head' => 'schema_head'] as $manifestField => $baselineField) {
-                if (!hash_equals((string) $baselineArray[$baselineField], (string) $manifest[$manifestField])) {
-                    throw new InvalidArgumentException('Authenticated backup does not match trusted target ' . $baselineField . '.');
-                }
-            }
-
-            $expectedData = [];
-            foreach ($this->baseline->tablesWithBackupPolicy('durable') as $table) { $expectedData[] = 'data/' . $table['name'] . '.ndjson'; }
-            sort($expectedData, SORT_STRING);
-            $actualData = []; $roles = []; $required = ['metadata/recovery.json','secrets/recovery.json'];
-            foreach ($manifest['files'] as $file) {
-                $roles[$file['path']] = $file['role'];
-                if ($file['role'] === 'logical_data') { $actualData[] = $file['path']; }
-                elseif ($file['role'] === 'persistent_asset' && !preg_match('#\Aassets/avatars/[a-f0-9]{40}\.(?:jpg|png|webp)\z#', $file['path'])) {
-                    throw new InvalidArgumentException('Authenticated backup contains an unsupported persistent asset path.');
-                } elseif ($file['role'] === 'portable_secret' && $file['path'] !== 'secrets/recovery.json') {
-                    throw new InvalidArgumentException('Authenticated backup contains an unsupported portable-secret path.');
-                }
-            }
-            sort($actualData, SORT_STRING);
-            if ($actualData !== $expectedData) { throw new InvalidArgumentException('Authenticated backup durable-table payload does not match trusted BaselineMetadata.'); }
-            $required = array_merge($required, $expectedData);
-            $context = ArchiveValidationContext::forBackup($opened['archive_sha256'], $opened['manifest_sha256'],
-                [$baselineArray['baseline_id'] => [$baselineArray['schema_head']]], $roles, $required);
-            $extracted = (new ArchiveSafetyReader())->extractToNewStage($opened['archive_path'], $opened['manifest_json'], $context, $this->stagingRoot, $this->publicWebRoot);
-
-            $secretJson = file_get_contents($extracted->path() . DIRECTORY_SEPARATOR . 'secrets' . DIRECTORY_SEPARATOR . 'recovery.json');
-            if (!is_string($secretJson)) { throw new RuntimeException('Authenticated portable recovery secrets could not be read.'); }
-            $secretClassifications = BackupSecrets::assertTargetMatches(BackupSecrets::parse($secretJson), $targetSecrets);
-            $recoveryJson = file_get_contents($extracted->path() . DIRECTORY_SEPARATOR . 'metadata' . DIRECTORY_SEPARATOR . 'recovery.json');
-            $sequences = $this->parseSequences($recoveryJson);
-            $this->assertStagedTarget();
+            $validated = $this->openValidatedPackage($envelopePath, $encryptionKey, $targetSecrets);
+            $opened = $validated['opened'];
+            $extracted = $validated['extracted'];
+            $manifest = $validated['manifest'];
+            $secretClassifications = $validated['secret_classifications'];
+            $sequences = $validated['sequences'];
 
             $assetStage = self::createPrivateStage($this->stagingRoot, 'restored-assets-');
             $assetCount = 0;
@@ -201,6 +172,150 @@ final class StagedBackupRestore
         }
     }
 
+    public function inspect($envelopePath, $encryptionKey, array $targetSecrets)
+    {
+        $opened = null; $extracted = null;
+        try {
+            $validated = $this->openValidatedPackage($envelopePath, $encryptionKey, $targetSecrets);
+            $opened = $validated['opened'];
+            $extracted = $validated['extracted'];
+            $manifest = $validated['manifest'];
+
+            $policy = [];
+            foreach (['durable', 'reset', 'excluded'] as $name) {
+                $tables = array_map(function ($table) { return $table['name']; }, $this->baseline->tablesWithBackupPolicy($name));
+                $policy[$name] = ['count' => count($tables), 'tables' => $tables];
+            }
+            $roleCounts = [];
+            foreach ($manifest['files'] as $file) {
+                $role = $file['role'];
+                $roleCounts[$role] = isset($roleCounts[$role]) ? $roleCounts[$role] + 1 : 1;
+            }
+            ksort($roleCounts, SORT_STRING);
+
+            return [
+                'envelope_sha256' => hash_file('sha256', $envelopePath),
+                'application_version' => $manifest['application_version'],
+                'source_commit' => $manifest['source_commit'],
+                'source_tag' => $manifest['source_tag'],
+                'source_timestamp' => $manifest['source_timestamp'],
+                'schema_baseline' => $manifest['schema_baseline'],
+                'schema_head' => $manifest['schema_head'],
+                'compatibility' => $manifest['compatibility'],
+                'minimum_reader_version' => $manifest['minimum_reader_version'],
+                'archive_sha256' => $opened['archive_sha256'],
+                'manifest_sha256' => $opened['manifest_sha256'],
+                'content_tree_sha256' => $manifest['content_tree_sha256'],
+                'backup_policy' => $policy,
+                'durable_row_counts' => $this->inspectDurableRowCounts($extracted->path()),
+                'file_role_counts' => $roleCounts,
+                'sequence_table_count' => count($validated['sequences']),
+                'secret_classifications' => $validated['secret_classifications'],
+                'target_ready' => true,
+                'cutover_performed' => false,
+            ];
+        } finally {
+            if ($extracted instanceof ArchiveExtractionStage && is_dir($extracted->path())) { BackupEnvelope::removePrivateStage($extracted->path(), $this->stagingRoot); }
+            if (is_array($opened) && isset($opened['stage_path']) && is_dir($opened['stage_path'])) { BackupEnvelope::removePrivateStage($opened['stage_path'], $this->stagingRoot); }
+        }
+    }
+
+    public function targetStatus()
+    {
+        $this->assertStagedTarget();
+        return [
+            'ready' => true,
+            'empty_target' => true,
+            'live_overwrite' => false,
+            'automatic_cutover' => false,
+            'message' => 'Separate staged-restore target is compatible and empty.',
+        ];
+    }
+
+    private function openValidatedPackage($envelopePath, $encryptionKey, array $targetSecrets)
+    {
+        $opened = null; $extracted = null;
+        try {
+            $opened = BackupEnvelope::decryptToPrivateStage($envelopePath, $this->stagingRoot, $encryptionKey);
+            $manifest = PackageManifest::parse($opened['manifest_json']);
+            $baselineArray = $this->baseline->toArray();
+            foreach (['application_version' => 'application_version','schema_baseline' => 'baseline_id','schema_head' => 'schema_head'] as $manifestField => $baselineField) {
+                if (!hash_equals((string) $baselineArray[$baselineField], (string) $manifest[$manifestField])) {
+                    throw new InvalidArgumentException('Authenticated backup does not match trusted target ' . $baselineField . '.');
+                }
+            }
+
+            $expectedData = [];
+            foreach ($this->baseline->tablesWithBackupPolicy('durable') as $table) { $expectedData[] = 'data/' . $table['name'] . '.ndjson'; }
+            sort($expectedData, SORT_STRING);
+            $actualData = []; $roles = []; $required = ['metadata/recovery.json','secrets/recovery.json'];
+            foreach ($manifest['files'] as $file) {
+                $roles[$file['path']] = $file['role'];
+                if ($file['role'] === 'logical_data') { $actualData[] = $file['path']; }
+                elseif ($file['role'] === 'persistent_asset' && !preg_match('#\Aassets/avatars/[a-f0-9]{40}\.(?:jpg|png|webp)\z#', $file['path'])) {
+                    throw new InvalidArgumentException('Authenticated backup contains an unsupported persistent asset path.');
+                } elseif ($file['role'] === 'portable_secret' && $file['path'] !== 'secrets/recovery.json') {
+                    throw new InvalidArgumentException('Authenticated backup contains an unsupported portable-secret path.');
+                }
+            }
+            sort($actualData, SORT_STRING);
+            if ($actualData !== $expectedData) { throw new InvalidArgumentException('Authenticated backup durable-table payload does not match trusted BaselineMetadata.'); }
+            $required = array_merge($required, $expectedData);
+            $context = ArchiveValidationContext::forBackup($opened['archive_sha256'], $opened['manifest_sha256'],
+                [$baselineArray['baseline_id'] => [$baselineArray['schema_head']]], $roles, $required);
+            $extracted = (new ArchiveSafetyReader())->extractToNewStage($opened['archive_path'], $opened['manifest_json'], $context, $this->stagingRoot, $this->publicWebRoot);
+
+            $secretJson = file_get_contents($extracted->path() . DIRECTORY_SEPARATOR . 'secrets' . DIRECTORY_SEPARATOR . 'recovery.json');
+            if (!is_string($secretJson)) { throw new RuntimeException('Authenticated portable recovery secrets could not be read.'); }
+            $secretClassifications = BackupSecrets::assertTargetMatches(BackupSecrets::parse($secretJson), $targetSecrets);
+            $recoveryJson = file_get_contents($extracted->path() . DIRECTORY_SEPARATOR . 'metadata' . DIRECTORY_SEPARATOR . 'recovery.json');
+            $sequences = $this->parseSequences($recoveryJson);
+            $this->assertStagedTarget();
+
+            return [
+                'opened' => $opened,
+                'extracted' => $extracted,
+                'manifest' => $manifest,
+                'secret_classifications' => $secretClassifications,
+                'sequences' => $sequences,
+            ];
+        } catch (Throwable $exception) {
+            if ($extracted instanceof ArchiveExtractionStage && is_dir($extracted->path())) { BackupEnvelope::removePrivateStage($extracted->path(), $this->stagingRoot); }
+            if (is_array($opened) && isset($opened['stage_path']) && is_dir($opened['stage_path'])) { BackupEnvelope::removePrivateStage($opened['stage_path'], $this->stagingRoot); }
+            throw $exception;
+        }
+    }
+
+    private function inspectDurableRowCounts($root)
+    {
+        $counts = [];
+        foreach ($this->baseline->tablesWithBackupPolicy('durable') as $table) {
+            $path = $root . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . $table['name'] . '.ndjson';
+            $stream = @fopen($path, 'rb');
+            if (!is_resource($stream)) { throw new RuntimeException('Durable table payload could not be opened: ' . $table['name'] . '.'); }
+            $count = 0;
+            try {
+                while (($line = fgets($stream)) !== false) {
+                    if (substr($line, -1) !== "\n") { throw new InvalidArgumentException('Durable table NDJSON record lacks a final LF.'); }
+                    $json = substr($line, 0, -1);
+                    PackageManifest::assertNoDuplicateJsonObjectKeys($json);
+                    $wire = json_decode($json, false, 32, JSON_BIGINT_AS_STRING);
+                    $row = json_decode($json, true, 32, JSON_BIGINT_AS_STRING);
+                    if (!($wire instanceof stdClass) || !is_array($row) || json_last_error() !== JSON_ERROR_NONE || array_keys($row) !== $table['columns']) {
+                        throw new InvalidArgumentException('Durable table row does not match target columns: ' . $table['name'] . '.');
+                    }
+                    foreach ($row as $value) {
+                        if ($value !== null && !is_string($value)) { throw new InvalidArgumentException('Durable table values must be strings or null.'); }
+                    }
+                    $count++;
+                }
+                if (!feof($stream)) { throw new RuntimeException('Durable table payload could not be read completely.'); }
+            } finally { fclose($stream); }
+            $counts[$table['name']] = $count;
+        }
+        return $counts;
+    }
+
     private function assertStagedTarget()
     {
         $names = $this->target->tableNames();
@@ -212,6 +327,12 @@ final class StagedBackupRestore
         }
         foreach (array_merge($this->baseline->tablesWithBackupPolicy('durable'), $this->baseline->tablesWithBackupPolicy('reset')) as $table) {
             if ($this->target->rowCount($table['name']) !== 0) { throw new InvalidArgumentException('Staged restore requires empty durable/reset target tables: ' . $table['name'] . '.'); }
+        }
+        foreach ($this->baseline->tablesWithBackupPolicy('durable') as $table) {
+            $next = $this->target->nextSequenceValue($table['name']);
+            if ($next !== null && $next !== 1) {
+                throw new InvalidArgumentException('Staged restore target sequence state is not pristine: ' . $table['name'] . '. Reprovision the target before retrying.');
+            }
         }
         foreach ($this->baseline->tablesWithBackupPolicy('excluded') as $table) {
             $count = $this->target->rowCount($table['name']);

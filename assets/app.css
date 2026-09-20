@@ -281,6 +281,9 @@ button, input, textarea { font: inherit; }
 .backup-restore-details dd { margin: 0; overflow-wrap: anywhere; }
 .backup-restore-operation .ui-button { justify-self: start; }
 .backup-restore-operation .ui-button:disabled { cursor: not-allowed; opacity: .58; }
+.backup-restore-uploader, .backup-restore-receipt { display: grid; gap: 14px; min-width: 0; }
+.backup-restore-uploader > p, .backup-restore-receipt > p { margin: 0; color: var(--app-muted); line-height: 1.5; }
+.backup-restore-receipt .ui-data-inspector { max-height: min(52vh, 520px); overflow: auto; }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
 .connection-label { color: var(--app-muted); font-size: 12px; }
 

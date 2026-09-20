@@ -441,11 +441,24 @@ tag; therefore production canonical-artifact evidence remains open.
       round-trip evidence recovered durable state while leaving session, OAuth,
       service-token, and outbox fixtures empty and preserving target-local roles
       and installation identity.
-- [ ] Pass exact-head CI for the encrypted backup producer, retain the MySQL 8.4
+- [x] Pass exact-head CI for the encrypted backup producer, retain the MySQL 8.4
       round-trip artifact and deterministic baseline metadata hash, and obtain
       Commercial Assessor acceptance before replacing Backup/Restore UI
       placeholders with real actions. Evidence requirements are recorded in
       [`v1-encrypted-backup-acceptance.md`](v1-encrypted-backup-acceptance.md).
+      Commercial Assessor message 3293 closes this gate at PR head
+      `ce99edcccc311c86f3c711b4ab386a85d596bf98` using all-green CI run
+      `35514103883`, retained encrypted round-trip artifact `10606134839`, and
+      deterministic BaselineMetadata SHA-256
+      `c3924d363fa49ec050070daa1fbb5f7ddcd803461f4905b20708199714b86643`.
+- [ ] Replace the Backup/Restore placeholders with authenticated real actions
+      while preserving the accepted backend boundaries: CI-built clean-package
+      retrieval only, encrypted non-executable backup creation, authenticated
+      inspection before trust, separate empty staged target, no live overwrite,
+      no automatic cutover, and explicit reset/reissue consequences. Closure
+      requires exact implementation/CI evidence, installed-browser responsive
+      and keyboard/focus evidence, retry/error/recovery evidence, and Helper's
+      focused UI/UX review; see [`v1-admin-recovery-ui.md`](v1-admin-recovery-ui.md).
 
 **Exit evidence:** `v1.0.0` can be built, verified, clean-installed, backed up,
 and restored using published artifacts and documentation. Later supported
