@@ -1782,7 +1782,12 @@ function openStageRestoreConfirmation(inspection) {
       [{ type: "text", content: "Sessions, ephemeral OAuth tokens/codes, delivery queues, webhook deliveries, and service credentials will not be carried into the staged target. Credentials marked for reissue must be replaced." }],
       [{ type: "checkbox", name: "no_cutover", label: "I understand this writes only to the separate empty staging target and never overwrites the live database or cuts traffic over.", required: true }],
       [{ type: "checkbox", name: "reset_ack", label: "I understand reset/reissue data is intentionally omitted and must be re-established after an approved cutover.", required: true }],
-      [modalTextField("confirmation", "Type STAGE RESTORE to continue", { required: true, autocomplete: "off" })],
+      [modalTextField("confirmation", "Type STAGE RESTORE to continue", {
+        required: true,
+        autocomplete: "off",
+        pattern: "STAGE RESTORE",
+        help: "Enter exactly STAGE RESTORE (uppercase, with one space).",
+      })],
     ],
     async onSubmit(values, context) {
       try {
@@ -1815,7 +1820,21 @@ function openRestoreUploader() {
   content.append(guidance, mount);
   let inspection = null;
   let modal = null;
-  const uploader = state.factories.createFileUploader(mount, {
+  let uploader = null;
+  let contextGeneration = 1;
+  let contextActive = true;
+  let transitionTimer = null;
+  const invalidateInspectionContext = () => {
+    contextActive = false;
+    contextGeneration += 1;
+    inspection = null;
+    if (transitionTimer !== null) {
+      clearTimeout(transitionTimer);
+      transitionTimer = null;
+    }
+    uploader?.destroy();
+  };
+  uploader = state.factories.createFileUploader(mount, {
     ariaLabel: "Encrypted backup inspection",
     dropzoneAriaLabel: "Choose encrypted Syndicatum backup",
     accept: ".syndicatum-backup",
@@ -1827,15 +1846,30 @@ function openRestoreUploader() {
     dropText: "Drop one encrypted backup here or choose Browse.",
     async onUpload(item, controls) { inspection = await uploadBackupInspection(item, controls); },
     onComplete(stateValue) {
-      if (inspection && stateValue.items.some((entry) => entry.status === "success")) {
-        setTimeout(async () => { await modal.close({ reason: "inspected" }); openStageRestoreConfirmation(inspection); }, 0);
-      }
+      if (!contextActive || !inspection || !stateValue.items.some((entry) => entry.status === "success")) return;
+      const completedInspection = inspection;
+      const completedGeneration = contextGeneration;
+      if (transitionTimer !== null) clearTimeout(transitionTimer);
+      transitionTimer = setTimeout(async () => {
+        transitionTimer = null;
+        if (!contextActive || completedGeneration !== contextGeneration) return;
+        const closed = await modal.close({ reason: "inspected" });
+        if (!closed || !contextActive || completedGeneration !== contextGeneration) return;
+        contextActive = false;
+        contextGeneration += 1;
+        uploader.destroy();
+        openStageRestoreConfirmation(completedInspection);
+      }, 0);
     },
   });
   modal = state.factories.createActionModal({
     title: "Inspect encrypted backup", size: "lg", content,
     actions: [{ id: "close", label: "Close" }],
-    onClose() { uploader.destroy(); },
+    onBeforeClose(meta) {
+      if (meta?.reason !== "inspected") invalidateInspectionContext();
+      return true;
+    },
+    onClose() { invalidateInspectionContext(); },
   });
   modal.open();
 }
