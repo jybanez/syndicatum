@@ -301,6 +301,7 @@ $recoveryMetadata = [
     'contract_name' => 'syndicatum-backup-metadata', 'format_version' => '1.0',
     'baseline_id' => 'baseline.1', 'schema_head' => '202609200000',
     'data_files' => ['data/records.ndjson'], 'asset_files' => [], 'secret_files' => [],
+    'sequences' => (object) [],
 ];
 $backupPayloads = [
     'data/records.ndjson' => ['content' => "{\"id\":1}\n", 'role' => 'logical_data'],

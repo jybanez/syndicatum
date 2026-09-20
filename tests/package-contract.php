@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . '/src/PackageManifest.php';
 require_once dirname(__DIR__) . '/src/InstallationIdentity.php';
 require_once dirname(__DIR__) . '/src/PackageCompatibility.php';
 require_once dirname(__DIR__) . '/src/BaselineMetadata.php';
+require_once dirname(__DIR__) . '/src/BackupTablePolicy.php';
 
 function packageContractFail($message)
 {
@@ -62,6 +63,72 @@ if ($release['package_kind'] !== 'release') {
 $backup = PackageManifest::parse(json_encode(validManifest('backup')));
 if (!$backup['contains_data']) {
     packageContractFail('Backup manifest lost its data flag.');
+}
+
+$baselineJson = file_get_contents(dirname(__DIR__) . '/schema/mysql84/baseline.json');
+$baselineArray = json_decode($baselineJson, true);
+if (!is_array($baselineArray) || json_last_error() !== JSON_ERROR_NONE) {
+    packageContractFail('Trusted MySQL 8.4 baseline metadata is invalid JSON.');
+}
+BaselineMetadata::fromArray($baselineArray);
+$policyJson = file_get_contents(dirname(__DIR__) . '/schema/mysql84/backup-policy-v1.json');
+$policy = BackupTablePolicy::fromJson($policyJson);
+$baselineNames = array_column($baselineArray['tables'], 'name');
+if ($policy->tableNames() !== $baselineNames) {
+    packageContractFail('Backup table policy does not close the trusted baseline table inventory.');
+}
+$policyCounts = ['durable' => 0, 'reset' => 0, 'excluded' => 0];
+$baselineByName = [];
+foreach ($baselineArray['tables'] as $table) {
+    $policyCounts[$table['backup_policy']]++;
+    $baselineByName[$table['name']] = $table;
+}
+if ($policyCounts !== ['durable' => 28, 'reset' => 17, 'excluded' => 3]) {
+    packageContractFail('Reviewed durable/reset/excluded table counts changed unexpectedly.');
+}
+foreach (['syndicatum_sessions', 'oauth_access_tokens', 'message_events_outbox', 'agent_webhook_deliveries'] as $name) {
+    if ($baselineByName[$name]['backup_policy'] !== 'reset' || $baselineByName[$name]['reset_strategy'] !== 'truncate') {
+        packageContractFail('Replayable transient table is not reset by the reviewed policy: ' . $name);
+    }
+}
+foreach (['mcp_service_tokens' => 'reissue_credentials', 'connector_devices' => 'reauthorize',
+          'connector_device_activation_routes' => 'rebind_after_reauthorization'] as $name => $strategy) {
+    if ($baselineByName[$name]['backup_policy'] !== 'reset' || $baselineByName[$name]['reset_strategy'] !== $strategy) {
+        packageContractFail('Credential-bearing reset table lacks its reviewed recovery action: ' . $name);
+    }
+}
+foreach (['oauth_clients', 'agent_activation_bindings', 'agent_notification_webhooks', 'system_settings'] as $name) {
+    if ($baselineByName[$name]['backup_policy'] !== 'durable') {
+        packageContractFail('Reviewed integration configuration is not durable: ' . $name);
+    }
+}
+foreach (['syndicatum_installation_identity', 'syndicatum_schema_migrations', 'system_roles'] as $name) {
+    if ($baselineByName[$name]['backup_policy'] !== 'excluded' || $baselineByName[$name]['target_expectation'] !== 'locally_initialized') {
+        packageContractFail('Target-local table is not excluded by the reviewed policy: ' . $name);
+    }
+}
+$schemaPolicyInput = [];
+foreach ($baselineArray['tables'] as $index => $table) {
+    $schemaPolicyInput[$table['name']] = [
+        'restore_order' => $table['restore_order'] === null ? (($index + 1) * 10) : $table['restore_order'],
+        'columns' => $table['columns'],
+        'identity_columns' => $table['identity_columns'] ?: ['id'],
+    ];
+}
+$originalApplied = $policy->apply($schemaPolicyInput);
+$mutatedPolicyJson = str_replace(
+    '"mcp_service_tokens": {"backup_policy": "reset", "reset_strategy": "reissue_credentials"}',
+    '"mcp_service_tokens": {"backup_policy": "reset", "reset_strategy": "truncate"}',
+    $policyJson,
+    $mutationCount
+);
+if ($mutationCount !== 1) { packageContractFail('Backup policy mutation fixture did not change exactly one table.'); }
+$mutatedApplied = BackupTablePolicy::fromJson($mutatedPolicyJson)->apply($schemaPolicyInput);
+$originalPolicyHash = hash('sha256', json_encode($originalApplied, JSON_UNESCAPED_SLASHES));
+$mutatedPolicyHash = hash('sha256', json_encode($mutatedApplied, JSON_UNESCAPED_SLASHES));
+if ($originalPolicyHash === $mutatedPolicyHash
+    || $originalPolicyHash !== hash('sha256', json_encode($policy->apply($schemaPolicyInput), JSON_UNESCAPED_SLASHES))) {
+    packageContractFail('Backup policy metadata hashing is not deterministic and classification-sensitive.');
 }
 
 $goldenFiles = validManifest()['files'];
@@ -400,10 +467,10 @@ $baseline = BaselineMetadata::fromArray([
         ['id' => '202609200002', 'sha256' => str_repeat('3', 64)],
     ],
     'tables' => [
-        ['name' => 'audit_events', 'backup_policy' => 'durable', 'restore_order' => 10, 'identity_columns' => ['id'], 'sequence_state' => 'preserve', 'integrity_checks' => ['row_count', 'identity_uniqueness']],
-        ['name' => 'oauth_attempts', 'backup_policy' => 'excluded', 'restore_order' => null, 'identity_columns' => [], 'integrity_checks' => [], 'excluded_reason' => 'security_local', 'target_expectation' => 'locally_initialized'],
-        ['name' => 'outbox_events', 'backup_policy' => 'reset', 'restore_order' => 20, 'identity_columns' => ['id'], 'integrity_checks' => [], 'reset_strategy' => 'rebuild_from_durable_state'],
-        ['name' => 'syndicatum_sessions', 'backup_policy' => 'reset', 'restore_order' => 30, 'identity_columns' => ['id'], 'integrity_checks' => [], 'reset_strategy' => 'regenerate_on_start'],
+        ['name' => 'audit_events', 'backup_policy' => 'durable', 'restore_order' => 10, 'columns' => ['id'], 'identity_columns' => ['id'], 'sequence_state' => 'preserve', 'integrity_checks' => ['row_count', 'identity_uniqueness']],
+        ['name' => 'oauth_attempts', 'backup_policy' => 'excluded', 'restore_order' => null, 'columns' => ['id'], 'identity_columns' => [], 'integrity_checks' => [], 'excluded_reason' => 'security_local', 'target_expectation' => 'locally_initialized'],
+        ['name' => 'outbox_events', 'backup_policy' => 'reset', 'restore_order' => 20, 'columns' => ['id'], 'identity_columns' => ['id'], 'integrity_checks' => [], 'reset_strategy' => 'rebuild_from_durable_state'],
+        ['name' => 'syndicatum_sessions', 'backup_policy' => 'reset', 'restore_order' => 30, 'columns' => ['id'], 'identity_columns' => ['id'], 'integrity_checks' => [], 'reset_strategy' => 'regenerate_on_start'],
     ],
 ]);
 if (!$baseline->supportsMysqlVersion('8.4.11') || $baseline->supportsMysqlVersion('9.0.0')) {

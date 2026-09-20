@@ -445,6 +445,46 @@ have occurred. Otherwise:
 Export post-backup human-authored data separately if it must be retained. Do
 not attempt a partial reverse transform of the schema.
 
+## Encrypted backup staging (backend contract)
+
+Create a 32-byte backup key once and store its base64 form in a private host
+file outside the repository and public web root:
+
+```console
+php -r "echo base64_encode(random_bytes(32)), PHP_EOL;" > /secure/path/syndicatum-backup.key
+chmod 0600 /secure/path/syndicatum-backup.key
+```
+
+Set `SYNDICATUM_BACKUP_KEY_FILE=/secure/path/syndicatum-backup.key` in `.env`.
+Compose exposes that file only to the one-shot `backup-key-init` service. That
+service writes a mode `0400`, UID/GID `33:33` copy into the dedicated
+`syndicatum_backup_key_runtime` volume; the non-root app receives that volume
+read-only at `/run/syndicatum-backup-key` and never receives the raw Compose
+secret mount. The app's plaintext work area is a private, non-executable tmpfs at
+`/var/lib/syndicatum/staging`; encrypted envelopes are written to the persistent
+`syndicatum_backups` volume at `/var/lib/syndicatum/backups`.
+
+Until the admin UI action is accepted, an operator can create an envelope with:
+
+```console
+docker compose exec app php scripts/create-encrypted-backup.php \
+  --output=/var/lib/syndicatum/backups/syndicatum-$(date -u +%Y%m%dT%H%M%SZ).syndicatum-backup
+```
+
+Restore is stage-only and requires a separately installed empty target database:
+
+```console
+docker compose exec app php scripts/restore-encrypted-backup.php \
+  --input=/var/lib/syndicatum/backups/verified-file.syndicatum-backup
+```
+
+The restore command imports durable rows into that target and returns a private
+asset-stage path with `cutover_performed:false`. It does not overwrite the live
+database, move assets into the live avatar directory, or switch ingress.
+Credential-bearing state is deliberately reset: MCP service tokens must be
+reissued, connector devices reauthorized/rebound, and users sign in again.
+See `docs/v1-encrypted-backup-contract.md` for the exact 48-table policy.
+
 ## Diagnostics
 
 Start with:

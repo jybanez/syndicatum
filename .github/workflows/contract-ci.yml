@@ -94,6 +94,7 @@ jobs:
         shell: pwsh
         run: |
           php tests/package-contract.php
+          php tests/backup-envelope.php
           php tests/archive-safety.php
 
   canonical-release-candidate:
@@ -221,6 +222,50 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  mysql84-encrypted-backup-roundtrip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      PBB_AGENTCHAT_DB_HOST: 127.0.0.1
+      PBB_AGENTCHAT_DB_PORT: "3306"
+      PBB_AGENTCHAT_DB_USER: root
+      PBB_AGENTCHAT_DB_PASS: ""
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql, zip
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Round-trip encrypted durable state through clean MySQL 8.4 target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-backup
+          php tests/backup-mysql84-roundtrip.php | tee ci-backup/mysql84-roundtrip.json
+      - name: Retain encrypted backup round-trip evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql84-encrypted-backup-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-backup/
+          if-no-files-found: error
+          retention-days: 30
+
   source-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -289,6 +334,8 @@ jobs:
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
           php tests/operational-health.php | tee ci-evidence/operational-health.txt
           php tests/package-contract.php | tee ci-evidence/package-contract.txt
+          php tests/backup-envelope.php | tee ci-evidence/backup-envelope.txt
+          php tests/backup-producer.php | tee ci-evidence/backup-producer.txt
           python tests/canonical-inventory-contract.py | tee ci-evidence/canonical-inventory-contract.txt
           php tests/archive-safety.php | tee ci-evidence/archive-safety.txt
           php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt

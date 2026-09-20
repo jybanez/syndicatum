@@ -63,6 +63,29 @@ class BaselineMetadata
         return isset($this->tablePolicies[$tableName]) ? $this->tablePolicies[$tableName] : null;
     }
 
+    public function tablePolicies()
+    {
+        return array_values($this->tablePolicies);
+    }
+
+    public function tablesWithBackupPolicy($policy)
+    {
+        if (!in_array($policy, ['durable', 'reset', 'excluded'], true)) {
+            throw new InvalidArgumentException('Unknown baseline table backup policy.');
+        }
+        $tables = [];
+        foreach ($this->tablePolicies as $table) {
+            if ($table['backup_policy'] === $policy) { $tables[] = $table; }
+        }
+        if ($policy !== 'excluded') {
+            usort($tables, function ($left, $right) {
+                if ($left['restore_order'] === $right['restore_order']) { return strcmp($left['name'], $right['name']); }
+                return $left['restore_order'] < $right['restore_order'] ? -1 : 1;
+            });
+        }
+        return $tables;
+    }
+
     public function assertKnownTables(array $tableNames)
     {
         $unknown = [];
@@ -203,7 +226,7 @@ class BaselineMetadata
                 throw new InvalidArgumentException('Baseline table classification #' . $index . ' is invalid.');
             }
             self::assertAllowedKeys($table, [
-                'name', 'backup_policy', 'restore_order', 'identity_columns', 'sequence_state',
+                'name', 'backup_policy', 'restore_order', 'columns', 'identity_columns', 'sequence_state',
                 'integrity_checks', 'reset_strategy', 'excluded_reason', 'target_expectation',
             ], 'tables[' . $index . ']');
             $name = self::requiredString($table, 'name');
@@ -222,6 +245,14 @@ class BaselineMetadata
             }
             self::requireList($table['identity_columns'], 'Baseline identity columns');
             self::uniqueStringList($table['identity_columns'], 'Baseline identity columns');
+            if (!isset($table['columns']) || !is_array($table['columns']) || !$table['columns']) {
+                throw new InvalidArgumentException('Baseline table column inventory is required.');
+            }
+            self::requireList($table['columns'], 'Baseline table columns');
+            self::uniqueStringList($table['columns'], 'Baseline table columns');
+            if (count(array_diff($table['identity_columns'], $table['columns'])) > 0) {
+                throw new InvalidArgumentException('Baseline identity columns must be present in the exact table column inventory.');
+            }
             if (!isset($table['integrity_checks']) || !is_array($table['integrity_checks'])) {
                 throw new InvalidArgumentException('Baseline table integrity-check policy is required.');
             }
@@ -277,7 +308,7 @@ class BaselineMetadata
                     throw new InvalidArgumentException('Reset tables cannot declare durable sequence behavior.');
                 }
                 $strategy = self::requiredString($table, 'reset_strategy');
-                if (!in_array($strategy, ['truncate', 'recreate_default_row', 'regenerate_on_start', 'rebuild_from_durable_state'], true)) {
+                if (!in_array($strategy, ['truncate', 'recreate_default_row', 'regenerate_on_start', 'rebuild_from_durable_state', 'reissue_credentials', 'reauthorize', 'rebind_after_reauthorization'], true)) {
                     throw new InvalidArgumentException('Unknown baseline reset strategy.');
                 }
             } elseif (isset($table['reset_strategy']) && $table['reset_strategy'] !== null) {

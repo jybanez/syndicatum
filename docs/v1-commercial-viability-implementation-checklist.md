@@ -431,6 +431,21 @@ tag; therefore production canonical-artifact evidence remains open.
 - [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only
       from a working tree. For later releases, test upgrade from the immediately
       previous supported published release.
+- [x] Implement the encrypted backup producer and stage-only restore backend.
+      The contract is recorded in
+      [`v1-encrypted-backup-contract.md`](v1-encrypted-backup-contract.md): a
+      closed 48-table policy (28 durable / 17 reset / 3 target-local),
+      authenticated encryption, ordinary reader/controlled extraction, private
+      staging, explicit recovery-secret handling, persistent avatar inclusion,
+      empty-target enforcement, and no automatic cutover. Local MySQL 8.4.11
+      round-trip evidence recovered durable state while leaving session, OAuth,
+      service-token, and outbox fixtures empty and preserving target-local roles
+      and installation identity.
+- [ ] Pass exact-head CI for the encrypted backup producer, retain the MySQL 8.4
+      round-trip artifact and deterministic baseline metadata hash, and obtain
+      Commercial Assessor acceptance before replacing Backup/Restore UI
+      placeholders with real actions. Evidence requirements are recorded in
+      [`v1-encrypted-backup-acceptance.md`](v1-encrypted-backup-acceptance.md).
 
 **Exit evidence:** `v1.0.0` can be built, verified, clean-installed, backed up,
 and restored using published artifacts and documentation. Later supported

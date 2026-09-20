@@ -3,7 +3,8 @@ FROM ${PHP_IMAGE}
 
 ENV APACHE_DOCUMENT_ROOT=/var/www/html \
     SYNDICATUM_AVATAR_DIR=/var/lib/syndicatum/avatars \
-    SYNDICATUM_STAGING_DIR=/var/lib/syndicatum/staging
+    SYNDICATUM_STAGING_DIR=/var/lib/syndicatum/staging \
+    SYNDICATUM_BACKUP_DIR=/var/lib/syndicatum/backups
 
 RUN set -eux; \
     apt-get update; \
@@ -50,8 +51,9 @@ COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/syndicatum-entrypoint
 COPY --chmod=755 docker/worker-loop.sh /usr/local/bin/syndicatum-worker
 
 RUN set -eux; \
-    mkdir -p /var/lib/syndicatum/avatars /var/lib/syndicatum/staging /var/www/html/runtime; \
+    mkdir -p /var/lib/syndicatum/avatars /var/lib/syndicatum/staging /var/lib/syndicatum/backups /var/www/html/runtime; \
     chmod 0700 /var/lib/syndicatum/staging; \
+    chmod 0700 /var/lib/syndicatum/backups; \
     chown -R www-data:www-data /var/lib/syndicatum /var/www/html/runtime
 
 EXPOSE 8080

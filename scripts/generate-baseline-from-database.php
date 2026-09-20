@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__DIR__) . '/src/BackupTablePolicy.php';
+
 require_once dirname(__DIR__) . '/src/Db.php';
 
 function failBaselineGeneration($message)
@@ -153,6 +155,22 @@ foreach ($primaryRows as $row) {
     $primaryKeys[$row['TABLE_NAME']][] = $row['COLUMN_NAME'];
 }
 
+$columnRows = $pdo->query(
+    "SELECT table_name AS TABLE_NAME, column_name AS COLUMN_NAME
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+     ORDER BY table_name, ordinal_position"
+)->fetchAll();
+$tableColumns = [];
+foreach ($columnRows as $row) {
+    $tableColumns[$row['TABLE_NAME']][] = $row['COLUMN_NAME'];
+}
+$tableColumns[$identityTable] = [
+    'singleton_id', 'application_version', 'schema_baseline', 'schema_head', 'baseline_source_commit',
+    'release_source_commit', 'package_sha256', 'package_format_version', 'installation_id', 'installed_at',
+    'last_upgrade_id', 'last_upgrade_from_version', 'last_upgrade_to_version', 'last_upgraded_at',
+];
+
 $statements = [
     '-- Syndicatum authoritative MySQL 8.4 baseline.',
     '-- Generated from immutable source commit ' . $sourceCommit . '.',
@@ -204,7 +222,7 @@ $statements[] = "INSERT INTO `system_roles` (`code`, `name`, `created_at`) VALUE
 $statements[] = 'SET FOREIGN_KEY_CHECKS = @syndicatum_saved_foreign_key_checks;';
 $schema = implode("\n\n", $statements) . "\n";
 
-$tablePolicies = [];
+$schemaTablePolicies = [];
 foreach ($tables as $table) {
     $identityColumns = $table === $identityTable
         ? ['singleton_id']
@@ -212,15 +230,21 @@ foreach ($tables as $table) {
     if (!$identityColumns) {
         failBaselineGeneration('Every V1 baseline table must have a primary key: ' . $table . '.');
     }
-    $tablePolicies[] = [
-        'name' => $table,
-        'backup_policy' => 'durable',
+    if (!isset($tableColumns[$table]) || !$tableColumns[$table]) {
+        failBaselineGeneration('Could not read exact column inventory for ' . $table . '.');
+    }
+    $schemaTablePolicies[$table] = [
         'restore_order' => $restoreOrders[$table],
+        'columns' => array_values($tableColumns[$table]),
         'identity_columns' => $identityColumns,
-        'sequence_state' => 'preserve',
-        'integrity_checks' => ['row_count', 'identity_uniqueness', 'foreign_key_consistency'],
     ];
 }
+$backupPolicyPath = dirname(__DIR__) . '/schema/mysql84/backup-policy-v1.json';
+$backupPolicyJson = file_get_contents($backupPolicyPath);
+if (!is_string($backupPolicyJson) || $backupPolicyJson === '') {
+    failBaselineGeneration('The reviewed V1 backup table policy is missing.');
+}
+$tablePolicies = BackupTablePolicy::fromJson($backupPolicyJson)->apply($schemaTablePolicies);
 
 $sqlModes = array_values(array_filter(explode(',', (string) $pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn())));
 sort($sqlModes, SORT_STRING);

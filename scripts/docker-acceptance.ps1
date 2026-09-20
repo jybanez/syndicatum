@@ -193,12 +193,24 @@ $environmentPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.env
 if (Test-Path -LiteralPath $environmentPath) {
     throw "Refusing to overwrite unexpected temporary environment file: $environmentPath"
 }
+$backupKeyPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.backup-key"
+if (Test-Path -LiteralPath $backupKeyPath) {
+    throw "Refusing to overwrite unexpected temporary backup key file: $backupKeyPath"
+}
 
 $backupPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.sql"
 $rootPassword = New-HexSecret 24
 $applicationPassword = New-HexSecret 24
 $applicationSecret = New-HexSecret 32
 $masterKey = New-HexSecret 32
+$backupKeyBytes = New-Object byte[] 32
+$backupKeyRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $backupKeyRng.GetBytes($backupKeyBytes) } finally { $backupKeyRng.Dispose() }
+[System.IO.File]::WriteAllText($backupKeyPath, [Convert]::ToBase64String($backupKeyBytes) + "`n", [System.Text.UTF8Encoding]::new($false))
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Unix) {
+    & chmod 600 -- $backupKeyPath
+    if ($LASTEXITCODE -ne 0) { throw 'Could not make the acceptance backup key private.' }
+}
 $probeValue = "restore-$suffix"
 if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
     $BaseUrl = "http://127.0.0.1:$HttpPort"
@@ -223,6 +235,7 @@ $environment = @(
     "PBB_AGENTCHAT_DB_PASS=$applicationPassword"
     "PBB_AGENTCHAT_SECRET=$applicationSecret"
     "SYNDICATUM_MASTER_KEY=$masterKey"
+    "SYNDICATUM_BACKUP_KEY_FILE=$backupKeyPath"
     "SYNDICATUM_PACKAGE_SHA256=$PackageSha256"
     "SYNDICATUM_RELEASE_SOURCE_COMMIT=$ReleaseSourceCommit"
 ) -join "`n"
@@ -298,6 +311,17 @@ try {
             throw "Worker heartbeat health check did not report healthy: $workerHealth"
         }
         Write-Host 'Verified worker heartbeat health check: healthy.'
+        $backupKeyLength = (Invoke-Compose -Arguments @('exec', '-T', '--user', '33:33', $AppService, 'php', '-r', 'require "src/BackupKeyFile.php"; echo strlen(BackupKeyFile::loadFromEnvironment());') -Capture).Trim()
+        if ($backupKeyLength -ne '32') {
+            throw "Application could not read the private 32-byte backup key; observed length: $backupKeyLength"
+        }
+        $backupPaths = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'sh', '-lc', 'stat -c "%a:%u:%g:%n" /var/lib/syndicatum/staging /var/lib/syndicatum/backups /run/syndicatum-backup-key/backup-key') -Capture).Trim()
+        if ($backupPaths -notmatch '(?m)^700:33:33:/var/lib/syndicatum/staging\r?$' -or
+            $backupPaths -notmatch '(?m)^700:33:33:/var/lib/syndicatum/backups\r?$' -or
+            $backupPaths -notmatch '(?m)^400:33:33:/run/syndicatum-backup-key/backup-key\r?$') {
+            throw "Backup staging/storage/key permissions are not private: $backupPaths"
+        }
+        Write-Host 'Verified private backup key, tmpfs staging, and persistent encrypted-backup storage.'
     } catch {
         Write-Warning 'Container startup failed. Capturing service state and logs before cleanup.'
         try { Invoke-Compose -Arguments @('ps', '--all') } catch { Write-Warning $_ }
@@ -842,4 +866,5 @@ try {
     }
     Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $environmentPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $backupKeyPath -Force -ErrorAction SilentlyContinue
 }

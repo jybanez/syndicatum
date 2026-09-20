@@ -13,6 +13,8 @@ x-syndicatum-environment: &syndicatum-environment
   SYNDICATUM_ALLOW_LEGACY_UPGRADE: ${SYNDICATUM_ALLOW_LEGACY_UPGRADE:-}
   SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST: ${SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST:-}
   SYNDICATUM_AVATAR_DIR: /var/lib/syndicatum/avatars
+  SYNDICATUM_STAGING_DIR: /var/lib/syndicatum/staging
+  SYNDICATUM_BACKUP_DIR: /var/lib/syndicatum/backups
   SYNDICATUM_WORKER_STALE_SECONDS: ${SYNDICATUM_WORKER_STALE_SECONDS:-120}
   TZ: ${TZ:-UTC}
 
@@ -62,14 +64,21 @@ services:
       - /tmp:rw,nosuid,nodev,mode=1777
       - /var/run/apache2:rw,nosuid,nodev,uid=33,gid=33,mode=0755
       - /var/lock/apache2:rw,nosuid,nodev,uid=33,gid=33,mode=0755
+      - /var/lib/syndicatum/staging:rw,nosuid,nodev,noexec,uid=33,gid=33,mode=0700
     depends_on:
       db:
         condition: service_healthy
-    environment: *syndicatum-environment
+      backup-key-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *syndicatum-environment
+      SYNDICATUM_BACKUP_KEY_FILE: /run/syndicatum-backup-key/backup-key
     ports:
       - "${SYNDICATUM_HTTP_BIND:-127.0.0.1}:${SYNDICATUM_HTTP_PORT:-8080}:8080"
     volumes:
       - syndicatum_avatars:/var/lib/syndicatum/avatars
+      - syndicatum_backups:/var/lib/syndicatum/backups
+      - syndicatum_backup_key_runtime:/run/syndicatum-backup-key:ro
     healthcheck:
       test:
         - CMD
@@ -87,6 +96,32 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  backup-key-init:
+    image: ${SYNDICATUM_IMAGE:-syndicatum:local}
+    user: root
+    restart: "no"
+    read_only: true
+    entrypoint: ["/bin/sh", "-eu", "-c"]
+    command:
+      - >-
+        test -f /run/secrets/syndicatum_backup_key &&
+        test ! -L /run/secrets/syndicatum_backup_key &&
+        rm -f /runtime/backup-key &&
+        install -m 0400 -o 33 -g 33 /run/secrets/syndicatum_backup_key /runtime/backup-key
+    volumes:
+      - syndicatum_backup_key_runtime:/runtime
+    secrets:
+      - source: syndicatum_backup_key
+        target: syndicatum_backup_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
 
   worker:
     image: ${SYNDICATUM_IMAGE:-syndicatum:local}
@@ -124,6 +159,12 @@ services:
 volumes:
   syndicatum_db:
   syndicatum_avatars:
+  syndicatum_backups:
+  syndicatum_backup_key_runtime:
+
+secrets:
+  syndicatum_backup_key:
+    file: ${SYNDICATUM_BACKUP_KEY_FILE:?Set SYNDICATUM_BACKUP_KEY_FILE to a private host file}
 
 networks:
   frontend:

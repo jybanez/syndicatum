@@ -23,22 +23,36 @@
     "tables": [
         {
             "name": "account_oauth_attempts",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 10,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "attempt_hash",
+                "state_hash",
+                "nonce",
+                "return_path",
+                "created_at",
+                "expires_at",
+                "consumed_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "administrative_audit_events",
             "backup_policy": "durable",
             "restore_order": 130,
+            "columns": [
+                "id",
+                "actor_user_id",
+                "action",
+                "subject_type",
+                "subject_id",
+                "metadata_json",
+                "ip_address",
+                "created_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -53,6 +67,31 @@
             "name": "agent_activation_bindings",
             "backup_policy": "durable",
             "restore_order": 330,
+            "columns": [
+                "agent_id",
+                "project_id",
+                "runtime_type",
+                "activation_driver",
+                "conversation_id",
+                "working_directory",
+                "workspace_agent_trigger_id",
+                "workspace_agent_conversation_key",
+                "workspace_agent_token_encrypted",
+                "workspace_agent_last_success_at",
+                "workspace_agent_last_failure_at",
+                "workspace_agent_last_error",
+                "responses_model",
+                "responses_api_key_encrypted",
+                "responses_mcp_token_encrypted",
+                "responses_last_response_id",
+                "responses_last_success_at",
+                "responses_last_failure_at",
+                "responses_last_error",
+                "enabled",
+                "created_by_user_id",
+                "created_at",
+                "updated_at"
+            ],
             "identity_columns": [
                 "agent_id"
             ],
@@ -67,6 +106,11 @@
             "name": "agent_credential_scopes",
             "backup_policy": "durable",
             "restore_order": 140,
+            "columns": [
+                "agent_id",
+                "scope",
+                "created_at"
+            ],
             "identity_columns": [
                 "agent_id",
                 "scope"
@@ -82,6 +126,19 @@
             "name": "agent_notification_webhooks",
             "backup_policy": "durable",
             "restore_order": 340,
+            "columns": [
+                "agent_id",
+                "project_id",
+                "endpoint_url",
+                "enabled",
+                "events_json",
+                "signing_secret_encrypted",
+                "created_at",
+                "updated_at",
+                "last_success_at",
+                "last_failure_at",
+                "last_error"
+            ],
             "identity_columns": [
                 "agent_id"
             ],
@@ -94,22 +151,54 @@
         },
         {
             "name": "agent_webhook_deliveries",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 410,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "delivery_uuid",
+                "project_id",
+                "message_id",
+                "agent_id",
+                "event_type",
+                "payload_json",
+                "status",
+                "attempt_count",
+                "last_attempt_at",
+                "next_attempt_at",
+                "response_status",
+                "last_error",
+                "last_failure_code",
+                "created_at",
+                "delivered_at",
+                "terminal_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "agents",
             "backup_policy": "durable",
             "restore_order": 20,
+            "columns": [
+                "id",
+                "project_name",
+                "description",
+                "source_order",
+                "token_prefix",
+                "token_hash",
+                "token_secret_version",
+                "claim_prefix",
+                "claim_hash",
+                "claim_secret_version",
+                "claim_expires_at",
+                "role",
+                "is_active",
+                "created_at",
+                "updated_at",
+                "last_used_at",
+                "claimed_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -124,6 +213,25 @@
             "name": "chat_agents",
             "backup_policy": "durable",
             "restore_order": 30,
+            "columns": [
+                "id",
+                "project_name",
+                "description",
+                "source_order",
+                "token_prefix",
+                "token_hash",
+                "token_secret_version",
+                "claim_prefix",
+                "claim_hash",
+                "claim_secret_version",
+                "claim_expires_at",
+                "role",
+                "is_active",
+                "created_at",
+                "updated_at",
+                "last_used_at",
+                "claimed_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -138,6 +246,19 @@
             "name": "chat_entries",
             "backup_policy": "durable",
             "restore_order": 150,
+            "columns": [
+                "id",
+                "entry_uuid",
+                "sender_agent_id",
+                "message_timestamp",
+                "body",
+                "source_line",
+                "source_order",
+                "source_hash",
+                "created_at",
+                "updated_at",
+                "deleted_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -152,6 +273,12 @@
             "name": "chat_entry_recipients",
             "backup_policy": "durable",
             "restore_order": 240,
+            "columns": [
+                "id",
+                "entry_id",
+                "target_agent_id",
+                "created_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -166,6 +293,14 @@
             "name": "chat_entry_revisions",
             "backup_policy": "durable",
             "restore_order": 250,
+            "columns": [
+                "id",
+                "entry_id",
+                "edited_by_agent_id",
+                "previous_body",
+                "new_body",
+                "edited_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -180,6 +315,16 @@
             "name": "chat_topics",
             "backup_policy": "durable",
             "restore_order": 160,
+            "columns": [
+                "id",
+                "body",
+                "source_hash",
+                "is_active",
+                "created_by_agent_id",
+                "created_at",
+                "updated_at",
+                "deleted_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -194,6 +339,16 @@
             "name": "chat_write_audit",
             "backup_policy": "durable",
             "restore_order": 170,
+            "columns": [
+                "id",
+                "agent_id",
+                "action",
+                "success",
+                "ip_address",
+                "user_agent",
+                "message",
+                "created_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -206,93 +361,136 @@
         },
         {
             "name": "connector_device_activation_routes",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 350,
-            "identity_columns": [
+            "columns": [
                 "device_id",
-                "agent_id"
+                "agent_id",
+                "project_id",
+                "runtime_type",
+                "conversation_id",
+                "working_directory",
+                "enabled",
+                "created_at",
+                "updated_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "rebind_after_reauthorization"
         },
         {
             "name": "connector_device_authorizations",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 180,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "device_code_hash",
+                "user_code_hash",
+                "device_name",
+                "platform",
+                "notification_channel",
+                "status",
+                "approved_user_id",
+                "created_at",
+                "expires_at",
+                "approved_at",
+                "consumed_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "connector_devices",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 190,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "user_id",
+                "display_name",
+                "platform",
+                "token_prefix",
+                "token_hash",
+                "created_at",
+                "last_seen_at",
+                "expires_at",
+                "revoked_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "reauthorize"
         },
         {
             "name": "connector_discussion_binding_intents",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 360,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "context_token_hash",
+                "oauth_access_token_id",
+                "created_by_user_id",
+                "project_id",
+                "requested_agent_id",
+                "requested_agent_name",
+                "provider",
+                "status",
+                "confirmed_agent_id",
+                "discussion_id",
+                "discussion_reference",
+                "resolved_by_device_id",
+                "created_at",
+                "expires_at",
+                "resolved_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "delivery_worker_heartbeats",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 40,
-            "identity_columns": [
-                "worker_name"
+            "columns": [
+                "worker_name",
+                "last_success_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "google_oauth_attempts",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 50,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "attempt_hash",
+                "state_hash",
+                "nonce",
+                "code_verifier",
+                "flow_type",
+                "link_user_id",
+                "return_path",
+                "created_at",
+                "expires_at",
+                "consumed_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "legacy_api_usage_daily",
             "backup_policy": "durable",
             "restore_order": 60,
+            "columns": [
+                "usage_date",
+                "endpoint",
+                "method",
+                "request_count",
+                "first_used_at",
+                "last_used_at"
+            ],
             "identity_columns": [
                 "usage_date",
                 "endpoint",
@@ -307,22 +505,36 @@
         },
         {
             "name": "mcp_service_tokens",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 370,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "token_hash",
+                "project_id",
+                "agent_id",
+                "created_by_user_id",
+                "created_at",
+                "last_used_at",
+                "revoked_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "reissue_credentials"
         },
         {
             "name": "message_addressees",
             "backup_policy": "durable",
             "restore_order": 420,
+            "columns": [
+                "message_id",
+                "participant_id",
+                "reason",
+                "notified_at",
+                "seen_at",
+                "acknowledged_at",
+                "created_at",
+                "responsibility_status_generation"
+            ],
             "identity_columns": [
                 "message_id",
                 "participant_id"
@@ -336,22 +548,42 @@
         },
         {
             "name": "message_events_outbox",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 430,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "event_uuid",
+                "project_id",
+                "message_id",
+                "event_type",
+                "project_sequence",
+                "payload_json",
+                "attempt_count",
+                "last_attempt_at",
+                "available_at",
+                "published_at",
+                "failed_at",
+                "last_error",
+                "last_failure_code",
+                "created_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "message_revisions",
             "backup_policy": "durable",
             "restore_order": 440,
+            "columns": [
+                "id",
+                "legacy_revision_id",
+                "message_id",
+                "editor_participant_id",
+                "previous_body",
+                "new_body",
+                "edited_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -366,6 +598,23 @@
             "name": "messages",
             "backup_policy": "durable",
             "restore_order": 400,
+            "columns": [
+                "id",
+                "message_uuid",
+                "legacy_entry_id",
+                "project_id",
+                "project_sequence",
+                "sender_participant_id",
+                "reply_to_message_id",
+                "body",
+                "client_idempotency_key",
+                "request_fingerprint",
+                "correlation_id",
+                "reply_depth",
+                "created_at",
+                "updated_at",
+                "deleted_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -378,36 +627,61 @@
         },
         {
             "name": "oauth_access_tokens",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 270,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "token_hash",
+                "client_id",
+                "user_id",
+                "project_id",
+                "agent_id",
+                "resource_uri",
+                "scope_text",
+                "created_at",
+                "expires_at",
+                "last_used_at",
+                "revoked_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "oauth_authorization_codes",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 280,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "code_hash",
+                "client_id",
+                "user_id",
+                "project_id",
+                "agent_id",
+                "redirect_uri",
+                "resource_uri",
+                "scope_text",
+                "code_challenge",
+                "created_at",
+                "expires_at",
+                "consumed_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "oauth_clients",
             "backup_policy": "durable",
             "restore_order": 70,
+            "columns": [
+                "client_id",
+                "client_name",
+                "redirect_uris_json",
+                "token_endpoint_auth_method",
+                "created_at",
+                "updated_at"
+            ],
             "identity_columns": [
                 "client_id"
             ],
@@ -420,22 +694,37 @@
         },
         {
             "name": "oauth_refresh_tokens",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 380,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "token_hash",
+                "access_token_id",
+                "client_id",
+                "user_id",
+                "project_id",
+                "agent_id",
+                "resource_uri",
+                "scope_text",
+                "created_at",
+                "expires_at",
+                "consumed_at",
+                "revoked_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "pinned_messages",
             "backup_policy": "durable",
             "restore_order": 450,
+            "columns": [
+                "project_id",
+                "message_id",
+                "pinned_by_participant_id",
+                "created_at"
+            ],
             "identity_columns": [
                 "project_id",
                 "message_id"
@@ -451,6 +740,18 @@
             "name": "project_agents",
             "backup_policy": "durable",
             "restore_order": 290,
+            "columns": [
+                "project_id",
+                "agent_id",
+                "display_name",
+                "avatar_url",
+                "provider",
+                "runtime_name",
+                "capabilities_json",
+                "status",
+                "created_at",
+                "updated_at"
+            ],
             "identity_columns": [
                 "project_id",
                 "agent_id"
@@ -466,6 +767,19 @@
             "name": "project_invitations",
             "backup_policy": "durable",
             "restore_order": 300,
+            "columns": [
+                "id",
+                "project_id",
+                "invited_email",
+                "role",
+                "token_hash",
+                "invited_by_user_id",
+                "accepted_by_user_id",
+                "status",
+                "expires_at",
+                "created_at",
+                "responded_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -480,6 +794,15 @@
             "name": "project_members",
             "backup_policy": "durable",
             "restore_order": 310,
+            "columns": [
+                "project_id",
+                "user_id",
+                "role",
+                "status",
+                "created_at",
+                "updated_at",
+                "removed_at"
+            ],
             "identity_columns": [
                 "project_id",
                 "user_id"
@@ -495,6 +818,10 @@
             "name": "project_message_sequences",
             "backup_policy": "durable",
             "restore_order": 320,
+            "columns": [
+                "project_id",
+                "next_sequence"
+            ],
             "identity_columns": [
                 "project_id"
             ],
@@ -509,6 +836,17 @@
             "name": "project_participants",
             "backup_policy": "durable",
             "restore_order": 390,
+            "columns": [
+                "id",
+                "project_id",
+                "kind",
+                "user_id",
+                "agent_id",
+                "status",
+                "created_at",
+                "updated_at",
+                "status_generation"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -523,6 +861,20 @@
             "name": "projects",
             "backup_policy": "durable",
             "restore_order": 260,
+            "columns": [
+                "id",
+                "public_id",
+                "workspace_id",
+                "owner_user_id",
+                "name",
+                "slug",
+                "description",
+                "instructions",
+                "status",
+                "created_at",
+                "updated_at",
+                "archived_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -535,22 +887,51 @@
         },
         {
             "name": "responses_api_deliveries",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 460,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "delivery_uuid",
+                "project_id",
+                "message_id",
+                "agent_id",
+                "status",
+                "attempt_count",
+                "last_attempt_at",
+                "next_attempt_at",
+                "response_status",
+                "response_id",
+                "response_state",
+                "last_error",
+                "last_failure_code",
+                "created_at",
+                "delivered_at",
+                "terminal_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "responsibility_events",
             "backup_policy": "durable",
             "restore_order": 470,
+            "columns": [
+                "event_message_id",
+                "project_id",
+                "request_message_id",
+                "initial_responder_participant_id",
+                "actor_participant_id",
+                "actor_was_moderator",
+                "kind",
+                "prior_state",
+                "expected_event_message_id",
+                "reference_event_message_id",
+                "target_participant_id",
+                "responder_status_generation",
+                "idempotency_key",
+                "created_at"
+            ],
             "identity_columns": [
                 "event_message_id"
             ],
@@ -563,78 +944,108 @@
         },
         {
             "name": "security_rate_limits",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 80,
-            "identity_columns": [
-                "bucket_key"
+            "columns": [
+                "bucket_key",
+                "action",
+                "window_started_at",
+                "hit_count",
+                "blocked_until",
+                "updated_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "syndicatum_installation_identity",
-            "backup_policy": "durable",
-            "restore_order": 90,
-            "identity_columns": [
-                "singleton_id"
+            "backup_policy": "excluded",
+            "restore_order": null,
+            "columns": [
+                "singleton_id",
+                "application_version",
+                "schema_baseline",
+                "schema_head",
+                "baseline_source_commit",
+                "release_source_commit",
+                "package_sha256",
+                "package_format_version",
+                "installation_id",
+                "installed_at",
+                "last_upgrade_id",
+                "last_upgrade_from_version",
+                "last_upgrade_to_version",
+                "last_upgraded_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "excluded_reason": "environment_local",
+            "target_expectation": "locally_initialized"
         },
         {
             "name": "syndicatum_schema_migrations",
-            "backup_policy": "durable",
-            "restore_order": 100,
-            "identity_columns": [
-                "version"
+            "backup_policy": "excluded",
+            "restore_order": null,
+            "columns": [
+                "version",
+                "description",
+                "checksum",
+                "applied_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "excluded_reason": "environment_local",
+            "target_expectation": "locally_initialized"
         },
         {
             "name": "syndicatum_sessions",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 200,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "user_id",
+                "token_hash",
+                "csrf_token_hash",
+                "account_session_id",
+                "auth_provider",
+                "ip_address",
+                "user_agent",
+                "created_at",
+                "last_seen_at",
+                "expires_at",
+                "revoked_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "system_roles",
-            "backup_policy": "durable",
-            "restore_order": 110,
-            "identity_columns": [
-                "id"
+            "backup_policy": "excluded",
+            "restore_order": null,
+            "columns": [
+                "id",
+                "code",
+                "name",
+                "created_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "excluded_reason": "environment_local",
+            "target_expectation": "locally_initialized"
         },
         {
             "name": "system_settings",
             "backup_policy": "durable",
             "restore_order": 210,
+            "columns": [
+                "setting_key",
+                "value_json",
+                "encrypted_value",
+                "updated_by_user_id",
+                "updated_at"
+            ],
             "identity_columns": [
                 "setting_key"
             ],
@@ -649,6 +1060,12 @@
             "name": "user_system_roles",
             "backup_policy": "durable",
             "restore_order": 220,
+            "columns": [
+                "user_id",
+                "role_id",
+                "granted_by_user_id",
+                "created_at"
+            ],
             "identity_columns": [
                 "user_id",
                 "role_id"
@@ -664,6 +1081,20 @@
             "name": "users",
             "backup_policy": "durable",
             "restore_order": 120,
+            "columns": [
+                "id",
+                "normalized_email",
+                "username",
+                "password_hash",
+                "display_name",
+                "avatar_url",
+                "pbb_user_id",
+                "google_subject",
+                "status",
+                "created_at",
+                "updated_at",
+                "deleted_at"
+            ],
             "identity_columns": [
                 "id"
             ],
@@ -676,22 +1107,42 @@
         },
         {
             "name": "workspace_agent_trigger_deliveries",
-            "backup_policy": "durable",
+            "backup_policy": "reset",
             "restore_order": 480,
-            "identity_columns": [
-                "id"
+            "columns": [
+                "id",
+                "delivery_uuid",
+                "project_id",
+                "message_id",
+                "agent_id",
+                "status",
+                "attempt_count",
+                "last_attempt_at",
+                "next_attempt_at",
+                "response_status",
+                "run_id",
+                "conversation_url",
+                "last_error",
+                "last_failure_code",
+                "created_at",
+                "delivered_at",
+                "terminal_at"
             ],
-            "sequence_state": "preserve",
-            "integrity_checks": [
-                "row_count",
-                "identity_uniqueness",
-                "foreign_key_consistency"
-            ]
+            "identity_columns": [],
+            "integrity_checks": [],
+            "reset_strategy": "truncate"
         },
         {
             "name": "workspaces",
             "backup_policy": "durable",
             "restore_order": 230,
+            "columns": [
+                "id",
+                "owner_user_id",
+                "name",
+                "created_at",
+                "updated_at"
+            ],
             "identity_columns": [
                 "id"
             ],

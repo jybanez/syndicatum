@@ -655,11 +655,14 @@ final class ArchiveSafetyReader
                 throw new InvalidArgumentException('Backup recovery metadata file lists must be JSON arrays.');
             }
         }
+        if (!property_exists($wire, 'sequences') || !($wire->sequences instanceof stdClass)) {
+            throw new InvalidArgumentException('Backup recovery sequence metadata must be a JSON object.');
+        }
         $metadata = json_decode($json, true, 32, JSON_BIGINT_AS_STRING);
         if (!is_array($metadata) || json_last_error() !== JSON_ERROR_NONE) {
             throw new InvalidArgumentException('Backup recovery metadata must be valid JSON.');
         }
-        $allowed = ['contract_name', 'format_version', 'baseline_id', 'schema_head', 'data_files', 'asset_files', 'secret_files'];
+        $allowed = ['contract_name', 'format_version', 'baseline_id', 'schema_head', 'data_files', 'asset_files', 'secret_files', 'sequences'];
         foreach ($metadata as $key => $_value) {
             if (!is_string($key) || !in_array($key, $allowed, true)) {
                 throw new InvalidArgumentException('Backup recovery metadata contains schema or policy authority.');
@@ -679,6 +682,15 @@ final class ArchiveSafetyReader
             foreach ($manifest['files'] as $file) { if ($file['role'] === $role) { $expected[] = $file['path']; } }
             if ($metadata[$field] !== $expected) {
                 throw new InvalidArgumentException('Backup recovery metadata file lists do not match the manifest.');
+            }
+        }
+        if (!isset($metadata['sequences']) || !is_array($metadata['sequences'])) {
+            throw new InvalidArgumentException('Backup recovery sequence metadata is required.');
+        }
+        foreach ($metadata['sequences'] as $table => $value) {
+            if (!is_string($table) || !preg_match('/\A[a-z][a-z0-9_]{0,63}\z/', $table)
+                || ($value !== null && (!is_int($value) || $value < 1))) {
+                throw new InvalidArgumentException('Backup recovery sequence metadata contains an invalid value.');
             }
         }
     }
