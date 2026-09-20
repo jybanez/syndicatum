@@ -1773,6 +1773,8 @@ function openStageRestoreConfirmation(inspection) {
   let pendingReceipt = null;
   const modal = state.factories.createFormModal({
     title: "Stage verified restore", submitLabel: "Stage verified restore", size: "lg",
+    className: "recovery-stage-restore-modal",
+    initialFocus: '[name="confirmation"]',
     initialValues: { confirmation: "", no_cutover: false, reset_ack: false },
     rows: [
       [{ type: "text", content: "The encrypted package authenticated successfully and matches the trusted baseline. The server will revalidate it immediately before staging." }],
@@ -1823,15 +1825,12 @@ function openRestoreUploader() {
   let uploader = null;
   let contextGeneration = 1;
   let contextActive = true;
-  let transitionTimer = null;
+  let pendingTransition = null;
   const invalidateInspectionContext = () => {
     contextActive = false;
     contextGeneration += 1;
     inspection = null;
-    if (transitionTimer !== null) {
-      clearTimeout(transitionTimer);
-      transitionTimer = null;
-    }
+    pendingTransition = null;
     uploader?.destroy();
   };
   uploader = state.factories.createFileUploader(mount, {
@@ -1846,20 +1845,11 @@ function openRestoreUploader() {
     dropText: "Drop one encrypted backup here or choose Browse.",
     async onUpload(item, controls) { inspection = await uploadBackupInspection(item, controls); },
     onComplete(stateValue) {
-      if (!contextActive || !inspection || !stateValue.items.some((entry) => entry.status === "success")) return;
-      const completedInspection = inspection;
-      const completedGeneration = contextGeneration;
-      if (transitionTimer !== null) clearTimeout(transitionTimer);
-      transitionTimer = setTimeout(async () => {
-        transitionTimer = null;
-        if (!contextActive || completedGeneration !== contextGeneration) return;
-        const closed = await modal.close({ reason: "inspected" });
-        if (!closed || !contextActive || completedGeneration !== contextGeneration) return;
-        contextActive = false;
-        contextGeneration += 1;
-        uploader.destroy();
-        openStageRestoreConfirmation(completedInspection);
-      }, 0);
+      if (!contextActive || pendingTransition || !inspection || !stateValue.items.some((entry) => entry.status === "success")) return;
+      pendingTransition = { inspection, generation: contextGeneration };
+      modal.close({ reason: "inspected" }).then((closed) => {
+        if (!closed && pendingTransition?.generation === contextGeneration) pendingTransition = null;
+      });
     },
   });
   modal = state.factories.createActionModal({
@@ -1869,7 +1859,13 @@ function openRestoreUploader() {
       if (meta?.reason !== "inspected") invalidateInspectionContext();
       return true;
     },
-    onClose() { invalidateInspectionContext(); },
+    onClose(meta) {
+      const transition = meta?.reason === "inspected" ? pendingTransition : null;
+      const shouldOpenConfirmation = Boolean(transition && contextActive && transition.generation === contextGeneration);
+      const completedInspection = shouldOpenConfirmation ? transition.inspection : null;
+      invalidateInspectionContext();
+      if (completedInspection) openStageRestoreConfirmation(completedInspection);
+    },
   });
   modal.open();
 }

@@ -284,6 +284,20 @@ button, input, textarea { font: inherit; }
 .backup-restore-uploader, .backup-restore-receipt { display: grid; gap: 14px; min-width: 0; }
 .backup-restore-uploader > p, .backup-restore-receipt > p { margin: 0; color: var(--app-muted); line-height: 1.5; }
 .backup-restore-receipt .ui-data-inspector { max-height: min(52vh, 520px); overflow: auto; }
+.recovery-stage-restore-modal .ui-modal,
+.recovery-stage-restore-modal .ui-modal-body,
+.recovery-stage-restore-modal .ui-form-modal,
+.recovery-stage-restore-modal .ui-form-modal-form,
+.recovery-stage-restore-modal .ui-form-modal-rows,
+.recovery-stage-restore-modal .ui-form-modal-row,
+.recovery-stage-restore-modal .ui-form-modal-field { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.recovery-stage-restore-modal .ui-form-modal-text,
+.recovery-stage-restore-modal .ui-form-modal-display-value,
+.recovery-stage-restore-modal .ui-form-modal-help,
+.recovery-stage-restore-modal .ui-form-modal-checkbox-label { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+.recovery-stage-restore-modal .ui-form-modal-checkbox { display: flex; min-width: 0; max-width: 100%; align-items: flex-start; }
+.recovery-stage-restore-modal .ui-form-modal-checkbox-input { flex: 0 0 16px; margin-top: 1px; }
+.recovery-stage-restore-modal .ui-form-modal-checkbox-label { display: block; flex: 1 1 auto; }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
 .connection-label { color: var(--app-muted); font-size: 12px; }
 
