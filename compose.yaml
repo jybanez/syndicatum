@@ -8,6 +8,8 @@ x-syndicatum-environment: &syndicatum-environment
   PBB_AGENTCHAT_SECRET: ${PBB_AGENTCHAT_SECRET:?Set PBB_AGENTCHAT_SECRET in .env}
   PBB_AGENTCHAT_PREVIOUS_SECRET: ${PBB_AGENTCHAT_PREVIOUS_SECRET:-}
   SYNDICATUM_MASTER_KEY: ${SYNDICATUM_MASTER_KEY:?Set SYNDICATUM_MASTER_KEY in .env}
+  SYNDICATUM_PACKAGE_SHA256: ${SYNDICATUM_PACKAGE_SHA256:?Set SYNDICATUM_PACKAGE_SHA256 to the verified release package digest}
+  SYNDICATUM_RELEASE_SOURCE_COMMIT: ${SYNDICATUM_RELEASE_SOURCE_COMMIT:?Set SYNDICATUM_RELEASE_SOURCE_COMMIT to the full release commit}
   SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST: ${SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST:-}
   SYNDICATUM_AVATAR_DIR: /var/lib/syndicatum/avatars
   SYNDICATUM_WORKER_STALE_SECONDS: ${SYNDICATUM_WORKER_STALE_SECONDS:-120}
@@ -19,7 +21,7 @@ services:
       context: .
       dockerfile: docker/mysql.Dockerfile
       args:
-        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:5.7.44}
+        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a}
     image: ${SYNDICATUM_DB_IMAGE:-syndicatum-db:local}
     restart: unless-stopped
     environment:
@@ -32,7 +34,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --log-bin-trust-function-creators=1
-      - --sql-mode=${SYNDICATUM_MYSQL_SQL_MODE:-STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION}
+      - --sql-mode=${SYNDICATUM_MYSQL_SQL_MODE:-STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION}
     volumes:
       - syndicatum_db:/var/lib/mysql
     healthcheck:

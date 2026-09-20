@@ -96,6 +96,56 @@ jobs:
           php tests/package-contract.php
           php tests/archive-safety.php
 
+  mysql84-baseline-drift:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: syndicatum_baseline_drift
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      PBB_AGENTCHAT_DB_HOST: 127.0.0.1
+      PBB_AGENTCHAT_DB_NAME: syndicatum_baseline_drift
+      PBB_AGENTCHAT_DB_USER: root
+      PBB_AGENTCHAT_DB_PASS: ""
+      PBB_AGENTCHAT_SECRET: baseline-drift-only-secret-at-least-32-characters
+      SYNDICATUM_MASTER_KEY: baseline-drift-only-master-key-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Regenerate the frozen baseline and reject drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-baseline
+          php scripts/hidden-replay-audit.php | tee ci-baseline/hidden-replay-audit.txt
+          bash scripts/check-baseline-drift.sh | tee ci-baseline/drift-check.txt
+      - name: Retain deterministic baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql84-baseline-drift-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-baseline/
+          if-no-files-found: warn
+          retention-days: 30
+
   source-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -211,10 +261,12 @@ jobs:
           docker version --format '{{.Server.Version}}'
           docker compose version
           pwsh --version
-      - name: Run isolated MySQL 5.7.44 archived-candidate lifecycle
+      - name: Run isolated baseline-only MySQL 8.4 archived-candidate lifecycle
         shell: bash
         run: |
           set -euo pipefail
+          export SYNDICATUM_PACKAGE_SHA256="$(awk '{print $1}' "release-candidate/syndicatum-${GITHUB_SHA}.tar.gz.sha256")"
+          export SYNDICATUM_RELEASE_SOURCE_COMMIT="$GITHUB_SHA"
           pwsh -NoProfile -File ./release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
       - name: Identify the exact acceptance images
         id: acceptance-images
@@ -305,10 +357,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export SYNDICATUM_PACKAGE_SHA256="$(awk '{print $1}' "mysql84-candidate/syndicatum-${GITHUB_SHA}.tar.gz.sha256")"
+          export SYNDICATUM_RELEASE_SOURCE_COMMIT="$GITHUB_SHA"
           pwsh -NoProfile -File ./mysql84-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 \
             -MySqlImage 'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a' \
             -ExpectedMySqlVersionPattern '^8\.4(?:$|[.-])' \
-            -DatabaseSqlMode 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' \
+            -DatabaseSqlMode 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' \
             2>&1 | tee mysql84-acceptance.log
       - name: Identify the exact MySQL 8.4 acceptance image
         id: mysql84-image

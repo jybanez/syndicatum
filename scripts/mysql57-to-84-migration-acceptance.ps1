@@ -76,6 +76,9 @@ function Write-AcceptanceEnvironment([string]$MySqlImage, [string]$DatabaseImage
         'PBB_AGENTCHAT_DB_HOST=db'
         "PBB_AGENTCHAT_SECRET=$applicationSecret"
         "SYNDICATUM_MASTER_KEY=$masterKey"
+        'SYNDICATUM_ALLOW_LEGACY_UPGRADE=1'
+        'SYNDICATUM_PACKAGE_SHA256=0000000000000000000000000000000000000000000000000000000000000000'
+        'SYNDICATUM_RELEASE_SOURCE_COMMIT=0000000000000000000000000000000000000000'
         'TZ=UTC'
     ) | Set-Content -LiteralPath $environmentPath -Encoding utf8NoBOM
 }

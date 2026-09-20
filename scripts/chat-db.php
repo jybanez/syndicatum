@@ -6,53 +6,109 @@ require_once dirname(__DIR__) . '/src/SchemaMigrator.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/ExpansionMigrator.php';
 require_once dirname(__DIR__) . '/src/BaselineInstaller.php';
+require_once dirname(__DIR__) . '/src/InstallationState.php';
+
+function baselineIdentityFromEnvironment()
+{
+    $packageSha256 = getenv('SYNDICATUM_PACKAGE_SHA256');
+    $releaseSourceCommit = getenv('SYNDICATUM_RELEASE_SOURCE_COMMIT');
+    if ($packageSha256 === false || $releaseSourceCommit === false) {
+        throw new RuntimeException('SYNDICATUM_PACKAGE_SHA256 and SYNDICATUM_RELEASE_SOURCE_COMMIT are required for an empty database.');
+    }
+    $installationId = getenv('SYNDICATUM_INSTALLATION_ID');
+    if ($installationId === false || trim($installationId) === '') {
+        $installationId = Db::uuidV4();
+    }
+    $installedAt = getenv('SYNDICATUM_INSTALLED_AT');
+    if ($installedAt === false || trim($installedAt) === '') {
+        $installedAt = gmdate('Y-m-d\TH:i:s\Z');
+    }
+    return [
+        'application_version' => '1.0.0',
+        'schema_baseline' => 'syndicatum-mysql84-1.0.0-baseline.1',
+        'schema_head' => '202609180004',
+        'baseline_source_commit' => '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d',
+        'release_source_commit' => $releaseSourceCommit,
+        'package_sha256' => $packageSha256,
+        'package_format_version' => '1.0',
+        'installation_id' => $installationId,
+        'installed_at' => $installedAt,
+    ];
+}
+
+function baselineInstaller(PDO $pdo)
+{
+    $root = dirname(__DIR__);
+    return new BaselineInstaller(
+        $pdo,
+        $root . '/schema/mysql84/schema.sql',
+        $root . '/schema/mysql84/baseline.json'
+    );
+}
+
+function requireLegacySchemaAuthorization()
+{
+    if (getenv('SYNDICATUM_ALLOW_LEGACY_UPGRADE') !== '1') {
+        throw new RuntimeException('Legacy schema replay requires explicit SYNDICATUM_ALLOW_LEGACY_UPGRADE=1 authorization.');
+    }
+}
 
 $command = isset($argv[1]) ? $argv[1] : 'help';
 
 try {
-    $repository = new ChatRepository(Db::pdo());
+    $pdo = Db::pdo();
+    $repository = new ChatRepository($pdo);
 
     if ($command === 'baseline-install') {
-        $packageSha256 = getenv('SYNDICATUM_PACKAGE_SHA256');
-        $releaseSourceCommit = getenv('SYNDICATUM_RELEASE_SOURCE_COMMIT');
-        if ($packageSha256 === false || $releaseSourceCommit === false) {
-            throw new RuntimeException('SYNDICATUM_PACKAGE_SHA256 and SYNDICATUM_RELEASE_SOURCE_COMMIT are required.');
+        echo json_encode(baselineInstaller($pdo)->install(baselineIdentityFromEnvironment()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        exit(0);
+    }
+
+    if ($command === 'startup-schema') {
+        $state = (new InstallationState($pdo))->inspect();
+        if ($state['state'] === 'empty' && getenv('SYNDICATUM_ALLOW_LEGACY_UPGRADE') === '1') {
+            $repository->installSchema();
+            echo json_encode([
+                'state' => 'legacy_install',
+                'warning' => 'Historical schema replay was explicitly authorized for a legacy acceptance fixture.',
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            exit(0);
         }
-        $installationId = getenv('SYNDICATUM_INSTALLATION_ID');
-        if ($installationId === false || trim($installationId) === '') {
-            $installationId = Db::uuidV4();
+        if ($state['state'] === 'empty') {
+            $result = baselineInstaller($pdo)->install(baselineIdentityFromEnvironment());
+            $result['state'] = 'installed';
+            echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            exit(0);
         }
-        $installedAt = getenv('SYNDICATUM_INSTALLED_AT');
-        if ($installedAt === false || trim($installedAt) === '') {
-            $installedAt = gmdate('Y-m-d\TH:i:s\Z');
+        if (!empty($state['ready'])) {
+            echo json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            exit(0);
         }
-        $root = dirname(__DIR__);
-        $installer = new BaselineInstaller(
-            Db::pdo(),
-            $root . '/schema/mysql84/schema.sql',
-            $root . '/schema/mysql84/baseline.json'
-        );
-        echo json_encode($installer->install([
-            'application_version' => '1.0.0',
-            'schema_baseline' => 'syndicatum-mysql84-1.0.0-baseline.1',
-            'schema_head' => '202609180004',
-            'baseline_source_commit' => '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d',
-            'release_source_commit' => $releaseSourceCommit,
-            'package_sha256' => $packageSha256,
-            'package_format_version' => '1.0',
-            'installation_id' => $installationId,
-            'installed_at' => $installedAt,
-        ]), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        if ($state['state'] === 'legacy_or_partial' && getenv('SYNDICATUM_ALLOW_LEGACY_UPGRADE') === '1') {
+            $repository->installSchema();
+            echo json_encode([
+                'state' => 'legacy_upgrade',
+                'warning' => 'Historical schema replay was explicitly authorized for a legacy deployment.',
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            exit(0);
+        }
+        throw new RuntimeException('Database state is ' . $state['state'] . '; explicit legacy upgrade or database recreation is required.');
+    }
+
+    if ($command === 'installation-status') {
+        echo json_encode((new InstallationState($pdo))->inspect(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         exit(0);
     }
 
     if ($command === 'install-schema') {
+        requireLegacySchemaAuthorization();
         $repository->installSchema();
         echo "Schema installed.\n";
         exit(0);
     }
 
     if ($command === 'migrate') {
+        requireLegacySchemaAuthorization();
         $migrations = (new SchemaMigrator(Db::pdo()))->migrate();
         echo json_encode([
             'applied' => $migrations,
@@ -150,6 +206,8 @@ try {
 
     echo "Usage:\n";
     echo "  SYNDICATUM_PACKAGE_SHA256=... SYNDICATUM_RELEASE_SOURCE_COMMIT=... php scripts/chat-db.php baseline-install\n";
+    echo "  php scripts/chat-db.php startup-schema\n";
+    echo "  php scripts/chat-db.php installation-status\n";
     echo "  php scripts/chat-db.php install-schema\n";
     echo "  php scripts/chat-db.php migrate\n";
     echo "  php scripts/chat-db.php migration-status\n";

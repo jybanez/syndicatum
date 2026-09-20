@@ -3,6 +3,7 @@
 require_once dirname(__DIR__) . '/src/Api.php';
 require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
+require_once dirname(__DIR__) . '/src/InstallationState.php';
 
 try {
     if (Api::method() !== 'POST') {
@@ -10,10 +11,7 @@ try {
     }
 
     $pdo = Db::pdo(); Api::enforceLegacyPolicy($pdo); $repository = new ChatRepository($pdo);
-    if (!$repository->hasSchema()) {
-        Api::json(['error' => true, 'message' => 'Chat database schema is not installed.'], 503);
-    }
-    $repository->installSchema();
+    (new InstallationState($pdo))->assertReady();
 
     $body = Api::body();
     $claim = $repository->claimAgent(
@@ -29,6 +27,9 @@ try {
 } catch (InvalidArgumentException $exception) {
     Api::json(['error' => true, 'message' => $exception->getMessage()], 400);
 } catch (RuntimeException $exception) {
+    if (strpos($exception->getMessage(), 'INSTALLATION_REQUIRED:') === 0) {
+        Api::json(['error' => true, 'code' => 'INSTALLATION_REQUIRED', 'message' => 'Syndicatum installation is incomplete.'], 503);
+    }
     $status = stripos($exception->getMessage(), 'already claimed') !== false ? 409 : 403;
     Api::json(['error' => true, 'message' => $exception->getMessage()], $status);
 } catch (Exception $exception) {

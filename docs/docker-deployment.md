@@ -82,6 +82,10 @@ The stack refuses to start without:
 - `PBB_AGENTCHAT_SECRET`, used to HMAC agent tokens and claim codes.
 - `SYNDICATUM_MASTER_KEY`, at least 32 characters, used to encrypt integration
   and webhook secrets stored in the database.
+- `SYNDICATUM_PACKAGE_SHA256`, the 64-character SHA-256 digest of the exact
+  reviewed release package being deployed.
+- `SYNDICATUM_RELEASE_SOURCE_COMMIT`, the full 40-character Git commit embedded
+  in that package. A branch, shortened commit, or moving tag is not accepted.
 
 The two database passwords must be distinct, contain at least 16 characters,
 and must not use a common placeholder such as `password`, `secret`, `changeme`,
@@ -159,19 +163,23 @@ Compose network and must not be published on the host.
    docker compose logs --tail=100 app db worker
    ```
 
-   The application entrypoint waits for MySQL and runs the idempotent schema
-   installer. That installer creates the base tables and applies ordered,
-   checksummed migrations under a MySQL migration lock. A container becoming
-   ready does not authorize destructive or reverse migrations.
+   The application entrypoint waits for MySQL and inspects installation state.
+   On an empty database it installs the reviewed MySQL 8.4 baseline artifact,
+   records the exact package and source identity, and applies no historical
+   migrations. On a matching installed database it performs only a read-only
+   readiness check. Legacy, partial, mismatched, or otherwise invalid states
+   fail closed; ordinary startup never replays the historical migration chain.
 
 6. Verify schema state:
 
    ```console
+   docker compose exec app php scripts/chat-db.php installation-status
    docker compose exec app php scripts/chat-db.php migration-status
    ```
 
-   Every applied migration must have a valid checksum and no pending migration
-   may be ignored.
+   Installation state must be `ready`, with the expected baseline, package,
+   and source identities. For V1 the migration status must be empty: the
+   canonical baseline is the starting point, not a replay of migration history.
 
 7. Bootstrap the first administrator without placing the password in shell
    history or a command argument. Open a container shell, read the value

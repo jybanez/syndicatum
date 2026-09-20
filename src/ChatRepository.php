@@ -39,6 +39,9 @@ class ChatRepository
 
     public function installSchema()
     {
+        if (Db::tableExists($this->pdo, 'syndicatum_installation_identity')) {
+            throw new RuntimeException('Legacy schema installation is forbidden on a baseline-installed database.');
+        }
         $statements = [
             "CREATE TABLE IF NOT EXISTS chat_agents (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

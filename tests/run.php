@@ -474,7 +474,7 @@ try {
         $suite->assertSame(200, $allowed['status']);
     });
 
-    $suite->test('claim API exchanges a claim once and issues a primary token', function () use ($suite, $baseUrl, $repository, $pdo) {
+    $suite->test('legacy claim API fails closed without mutating schema or credentials', function () use ($suite, $baseUrl, $repository, $pdo) {
         $now = Db::now();
         $statement = $pdo->prepare('INSERT INTO chat_agents (project_name, description, is_active, created_at, updated_at) VALUES (?, ?, 1, ?, ?)');
         $statement->execute(['Claim Project', 'Claim API test', $now, $now]);
@@ -491,20 +491,17 @@ try {
         $pdo->prepare('INSERT INTO project_agents (project_id, agent_id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
             ->execute([$claimProjectId, $claimAgentId, 'Claim Project', $now, $now]);
         $claim = $repository->generateClaimCode('Claim Project', $claimProjectId);
+        $migrationRowsBefore = (int) $pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn();
         $response = httpRequest($baseUrl, 'POST', '/api/claim.php', [], [
             'project_name' => 'Claim Project',
             'claim_code' => $claim['claim_code'],
         ]);
-        $suite->assertSame(201, $response['status']);
+        $suite->assertSame(503, $response['status']);
         $body = decodedBody($response);
-        $suite->assertTrue(strpos($body['data']['token'], 'pbbchat_') === 0);
-        $second = httpRequest($baseUrl, 'POST', '/api/claim.php', [], [
-            'project_name' => 'Claim Project',
-            'claim_code' => $claim['claim_code'],
-        ]);
-        $suite->assertSame(409, $second['status']);
+        $suite->assertSame('INSTALLATION_REQUIRED', $body['code']);
         $version = $pdo->query("SELECT token_secret_version FROM chat_agents WHERE project_name = 'Claim Project'")->fetchColumn();
-        $suite->assertSame('primary', $version);
+        $suite->assertSame(null, $version);
+        $suite->assertSame($migrationRowsBefore, (int) $pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn());
     });
 
     $suite->test('disabled schema-installation HTTP endpoint returns Gone', function () use ($suite, $baseUrl) {

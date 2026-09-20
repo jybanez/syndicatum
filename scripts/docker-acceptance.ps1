@@ -5,11 +5,13 @@ param(
     [string]$DatabaseService = 'db',
     [string]$WorkerService = 'worker',
     [ValidateNotNullOrEmpty()]
-    [string]$MySqlImage = 'mysql:5.7.44',
+    [string]$MySqlImage = 'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a',
     [ValidateNotNullOrEmpty()]
-    [string]$ExpectedMySqlVersionPattern = '^5\.7\.44(?:$|[.-])',
+    [string]$ExpectedMySqlVersionPattern = '^8\.4(?:$|[.-])',
     [ValidateNotNullOrEmpty()]
-    [string]$DatabaseSqlMode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION',
+    [string]$DatabaseSqlMode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
+    [string]$PackageSha256 = $env:SYNDICATUM_PACKAGE_SHA256,
+    [string]$ReleaseSourceCommit = $env:SYNDICATUM_RELEASE_SOURCE_COMMIT,
     [string]$BaseUrl = '',
     [ValidateRange(1, 65535)]
     [int]$HttpPort = 18080,
@@ -142,6 +144,12 @@ function Invoke-DockerWithFile {
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Docker CLI is not installed or is not available on PATH.'
 }
+if ($PackageSha256 -notmatch '^[a-f0-9]{64}$') {
+    throw 'PackageSha256 must be the lowercase SHA-256 of the exact acceptance package.'
+}
+if ($ReleaseSourceCommit -notmatch '^[a-f0-9]{40}$') {
+    throw 'ReleaseSourceCommit must be the full lowercase Git commit of the acceptance package.'
+}
 $dockerServerVersion = & docker info --format '{{.ServerVersion}}' 2>$null
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($dockerServerVersion -join ''))) {
     throw 'Docker is installed, but its engine is not running. Start Docker and rerun this acceptance harness.'
@@ -215,6 +223,8 @@ $environment = @(
     "PBB_AGENTCHAT_DB_PASS=$applicationPassword"
     "PBB_AGENTCHAT_SECRET=$applicationSecret"
     "SYNDICATUM_MASTER_KEY=$masterKey"
+    "SYNDICATUM_PACKAGE_SHA256=$PackageSha256"
+    "SYNDICATUM_RELEASE_SOURCE_COMMIT=$ReleaseSourceCommit"
 ) -join "`n"
 [System.IO.File]::WriteAllText($environmentPath, $environment + "`n", [System.Text.UTF8Encoding]::new($false))
 
@@ -295,15 +305,20 @@ try {
         throw
     }
 
-    Write-Step 'Applying migrations and confirming they are complete'
-    $migrationOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'migrate') -Capture
-    $statusOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'migration-status') -Capture
-    $migrationStatus = $statusOutput | ConvertFrom-Json
-    $incomplete = @($migrationStatus | Where-Object { -not $_.applied -or -not $_.checksum_valid })
-    if ($incomplete.Count -gt 0) {
-        throw "Migration verification found $($incomplete.Count) incomplete or checksum-invalid migration(s)."
+    Write-Step 'Confirming baseline identity and zero fabricated historical migration rows'
+    $installationOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'installation-status') -Capture
+    $installation = $installationOutput | ConvertFrom-Json
+    if (-not $installation.ready -or $installation.state -ne 'ready' -or
+        $installation.identity.package_sha256 -ne $PackageSha256 -or
+        $installation.identity.release_source_commit -ne $ReleaseSourceCommit) {
+        throw 'Baseline installation identity does not match the exact acceptance package.'
     }
-    Write-Host "Migration verification passed for $(@($migrationStatus).Count) migration(s)."
+    $statusOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'migration-status') -Capture
+    $migrationStatus = @($statusOutput | ConvertFrom-Json)
+    if ($migrationStatus.Count -ne 0 -or [int]$installation.migration_rows -ne 0) {
+        throw 'Fresh baseline installation must have zero historical migration rows and no declared post-baseline migrations.'
+    }
+    Write-Host 'Baseline identity matched the package and historical migration row count is zero.'
 
     Write-Step 'Checking application and machine-readable health endpoints'
     $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
