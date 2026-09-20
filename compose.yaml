@@ -8,8 +8,22 @@ x-syndicatum-environment: &syndicatum-environment
   PBB_AGENTCHAT_SECRET: ${PBB_AGENTCHAT_SECRET:?Set PBB_AGENTCHAT_SECRET in .env}
   PBB_AGENTCHAT_PREVIOUS_SECRET: ${PBB_AGENTCHAT_PREVIOUS_SECRET:-}
   SYNDICATUM_MASTER_KEY: ${SYNDICATUM_MASTER_KEY:?Set SYNDICATUM_MASTER_KEY in .env}
+  SYNDICATUM_PACKAGE_SHA256: ${SYNDICATUM_PACKAGE_SHA256:?Set SYNDICATUM_PACKAGE_SHA256 to the verified release package digest}
+  SYNDICATUM_RELEASE_SOURCE_COMMIT: ${SYNDICATUM_RELEASE_SOURCE_COMMIT:?Set SYNDICATUM_RELEASE_SOURCE_COMMIT to the full release commit}
+  SYNDICATUM_ALLOW_LEGACY_UPGRADE: ${SYNDICATUM_ALLOW_LEGACY_UPGRADE:-}
   SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST: ${SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST:-}
   SYNDICATUM_AVATAR_DIR: /var/lib/syndicatum/avatars
+  SYNDICATUM_STAGING_DIR: /var/lib/syndicatum/staging
+  SYNDICATUM_BACKUP_DIR: /var/lib/syndicatum/backups
+  SYNDICATUM_RELEASE_PACKAGE_PATH: ${SYNDICATUM_RELEASE_PACKAGE_PATH:-}
+  SYNDICATUM_RELEASE_TAG: ${SYNDICATUM_RELEASE_TAG:-}
+  SYNDICATUM_RELEASE_PROVENANCE_SHA256: ${SYNDICATUM_RELEASE_PROVENANCE_SHA256:-}
+  SYNDICATUM_RELEASE_REPOSITORY: ${SYNDICATUM_RELEASE_REPOSITORY:-jybanez/syndicatum}
+  SYNDICATUM_RESTORE_DB_HOST: ${SYNDICATUM_RESTORE_DB_HOST:-}
+  SYNDICATUM_RESTORE_DB_PORT: ${SYNDICATUM_RESTORE_DB_PORT:-3306}
+  SYNDICATUM_RESTORE_DB_NAME: ${SYNDICATUM_RESTORE_DB_NAME:-}
+  SYNDICATUM_RESTORE_DB_USER: ${SYNDICATUM_RESTORE_DB_USER:-}
+  SYNDICATUM_RESTORE_DB_PASS: ${SYNDICATUM_RESTORE_DB_PASS:-}
   SYNDICATUM_WORKER_STALE_SECONDS: ${SYNDICATUM_WORKER_STALE_SECONDS:-120}
   TZ: ${TZ:-UTC}
 
@@ -19,7 +33,7 @@ services:
       context: .
       dockerfile: docker/mysql.Dockerfile
       args:
-        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:5.7.44}
+        MYSQL_IMAGE: ${SYNDICATUM_MYSQL_IMAGE:-mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a}
     image: ${SYNDICATUM_DB_IMAGE:-syndicatum-db:local}
     restart: unless-stopped
     environment:
@@ -32,7 +46,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --log-bin-trust-function-creators=1
-      - --sql-mode=${SYNDICATUM_MYSQL_SQL_MODE:-STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION}
+      - --sql-mode=${SYNDICATUM_MYSQL_SQL_MODE:-STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION}
     volumes:
       - syndicatum_db:/var/lib/mysql
     healthcheck:
@@ -59,14 +73,21 @@ services:
       - /tmp:rw,nosuid,nodev,mode=1777
       - /var/run/apache2:rw,nosuid,nodev,uid=33,gid=33,mode=0755
       - /var/lock/apache2:rw,nosuid,nodev,uid=33,gid=33,mode=0755
+      - /var/lib/syndicatum/staging:rw,nosuid,nodev,noexec,uid=33,gid=33,mode=0700
     depends_on:
       db:
         condition: service_healthy
-    environment: *syndicatum-environment
+      backup-key-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *syndicatum-environment
+      SYNDICATUM_BACKUP_KEY_FILE: /run/syndicatum-backup-key/backup-key
     ports:
       - "${SYNDICATUM_HTTP_BIND:-127.0.0.1}:${SYNDICATUM_HTTP_PORT:-8080}:8080"
     volumes:
       - syndicatum_avatars:/var/lib/syndicatum/avatars
+      - syndicatum_backups:/var/lib/syndicatum/backups
+      - syndicatum_backup_key_runtime:/run/syndicatum-backup-key:ro
     healthcheck:
       test:
         - CMD
@@ -84,6 +105,32 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  backup-key-init:
+    image: ${SYNDICATUM_IMAGE:-syndicatum:local}
+    user: root
+    restart: "no"
+    read_only: true
+    entrypoint: ["/bin/sh", "-eu", "-c"]
+    command:
+      - >-
+        test -f /run/secrets/syndicatum_backup_key &&
+        test ! -L /run/secrets/syndicatum_backup_key &&
+        rm -f /runtime/backup-key &&
+        install -m 0400 -o 33 -g 33 /run/secrets/syndicatum_backup_key /runtime/backup-key
+    volumes:
+      - syndicatum_backup_key_runtime:/runtime
+    secrets:
+      - source: syndicatum_backup_key
+        target: syndicatum_backup_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
 
   worker:
     image: ${SYNDICATUM_IMAGE:-syndicatum:local}
@@ -121,6 +168,12 @@ services:
 volumes:
   syndicatum_db:
   syndicatum_avatars:
+  syndicatum_backups:
+  syndicatum_backup_key_runtime:
+
+secrets:
+  syndicatum_backup_key:
+    file: ${SYNDICATUM_BACKUP_KEY_FILE:?Set SYNDICATUM_BACKUP_KEY_FILE to a private host file}
 
 networks:
   frontend:

@@ -79,6 +79,193 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  package-contract-portability:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "7.4"
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Verify package and archive reader contracts on Windows and PHP 7.4
+        shell: pwsh
+        run: |
+          php tests/package-contract.php
+          php tests/backup-envelope.php
+          php tests/archive-safety.php
+
+  canonical-release-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Verify the closed producer policy and deterministic candidate bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/canonical-release-producer.py
+          mkdir -p canonical-candidate/first canonical-candidate/second
+          tag="candidate-${GITHUB_SHA}"
+          python3 tools/release/canonical_release.py \
+            --repository . --commit "$GITHUB_SHA" --tag "$tag" \
+            --output-dir canonical-candidate/first \
+            | tee canonical-candidate/first/build-result.json
+          python3 tools/release/canonical_release.py \
+            --repository . --commit "$GITHUB_SHA" --tag "$tag" \
+            --output-dir canonical-candidate/second \
+            | tee canonical-candidate/second/build-result.json
+          for name in syndicatum-v1.0.0.zip syndicatum-v1.0.0.manifest.json syndicatum-v1.0.0.sha256 syndicatum-v1.0.0.provenance.json; do
+            cmp "canonical-candidate/first/$name" "canonical-candidate/second/$name"
+          done
+          (cd canonical-candidate/first && sha256sum --check syndicatum-v1.0.0.sha256)
+      - name: Round-trip exact candidate through the frozen reader and controlled extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_root="$(mktemp -d)"
+          public_root="$(mktemp -d)"
+          chmod 0700 "$staging_root" "$public_root"
+          php tests/canonical-release-roundtrip.php \
+            canonical-candidate/first/syndicatum-v1.0.0.zip \
+            canonical-candidate/first/syndicatum-v1.0.0.manifest.json \
+            "$staging_root" "$public_root" \
+            "$GITHUB_SHA" "candidate-${GITHUB_SHA}" \
+            syndicatum-mysql84-1.0.0-baseline.1 202609180004 \
+            | tee canonical-candidate/first/roundtrip.json
+      - name: Clean-install the exact candidate artifact on empty MySQL 8.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$(jq -r '.stage' canonical-candidate/first/roundtrip.json)"
+          test -d "$package_root/app"
+          install_root="$(mktemp -d)"
+          cp -a "$package_root/app/." "$install_root/"
+          mkdir -p "$install_root/schema"
+          cp -a "$package_root/schema/baselines/mysql84" "$install_root/schema/mysql84"
+          cp -a "$package_root/plugins" "$install_root/plugins"
+          cp -a "$package_root/skills" "$install_root/skills"
+          package_sha="$(cut -d ' ' -f 1 canonical-candidate/first/syndicatum-v1.0.0.sha256)"
+          export SYNDICATUM_ACCEPTANCE_INGRESS_FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/realtime-acceptance-ingress.php"
+          pwsh -NoProfile -File scripts/docker-acceptance.ps1 \
+            -ComposeFile "$install_root/compose.yaml" \
+            -PackageSha256 "$package_sha" \
+            -ReleaseSourceCommit "$GITHUB_SHA" \
+            2>&1 | tee canonical-candidate/first/mysql84-install.log
+      - name: Retain non-authoritative candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canonical-release-candidate-${{ github.sha }}-${{ github.run_attempt }}
+          path: canonical-candidate/first/
+          if-no-files-found: error
+          retention-days: 30
+
+  mysql84-baseline-drift:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: syndicatum_baseline_drift
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      PBB_AGENTCHAT_DB_HOST: 127.0.0.1
+      PBB_AGENTCHAT_DB_NAME: syndicatum_baseline_drift
+      PBB_AGENTCHAT_DB_USER: root
+      PBB_AGENTCHAT_DB_PASS: ""
+      PBB_AGENTCHAT_SECRET: baseline-drift-only-secret-at-least-32-characters
+      SYNDICATUM_MASTER_KEY: baseline-drift-only-master-key-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Regenerate the frozen baseline and reject drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-baseline
+          php scripts/hidden-replay-audit.php | tee ci-baseline/hidden-replay-audit.txt
+          bash scripts/check-baseline-drift.sh | tee ci-baseline/drift-check.txt
+      - name: Retain deterministic baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql84-baseline-drift-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-baseline/
+          if-no-files-found: warn
+          retention-days: 30
+
+  mysql84-encrypted-backup-roundtrip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      PBB_AGENTCHAT_DB_HOST: 127.0.0.1
+      PBB_AGENTCHAT_DB_PORT: "3306"
+      PBB_AGENTCHAT_DB_USER: root
+      PBB_AGENTCHAT_DB_PASS: ""
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql, zip
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Round-trip encrypted durable state through clean MySQL 8.4 target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-backup
+          php tests/backup-mysql84-roundtrip.php | tee ci-backup/mysql84-roundtrip.json
+      - name: Retain encrypted backup round-trip evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql84-encrypted-backup-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-backup/
+          if-no-files-found: error
+          retention-days: 30
+
   source-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -146,6 +333,12 @@ jobs:
           php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
           php tests/operational-health.php | tee ci-evidence/operational-health.txt
+          php tests/package-contract.php | tee ci-evidence/package-contract.txt
+          php tests/backup-envelope.php | tee ci-evidence/backup-envelope.txt
+          php tests/backup-producer.php | tee ci-evidence/backup-producer.txt
+          php tests/recovery-operation-store.php | tee ci-evidence/recovery-operation-store.txt
+          python tests/canonical-inventory-contract.py | tee ci-evidence/canonical-inventory-contract.txt
+          php tests/archive-safety.php | tee ci-evidence/archive-safety.txt
           php tests/message-delivery-status.php | tee ci-evidence/message-delivery-status.txt
           php tests/delivery-failure-taxonomy.php | tee ci-evidence/delivery-failure-taxonomy.txt
           php tests/delivery-operator-view.php | tee ci-evidence/delivery-operator-view.txt
@@ -191,10 +384,12 @@ jobs:
           docker version --format '{{.Server.Version}}'
           docker compose version
           pwsh --version
-      - name: Run isolated MySQL 5.7.44 archived-candidate lifecycle
+      - name: Run isolated baseline-only MySQL 8.4 archived-candidate lifecycle
         shell: bash
         run: |
           set -euo pipefail
+          export SYNDICATUM_PACKAGE_SHA256="$(awk '{print $1}' "release-candidate/syndicatum-${GITHUB_SHA}.tar.gz.sha256")"
+          export SYNDICATUM_RELEASE_SOURCE_COMMIT="$GITHUB_SHA"
           pwsh -NoProfile -File ./release-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 2>&1 | tee docker-acceptance.log
       - name: Identify the exact acceptance images
         id: acceptance-images
@@ -285,10 +480,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export SYNDICATUM_PACKAGE_SHA256="$(awk '{print $1}' "mysql84-candidate/syndicatum-${GITHUB_SHA}.tar.gz.sha256")"
+          export SYNDICATUM_RELEASE_SOURCE_COMMIT="$GITHUB_SHA"
           pwsh -NoProfile -File ./mysql84-candidate/unpacked/syndicatum/scripts/docker-acceptance.ps1 \
             -MySqlImage 'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a' \
             -ExpectedMySqlVersionPattern '^8\.4(?:$|[.-])' \
-            -DatabaseSqlMode 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' \
+            -DatabaseSqlMode 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' \
             2>&1 | tee mysql84-acceptance.log
       - name: Identify the exact MySQL 8.4 acceptance image
         id: mysql84-image

@@ -37,6 +37,13 @@ const API = {
   adminAgents: "api/v1/admin/agents.php",
   adminAudit: "api/v1/admin/audit.php",
   adminDeliveryHealth: "api/v1/admin/delivery-health.php",
+  recoveryStatus: "api/v1/admin/recovery-status.php",
+  releasePackage: "api/v1/admin/release-package.php",
+  backups: "api/v1/admin/backups.php",
+  backupDownloads: "api/v1/admin/backup-downloads.php",
+  restoreInspections: "api/v1/admin/restore-inspections.php",
+  stagedRestores: "api/v1/admin/staged-restores.php",
+  artifactDownload: "api/v1/admin/artifact-download.php",
 };
 
 const state = {
@@ -69,6 +76,7 @@ const state = {
   mobilePanel: "left",
   factories: {},
   components: {},
+  recoveryStatus: null,
 };
 
 const el = Object.fromEntries([
@@ -226,7 +234,7 @@ function applicationPath(path = "") {
 
 function routeForSurface(surface, projectId = "") {
   if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
-  if (["users", "agents", "audit", "delivery-health"].includes(surface)) return applicationPath(surface);
+  if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(surface)) return applicationPath(surface);
   return applicationPath();
 }
 
@@ -239,7 +247,7 @@ function currentApplicationRoute() {
     try { return { surface: "project", projectId: decodeURIComponent(parts[1]) }; }
     catch (_error) { return { surface: "workspace", projectId: "" }; }
   }
-  if (["users", "agents", "audit", "delivery-health"].includes(parts[0])) return { surface: parts[0], projectId: "" };
+  if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(parts[0])) return { surface: parts[0], projectId: "" };
   const legacyProjectId = new URLSearchParams(location.search).get("project") || "";
   return legacyProjectId ? { surface: "project", projectId: legacyProjectId } : { surface: "workspace", projectId: "" };
 }
@@ -321,6 +329,7 @@ function mountNavbar() {
   if (state.mode === "expanded" && capability("admin.agents")) items.push({ id: "agents", label: "Agents", icon: helperIconHtml("comms.radio"), className: "ui-button-borderless" });
   if (state.mode === "expanded" && capability("admin.audit")) items.push({ id: "audit", label: "Audit", icon: helperIconHtml("time.history"), className: "ui-button-borderless" });
   if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "delivery-health", label: "Delivery health", icon: helperIconHtml("actions.settings"), className: "ui-button-borderless" });
+  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "backup-restore", label: "Backup / Restore", icon: helperIconHtml("actions.download"), className: "ui-button-borderless" });
   const actions = [];
   if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) actions.push({
     id: "settings",
@@ -377,7 +386,7 @@ function mountNavbar() {
     mobileLayout: "scroll",
     onNavigate(item) {
       if (item?.id === "brand" || item?.id === "workspace") showWorkspaceSurface();
-      else if (["users", "agents", "audit", "delivery-health"].includes(item?.id)) void showAdminSurface(item.id);
+      else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
     },
     onAction(action) { if (action?.id === "settings") void openSettings(); },
     onActionMenuSelect(_action, item) {
@@ -934,7 +943,7 @@ function setSurface(name) {
   state.surface = name;
   el.workspace_surface.hidden = name !== "workspace";
   el.project_surface.hidden = name !== "project";
-  el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health"].includes(name);
+  el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health", "backup-restore"].includes(name);
   el.mobile_panel_switcher.hidden = !["workspace", "project"].includes(name);
   const labels = name === "project" ? ["Participants", "Timeline"] : ["Profile", "Projects"];
   panelButtons.forEach((button, index) => { button.textContent = labels[index] || button.textContent; });
@@ -1568,11 +1577,421 @@ function adminRows(payload, kind) {
   return Array.isArray(rows) ? rows : [];
 }
 
+function recoveryOperationPanel(titleText, descriptionText, statusText, details = [], action = null) {
+  const panel = document.createElement("section");
+  panel.className = "backup-restore-operation ui-panel";
+  const heading = document.createElement("div");
+  heading.className = "backup-restore-operation-heading";
+  const copy = document.createElement("div");
+  const title = document.createElement("h2");
+  title.textContent = titleText;
+  const description = document.createElement("p");
+  description.textContent = descriptionText;
+  copy.append(title, description);
+  const stateLabel = document.createElement("span");
+  stateLabel.className = `ui-badge ${statusText === "Ready" || statusText === "Verified" ? "backup-restore-preview-status" : "backup-restore-unavailable"}`;
+  stateLabel.textContent = statusText;
+  heading.append(copy, stateLabel);
+  panel.appendChild(heading);
+  if (details.length) {
+    const list = document.createElement("dl");
+    list.className = "backup-restore-details";
+    details.forEach(([label, value = "Unavailable"]) => {
+      const term = document.createElement("dt"); term.textContent = label;
+      const detail = document.createElement("dd"); detail.textContent = value;
+      list.append(term, detail);
+    });
+    panel.appendChild(list);
+  }
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ui-button ui-button-primary";
+    button.disabled = Boolean(action.disabled);
+    button.textContent = action.label;
+    button.addEventListener("click", action.onClick);
+    panel.appendChild(button);
+  }
+  return panel;
+}
+
+function recoveryDownload(token) {
+  const link = document.createElement("a");
+  link.href = `${API.artifactDownload}?${new URLSearchParams({ ticket: token })}`;
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 1000);
+}
+
+async function idempotentRecoveryPost(url, body, idempotencyKey) {
+  const send = () => request(url, {
+    method: "POST",
+    headers: csrfHeaders({ "Idempotency-Key": idempotencyKey }),
+    body: JSON.stringify(body),
+  });
+  let operation;
+  try { operation = unwrap(await send()); }
+  catch (error) {
+    const receipt = unwrap(error.payload);
+    if (receipt?.operation_id) throw new Error(receipt.error_message || "The recovery operation did not complete.");
+    if (error.status) throw error;
+    state.components.toast.warn("The outcome is unknown. Checking the same operation without creating a duplicate…", { title: "Connection interrupted" });
+    operation = unwrap(await send());
+  }
+  if (operation?.status !== "started") return operation;
+  const statusUrl = `${url}?${new URLSearchParams({ operation_id: operation.operation_id })}`;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      operation = unwrap(await request(statusUrl));
+      if (operation?.status !== "started") return operation;
+    } catch (error) {
+      if (error.status) throw error;
+    }
+  }
+  return {
+    ...operation,
+    status: "uncertain",
+    error_message: "The operation is still running or its terminal receipt was interrupted. Do not submit a different request. Retry this same confirmation or have an administrator inspect the staging target.",
+  };
+}
+
+async function reauthorizeBackupDownload(operationId) {
+  const result = unwrap(await request(API.backupDownloads, {
+    method: "POST", headers: csrfHeaders(), body: JSON.stringify({ operation_id: operationId }),
+  }));
+  recoveryDownload(result.download.token);
+  state.components.toast.success("A new one-time backup download was authorized.");
+}
+
+function showRecoveryReceipt(titleText, receipt, download = null, operation = null) {
+  const content = document.createElement("div");
+  content.className = "backup-restore-receipt";
+  const summary = document.createElement("p");
+  summary.textContent = receipt?.cutover_performed === false
+    ? "Verified. No live overwrite or automatic cutover was performed."
+    : "Verified operation receipt.";
+  const inspectorHost = document.createElement("div");
+  content.append(summary, inspectorHost);
+  const inspector = state.factories.createDataInspector(inspectorHost, receipt, { ariaLabel: `${titleText} details` });
+  const actions = [{ id: "close", label: "Close", autoFocus: !download }];
+  if (download?.token) actions.unshift({
+    id: "download", label: "Download encrypted backup", variant: "primary", autoFocus: true,
+    onClick() { recoveryDownload(download.token); },
+  });
+  if (operation?.kind === "backup" && operation?.operation_id) actions.unshift({
+    id: "reauthorize", label: "Authorize another download", variant: "secondary",
+    async onClick() {
+      try { await reauthorizeBackupDownload(operation.operation_id); }
+      catch (error) { state.components.toast.error(error.message, { title: "Download authorization failed" }); }
+    },
+  });
+  const modal = state.factories.createActionModal({ title: titleText, size: "lg", content, actions, onClose() { inspector.destroy?.(); } });
+  modal.open();
+}
+
+function openReleasePackage(status) {
+  const modal = state.factories.createFormModal({
+    title: "Get clean package", submitLabel: "Authorize download",
+    initialValues: { verified_source: false },
+    rows: [
+      [{ type: "text", content: "Syndicatum will only download the pinned CI-built release. This running instance cannot build or mint canonical executable code." }],
+      [{ type: "display", name: "sha", label: "Pinned SHA-256", value: status.release.sha256 || "Unavailable" }],
+      [{ type: "display", name: "commit", label: "Source commit", value: status.release.source_commit || "Unavailable" }],
+      [{ type: "checkbox", name: "verified_source", label: "I understand this retrieves the verified CI artifact and does not build a package locally.", required: true }],
+    ],
+    async onSubmit(values, context) {
+      try {
+        if (!values.verified_source) throw new Error("Confirm the CI-built release boundary.");
+        const result = unwrap(await request(API.releasePackage, { method: "POST", headers: csrfHeaders(), body: "{}" }));
+        recoveryDownload(result.download.token);
+        state.components.toast.success("Verified CI-built package download authorized.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+  });
+  modal.open();
+}
+
+function openBuildBackup() {
+  const idempotencyKey = makeIdempotencyKey();
+  let pendingReceipt = null;
+  const modal = state.factories.createFormModal({
+    title: "Build encrypted backup", submitLabel: "Build encrypted backup", size: "lg",
+    initialValues: { understand: false },
+    rows: [
+      [{ type: "text", content: "This creates a non-executable, authenticated encrypted backup in private storage. The destination is server-selected and an existing artifact is never replaced." }],
+      [{ type: "text", content: "Sessions, ephemeral OAuth state, delivery queues, and service credentials are reset or reissued during restore. No restore or cutover occurs while building a backup." }],
+      [{ type: "checkbox", name: "understand", label: "I understand the backup and credential-reset boundaries.", required: true }],
+    ],
+    async onSubmit(values, context) {
+      try {
+        if (!values.understand) throw new Error("Confirm the backup boundaries before continuing.");
+        const operation = await idempotentRecoveryPost(API.backups, {}, idempotencyKey);
+        if (operation.status !== "succeeded") throw new Error(operation.error_message || "Encrypted backup creation failed.");
+        pendingReceipt = operation;
+        state.components.toast.success("Encrypted backup created and verified.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+    onClose() {
+      if (pendingReceipt) showRecoveryReceipt("Encrypted backup created", pendingReceipt.result, pendingReceipt.result.download, pendingReceipt);
+    },
+  });
+  modal.open();
+}
+
+function uploadBackupInspection(item, controls) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", API.restoreInspections);
+    xhr.responseType = "json";
+    const csrf = state.session?.csrf_token || state.session?.csrfToken || "";
+    if (csrf) xhr.setRequestHeader("X-CSRF-Token", csrf);
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) controls.report(Math.min(85, (event.loaded / event.total) * 85));
+    });
+    xhr.addEventListener("load", () => {
+      const payload = xhr.response;
+      if (xhr.status >= 200 && xhr.status < 300) { controls.report(100); resolve(unwrap(payload)); return; }
+      reject(new Error(payload?.message || `Inspection failed with status ${xhr.status}`));
+    });
+    xhr.addEventListener("error", () => reject(new Error("Upload outcome is unknown. Retry inspection; inspection never mutates a database.")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload cancelled before restore staging began.")));
+    controls.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    const form = new FormData();
+    form.append("backup", item.file, item.name);
+    xhr.send(form);
+  });
+}
+
+function openStageRestoreConfirmation(inspection) {
+  const metadata = inspection.metadata;
+  const idempotencyKey = makeIdempotencyKey();
+  const durableRows = Object.values(metadata.durable_row_counts || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+  let pendingReceipt = null;
+  const modal = state.factories.createFormModal({
+    title: "Stage verified restore", submitLabel: "Stage verified restore", size: "lg",
+    className: "recovery-stage-restore-modal",
+    initialFocus: '[name="confirmation"]',
+    initialValues: { confirmation: "", no_cutover: false, reset_ack: false },
+    rows: [
+      [{ type: "text", content: "The encrypted package authenticated successfully and matches the trusted baseline. The server will revalidate it immediately before staging." }],
+      [{ type: "display", name: "digest", label: "Envelope SHA-256", value: metadata.envelope_sha256 }],
+      [{ type: "display", name: "contents", label: "Durable contents", value: `${durableRows} rows across ${metadata.backup_policy?.durable?.count || 0} durable tables` }],
+      [{ type: "display", name: "policy", label: "Reset / target-local policy", value: `${metadata.backup_policy?.reset?.count || 0} reset tables · ${metadata.backup_policy?.excluded?.count || 0} target-local tables` }],
+      [{ type: "text", content: "Sessions, ephemeral OAuth tokens/codes, delivery queues, webhook deliveries, and service credentials will not be carried into the staged target. Credentials marked for reissue must be replaced." }],
+      [{ type: "checkbox", name: "no_cutover", label: "I understand this writes only to the separate empty staging target and never overwrites the live database or cuts traffic over.", required: true }],
+      [{ type: "checkbox", name: "reset_ack", label: "I understand reset/reissue data is intentionally omitted and must be re-established after an approved cutover.", required: true }],
+      [modalTextField("confirmation", "Type STAGE RESTORE to continue", {
+        required: true,
+        autocomplete: "off",
+        pattern: "STAGE RESTORE",
+        help: "Enter exactly STAGE RESTORE (uppercase, with one space).",
+      })],
+    ],
+    async onSubmit(values, context) {
+      try {
+        if (!values.no_cutover || !values.reset_ack) throw new Error("Confirm both staged-restore boundaries.");
+        if (String(values.confirmation || "") !== "STAGE RESTORE") throw new Error("Type STAGE RESTORE exactly.");
+        const operation = await idempotentRecoveryPost(API.stagedRestores, {
+          inspection_id: inspection.inspection_id,
+          envelope_sha256: metadata.envelope_sha256,
+          confirmation: values.confirmation,
+        }, idempotencyKey);
+        if (operation.status !== "succeeded") throw new Error(operation.error_message || "Staged restore failed. Reprovision the staging target before retrying.");
+        pendingReceipt = operation;
+        state.components.toast.success("Restore staged. No live overwrite or cutover occurred.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+    onClose() {
+      if (pendingReceipt) showRecoveryReceipt("Restore staged", pendingReceipt.result);
+    },
+  });
+  modal.open();
+}
+
+function openRestoreUploader() {
+  const content = document.createElement("div");
+  content.className = "backup-restore-uploader";
+  const guidance = document.createElement("p");
+  guidance.textContent = "Choose one encrypted .syndicatum-backup file. Inspection authenticates and validates it without changing either database.";
+  const mount = document.createElement("div");
+  content.append(guidance, mount);
+  let inspection = null;
+  let modal = null;
+  let uploader = null;
+  let contextGeneration = 1;
+  let contextActive = true;
+  let pendingTransition = null;
+  const invalidateInspectionContext = () => {
+    contextActive = false;
+    contextGeneration += 1;
+    inspection = null;
+    pendingTransition = null;
+    uploader?.destroy();
+  };
+  uploader = state.factories.createFileUploader(mount, {
+    ariaLabel: "Encrypted backup inspection",
+    dropzoneAriaLabel: "Choose encrypted Syndicatum backup",
+    accept: ".syndicatum-backup",
+    allowedTypes: [".syndicatum-backup"],
+    multiple: false,
+    maxFiles: 1,
+    maxFileSize: 256 * 1024 * 1024,
+    startText: "Authenticate and inspect",
+    dropText: "Drop one encrypted backup here or choose Browse.",
+    async onUpload(item, controls) { inspection = await uploadBackupInspection(item, controls); },
+    onComplete(stateValue) {
+      if (!contextActive || pendingTransition || !inspection || !stateValue.items.some((entry) => entry.status === "success")) return;
+      pendingTransition = { inspection, generation: contextGeneration };
+      modal.close({ reason: "inspected" }).then((closed) => {
+        if (!closed && pendingTransition?.generation === contextGeneration) pendingTransition = null;
+      });
+    },
+  });
+  modal = state.factories.createActionModal({
+    title: "Inspect encrypted backup", size: "lg", content,
+    actions: [{ id: "close", label: "Close" }],
+    onBeforeClose(meta) {
+      if (meta?.reason !== "inspected") invalidateInspectionContext();
+      return true;
+    },
+    onClose(meta) {
+      const transition = meta?.reason === "inspected" ? pendingTransition : null;
+      const shouldOpenConfirmation = Boolean(transition && contextActive && transition.generation === contextGeneration);
+      const completedInspection = shouldOpenConfirmation ? transition.inspection : null;
+      invalidateInspectionContext();
+      if (completedInspection) openStageRestoreConfirmation(completedInspection);
+    },
+  });
+  modal.open();
+}
+
+function renderBackupRestoreSurface(recovery = null, error = null) {
+  el.admin_list.replaceChildren();
+  const intro = document.createElement("section");
+  intro.className = "backup-restore-intro ui-panel";
+  const introCopy = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "ui-eyebrow";
+  eyebrow.textContent = "Administrator recovery controls";
+  const title = document.createElement("h2");
+  title.textContent = "Installation portability and recovery";
+  const description = document.createElement("p");
+  description.textContent = "Retrieve a verified CI release, build an encrypted backup, or validate and stage a restore without live overwrite or automatic cutover.";
+  introCopy.append(eyebrow, title, description);
+  const status = document.createElement("span");
+  status.className = "ui-badge backup-restore-preview-status";
+  status.textContent = error ? "Unavailable" : (recovery ? "Connected" : "Loading");
+  intro.append(introCopy, status);
+
+  const note = document.createElement("p");
+  note.className = "backup-restore-note";
+  note.textContent = error || "Restore is restricted to a separately configured empty staging database. Cutover remains a separate, unimplemented approval step.";
+
+  const tabsHost = document.createElement("div");
+  tabsHost.className = "backup-restore-tabs";
+  el.admin_list.append(intro, note, tabsHost);
+  state.components.adminTabs = state.factories.createTabs(tabsHost, {
+    ariaLabel: "Backup and restore workflows",
+    activeId: "overview",
+    onChange(_tab, activeId) {
+      requestAnimationFrame(() => {
+        const activeTab = Array.from(tabsHost.querySelectorAll('[role="tab"]')).find((entry) => entry.dataset.tabId === String(activeId));
+        activeTab?.focus({ preventScroll: true });
+      });
+    },
+    tabs: [
+      {
+        id: "overview",
+        label: "Overview",
+        render(host) {
+          const grid = document.createElement("div");
+          grid.className = "backup-restore-overview-grid";
+          grid.append(
+            recoveryOperationPanel("Installation identity", recovery?.installation?.message || "The immutable installed release identity anchors package and backup compatibility.", recovery?.installation?.available ? "Verified" : "Unavailable", [
+              ["Installation ID", recovery?.installation?.installation_id], ["Installed version", recovery?.installation?.application_version], ["Package baseline", recovery?.installation?.schema_baseline],
+            ]),
+            recoveryOperationPanel("Backup contract", "Backups are authenticated, encrypted, non-executable, and written with no-replacement semantics.", recovery?.backup?.available ? "Ready" : "Unavailable", [
+              ["Encryption", recovery?.backup?.encrypted ? "Required" : "Unavailable"], ["Executable code", recovery?.backup?.executable ? "Included" : "Excluded"], ["Existing destinations", "Never replaced"],
+            ]),
+            recoveryOperationPanel("Restore boundary", "The serving database is never a restore target.", recovery?.restore_target?.ready ? "Ready" : "Unavailable", [
+              ["Separate target", recovery?.restore_target?.configured ? "Configured" : "Not configured"], ["Empty-target check", recovery?.restore_target?.ready ? "Passed" : "Not ready"], ["Automatic cutover", "Never"],
+            ]),
+          );
+          host.appendChild(grid);
+        },
+      },
+      {
+        id: "clean-package",
+        label: "Get clean package",
+        render(host) {
+          host.appendChild(recoveryOperationPanel(
+            "Get the canonical clean installation package",
+            "Retrieve the mounted immutable CI-built release after checking its pinned SHA-256. The serving instance never builds or mints it.",
+            recovery?.release?.available ? "Verified" : "Unavailable",
+            [["Source", "CI-built immutable release"], ["SHA-256", recovery?.release?.sha256], ["Source commit", recovery?.release?.source_commit]],
+            { label: "Get clean package", disabled: !recovery?.release?.available, onClick: () => openReleasePackage(recovery) },
+          ));
+        },
+      },
+      {
+        id: "backup",
+        label: "Build backup",
+        render(host) {
+          host.appendChild(recoveryOperationPanel(
+            "Build a verified backup",
+            "Create an encrypted, non-executable package containing trusted durable data and required persistent assets, then verify it before download.",
+            recovery?.backup?.available ? "Ready" : "Unavailable",
+            [["Encryption", "AES-256-GCM authenticated"], ["Persistent assets", "Verified allowlist"], ["Destination policy", "Private, server-selected, no replacement"]],
+            { label: "Build encrypted backup", disabled: !recovery?.backup?.available, onClick: openBuildBackup },
+          ));
+        },
+      },
+      {
+        id: "restore",
+        label: "Restore",
+        render(host) {
+          host.appendChild(recoveryOperationPanel(
+            "Restore from a verified backup",
+            "Authenticate and inspect an encrypted backup, review its compatibility and reset/reissue policy, then stage it only to the separate empty target.",
+            recovery?.restore_target?.ready ? "Ready" : "Unavailable",
+            [["Package validation", "Authenticated before trust"], ["Target", recovery?.restore_target?.message], ["Live overwrite / cutover", "Never / never"]],
+            { label: "Select backup to inspect", disabled: !recovery?.restore_target?.ready, onClick: openRestoreUploader },
+          ));
+        },
+      },
+    ],
+  });
+}
+
+async function loadBackupRestoreSurface() {
+  renderBackupRestoreSurface();
+  try {
+    state.recoveryStatus = unwrap(await request(API.recoveryStatus));
+    renderBackupRestoreSurface(state.recoveryStatus);
+  } catch (error) {
+    state.recoveryStatus = null;
+    renderBackupRestoreSurface(null, error.message);
+  }
+}
+
 async function showAdminSurface(kind, { historyMode = "push" } = {}) {
-  if (kind === "delivery-health" ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
+  const settingsSurface = ["delivery-health", "backup-restore"].includes(kind);
+  if (settingsSurface ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
   updateApplicationRoute(kind, "", historyMode);
-  el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : kind[0].toUpperCase() + kind.slice(1);
+  state.components.adminTabs?.destroy();
+  state.components.adminTabs = null;
+  el.admin_refresh_button.hidden = kind === "backup-restore";
+  el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : (kind === "backup-restore" ? "Backup / Restore" : kind[0].toUpperCase() + kind.slice(1));
+  if (kind === "backup-restore") {
+    void loadBackupRestoreSurface();
+    return;
+  }
   el.admin_list.replaceChildren(); const loading = document.createElement("p"); loading.textContent = "Loading…"; el.admin_list.append(loading);
   const endpoint = { users: API.adminUsers, agents: API.adminAgents, audit: API.adminAudit, "delivery-health": API.adminDeliveryHealth }[kind];
   try {
@@ -2011,6 +2430,11 @@ async function openSettings() {
       google_client_secret: "",
     },
     rows: [
+      [{ type: "text", content: "Installation identity" }],
+      [{ type: "text", content: "Preview only — identity is read-only and will be populated by the future installation-state service." }],
+      [{ type: "input", name: "installation_id", label: "Installation ID", placeholder: "Not yet available", disabled: true }, { type: "input", name: "installed_release", label: "Installed release", placeholder: "Not yet available", disabled: true }],
+      [{ type: "input", name: "installed_baseline", label: "Schema baseline", placeholder: "Not yet available", disabled: true }, { type: "input", name: "installation_provenance", label: "Release provenance", placeholder: "Not yet available", disabled: true }],
+      [{ type: "divider" }],
       [{ type: "text", content: "General and messaging" }],
       [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
       [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
@@ -2101,8 +2525,8 @@ async function loadExpanded() {
     : null;
   if (requestedProject) {
     await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
-  } else if (["users", "agents", "audit", "delivery-health"].includes(requestedRoute.surface)
-      && (requestedRoute.surface === "delivery-health" ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
+  } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
+      && (["delivery-health", "backup-restore"].includes(requestedRoute.surface) ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
     await showAdminSurface(requestedRoute.surface, { historyMode: "replace" });
   } else {
     showWorkspaceSurface({ historyMode: "replace" });
@@ -2335,7 +2759,7 @@ function startPolling() {
 async function bootstrap() {
   uiLoader.setPreferBundles(true);
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover", "ui.tabs", "ui.action.modal", "ui.file.uploader", "ui.data.inspector"];
   await uiLoader.loadMany(names, options);
   state.factories = {
     createNavbar: await uiLoader.get("ui.navbar", options),
@@ -2352,6 +2776,10 @@ async function bootstrap() {
     uiAlert: await uiLoader.get("ui.dialog.alert", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
     createPopover: await uiLoader.get("ui.popover", options),
+    createTabs: await uiLoader.get("ui.tabs", options),
+    createActionModal: await uiLoader.get("ui.action.modal", options),
+    createFileUploader: await uiLoader.get("ui.file.uploader", options),
+    createDataInspector: await uiLoader.get("ui.data.inspector", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
@@ -2417,7 +2845,8 @@ async function bootstrap() {
       : null;
     if (routeProject) {
       void switchProject(routeProject.id, { initial: true, historyMode: "none" }).catch(handleLoadError);
-    } else if (["users", "agents", "audit"].includes(route.surface) && capability(`admin.${route.surface}`)) {
+    } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(route.surface)
+        && (["delivery-health", "backup-restore"].includes(route.surface) ? capability("admin.settings", isAdministrator()) : capability(`admin.${route.surface}`))) {
       void showAdminSurface(route.surface, { historyMode: "none" });
     } else {
       showWorkspaceSurface({ historyMode: "none" });

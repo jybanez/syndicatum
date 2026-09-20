@@ -51,6 +51,7 @@ $applicationPassword = New-HexSecret 24
 $applicationSecret = New-HexSecret 32
 $masterKey = New-HexSecret 32
 $environmentPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.env"
+$backupKeyPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.backup-key"
 $dumpPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.sql"
 $applicationImage = "${projectName}-app:acceptance"
 $databaseImage57 = "${projectName}-db57:acceptance"
@@ -59,6 +60,21 @@ $databaseContainer = "${projectName}-db-1"
 $sourceSqlMode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'
 $targetSqlMode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 $script:ComposeOptions = @('--project-name', $projectName, '--env-file', $environmentPath, '--file', $composePath)
+
+if (Test-Path -LiteralPath $backupKeyPath) {
+    throw "Refusing to overwrite unexpected temporary backup key file: $backupKeyPath"
+}
+$backupKeyBytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($backupKeyBytes)
+[System.IO.File]::WriteAllText(
+    $backupKeyPath,
+    [Convert]::ToBase64String($backupKeyBytes) + "`n",
+    [System.Text.UTF8Encoding]::new($false)
+)
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Unix) {
+    & chmod 600 -- $backupKeyPath
+    if ($LASTEXITCODE -ne 0) { throw 'Could not make the migration acceptance backup key private.' }
+}
 
 function Write-AcceptanceEnvironment([string]$MySqlImage, [string]$DatabaseImage, [string]$SqlMode) {
     @(
@@ -76,6 +92,10 @@ function Write-AcceptanceEnvironment([string]$MySqlImage, [string]$DatabaseImage
         'PBB_AGENTCHAT_DB_HOST=db'
         "PBB_AGENTCHAT_SECRET=$applicationSecret"
         "SYNDICATUM_MASTER_KEY=$masterKey"
+        "SYNDICATUM_BACKUP_KEY_FILE=$backupKeyPath"
+        'SYNDICATUM_ALLOW_LEGACY_UPGRADE=1'
+        'SYNDICATUM_PACKAGE_SHA256=0000000000000000000000000000000000000000000000000000000000000000'
+        'SYNDICATUM_RELEASE_SOURCE_COMMIT=0000000000000000000000000000000000000000'
         'TZ=UTC'
     ) | Set-Content -LiteralPath $environmentPath -Encoding utf8NoBOM
 }
@@ -151,4 +171,5 @@ try {
     try { Invoke-Compose -Arguments @('down', '--volumes', '--remove-orphans') } catch { Write-Warning $_ }
     if (Test-Path -LiteralPath $environmentPath) { Remove-Item -LiteralPath $environmentPath -Force }
     if (Test-Path -LiteralPath $dumpPath) { Remove-Item -LiteralPath $dumpPath -Force }
+    if (Test-Path -LiteralPath $backupKeyPath) { Remove-Item -LiteralPath $backupKeyPath -Force }
 }

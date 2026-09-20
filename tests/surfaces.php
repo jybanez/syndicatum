@@ -115,6 +115,16 @@ function surfacePort()
     return (int) substr(strrchr($name, ':'), 1);
 }
 
+function surfaceRemoveTree($path)
+{
+    if (is_dir($path) && !is_link($path)) {
+        foreach (scandir($path) ?: [] as $name) {
+            if ($name !== '.' && $name !== '..') { surfaceRemoveTree($path . DIRECTORY_SEPARATOR . $name); }
+        }
+        @rmdir($path);
+    } elseif (file_exists($path) || is_link($path)) { @unlink($path); }
+}
+
 function surfaceServer($root, $port, array $environment)
 {
     $log = tempnam(sys_get_temp_dir(), 'syndicatum-surfaces-');
@@ -231,16 +241,22 @@ if (!preg_match('/^syndicatum_surfaces_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe surface test database name.');
 }
 $secret = bin2hex(surfaceRandom(32));
-$adminPdo = new PDO('mysql:host=127.0.0.1;charset=utf8mb4', 'root', '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$testDbHost = getenv('PBB_AGENTCHAT_TEST_DB_HOST');
+$testDbHost = $testDbHost === false || trim((string) $testDbHost) === '' ? '127.0.0.1' : trim((string) $testDbHost);
+$testDbPass = getenv('PBB_AGENTCHAT_TEST_DB_PASS');
+$testDbPass = $testDbPass === false ? '' : (string) $testDbPass;
+$adminPdo = new PDO('mysql:host=' . $testDbHost . ';charset=utf8mb4', 'root', $testDbPass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $adminPdo->exec('CREATE DATABASE `' . $database . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-putenv('PBB_AGENTCHAT_DB_HOST=127.0.0.1');
+putenv('PBB_AGENTCHAT_DB_HOST=' . $testDbHost);
 putenv('PBB_AGENTCHAT_DB_NAME=' . $database);
 putenv('PBB_AGENTCHAT_DB_USER=root');
-putenv('PBB_AGENTCHAT_DB_PASS=');
+putenv('PBB_AGENTCHAT_DB_PASS=' . $testDbPass);
 putenv('PBB_AGENTCHAT_SECRET=' . $secret);
 
 $server = null;
 $serverLog = null;
+$recoveryRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-surfaces-recovery-' . bin2hex(surfaceRandom(8));
+foreach (['backups', 'staging', 'avatars'] as $name) { mkdir($recoveryRoot . DIRECTORY_SEPARATOR . $name, 0700, true); @chmod($recoveryRoot . DIRECTORY_SEPARATOR . $name, 0700); }
 try {
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
@@ -327,6 +343,63 @@ try {
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
         $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
         $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.174";') !== false, 'The vendored Helper bundle must include the approved agent-icon release.');
+    });
+
+    $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $recoveryApi = file_get_contents($root . '/api/v1/admin/_recovery.php');
+        $backupApi = file_get_contents($root . '/api/v1/admin/backups.php');
+        $backupDownloadsApi = file_get_contents($root . '/api/v1/admin/backup-downloads.php');
+        $inspectionApi = file_get_contents($root . '/api/v1/admin/restore-inspections.php');
+        $restoreApi = file_get_contents($root . '/api/v1/admin/staged-restores.php');
+        $service = file_get_contents($root . '/src/AdminRecoveryService.php');
+        $suite->true(strpos($source, 'label: "Backup / Restore"') !== false, 'Administrators need a visible Backup / Restore navigation entry.');
+        $suite->true(strpos($source, 'createTabs: await uiLoader.get("ui.tabs", options)') !== false, 'The workflow must use the native Helper tabs component.');
+        $suite->true(strpos($source, 'state.components.adminTabs = state.factories.createTabs') !== false, 'The Helper tabs component must mount the workflow sections.');
+        $suite->true(strpos($source, "entry.dataset.tabId === String(activeId)") !== false && strpos($source, 'activeTab?.focus({ preventScroll: true })') !== false, 'Tab activation must restore focus after the canonical component rebuilds its tab buttons.');
+        $suite->true(strpos($source, 'createActionModal: await uiLoader.get("ui.action.modal", options)') !== false, 'Restore file selection must use the canonical Helper action modal.');
+        $suite->true(strpos($source, 'createFileUploader: await uiLoader.get("ui.file.uploader", options)') !== false, 'Restore file selection must use the canonical Helper uploader.');
+        $suite->true(strpos($source, 'createDataInspector: await uiLoader.get("ui.data.inspector", options)') !== false, 'Verified receipts must use the canonical Helper data inspector.');
+        $suite->true(strpos($source, 'recovery?.installation?.available ? "Verified" : "Unavailable"') !== false && strpos($source, 'recovery?.installation?.message') !== false, 'Installation identity must never be labeled verified when the backend reports it unavailable.');
+        $suite->true(strpos($source, 'This running instance cannot build or mint canonical executable code.') !== false, 'The clean package flow must preserve the CI-only producer boundary.');
+        $suite->true(strpos($source, 'Build encrypted backup') !== false && strpos($source, 'authenticated encrypted backup') !== false, 'The backup action must retain encryption and non-executable boundaries.');
+        $suite->true(strpos($source, 'Type STAGE RESTORE to continue') !== false, 'Staged restore needs explicit typed confirmation.');
+        $suite->true(strpos($source, 'pattern: "STAGE RESTORE"') !== false && strpos($source, 'Enter exactly STAGE RESTORE (uppercase, with one space).') !== false, 'Exact staged-restore confirmation must fail canonical field validation before managed busy begins with accessible corrective text.');
+        $suite->true(strpos($source, 'invalidateInspectionContext') !== false && strpos($source, 'pendingTransition = { inspection, generation: contextGeneration }') !== false && strpos($source, 'transition.generation === contextGeneration') !== false, 'Dismissed or superseded inspection contexts must not open a stale restore confirmation.');
+        $suite->true(strpos($source, 'onBeforeClose(meta)') !== false && strpos($source, 'meta?.reason !== "inspected"') !== false && strpos($source, 'uploader?.destroy()') !== false, 'Inspection dismissal must immediately invalidate pending transitions and cancel active uploader work.');
+        $suite->true(strpos($source, 'onClose(meta)') !== false && strpos($source, 'if (completedInspection) openStageRestoreConfirmation(completedInspection);') !== false && strpos($source, 'initialFocus: \'[name="confirmation"]\'') !== false, 'The verified inspection handoff must wait for canonical close finalization before opening and focusing the confirmation form.');
+        $suite->true(strpos($source, 'never overwrites the live database or cuts traffic over') !== false, 'The restore action must explicitly exclude live overwrite and automatic cutover.');
+        $suite->true(strpos($source, 'reset/reissue data is intentionally omitted') !== false, 'The restore action must explain reset and credential reissue consequences.');
+        $suite->true(strpos($source, 'outcome is unknown') !== false && strpos($source, 'Idempotency-Key') !== false, 'Unknown outcomes must reconcile with the same idempotency key.');
+        $suite->true(strpos($source, 'maxFileSize: 256 * 1024 * 1024') !== false, 'The canonical uploader must enforce the server upload limit.');
+        $suite->true(strpos($styles, '.backup-restore-overview-grid') !== false && strpos($styles, '.backup-restore-uploader') !== false, 'The live workflow needs responsive layout styling.');
+        $suite->true(strpos($styles, '.recovery-stage-restore-modal .ui-form-modal-display-value') !== false && strpos($styles, 'overflow-wrap: anywhere') !== false && strpos($styles, '.recovery-stage-restore-modal .ui-form-modal-checkbox-label') !== false, 'The restore confirmation must wrap long verified metadata and acknowledgement text within narrow viewports.');
+        $suite->true(strpos($recoveryApi, 'requireAdministrator()') !== false, 'Every recovery route must require an administrator session.');
+        $suite->true(strpos($backupApi, 'validateCsrf') !== false && strpos($backupDownloadsApi, 'validateCsrf') !== false && strpos($inspectionApi, 'validateCsrf') !== false && strpos($restoreApi, 'validateCsrf') !== false, 'Every recovery mutation must validate CSRF before service construction.');
+        $suite->true(strpos($source, 'Authorize another download') !== false && strpos($source, 'operation_id: operationId') !== false, 'Expired or interrupted backup downloads need a digest-rechecked reauthorization path.');
+        $suite->true(strpos($source, 'operation_id: operation.operation_id') !== false && strpos($source, 'status: "uncertain"') !== false, 'Started operations need bounded receipt polling and an explicit uncertain state.');
+        $suite->true(strpos($backupApi, 'does not accept client-controlled paths') !== false && strpos($restoreApi, 'does not accept client paths, database credentials, or cutover options') !== false, 'Recovery routes must reject browser-controlled filesystem, DSN, and cutover inputs.');
+        $suite->true(strpos($service, 'RESTORE_TARGET_IS_SERVING_DATABASE') !== false && strpos($service, '@@server_uuid') !== false, 'Staged restore must independently reject the serving database.');
+        $suite->true(strpos($service, "'automatic_cutover' => false") !== false && strpos($service, "'live_overwrite' => false") !== false, 'Server receipts must preserve no-overwrite and no-cutover facts.');
+    });
+
+    $suite->test('First-run setup preview uses the Helper stepper without enabling installation', function () use ($suite, $root) {
+        $page = file_get_contents($root . '/setup.php');
+        $source = file_get_contents($root . '/assets/setup.mjs');
+        $styles = file_get_contents($root . '/assets/setup.css');
+        $routes = file_get_contents($root . '/.htaccess');
+        $suite->true(strpos($routes, 'RewriteRule ^setup/?$ setup.php') !== false, 'The setup preview needs a stable route.');
+        $suite->true(strpos($page, 'First-run setup · UI preview') !== false, 'The setup shell must identify itself as a preview.');
+        $suite->true(strpos($page, 'This preview cannot create a database, administrator, package, or installation.') !== false, 'The setup shell must state its capability boundary.');
+        $suite->true(strpos($source, 'await uiLoader.get("ui.stepper", options)') !== false, 'The setup flow must use the native Helper stepper.');
+        $suite->true(strpos($source, '{ id: "ownership", title: "Ownership"') !== false && strpos($source, '{ id: "completion", title: "Completion"') !== false, 'The preview must show the approved ownership-through-completion stage model.');
+        $suite->true(strpos($source, 'next.textContent = currentIndex === reviewIndex ? "Begin installation"') !== false, 'The irreversible action needs an explicit installation label.');
+        $suite->true(strpos($source, 'next.disabled = currentIndex >= reviewIndex;') !== false, 'Review/install and completion actions must fail closed.');
+        $suite->true(strpos($source, 'Installation has not run') !== false, 'The completion preview must not imply a successful installation.');
+        $suite->true(strpos($source, 'renderStep({ focusStepper: true })') !== false && strpos($source, '?.focus({ preventScroll: true });') !== false, 'Keyboard activation must retain focus in the Helper stepper.');
+        $suite->true(strpos($styles, '.setup-workspace .ui-stepper--horizontal .ui-stepper-list') !== false && strpos($styles, 'grid-template-columns: repeat(2, minmax(0, 1fr));') !== false, 'The Helper stepper must reflow without horizontal overflow on mobile.');
+        $suite->true(strpos($source, 'fetch(') === false, 'The UI-first setup preview must not call an invented backend.');
     });
 
     $suite->test('Reply context cannot widen the message composer', function () use ($suite, $root) {
@@ -541,12 +614,39 @@ try {
     )->execute([$projectId, $agentId, $now, $now]);
 
     $environment = getenv();
-    $environment['PBB_AGENTCHAT_DB_HOST'] = '127.0.0.1';
+    $environment['PBB_AGENTCHAT_DB_HOST'] = $testDbHost;
     $environment['PBB_AGENTCHAT_DB_NAME'] = $database;
     $environment['PBB_AGENTCHAT_DB_USER'] = 'root';
-    $environment['PBB_AGENTCHAT_DB_PASS'] = '';
+    $environment['PBB_AGENTCHAT_DB_PASS'] = $testDbPass;
     $environment['PBB_AGENTCHAT_SECRET'] = $secret;
+    $environment['SYNDICATUM_BACKUP_DIR'] = $recoveryRoot . DIRECTORY_SEPARATOR . 'backups';
+    $environment['SYNDICATUM_STAGING_DIR'] = $recoveryRoot . DIRECTORY_SEPARATOR . 'staging';
+    $environment['SYNDICATUM_AVATAR_DIR'] = $recoveryRoot . DIRECTORY_SEPARATOR . 'avatars';
+    $environment['SYNDICATUM_RESTORE_DB_HOST'] = $testDbHost;
+    $environment['SYNDICATUM_RESTORE_DB_NAME'] = $database;
+    $environment['SYNDICATUM_RESTORE_DB_USER'] = 'root';
+    $environment['SYNDICATUM_RESTORE_DB_PASS'] = $testDbPass;
     list($server, $baseUrl, $serverLog) = surfaceServer($root, surfacePort(), $environment);
+
+    $suite->test('Recovery HTTP routes fail closed before mutation and reject the serving database as a target', function () use ($suite, $baseUrl, $tokens, $recoveryRoot) {
+        $anonymous = surfaceRequest($baseUrl, 'GET', '/api/v1/admin/recovery-status.php');
+        $normal = surfaceRequest($baseUrl, 'GET', '/api/v1/admin/recovery-status.php', surfaceHeaders($tokens['member']));
+        $missingCsrf = surfaceRequest($baseUrl, 'POST', '/api/v1/admin/backups.php', surfaceHeaders($tokens['admin']), []);
+        $badCsrf = surfaceRequest($baseUrl, 'POST', '/api/v1/admin/backup-downloads.php', surfaceHeaders($tokens['admin'], 'invalid-csrf'), ['operation_id' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']);
+        $bootstrap = surfaceRequest($baseUrl, 'GET', '/api/v1/admin/_recovery.php');
+        $suite->same(401, $anonymous['status'], 'Anonymous recovery status must require authentication.');
+        $suite->same(403, $normal['status'], 'Non-administrator recovery status must be denied.');
+        $suite->same(403, $missingCsrf['status'], 'Backup creation must reject missing CSRF.');
+        $suite->same(403, $badCsrf['status'], 'Backup ticket reauthorization must reject invalid CSRF.');
+        $suite->same(404, $bootstrap['status'], 'The shared recovery bootstrap must not be a public success route.');
+        $suite->same(['.', '..'], scandir($recoveryRoot . DIRECTORY_SEPARATOR . 'backups'), 'Rejected recovery requests must not create operation storage.');
+        $admin = surfaceRequest($baseUrl, 'GET', '/api/v1/admin/recovery-status.php', surfaceHeaders($tokens['admin']));
+        $suite->same(200, $admin['status'], 'An administrator must be able to read the recovery contract. ' . $admin['raw']);
+        $suite->same(true, $admin['body']['data']['restore_target']['configured']);
+        $suite->same(false, $admin['body']['data']['restore_target']['ready'], 'The serving database must not be accepted as the restore target.');
+        $suite->same(false, $admin['body']['data']['constraints']['live_overwrite']);
+        $suite->same(false, $admin['body']['data']['constraints']['automatic_cutover']);
+    });
 
     $suite->test('session exposes installation capabilities for anonymous, normal, and administrator users', function () use ($suite, $baseUrl, $tokens, $csrf) {
         $anonymous = surfaceRequest($baseUrl, 'GET', '/api/v1/session.php');
@@ -782,6 +882,7 @@ try {
     if (preg_match('/^syndicatum_surfaces_[a-f0-9]{12}$/', $database)) {
         $adminPdo->exec('DROP DATABASE IF EXISTS `' . $database . '`');
     }
+    surfaceRemoveTree($recoveryRoot);
 }
 
 exit($suite->finish());

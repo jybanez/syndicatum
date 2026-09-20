@@ -318,6 +318,19 @@ required release path must test at least one database mode/configuration
 representative of the supported production deployment, including strict SQL
 behavior; permissive local defaults alone are insufficient.
 
+The canonical V1 producer implementation candidate is now at
+`34d9f7781e447d2d7d3d4bb24f2a35ef26a9732b`. PR run
+[35496204277](https://github.com/jybanez/syndicatum/actions/runs/35496204277)
+passed all nine jobs. Its merge candidate rebuilt the 256-file release ZIP
+byte-identically, passed the frozen reader and controlled POSIX extractor, and
+recorded ZIP SHA-256
+`c88ea6865d8526f6674945a6d1b99908af92f721effb940f806190ffbaf97565`.
+The same ZIP bytes passed local empty-MySQL-8.4 installation with 48 tables,
+exact package/source/baseline identity, zero historical migration rows, health,
+worker/MCP, and backup/restore acceptance. The protected annotated-tag producer
+and publication-consumer path is implemented but has not yet executed for a new
+tag; therefore production canonical-artifact evidence remains open.
+
 - [x] Select `AGPL-3.0-only`, publish the canonical license text, and document
       the open-core boundary. Legal review and the third-party license inventory
       remain release-gate work.
@@ -409,10 +422,43 @@ behavior; permissive local defaults alone are insufficient.
       produce a passing checksummed evidence bundle and complete the exact
       archived-candidate lifecycle before Assessor review.
 - [x] Produce immutable release artifacts with checksums for RC1.
+- [ ] Execute the canonical V1 ZIP/manifest/checksum/provenance producer from a
+      new annotated protected-main tag and retain the exact published artifact
+      evidence. The implementation candidate and PR-safe deterministic
+      round-trip are green in run 35496204277; only protected tag CI may create
+      the production canonical artifact.
 - [x] Publish release notes and migration notes for RC1.
 - [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only
       from a working tree. For later releases, test upgrade from the immediately
       previous supported published release.
+- [x] Implement the encrypted backup producer and stage-only restore backend.
+      The contract is recorded in
+      [`v1-encrypted-backup-contract.md`](v1-encrypted-backup-contract.md): a
+      closed 48-table policy (28 durable / 17 reset / 3 target-local),
+      authenticated encryption, ordinary reader/controlled extraction, private
+      staging, explicit recovery-secret handling, persistent avatar inclusion,
+      empty-target enforcement, and no automatic cutover. Local MySQL 8.4.11
+      round-trip evidence recovered durable state while leaving session, OAuth,
+      service-token, and outbox fixtures empty and preserving target-local roles
+      and installation identity.
+- [x] Pass exact-head CI for the encrypted backup producer, retain the MySQL 8.4
+      round-trip artifact and deterministic baseline metadata hash, and obtain
+      Commercial Assessor acceptance before replacing Backup/Restore UI
+      placeholders with real actions. Evidence requirements are recorded in
+      [`v1-encrypted-backup-acceptance.md`](v1-encrypted-backup-acceptance.md).
+      Commercial Assessor message 3293 closes this gate at PR head
+      `ce99edcccc311c86f3c711b4ab386a85d596bf98` using all-green CI run
+      `35514103883`, retained encrypted round-trip artifact `10606134839`, and
+      deterministic BaselineMetadata SHA-256
+      `c3924d363fa49ec050070daa1fbb5f7ddcd803461f4905b20708199714b86643`.
+- [ ] Replace the Backup/Restore placeholders with authenticated real actions
+      while preserving the accepted backend boundaries: CI-built clean-package
+      retrieval only, encrypted non-executable backup creation, authenticated
+      inspection before trust, separate empty staged target, no live overwrite,
+      no automatic cutover, and explicit reset/reissue consequences. Closure
+      requires exact implementation/CI evidence, installed-browser responsive
+      and keyboard/focus evidence, retry/error/recovery evidence, and Helper's
+      focused UI/UX review; see [`v1-admin-recovery-ui.md`](v1-admin-recovery-ui.md).
 
 **Exit evidence:** `v1.0.0` can be built, verified, clean-installed, backed up,
 and restored using published artifacts and documentation. Later supported

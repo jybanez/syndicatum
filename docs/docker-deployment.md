@@ -82,6 +82,10 @@ The stack refuses to start without:
 - `PBB_AGENTCHAT_SECRET`, used to HMAC agent tokens and claim codes.
 - `SYNDICATUM_MASTER_KEY`, at least 32 characters, used to encrypt integration
   and webhook secrets stored in the database.
+- `SYNDICATUM_PACKAGE_SHA256`, the 64-character SHA-256 digest of the exact
+  reviewed release package being deployed.
+- `SYNDICATUM_RELEASE_SOURCE_COMMIT`, the full 40-character Git commit embedded
+  in that package. A branch, shortened commit, or moving tag is not accepted.
 
 The two database passwords must be distinct, contain at least 16 characters,
 and must not use a common placeholder such as `password`, `secret`, `changeme`,
@@ -159,19 +163,23 @@ Compose network and must not be published on the host.
    docker compose logs --tail=100 app db worker
    ```
 
-   The application entrypoint waits for MySQL and runs the idempotent schema
-   installer. That installer creates the base tables and applies ordered,
-   checksummed migrations under a MySQL migration lock. A container becoming
-   ready does not authorize destructive or reverse migrations.
+   The application entrypoint waits for MySQL and inspects installation state.
+   On an empty database it installs the reviewed MySQL 8.4 baseline artifact,
+   records the exact package and source identity, and applies no historical
+   migrations. On a matching installed database it performs only a read-only
+   readiness check. Legacy, partial, mismatched, or otherwise invalid states
+   fail closed; ordinary startup never replays the historical migration chain.
 
 6. Verify schema state:
 
    ```console
+   docker compose exec app php scripts/chat-db.php installation-status
    docker compose exec app php scripts/chat-db.php migration-status
    ```
 
-   Every applied migration must have a valid checksum and no pending migration
-   may be ignored.
+   Installation state must be `ready`, with the expected baseline, package,
+   and source identities. For V1 the migration status must be empty: the
+   canonical baseline is the starting point, not a replay of migration history.
 
 7. Bootstrap the first administrator without placing the password in shell
    history or a command argument. Open a container shell, read the value
@@ -436,6 +444,46 @@ have occurred. Otherwise:
 
 Export post-backup human-authored data separately if it must be retained. Do
 not attempt a partial reverse transform of the schema.
+
+## Encrypted backup staging (backend contract)
+
+Create a 32-byte backup key once and store its base64 form in a private host
+file outside the repository and public web root:
+
+```console
+php -r "echo base64_encode(random_bytes(32)), PHP_EOL;" > /secure/path/syndicatum-backup.key
+chmod 0600 /secure/path/syndicatum-backup.key
+```
+
+Set `SYNDICATUM_BACKUP_KEY_FILE=/secure/path/syndicatum-backup.key` in `.env`.
+Compose exposes that file only to the one-shot `backup-key-init` service. That
+service writes a mode `0400`, UID/GID `33:33` copy into the dedicated
+`syndicatum_backup_key_runtime` volume; the non-root app receives that volume
+read-only at `/run/syndicatum-backup-key` and never receives the raw Compose
+secret mount. The app's plaintext work area is a private, non-executable tmpfs at
+`/var/lib/syndicatum/staging`; encrypted envelopes are written to the persistent
+`syndicatum_backups` volume at `/var/lib/syndicatum/backups`.
+
+Until the admin UI action is accepted, an operator can create an envelope with:
+
+```console
+docker compose exec app php scripts/create-encrypted-backup.php \
+  --output=/var/lib/syndicatum/backups/syndicatum-$(date -u +%Y%m%dT%H%M%SZ).syndicatum-backup
+```
+
+Restore is stage-only and requires a separately installed empty target database:
+
+```console
+docker compose exec app php scripts/restore-encrypted-backup.php \
+  --input=/var/lib/syndicatum/backups/verified-file.syndicatum-backup
+```
+
+The restore command imports durable rows into that target and returns a private
+asset-stage path with `cutover_performed:false`. It does not overwrite the live
+database, move assets into the live avatar directory, or switch ingress.
+Credential-bearing state is deliberately reset: MCP service tokens must be
+reissued, connector devices reauthorized/rebound, and users sign in again.
+See `docs/v1-encrypted-backup-contract.md` for the exact 48-table policy.
 
 ## Diagnostics
 

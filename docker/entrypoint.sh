@@ -75,7 +75,7 @@ try {
     sleep 2
 done
 
-echo "Installing the base schema and applying ordered database migrations..." >&2
-php /var/www/html/scripts/chat-db.php install-schema
+echo "Verifying the baseline installation state..." >&2
+php /var/www/html/scripts/chat-db.php startup-schema
 
 exec "$@"

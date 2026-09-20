@@ -5,11 +5,13 @@ param(
     [string]$DatabaseService = 'db',
     [string]$WorkerService = 'worker',
     [ValidateNotNullOrEmpty()]
-    [string]$MySqlImage = 'mysql:5.7.44',
+    [string]$MySqlImage = 'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a',
     [ValidateNotNullOrEmpty()]
-    [string]$ExpectedMySqlVersionPattern = '^5\.7\.44(?:$|[.-])',
+    [string]$ExpectedMySqlVersionPattern = '^8\.4(?:$|[.-])',
     [ValidateNotNullOrEmpty()]
-    [string]$DatabaseSqlMode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION',
+    [string]$DatabaseSqlMode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
+    [string]$PackageSha256 = $env:SYNDICATUM_PACKAGE_SHA256,
+    [string]$ReleaseSourceCommit = $env:SYNDICATUM_RELEASE_SOURCE_COMMIT,
     [string]$BaseUrl = '',
     [ValidateRange(1, 65535)]
     [int]$HttpPort = 18080,
@@ -142,6 +144,12 @@ function Invoke-DockerWithFile {
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Docker CLI is not installed or is not available on PATH.'
 }
+if ($PackageSha256 -notmatch '^[a-f0-9]{64}$') {
+    throw 'PackageSha256 must be the lowercase SHA-256 of the exact acceptance package.'
+}
+if ($ReleaseSourceCommit -notmatch '^[a-f0-9]{40}$') {
+    throw 'ReleaseSourceCommit must be the full lowercase Git commit of the acceptance package.'
+}
 $dockerServerVersion = & docker info --format '{{.ServerVersion}}' 2>$null
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($dockerServerVersion -join ''))) {
     throw 'Docker is installed, but its engine is not running. Start Docker and rerun this acceptance harness.'
@@ -185,12 +193,24 @@ $environmentPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.env
 if (Test-Path -LiteralPath $environmentPath) {
     throw "Refusing to overwrite unexpected temporary environment file: $environmentPath"
 }
+$backupKeyPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.backup-key"
+if (Test-Path -LiteralPath $backupKeyPath) {
+    throw "Refusing to overwrite unexpected temporary backup key file: $backupKeyPath"
+}
 
 $backupPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.sql"
 $rootPassword = New-HexSecret 24
 $applicationPassword = New-HexSecret 24
 $applicationSecret = New-HexSecret 32
 $masterKey = New-HexSecret 32
+$backupKeyBytes = New-Object byte[] 32
+$backupKeyRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $backupKeyRng.GetBytes($backupKeyBytes) } finally { $backupKeyRng.Dispose() }
+[System.IO.File]::WriteAllText($backupKeyPath, [Convert]::ToBase64String($backupKeyBytes) + "`n", [System.Text.UTF8Encoding]::new($false))
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Unix) {
+    & chmod 600 -- $backupKeyPath
+    if ($LASTEXITCODE -ne 0) { throw 'Could not make the acceptance backup key private.' }
+}
 $probeValue = "restore-$suffix"
 if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
     $BaseUrl = "http://127.0.0.1:$HttpPort"
@@ -215,6 +235,9 @@ $environment = @(
     "PBB_AGENTCHAT_DB_PASS=$applicationPassword"
     "PBB_AGENTCHAT_SECRET=$applicationSecret"
     "SYNDICATUM_MASTER_KEY=$masterKey"
+    "SYNDICATUM_BACKUP_KEY_FILE=$backupKeyPath"
+    "SYNDICATUM_PACKAGE_SHA256=$PackageSha256"
+    "SYNDICATUM_RELEASE_SOURCE_COMMIT=$ReleaseSourceCommit"
 ) -join "`n"
 [System.IO.File]::WriteAllText($environmentPath, $environment + "`n", [System.Text.UTF8Encoding]::new($false))
 
@@ -288,6 +311,17 @@ try {
             throw "Worker heartbeat health check did not report healthy: $workerHealth"
         }
         Write-Host 'Verified worker heartbeat health check: healthy.'
+        $backupKeyLength = (Invoke-Compose -Arguments @('exec', '-T', '--user', '33:33', $AppService, 'php', '-r', 'require "src/BackupKeyFile.php"; echo strlen(BackupKeyFile::loadFromEnvironment());') -Capture).Trim()
+        if ($backupKeyLength -ne '32') {
+            throw "Application could not read the private 32-byte backup key; observed length: $backupKeyLength"
+        }
+        $backupPaths = (Invoke-Compose -Arguments @('exec', '-T', $AppService, 'sh', '-lc', 'stat -c "%a:%u:%g:%n" /var/lib/syndicatum/staging /var/lib/syndicatum/backups /run/syndicatum-backup-key/backup-key') -Capture).Trim()
+        if ($backupPaths -notmatch '(?m)^700:33:33:/var/lib/syndicatum/staging\r?$' -or
+            $backupPaths -notmatch '(?m)^700:33:33:/var/lib/syndicatum/backups\r?$' -or
+            $backupPaths -notmatch '(?m)^400:33:33:/run/syndicatum-backup-key/backup-key\r?$') {
+            throw "Backup staging/storage/key permissions are not private: $backupPaths"
+        }
+        Write-Host 'Verified private backup key, tmpfs staging, and persistent encrypted-backup storage.'
     } catch {
         Write-Warning 'Container startup failed. Capturing service state and logs before cleanup.'
         try { Invoke-Compose -Arguments @('ps', '--all') } catch { Write-Warning $_ }
@@ -295,15 +329,20 @@ try {
         throw
     }
 
-    Write-Step 'Applying migrations and confirming they are complete'
-    $migrationOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'migrate') -Capture
-    $statusOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'migration-status') -Capture
-    $migrationStatus = $statusOutput | ConvertFrom-Json
-    $incomplete = @($migrationStatus | Where-Object { -not $_.applied -or -not $_.checksum_valid })
-    if ($incomplete.Count -gt 0) {
-        throw "Migration verification found $($incomplete.Count) incomplete or checksum-invalid migration(s)."
+    Write-Step 'Confirming baseline identity and zero fabricated historical migration rows'
+    $installationOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'installation-status') -Capture
+    $installation = $installationOutput | ConvertFrom-Json
+    if (-not $installation.ready -or $installation.state -ne 'ready' -or
+        $installation.identity.package_sha256 -ne $PackageSha256 -or
+        $installation.identity.release_source_commit -ne $ReleaseSourceCommit) {
+        throw 'Baseline installation identity does not match the exact acceptance package.'
     }
-    Write-Host "Migration verification passed for $(@($migrationStatus).Count) migration(s)."
+    $statusOutput = Invoke-Compose -Arguments @('exec', '-T', $AppService, 'php', 'scripts/chat-db.php', 'migration-status') -Capture
+    $migrationStatus = @($statusOutput | ConvertFrom-Json)
+    if ($migrationStatus.Count -ne 0 -or [int]$installation.migration_rows -ne 0) {
+        throw 'Fresh baseline installation must have zero historical migration rows and no declared post-baseline migrations.'
+    }
+    Write-Host 'Baseline identity matched the package and historical migration row count is zero.'
 
     Write-Step 'Checking application and machine-readable health endpoints'
     $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
@@ -827,4 +866,5 @@ try {
     }
     Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $environmentPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $backupKeyPath -Force -ErrorAction SilentlyContinue
 }

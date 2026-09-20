@@ -15,6 +15,13 @@ class SchemaMigrator
 
     public function migrate()
     {
+        if (Db::tableExists($this->pdo, 'syndicatum_installation_identity')) {
+            $metadata = $this->baselineMetadata();
+            if (empty($metadata['post_baseline_migrations'])) {
+                return [];
+            }
+            throw new RuntimeException('Declared post-baseline migration execution is not implemented for this baseline.');
+        }
         $this->acquireLock();
 
         try {
@@ -64,6 +71,13 @@ class SchemaMigrator
 
     public function status()
     {
+        if (Db::tableExists($this->pdo, 'syndicatum_installation_identity')) {
+            $metadata = $this->baselineMetadata();
+            if (empty($metadata['post_baseline_migrations'])) {
+                return [];
+            }
+            throw new RuntimeException('Declared post-baseline migration status is not implemented for this baseline.');
+        }
         $this->ensureMigrationTable();
         $applied = $this->appliedMigrations();
         $status = [];
@@ -149,5 +163,16 @@ class SchemaMigrator
         } catch (Exception $ignored) {
             // Preserve the original migration error. MySQL also releases the lock when this connection closes.
         }
+    }
+
+    private function baselineMetadata()
+    {
+        $path = dirname(__DIR__) . '/schema/mysql84/baseline.json';
+        $json = file_get_contents($path);
+        $metadata = is_string($json) ? json_decode($json, true) : null;
+        if (!is_array($metadata) || json_last_error() !== JSON_ERROR_NONE) {
+            throw new RuntimeException('Trusted baseline metadata is unavailable.');
+        }
+        return $metadata;
     }
 }

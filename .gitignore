@@ -6,3 +6,4 @@ companion/dist/
 runtime/
 output/*.sql
 .playwright-cli/
+__pycache__/
