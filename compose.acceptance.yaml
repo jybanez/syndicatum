@@ -21,7 +21,7 @@ services:
       - /tmp:rw,nosuid,nodev,uid=33,gid=33,mode=1777
       - /receipts:rw,nosuid,nodev,uid=33,gid=33,mode=0700
     volumes:
-      - ./tests/fixtures/realtime-acceptance-ingress.php:/acceptance/ingress.php:ro
+      - ${SYNDICATUM_ACCEPTANCE_INGRESS_FIXTURE:-./tests/fixtures/realtime-acceptance-ingress.php}:/acceptance/ingress.php:ro
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8123/health') === 'ok' ? 0 : 1);"]
       interval: 2s

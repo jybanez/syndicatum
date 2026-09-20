@@ -1,0 +1,2139 @@
+{
+  "contract_name": "syndicatum-canonical-release-policy",
+  "format_version": "1.0",
+  "producer_version": "1.0.0",
+  "application_version": "1.0.0",
+  "candidate_roots": [
+    ".well-known",
+    "api",
+    "assets",
+    "auth",
+    "claim",
+    "docker",
+    "oauth",
+    "plugins/codex",
+    "release/package-runtime",
+    "schema/mysql84",
+    "scripts",
+    "skills",
+    "src",
+    "vendor",
+    ".htaccess",
+    "Dockerfile",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "VENDORED.md",
+    "claim.php",
+    "compose.acceptance.yaml",
+    "compose.yaml",
+    "connector-authorize.php",
+    "index.php",
+    "legal-page.php",
+    "license.php",
+    "manifest.webmanifest",
+    "mcp.php",
+    "privacy.php",
+    "setup.php",
+    "support.php",
+    "terms.php"
+  ],
+  "excluded_roots": [
+    ".agents",
+    ".github",
+    ".dockerignore",
+    ".env.example",
+    ".gitattributes",
+    ".gitignore",
+    "companion",
+    "docs",
+        "migrations",
+        "release/canonical-release-policy-v1.json",
+        "tests",
+    "tools"
+  ],
+  "allowed_top_level": [
+    ".agents",
+    ".dockerignore",
+    ".env.example",
+    ".gitattributes",
+    ".github",
+    ".gitignore",
+    ".htaccess",
+    ".well-known",
+    "api",
+    "assets",
+    "auth",
+    "claim",
+    "claim.php",
+    "companion",
+    "compose.acceptance.yaml",
+    "compose.yaml",
+    "connector-authorize.php",
+    "docker",
+    "Dockerfile",
+    "docs",
+    "index.php",
+    "legal-page.php",
+    "LICENSE",
+    "license.php",
+    "manifest.webmanifest",
+    "mcp.php",
+    "migrations",
+    "oauth",
+    "plugins",
+    "privacy.php",
+    "README.md",
+    "release",
+    "schema",
+    "scripts",
+    "setup.php",
+    "skills",
+    "src",
+    "support.php",
+    "terms.php",
+    "tests",
+    "THIRD_PARTY_NOTICES.md",
+    "tools",
+    "vendor",
+    "VENDORED.md"
+  ],
+  "compatibility": {
+    "php": {
+      "minimum": "8.2.0",
+      "maximum_exclusive": "9.0.0",
+      "extensions": [
+        "curl",
+        "gd",
+        "mbstring",
+        "opcache",
+        "pdo_mysql",
+        "zip"
+      ]
+    },
+    "mysql": {
+      "minimum": "8.4.0",
+      "maximum_exclusive": "9.0.0",
+      "sql_modes": [
+        "ERROR_FOR_DIVISION_BY_ZERO",
+        "NO_ENGINE_SUBSTITUTION",
+        "STRICT_TRANS_TABLES"
+      ],
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_unicode_ci"
+    }
+  },
+  "minimum_reader_version": "1.0.0",
+  "supported_upgrade_sources": [],
+  "baseline": {
+    "metadata_source": "schema/mysql84/baseline.json",
+    "schema_source": "schema/mysql84/schema.sql",
+    "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
+    "schema_head": "202609180004",
+    "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
+    "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e"
+  },
+  "sidecars": {
+    "archive": "syndicatum-v1.0.0.zip",
+    "manifest": "syndicatum-v1.0.0.manifest.json",
+    "checksum": "syndicatum-v1.0.0.sha256",
+    "provenance": "syndicatum-v1.0.0.provenance.json"
+  },
+  "dispositions": [
+    {
+      "source": ".htaccess",
+      "action": "ship",
+      "path": "app/.htaccess",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": ".well-known/oauth-authorization-server.php",
+      "action": "ship",
+      "path": "app/.well-known/oauth-authorization-server.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": ".well-known/oauth-protected-resource.php",
+      "action": "ship",
+      "path": "app/.well-known/oauth-protected-resource.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": ".well-known/pbb.json",
+      "action": "ship",
+      "path": "app/.well-known/pbb.json",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-agents.php",
+      "action": "ship",
+      "path": "app/api/chat-agents.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-context.php",
+      "action": "ship",
+      "path": "app/api/chat-context.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-entries.php",
+      "action": "ship",
+      "path": "app/api/chat-entries.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-entry.php",
+      "action": "ship",
+      "path": "app/api/chat-entry.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-log.php",
+      "action": "ship",
+      "path": "app/api/chat-log.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-summary.php",
+      "action": "ship",
+      "path": "app/api/chat-summary.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-topic.php",
+      "action": "ship",
+      "path": "app/api/chat-topic.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/chat-topics.php",
+      "action": "ship",
+      "path": "app/api/chat-topics.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/claim.php",
+      "action": "ship",
+      "path": "app/api/claim.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/install-schema.php",
+      "action": "ship",
+      "path": "app/api/install-schema.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/_bootstrap.php",
+      "action": "ship",
+      "path": "app/api/v1/_bootstrap.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/_human.php",
+      "action": "ship",
+      "path": "app/api/v1/_human.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/agents.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/agents.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/audit.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/audit.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/delivery-health.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/delivery-health.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/integration-test.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/integration-test.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/settings.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/settings.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/users.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/users.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/agent-activation-binding.php",
+      "action": "ship",
+      "path": "app/api/v1/agent-activation-binding.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/agent-claim.php",
+      "action": "ship",
+      "path": "app/api/v1/agent-claim.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/avatar-upload.php",
+      "action": "ship",
+      "path": "app/api/v1/avatar-upload.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/avatar.php",
+      "action": "ship",
+      "path": "app/api/v1/avatar.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-agent-replies.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-agent-replies.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-bindings.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-bindings.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-device-authorizations.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-device-authorizations.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-device-token.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-device-token.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-discussion-bindings.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-discussion-bindings.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-notification-deliveries.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-notification-deliveries.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-pending-notifications.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-pending-notifications.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/connector-realtime-admission.php",
+      "action": "ship",
+      "path": "app/api/v1/connector-realtime-admission.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/discussion-providers.php",
+      "action": "ship",
+      "path": "app/api/v1/discussion-providers.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/google-link.php",
+      "action": "ship",
+      "path": "app/api/v1/google-link.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/health.php",
+      "action": "ship",
+      "path": "app/api/v1/health.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/manage-projects.php",
+      "action": "ship",
+      "path": "app/api/v1/manage-projects.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/password.php",
+      "action": "ship",
+      "path": "app/api/v1/password.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/profile.php",
+      "action": "ship",
+      "path": "app/api/v1/profile.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-agent-activation.php",
+      "action": "ship",
+      "path": "app/api/v1/project-agent-activation.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-agent-webhook.php",
+      "action": "ship",
+      "path": "app/api/v1/project-agent-webhook.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-agents.php",
+      "action": "ship",
+      "path": "app/api/v1/project-agents.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-invitations.php",
+      "action": "ship",
+      "path": "app/api/v1/project-invitations.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-members.php",
+      "action": "ship",
+      "path": "app/api/v1/project-members.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-message-acknowledge.php",
+      "action": "ship",
+      "path": "app/api/v1/project-message-acknowledge.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-message.php",
+      "action": "ship",
+      "path": "app/api/v1/project-message.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-messages.php",
+      "action": "ship",
+      "path": "app/api/v1/project-messages.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-participants.php",
+      "action": "ship",
+      "path": "app/api/v1/project-participants.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-responsibility-inbox.php",
+      "action": "ship",
+      "path": "app/api/v1/project-responsibility-inbox.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project.php",
+      "action": "ship",
+      "path": "app/api/v1/project.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/projects.php",
+      "action": "ship",
+      "path": "app/api/v1/projects.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/realtime-admission.php",
+      "action": "ship",
+      "path": "app/api/v1/realtime-admission.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/session.php",
+      "action": "ship",
+      "path": "app/api/v1/session.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/workspace.php",
+      "action": "ship",
+      "path": "app/api/v1/workspace.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/app.css",
+      "action": "ship",
+      "path": "app/assets/app.css",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/app.mjs",
+      "action": "ship",
+      "path": "app/assets/app.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/desktop/macos-1024.png",
+      "action": "ship",
+      "path": "app/assets/brand/desktop/macos-1024.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/desktop/syndicatum.icns",
+      "action": "ship",
+      "path": "app/assets/brand/desktop/syndicatum.icns",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/desktop/syndicatum.ico",
+      "action": "ship",
+      "path": "app/assets/brand/desktop/syndicatum.ico",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/desktop/windows-store-150.png",
+      "action": "ship",
+      "path": "app/assets/brand/desktop/windows-store-150.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/desktop/windows-store-310.png",
+      "action": "ship",
+      "path": "app/assets/brand/desktop/windows-store-310.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/desktop/windows-store-44.png",
+      "action": "ship",
+      "path": "app/assets/brand/desktop/windows-store-44.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-1024.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-1024.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-128.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-128.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-16.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-16.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-20.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-20.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-24.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-24.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-256.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-256.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-32.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-32.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-48.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-48.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-512.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-512.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/black/syndicatum-64.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/black/syndicatum-64.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-1024.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-1024.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-128.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-128.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-16.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-16.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-20.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-20.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-24.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-24.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-256.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-256.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-32.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-32.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-48.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-48.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-512.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-512.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/color/syndicatum-64.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/color/syndicatum-64.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-1024.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-1024.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-128.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-128.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-16.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-16.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-20.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-20.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-24.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-24.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-256.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-256.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-32.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-32.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-48.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-48.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-512.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-512.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/png/white/syndicatum-64.png",
+      "action": "ship",
+      "path": "app/assets/brand/png/white/syndicatum-64.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/README.md",
+      "action": "ship",
+      "path": "app/assets/brand/README.md",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/source/syndicatum-icon-master.svg",
+      "action": "ship",
+      "path": "app/assets/brand/source/syndicatum-icon-master.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-app-tile-dark.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-app-tile-dark.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-app-tile-light.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-app-tile-light.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-maskable.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-maskable.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-micro-black.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-micro-black.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-micro-color.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-micro-color.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-micro-white.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-micro-white.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-monochrome-currentcolor.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-monochrome-currentcolor.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-standard-black.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-standard-black.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-standard-color.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-standard-color.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/svg/syndicatum-standard-white.svg",
+      "action": "ship",
+      "path": "app/assets/brand/svg/syndicatum-standard-white.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/apple-touch-icon-180x180.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/apple-touch-icon-180x180.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/favicon-16x16.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/favicon-16x16.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/favicon-32x32.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/favicon-32x32.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/favicon-48x48.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/favicon-48x48.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/favicon.ico",
+      "action": "ship",
+      "path": "app/assets/brand/web/favicon.ico",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/icon-192x192.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/icon-192x192.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/icon-512x512.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/icon-512x512.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/maskable-icon-192x192.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/maskable-icon-192x192.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/maskable-icon-512x512.png",
+      "action": "ship",
+      "path": "app/assets/brand/web/maskable-icon-512x512.png",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/brand/web/safari-pinned-tab.svg",
+      "action": "ship",
+      "path": "app/assets/brand/web/safari-pinned-tab.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/claim.css",
+      "action": "ship",
+      "path": "app/assets/claim.css",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/claim.mjs",
+      "action": "ship",
+      "path": "app/assets/claim.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/connector-authorize.mjs",
+      "action": "ship",
+      "path": "app/assets/connector-authorize.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/google-signin-dark.svg",
+      "action": "ship",
+      "path": "app/assets/google-signin-dark.svg",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/legal.css",
+      "action": "ship",
+      "path": "app/assets/legal.css",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/responsibility-evidence.mjs",
+      "action": "ship",
+      "path": "app/assets/responsibility-evidence.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/responsibility-inbox.mjs",
+      "action": "ship",
+      "path": "app/assets/responsibility-inbox.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/setup.css",
+      "action": "ship",
+      "path": "app/assets/setup.css",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/setup.mjs",
+      "action": "ship",
+      "path": "app/assets/setup.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "auth/account-callback.php",
+      "action": "ship",
+      "path": "app/auth/account-callback.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "auth/account.php",
+      "action": "ship",
+      "path": "app/auth/account.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "auth/google-callback.php",
+      "action": "ship",
+      "path": "app/auth/google-callback.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "auth/google.php",
+      "action": "ship",
+      "path": "app/auth/google.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "auth/local-logout.php",
+      "action": "ship",
+      "path": "app/auth/local-logout.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "auth/logout.php",
+      "action": "ship",
+      "path": "app/auth/logout.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "claim.php",
+      "action": "ship",
+      "path": "app/claim.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "claim/index.php",
+      "action": "ship",
+      "path": "app/claim/index.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "compose.acceptance.yaml",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "compose.yaml",
+      "action": "ship",
+      "path": "app/compose.yaml",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "connector-authorize.php",
+      "action": "ship",
+      "path": "app/connector-authorize.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "docker/apache-syndicatum.conf",
+      "action": "ship",
+      "path": "app/docker/apache-syndicatum.conf",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "docker/entrypoint.sh",
+      "action": "ship",
+      "path": "app/docker/entrypoint.sh",
+      "role": "application",
+      "mode": 493
+    },
+    {
+      "source": "docker/mysql-entrypoint.sh",
+      "action": "ship",
+      "path": "app/docker/mysql-entrypoint.sh",
+      "role": "application",
+      "mode": 493
+    },
+    {
+      "source": "docker/mysql.Dockerfile",
+      "action": "ship",
+      "path": "app/docker/mysql.Dockerfile",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "docker/php-production.ini",
+      "action": "ship",
+      "path": "app/docker/php-production.ini",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "docker/worker-loop.sh",
+      "action": "ship",
+      "path": "app/docker/worker-loop.sh",
+      "role": "application",
+      "mode": 493
+    },
+    {
+      "source": "Dockerfile",
+      "action": "ship",
+      "path": "app/Dockerfile",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "index.php",
+      "action": "ship",
+      "path": "app/index.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "legal-page.php",
+      "action": "ship",
+      "path": "app/legal-page.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "LICENSE",
+      "action": "ship",
+      "path": "notices/LICENSE",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "license.php",
+      "action": "ship",
+      "path": "app/license.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "manifest.webmanifest",
+      "action": "ship",
+      "path": "app/manifest.webmanifest",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "mcp.php",
+      "action": "ship",
+      "path": "app/mcp.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "oauth/authorize.php",
+      "action": "ship",
+      "path": "app/oauth/authorize.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "oauth/register.php",
+      "action": "ship",
+      "path": "app/oauth/register.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "oauth/revoke.php",
+      "action": "ship",
+      "path": "app/oauth/revoke.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "oauth/token.php",
+      "action": "ship",
+      "path": "app/oauth/token.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/.codex-plugin/plugin.json",
+      "action": "ship",
+      "path": "plugins/codex/.codex-plugin/plugin.json",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/.mcp.json",
+      "action": "ship",
+      "path": "plugins/codex/.mcp.json",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/assets/icon.png",
+      "action": "ship",
+      "path": "plugins/codex/assets/icon.png",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/assets/logo.png",
+      "action": "ship",
+      "path": "plugins/codex/assets/logo.png",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/agent-profile-store.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/agent-profile-store.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/authorization-listener.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/authorization-listener.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/background-service-manager.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/background-service-manager.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/background-service.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/background-service.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/codex-driver.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/codex-driver.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/config.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/config.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/connector.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/connector.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/device-connector.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/device-connector.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/listener-lock.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/listener-lock.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/pairing-state.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/pairing-state.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/paths.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/paths.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/profile-claim.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/profile-claim.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/profile-timeline.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/profile-timeline.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/runtime.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/runtime.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/secret-store.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/secret-store.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/server-migration.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/server-migration.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/server.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/server.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/state-store.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/state-store.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/mcp/syndicatum-client.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/syndicatum-client.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/README.md",
+      "action": "ship",
+      "path": "plugins/codex/README.md",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/skills/syndicatum-timeline/SKILL.md",
+      "action": "ship",
+      "path": "plugins/codex/skills/syndicatum-timeline/SKILL.md",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/test/authorization-listener.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/background-service-manager.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/connector.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/listener-lock.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/paths.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/plugin-identity.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/profile-alias.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/profile-claim.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/profile-timeline.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/runtime-background.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/secret-store.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/server-migration.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/server-protocol.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/skill-contract.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/syndicatum-client.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "privacy.php",
+      "action": "ship",
+      "path": "app/privacy.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "README.md",
+      "action": "ship",
+      "path": "notices/README.md",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "release/package-runtime/Dockerfile",
+      "action": "ship",
+      "path": "metadata/runtime/Dockerfile",
+      "role": "package_metadata",
+      "mode": 420
+    },
+    {
+      "source": "schema/mysql84/baseline.json",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/baseline.json",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "schema/mysql84/schema.sql",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/schema.sql",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "scripts/build-canonical-release.sh",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/chat-db.php",
+      "action": "ship",
+      "path": "app/scripts/chat-db.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/check-baseline-drift.sh",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/docker-acceptance.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/external-host-preflight.sh",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/generate-baseline-from-database.php",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/hidden-replay-audit.php",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/install-realtime-outbox-task.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/mysql57-to-84-migration-acceptance.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/plugin-mcp-connection-status.php",
+      "action": "ship",
+      "path": "app/scripts/plugin-mcp-connection-status.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/plugin-message-delivery-status.php",
+      "action": "ship",
+      "path": "app/scripts/plugin-message-delivery-status.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/plugin-operational-status.php",
+      "action": "ship",
+      "path": "app/scripts/plugin-operational-status.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/process-agent-webhooks.php",
+      "action": "ship",
+      "path": "app/scripts/process-agent-webhooks.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/process-message-outbox.php",
+      "action": "ship",
+      "path": "app/scripts/process-message-outbox.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/record-delivery-worker-heartbeat.php",
+      "action": "ship",
+      "path": "app/scripts/record-delivery-worker-heartbeat.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/responsibility-baseline-preflight.php",
+      "action": "ship",
+      "path": "app/scripts/responsibility-baseline-preflight.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/run-realtime-outbox-supervised.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/start-realtime-outbox-hidden.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/status-realtime-outbox.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/stop-realtime-outbox.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "scripts/verify-plugin-publication.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "setup.php",
+      "action": "ship",
+      "path": "app/setup.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "skills/syndicatum/references/protocol-v1.md",
+      "action": "ship",
+      "path": "skills/syndicatum/references/protocol-v1.md",
+      "role": "skill",
+      "mode": 420
+    },
+    {
+      "source": "skills/syndicatum/SKILL.md",
+      "action": "ship",
+      "path": "skills/syndicatum/SKILL.md",
+      "role": "skill",
+      "mode": 420
+    },
+    {
+      "source": "src/AccountIntegration.php",
+      "action": "ship",
+      "path": "app/src/AccountIntegration.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AdminDeliveryHealth.php",
+      "action": "ship",
+      "path": "app/src/AdminDeliveryHealth.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AdminService.php",
+      "action": "ship",
+      "path": "app/src/AdminService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AgentActivationService.php",
+      "action": "ship",
+      "path": "app/src/AgentActivationService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AgentWebhookService.php",
+      "action": "ship",
+      "path": "app/src/AgentWebhookService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AgentWebhookWorker.php",
+      "action": "ship",
+      "path": "app/src/AgentWebhookWorker.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/Api.php",
+      "action": "ship",
+      "path": "app/src/Api.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ArchiveSafetyReader.php",
+      "action": "ship",
+      "path": "app/src/ArchiveSafetyReader.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AuthService.php",
+      "action": "ship",
+      "path": "app/src/AuthService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/AvatarService.php",
+      "action": "ship",
+      "path": "app/src/AvatarService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/BaselineInstaller.php",
+      "action": "ship",
+      "path": "app/src/BaselineInstaller.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/BaselineMetadata.php",
+      "action": "ship",
+      "path": "app/src/BaselineMetadata.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ChatGptOAuthService.php",
+      "action": "ship",
+      "path": "app/src/ChatGptOAuthService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ChatRepository.php",
+      "action": "ship",
+      "path": "app/src/ChatRepository.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ConnectorDeviceService.php",
+      "action": "ship",
+      "path": "app/src/ConnectorDeviceService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/Db.php",
+      "action": "ship",
+      "path": "app/src/Db.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/DeliveryFailureTaxonomy.php",
+      "action": "ship",
+      "path": "app/src/DeliveryFailureTaxonomy.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/DeliveryOperatorView.php",
+      "action": "ship",
+      "path": "app/src/DeliveryOperatorView.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/DiscussionBindingIntentService.php",
+      "action": "ship",
+      "path": "app/src/DiscussionBindingIntentService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/DiscussionProviderRegistry.php",
+      "action": "ship",
+      "path": "app/src/DiscussionProviderRegistry.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ExpansionMigrator.php",
+      "action": "ship",
+      "path": "app/src/ExpansionMigrator.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/GoogleIntegration.php",
+      "action": "ship",
+      "path": "app/src/GoogleIntegration.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/InstallationIdentity.php",
+      "action": "ship",
+      "path": "app/src/InstallationIdentity.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/InstallationState.php",
+      "action": "ship",
+      "path": "app/src/InstallationState.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/IntegrationHealth.php",
+      "action": "ship",
+      "path": "app/src/IntegrationHealth.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/McpConnectionHealth.php",
+      "action": "ship",
+      "path": "app/src/McpConnectionHealth.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/McpServiceTokenService.php",
+      "action": "ship",
+      "path": "app/src/McpServiceTokenService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/MessageDeliveryStatus.php",
+      "action": "ship",
+      "path": "app/src/MessageDeliveryStatus.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/MessageOutbox.php",
+      "action": "ship",
+      "path": "app/src/MessageOutbox.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/OperationalHealth.php",
+      "action": "ship",
+      "path": "app/src/OperationalHealth.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PackageCompatibility.php",
+      "action": "ship",
+      "path": "app/src/PackageCompatibility.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PackageManifest.php",
+      "action": "ship",
+      "path": "app/src/PackageManifest.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ProjectManagementService.php",
+      "action": "ship",
+      "path": "app/src/ProjectManagementService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ProjectRepository.php",
+      "action": "ship",
+      "path": "app/src/ProjectRepository.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/RateLimiter.php",
+      "action": "ship",
+      "path": "app/src/RateLimiter.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/RealtimeIntegration.php",
+      "action": "ship",
+      "path": "app/src/RealtimeIntegration.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/RequestAuth.php",
+      "action": "ship",
+      "path": "app/src/RequestAuth.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ResponsesApiActivationService.php",
+      "action": "ship",
+      "path": "app/src/ResponsesApiActivationService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ResponsibilityEventService.php",
+      "action": "ship",
+      "path": "app/src/ResponsibilityEventService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ResponsibilityInboxService.php",
+      "action": "ship",
+      "path": "app/src/ResponsibilityInboxService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ResponsibilityMigrationAssessment.php",
+      "action": "ship",
+      "path": "app/src/ResponsibilityMigrationAssessment.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ResponsibilityStateProjector.php",
+      "action": "ship",
+      "path": "app/src/ResponsibilityStateProjector.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ResponsibilityStateReducer.php",
+      "action": "ship",
+      "path": "app/src/ResponsibilityStateReducer.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/SchemaMigrator.php",
+      "action": "ship",
+      "path": "app/src/SchemaMigrator.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/SettingsService.php",
+      "action": "ship",
+      "path": "app/src/SettingsService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/WorkspaceAgentTriggerService.php",
+      "action": "ship",
+      "path": "app/src/WorkspaceAgentTriggerService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "support.php",
+      "action": "ship",
+      "path": "app/support.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "terms.php",
+      "action": "ship",
+      "path": "app/terms.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "THIRD_PARTY_NOTICES.md",
+      "action": "ship",
+      "path": "notices/THIRD_PARTY_NOTICES.md",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/dist/helpers.ui.bundle.min.css",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/dist/helpers.ui.bundle.min.css",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/dist/helpers.ui.bundle.min.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/dist/helpers.ui.bundle.min.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.loader.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.loader.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/attachments/realtime-attachments.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/attachments/realtime-attachments.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/call/realtime-conference.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/call/realtime-conference.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/chat/realtime-chat.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/chat/realtime-chat.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/core/realtime-emitter.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/core/realtime-emitter.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/core/realtime-envelope.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/core/realtime-envelope.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/core/realtime-socket-client.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/core/realtime-socket-client.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/core/realtime-types.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/core/realtime-types.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/events/realtime-app-events.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/events/realtime-app-events.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/index.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/index.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/media/realtime-media.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/media/realtime-media.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-realtime/js/sdk/presence/realtime-presence.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-realtime/js/sdk/presence/realtime-presence.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "VENDORED.md",
+      "action": "ship",
+      "path": "notices/VENDORED.md",
+      "role": "notice",
+      "mode": 420
+    }
+  ]
+}

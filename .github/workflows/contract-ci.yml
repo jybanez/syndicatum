@@ -96,6 +96,62 @@ jobs:
           php tests/package-contract.php
           php tests/archive-safety.php
 
+  canonical-release-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zip
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Verify the closed producer policy and deterministic candidate bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/canonical-release-producer.py
+          mkdir -p canonical-candidate/first canonical-candidate/second
+          tag="candidate-${GITHUB_SHA}"
+          python3 tools/release/canonical_release.py \
+            --repository . --commit "$GITHUB_SHA" --tag "$tag" \
+            --output-dir canonical-candidate/first \
+            | tee canonical-candidate/first/build-result.json
+          python3 tools/release/canonical_release.py \
+            --repository . --commit "$GITHUB_SHA" --tag "$tag" \
+            --output-dir canonical-candidate/second \
+            | tee canonical-candidate/second/build-result.json
+          for name in syndicatum-v1.0.0.zip syndicatum-v1.0.0.manifest.json syndicatum-v1.0.0.sha256 syndicatum-v1.0.0.provenance.json; do
+            cmp "canonical-candidate/first/$name" "canonical-candidate/second/$name"
+          done
+          (cd canonical-candidate/first && sha256sum --check syndicatum-v1.0.0.sha256)
+      - name: Round-trip exact candidate through the frozen reader and controlled extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_root="$(mktemp -d)"
+          public_root="$(mktemp -d)"
+          chmod 0700 "$staging_root" "$public_root"
+          php tests/canonical-release-roundtrip.php \
+            canonical-candidate/first/syndicatum-v1.0.0.zip \
+            canonical-candidate/first/syndicatum-v1.0.0.manifest.json \
+            "$staging_root" "$public_root" \
+            "$GITHUB_SHA" "candidate-${GITHUB_SHA}" \
+            syndicatum-mysql84-1.0.0-baseline.1 202609180004 \
+            | tee canonical-candidate/first/roundtrip.json
+      - name: Retain non-authoritative candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canonical-release-candidate-${{ github.sha }}-${{ github.run_attempt }}
+          path: canonical-candidate/first/
+          if-no-files-found: error
+          retention-days: 30
+
   mysql84-baseline-drift:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
