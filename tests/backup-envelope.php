@@ -77,6 +77,14 @@ try {
     backupEnvelopeAssert($created['header']['frame_count'] > 1, 'Fixture must exercise multiple authenticated frames.');
     backupEnvelopeAssert($created['header']['archive_sha256'] === hash('sha256', $archiveBytes), 'Envelope archive digest is wrong.');
 
+    $originalEnvelopeSha256 = hash_file('sha256', $envelope);
+    backupEnvelopeThrows(function () use ($archive, $manifest, $envelope, $key, $identity) {
+        BackupEnvelope::encrypt($archive, $manifest, $envelope, $key, $identity, 4096);
+    }, 'An existing backup destination must never be replaced.');
+    backupEnvelopeAssert(hash_file('sha256', $envelope) === $originalEnvelopeSha256, 'Rejected replacement changed the original backup envelope.');
+    $partialEnvelopes = glob($envelope . '.partial-*');
+    backupEnvelopeAssert(is_array($partialEnvelopes) && count($partialEnvelopes) === 0, 'Rejected replacement left a partial envelope behind.');
+
     $opened = BackupEnvelope::decryptToPrivateStage($envelope, $staging, $key);
     backupEnvelopeAssert(hash_equals($manifest, file_get_contents($opened['manifest_path'])), 'Authenticated manifest did not round-trip.');
     backupEnvelopeAssert(hash_equals($archiveBytes, file_get_contents($opened['archive_path'])), 'Authenticated archive did not round-trip.');
