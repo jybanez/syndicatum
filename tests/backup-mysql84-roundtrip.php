@@ -89,7 +89,9 @@ try {
 
     $now = '2026-09-20 00:00:00';
     $future = '2027-09-20 00:00:00';
-    $source->exec("INSERT INTO users (id, normalized_email, username, password_hash, display_name, status, created_at, updated_at) VALUES (100, 'backup@example.test', 'backup-owner', 'fixture-hash', 'Backup Owner', 'active', '$now', '$now')");
+    $avatarName = str_repeat('f', 40) . '.png';
+    $avatarUrl = 'api/v1/avatar.php?file=' . $avatarName;
+    $source->exec("INSERT INTO users (id, normalized_email, username, password_hash, display_name, avatar_url, status, created_at, updated_at) VALUES (100, 'backup@example.test', 'backup-owner', 'fixture-hash', 'Backup Owner', '$avatarUrl', 'active', '$now', '$now')");
     $source->exec("INSERT INTO workspaces (id, owner_user_id, name, created_at, updated_at) VALUES (200, 100, 'Recovered workspace', '$now', '$now')");
     $source->exec("INSERT INTO projects (id, public_id, workspace_id, owner_user_id, name, slug, status, created_at, updated_at) VALUES (300, '33333333-3333-4333-8333-333333333333', 200, 100, 'Recovered project', 'recovered-project', 'active', '$now', '$now')");
     $source->exec("INSERT INTO project_members (project_id, user_id, role, status, created_at, updated_at) VALUES (300, 100, 'owner', 'active', '$now', '$now')");
@@ -119,6 +121,9 @@ try {
         if (!mkdir($path, 0700, true) && !is_dir($path)) { throw new RuntimeException('Could not create private backup acceptance directory.'); }
         chmod($path, 0700);
     }
+    $avatarBytes = "\x89PNG\x0d\x0a\x1a\x0a" . str_repeat('asset-fidelity', 32);
+    file_put_contents($temporaryRoot . '/assets/' . $avatarName, $avatarBytes);
+    chmod($temporaryRoot . '/assets/' . $avatarName, 0600);
     $backupPath = $temporaryRoot . '/backups/roundtrip.syndicatum-backup';
     $key = random_bytes(32);
     $portableSecrets = ['PBB_AGENTCHAT_SECRET' => str_repeat('h', 32), 'SYNDICATUM_MASTER_KEY' => str_repeat('m', 32)];
@@ -146,12 +151,21 @@ try {
         ->restore($backupPath, $key, $portableSecrets);
     $assetStage = $restored['asset_stage_path'];
     mysql84BackupAssert($restored['cutover_performed'] === false, 'Staged restore performed an automatic cutover.');
+    $restoredAvatar = $assetStage . '/' . $avatarName;
+    mysql84BackupAssert(is_file($restoredAvatar) && hash_file('sha256', $restoredAvatar) === hash('sha256', $avatarBytes), 'Persistent avatar asset did not round-trip exactly.');
     foreach (['users' => 1, 'workspaces' => 1, 'projects' => 1, 'oauth_clients' => 1, 'system_settings' => 1, 'user_system_roles' => 1] as $table => $count) {
         mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() === $count, 'Durable table did not round-trip: ' . $table);
     }
-    foreach (['syndicatum_sessions', 'oauth_access_tokens', 'mcp_service_tokens', 'connector_devices',
-              'connector_device_activation_routes', 'message_events_outbox', 'agent_webhook_deliveries',
-              'responses_api_deliveries', 'workspace_agent_trigger_deliveries'] as $table) {
+    $resetTables = [];
+    $excludedTables = [];
+    foreach ($baselineArray['tables'] as $tablePolicy) {
+        if ($tablePolicy['backup_policy'] === 'reset') { $resetTables[] = $tablePolicy['name']; }
+        if ($tablePolicy['backup_policy'] === 'excluded') { $excludedTables[] = $tablePolicy['name']; }
+    }
+    sort($resetTables, SORT_STRING);
+    sort($excludedTables, SORT_STRING);
+    mysql84BackupAssert(count($resetTables) === 17 && count($excludedTables) === 3, 'Closed table-policy counts changed unexpectedly.');
+    foreach ($resetTables as $table) {
         mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() === 0, 'Reset table was revived: ' . $table);
     }
     $mcpTokens = new McpServiceTokenService($target);
@@ -174,9 +188,19 @@ try {
         'envelope_sha256' => $produced['envelope_sha256'],
         'archive_sha256' => $produced['archive_sha256'],
         'manifest_sha256' => $produced['manifest_sha256'],
+        'content_tree_sha256' => $produced['content_tree_sha256'],
+        'durable_row_counts' => $produced['row_counts'],
+        'persistent_asset_count' => $produced['asset_count'],
+        'persistent_asset_sha256' => hash('sha256', $avatarBytes),
         'durable_fidelity' => true,
-        'reset_tables_revived' => false,
-        'excluded_target_identity_preserved' => true,
+        'reset_tables' => $resetTables,
+        'all_reset_tables_empty' => true,
+        'delivery_outbox_replay_possible' => false,
+        'excluded_tables' => $excludedTables,
+        'all_excluded_tables_target_local' => true,
+        'pre_backup_mcp_token_rejected' => true,
+        'replacement_mcp_token_authenticated' => true,
+        'next_users_auto_increment' => $nextUserId,
         'cutover_performed' => false,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $exception) {
