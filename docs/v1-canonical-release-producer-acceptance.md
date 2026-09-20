@@ -1,14 +1,20 @@
 # V1 canonical release producer acceptance contract
 
-Status: implementation in progress. This gate covers only the trusted CI release
-producer. It does not authorize backup production, restore, installation,
-promotion, or real UI actions.
+Status: contract accepted by Commercial Assessor in Syndicatum #3009;
+implementation and exact-artifact acceptance remain in progress. This gate
+covers only the trusted CI release producer. It does not authorize backup
+production, restore, installation, promotion, or real UI actions.
 
 ## Authority boundary
 
 The canonical release producer is CI tooling, not application functionality. It
 must have no web route or runtime service entry point. A running Syndicatum
 instance cannot invoke it or mint an executable release.
+
+Canonical status is publication authority, not secrecy or an assertion that the
+deterministic algorithm cannot be run elsewhere. Reproduced bytes are not an
+authoritative canonical release unless protected CI generated and published
+matching checksum and provenance for the protected source identity.
 
 One declared Linux CI environment produces the canonical bytes. Other jobs may
 consume and verify the artifact but must not publish a competing canonical ZIP
@@ -30,6 +36,11 @@ Production requires all of the following before any output is created:
 
 Failure of any precondition creates no canonical artifact.
 
+Payload bytes are read from immutable Git objects at the accepted commit using
+the exact tree/blob identities, not from mutable checkout paths. The checked-out
+policy and producer entry points must byte-match their blobs at that commit.
+The clean-tree check remains a defense-in-depth release preflight.
+
 ## Deterministic archive
 
 The producer consumes an exact, bytewise-sorted inventory. Every source path,
@@ -37,6 +48,11 @@ package path, role, and normalized mode is declared. Duplicate, case-folded,
 ancestor, or unmapped paths fail closed. A missing declared file, an unexpected
 tracked production candidate, a symlink, a non-regular file, or a source file
 whose digest changes during production aborts the build.
+
+The versioned policy defines closed source candidate roots and an explicit
+ship-or-exclude disposition for every tracked path in those roots. Therefore a
+new endpoint, runtime file, plugin, skill, schema file, or notice cannot silently
+evade review merely because it was not added to the shipping inventory.
 
 ZIP entry order, timestamps, Unix creator/type bits, modes, compression method,
 compression level, flags, comments, and extra fields are normalized. The
@@ -78,11 +94,21 @@ baseline, and post-baseline migration entries are eligible. Executable content
 is allowed only in the release namespaces and only when explicitly inventoried.
 The package declares `contains_data: false` and contains no live instance data,
 portable secret, recovery metadata, local configuration, avatar, or credential.
+It also declares `contains_persistent_assets: false`; both flags are asserted by
+producer tests even though the frozen reader couples the asset flag to roles only
+for backup packages.
 
 The schema baseline is authoritative for a fresh installation. Historical
 project migrations at or before the baseline cutover are not shipped as the
 fresh-install mechanism. Only separately declared, checksummed post-baseline
 migrations may appear.
+
+Baseline metadata `source_commit` identifies the commit that froze the baseline
+SQL and may predate the release commit. It is not required to self-reference the
+release commit that contains or consumes the metadata. The package manifest and
+provenance independently bind the exact release source commit. Initial V1
+baseline metadata uses cutover=head `202609180004` with no post-baseline
+migrations; later post-baseline identifiers must be unique 12-digit values.
 
 ## Round-trip acceptance
 
