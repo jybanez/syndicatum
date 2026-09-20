@@ -1,0 +1,706 @@
+{
+    "contract_name": "syndicatum-baseline",
+    "format_version": "1.0",
+    "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
+    "application_version": "1.0.0",
+    "schema_head": "202609180004",
+    "migration_cutover": "202609180004",
+    "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
+    "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e",
+    "mysql": {
+        "minimum": "8.4.0",
+        "maximum_exclusive": "9.0.0",
+        "reference_version": "8.4.11",
+        "charset": "utf8mb4",
+        "collation": "utf8mb4_unicode_ci",
+        "sql_modes": [
+            "ERROR_FOR_DIVISION_BY_ZERO",
+            "NO_ENGINE_SUBSTITUTION",
+            "STRICT_TRANS_TABLES"
+        ]
+    },
+    "post_baseline_migrations": [],
+    "tables": [
+        {
+            "name": "account_oauth_attempts",
+            "backup_policy": "durable",
+            "restore_order": 10,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "administrative_audit_events",
+            "backup_policy": "durable",
+            "restore_order": 130,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "agent_activation_bindings",
+            "backup_policy": "durable",
+            "restore_order": 330,
+            "identity_columns": [
+                "agent_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "agent_credential_scopes",
+            "backup_policy": "durable",
+            "restore_order": 140,
+            "identity_columns": [
+                "agent_id",
+                "scope"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "agent_notification_webhooks",
+            "backup_policy": "durable",
+            "restore_order": 340,
+            "identity_columns": [
+                "agent_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "agent_webhook_deliveries",
+            "backup_policy": "durable",
+            "restore_order": 410,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "agents",
+            "backup_policy": "durable",
+            "restore_order": 20,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "chat_agents",
+            "backup_policy": "durable",
+            "restore_order": 30,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "chat_entries",
+            "backup_policy": "durable",
+            "restore_order": 150,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "chat_entry_recipients",
+            "backup_policy": "durable",
+            "restore_order": 240,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "chat_entry_revisions",
+            "backup_policy": "durable",
+            "restore_order": 250,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "chat_topics",
+            "backup_policy": "durable",
+            "restore_order": 160,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "chat_write_audit",
+            "backup_policy": "durable",
+            "restore_order": 170,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "connector_device_activation_routes",
+            "backup_policy": "durable",
+            "restore_order": 350,
+            "identity_columns": [
+                "device_id",
+                "agent_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "connector_device_authorizations",
+            "backup_policy": "durable",
+            "restore_order": 180,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "connector_devices",
+            "backup_policy": "durable",
+            "restore_order": 190,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "connector_discussion_binding_intents",
+            "backup_policy": "durable",
+            "restore_order": 360,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "delivery_worker_heartbeats",
+            "backup_policy": "durable",
+            "restore_order": 40,
+            "identity_columns": [
+                "worker_name"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "google_oauth_attempts",
+            "backup_policy": "durable",
+            "restore_order": 50,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "legacy_api_usage_daily",
+            "backup_policy": "durable",
+            "restore_order": 60,
+            "identity_columns": [
+                "usage_date",
+                "endpoint",
+                "method"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "mcp_service_tokens",
+            "backup_policy": "durable",
+            "restore_order": 370,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "message_addressees",
+            "backup_policy": "durable",
+            "restore_order": 420,
+            "identity_columns": [
+                "message_id",
+                "participant_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "message_events_outbox",
+            "backup_policy": "durable",
+            "restore_order": 430,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "message_revisions",
+            "backup_policy": "durable",
+            "restore_order": 440,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "messages",
+            "backup_policy": "durable",
+            "restore_order": 400,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "oauth_access_tokens",
+            "backup_policy": "durable",
+            "restore_order": 270,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "oauth_authorization_codes",
+            "backup_policy": "durable",
+            "restore_order": 280,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "oauth_clients",
+            "backup_policy": "durable",
+            "restore_order": 70,
+            "identity_columns": [
+                "client_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "oauth_refresh_tokens",
+            "backup_policy": "durable",
+            "restore_order": 380,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "pinned_messages",
+            "backup_policy": "durable",
+            "restore_order": 450,
+            "identity_columns": [
+                "project_id",
+                "message_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_agents",
+            "backup_policy": "durable",
+            "restore_order": 290,
+            "identity_columns": [
+                "project_id",
+                "agent_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_invitations",
+            "backup_policy": "durable",
+            "restore_order": 300,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_members",
+            "backup_policy": "durable",
+            "restore_order": 310,
+            "identity_columns": [
+                "project_id",
+                "user_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_message_sequences",
+            "backup_policy": "durable",
+            "restore_order": 320,
+            "identity_columns": [
+                "project_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_participants",
+            "backup_policy": "durable",
+            "restore_order": 390,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "projects",
+            "backup_policy": "durable",
+            "restore_order": 260,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "responses_api_deliveries",
+            "backup_policy": "durable",
+            "restore_order": 460,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "responsibility_events",
+            "backup_policy": "durable",
+            "restore_order": 470,
+            "identity_columns": [
+                "event_message_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "security_rate_limits",
+            "backup_policy": "durable",
+            "restore_order": 80,
+            "identity_columns": [
+                "bucket_key"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "syndicatum_installation_identity",
+            "backup_policy": "durable",
+            "restore_order": 90,
+            "identity_columns": [
+                "singleton_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "syndicatum_schema_migrations",
+            "backup_policy": "durable",
+            "restore_order": 100,
+            "identity_columns": [
+                "version"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "syndicatum_sessions",
+            "backup_policy": "durable",
+            "restore_order": 200,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "system_roles",
+            "backup_policy": "durable",
+            "restore_order": 110,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "system_settings",
+            "backup_policy": "durable",
+            "restore_order": 210,
+            "identity_columns": [
+                "setting_key"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "user_system_roles",
+            "backup_policy": "durable",
+            "restore_order": 220,
+            "identity_columns": [
+                "user_id",
+                "role_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "users",
+            "backup_policy": "durable",
+            "restore_order": 120,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "workspace_agent_trigger_deliveries",
+            "backup_policy": "durable",
+            "restore_order": 480,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "workspaces",
+            "backup_policy": "durable",
+            "restore_order": 230,
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        }
+    ]
+}

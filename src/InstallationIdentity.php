@@ -11,9 +11,20 @@ class InstallationIdentity
 
     public static function fromArray(array $values)
     {
+        $allowed = [
+            'application_version', 'schema_baseline', 'schema_head', 'baseline_source_commit',
+            'release_source_commit', 'package_sha256', 'package_format_version',
+            'installation_id', 'installed_at', 'last_upgrade_id', 'last_upgrade_from_version',
+            'last_upgrade_to_version', 'last_upgraded_at',
+        ];
+        foreach ($values as $field => $_value) {
+            if (!is_string($field) || !in_array($field, $allowed, true)) {
+                throw new InvalidArgumentException('Installation identity contains an unsupported field: ' . (string) $field);
+            }
+        }
         foreach ([
-            'application_version', 'schema_baseline', 'schema_head', 'package_format_version',
-            'installation_id', 'installed_at',
+            'application_version', 'schema_baseline', 'schema_head', 'baseline_source_commit',
+            'release_source_commit', 'package_format_version', 'installation_id', 'installed_at',
         ] as $field) {
             if (!isset($values[$field]) || !is_string($values[$field]) || trim($values[$field]) === '') {
                 throw new InvalidArgumentException($field . ' is required.');
@@ -21,6 +32,11 @@ class InstallationIdentity
         }
         if (!isset($values['package_sha256']) || !is_string($values['package_sha256']) || !preg_match('/\A[a-f0-9]{64}\z/i', $values['package_sha256'])) {
             throw new InvalidArgumentException('package_sha256 must be a SHA-256 digest.');
+        }
+        foreach (['baseline_source_commit', 'release_source_commit'] as $field) {
+            if (!preg_match('/\A[a-f0-9]{40}\z/i', $values[$field])) {
+                throw new InvalidArgumentException($field . ' must be a full 40-character Git commit.');
+            }
         }
         if (!preg_match('/\A1\.\d+(?:\.\d+)?\z/', $values['package_format_version'])) {
             throw new InvalidArgumentException('package_format_version is not supported.');

@@ -287,6 +287,8 @@ $identity = InstallationIdentity::fromArray([
     'application_version' => '1.0.0',
     'schema_baseline' => 'syndicatum-mysql84-1.0.0-baseline.1',
     'schema_head' => '202609200001',
+    'baseline_source_commit' => str_repeat('a', 40),
+    'release_source_commit' => str_repeat('b', 40),
     'package_sha256' => str_repeat('e', 64),
     'package_format_version' => '1.0',
     'installation_id' => '550e8400-e29b-41d4-a716-446655440000',
@@ -306,6 +308,7 @@ InstallationIdentity::fromArray($upgradedIdentity);
 packageContractThrows(function () {
     InstallationIdentity::fromArray([
         'application_version' => '1.0.0', 'schema_baseline' => 'baseline', 'schema_head' => 'head',
+        'baseline_source_commit' => str_repeat('a', 40), 'release_source_commit' => str_repeat('b', 40),
         'package_sha256' => str_repeat('e', 64), 'package_format_version' => '1.0',
         'installation_id' => 'not-a-uuid', 'installed_at' => '2026-09-20T00:00:00Z',
     ]);
@@ -326,9 +329,20 @@ packageContractThrows(function () use ($upgradedIdentity) {
     InstallationIdentity::fromArray($upgradedIdentity);
 }, 'Upgrade identifiers must be typed non-empty strings.');
 
+packageContractThrows(function () use ($upgradedIdentity) {
+    unset($upgradedIdentity['baseline_source_commit']);
+    InstallationIdentity::fromArray($upgradedIdentity);
+}, 'Baseline source commit must remain distinct and required.');
+
+packageContractThrows(function () use ($upgradedIdentity) {
+    $upgradedIdentity['untrusted_extra_identity'] = 'value';
+    InstallationIdentity::fromArray($upgradedIdentity);
+}, 'Installation identity must reject undeclared fields.');
+
 packageContractThrows(function () {
     InstallationIdentity::fromArray([
         'application_version' => '1.0.0', 'schema_baseline' => 'baseline', 'schema_head' => 'head',
+        'baseline_source_commit' => str_repeat('a', 40), 'release_source_commit' => str_repeat('b', 40),
         'package_sha256' => str_repeat('e', 64), 'package_format_version' => '2.0',
         'installation_id' => '550e8400-e29b-41d4-a716-446655440000', 'installed_at' => '2026-09-20T00:00:00Z',
     ]);
@@ -507,6 +521,34 @@ $noPostCutover['post_baseline_migrations'] = [];
 $noPostCutover['schema_head'] = $noPostCutover['migration_cutover'];
 if (BaselineMetadata::fromArray($noPostCutover)->toArray()['schema_head'] !== $noPostCutover['migration_cutover']) {
     packageContractFail('A baseline with no post-cutover migrations must allow head equal to cutover.');
+}
+
+$baselineRoot = dirname(__DIR__) . '/schema/mysql84';
+$baselineSchema = file_get_contents($baselineRoot . '/schema.sql');
+$baselineMetadataArray = json_decode(file_get_contents($baselineRoot . '/baseline.json'), true);
+if (!is_string($baselineSchema) || !is_array($baselineMetadataArray)) {
+    packageContractFail('Committed MySQL 8.4 baseline artifacts are missing or invalid.');
+}
+$committedBaseline = BaselineMetadata::fromArray($baselineMetadataArray);
+if (!hash_equals($baselineMetadataArray['schema_sha256'], hash('sha256', $baselineSchema))) {
+    packageContractFail('Committed baseline SQL digest does not match baseline metadata.');
+}
+preg_match_all('/^CREATE TABLE `([a-z0-9_]+)`/m', $baselineSchema, $baselineTableMatches);
+$baselineTableNames = $baselineTableMatches[1];
+sort($baselineTableNames, SORT_STRING);
+$committedBaseline->assertBaselineTables($baselineTableNames);
+if (count($baselineTableNames) !== 48 || substr_count($baselineSchema, 'CREATE TRIGGER') !== 3) {
+    packageContractFail('Committed baseline must contain the reviewed 48 tables and three triggers.');
+}
+if (stripos($baselineSchema, 'DROP TABLE') !== false
+    || preg_match('/INSERT\s+INTO\s+`?syndicatum_schema_migrations`?/i', $baselineSchema)
+    || stripos($baselineSchema, 'DEFINER=') !== false) {
+    packageContractFail('Committed baseline contains destructive, fabricated-history, or environment-bound SQL.');
+}
+if ($baselineMetadataArray['source_commit'] !== '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d'
+    || $baselineMetadataArray['migration_cutover'] !== '202609180004'
+    || $baselineMetadataArray['post_baseline_migrations'] !== []) {
+    packageContractFail('Committed baseline provenance or cutover identity changed unexpectedly.');
 }
 
 echo 'Package manifest, compatibility, baseline, and installation identity contract assertions passed' . PHP_EOL;

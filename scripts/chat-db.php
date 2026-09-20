@@ -5,11 +5,46 @@ require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/SchemaMigrator.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/ExpansionMigrator.php';
+require_once dirname(__DIR__) . '/src/BaselineInstaller.php';
 
 $command = isset($argv[1]) ? $argv[1] : 'help';
 
 try {
     $repository = new ChatRepository(Db::pdo());
+
+    if ($command === 'baseline-install') {
+        $packageSha256 = getenv('SYNDICATUM_PACKAGE_SHA256');
+        $releaseSourceCommit = getenv('SYNDICATUM_RELEASE_SOURCE_COMMIT');
+        if ($packageSha256 === false || $releaseSourceCommit === false) {
+            throw new RuntimeException('SYNDICATUM_PACKAGE_SHA256 and SYNDICATUM_RELEASE_SOURCE_COMMIT are required.');
+        }
+        $installationId = getenv('SYNDICATUM_INSTALLATION_ID');
+        if ($installationId === false || trim($installationId) === '') {
+            $installationId = Db::uuidV4();
+        }
+        $installedAt = getenv('SYNDICATUM_INSTALLED_AT');
+        if ($installedAt === false || trim($installedAt) === '') {
+            $installedAt = gmdate('Y-m-d\TH:i:s\Z');
+        }
+        $root = dirname(__DIR__);
+        $installer = new BaselineInstaller(
+            Db::pdo(),
+            $root . '/schema/mysql84/schema.sql',
+            $root . '/schema/mysql84/baseline.json'
+        );
+        echo json_encode($installer->install([
+            'application_version' => '1.0.0',
+            'schema_baseline' => 'syndicatum-mysql84-1.0.0-baseline.1',
+            'schema_head' => '202609180004',
+            'baseline_source_commit' => '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d',
+            'release_source_commit' => $releaseSourceCommit,
+            'package_sha256' => $packageSha256,
+            'package_format_version' => '1.0',
+            'installation_id' => $installationId,
+            'installed_at' => $installedAt,
+        ]), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        exit(0);
+    }
 
     if ($command === 'install-schema') {
         $repository->installSchema();
@@ -114,6 +149,7 @@ try {
     }
 
     echo "Usage:\n";
+    echo "  SYNDICATUM_PACKAGE_SHA256=... SYNDICATUM_RELEASE_SOURCE_COMMIT=... php scripts/chat-db.php baseline-install\n";
     echo "  php scripts/chat-db.php install-schema\n";
     echo "  php scripts/chat-db.php migrate\n";
     echo "  php scripts/chat-db.php migration-status\n";
