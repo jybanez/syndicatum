@@ -1,7 +1,10 @@
 # V1 controlled-extraction contract
 
-Status: candidate implementation following the accepted validate-only reader.
-Package producers, installation, restore, SQL, and cutover remain deferred.
+Status: accepted at implementation commit
+`4ba1cae41b023698016845efd791e3928c41e09d` after independent verification in
+Syndicatum #3004 and formal closure in #3005. Package installation, restore,
+SQL, and cutover remain deferred. Producer work may proceed only in the ordered,
+separately reviewed slices authorized by #3005.
 
 ## Explicit operation boundary
 
@@ -35,6 +38,15 @@ sticky bit supplies the POSIX rename boundary. This admits the conventional
 root-owned sticky `/tmp` test parent and the intended root-owned Docker chain,
 while rejecting a writable non-sticky parent that lets another UID rename the
 private leaf and replace it with a symlink.
+
+The independent reproduction was a preflight/filesystem probe, not an
+end-to-end extraction exploit. Against the old `b2cf3f3` code, an explicitly
+verified UID 65534 could rename a UID 33-owned `0700` leaf within its writable
+non-sticky parent and replace the old pathname with a symlink into the public
+tree. The corrected `4ba1cae` preflight rejects that ancestor chain before
+snapshot or stage creation. This wording supersedes the original cross-parent
+description in Syndicatum #2998, whose first harness did not verify each UID
+transition.
 
 Docker provides `/var/lib/syndicatum/staging`, owned by `www-data` with mode
 `0700`; the web root remains `/var/www/html`. Archive snapshots for extraction
@@ -94,5 +106,8 @@ The archive contract suite proves:
 
 Ubuntu CI exercises successful POSIX extraction. Windows/PHP 7.4 CI exercises
 the explicit fail-closed platform boundary. The production Docker image installs
-the ZIP extension and creates the private staging root. No package producer or
-application route invokes extraction yet.
+the ZIP extension and creates the private staging root. Exact-head run
+`35471353005` passed all seven required jobs at `4ba1cae`; Helper independently
+confirmed the unsafe-chain rejection, the trusted
+`/var/lib/syndicatum/staging` positive control, and the root-owned sticky `/tmp`
+positive control. No application route invokes extraction yet.
