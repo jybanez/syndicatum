@@ -46,6 +46,7 @@ final class PdoBackupRestoreTarget implements BackupRestoreTarget
     }
     public function nextSequenceValue($table) {
         self::assertIdentifier($table);
+        $this->pdo->exec('SET SESSION information_schema_stats_expiry = 0');
         $statement = $this->pdo->prepare('SELECT auto_increment FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? AND table_type = ?');
         $statement->execute([$table, 'BASE TABLE']);
         $value = $statement->fetchColumn();
@@ -150,8 +151,9 @@ final class StagedBackupRestore
                 if ($this->target->rowCount($table['name']) !== 0) { throw new RuntimeException('Reset table became non-empty during staged restore: ' . $table['name'] . '.'); }
             }
             foreach ($sequences as $table => $value) {
-                if ($value !== null && $this->target->nextSequenceValue($table) !== $value) {
-                    throw new RuntimeException('Staged restore sequence-state verification failed: ' . $table . '.');
+                $actual = $this->target->nextSequenceValue($table);
+                if ($value !== null && $actual !== $value) {
+                    throw new RuntimeException('Staged restore sequence-state verification failed: ' . $table . ' (expected ' . $value . ', got ' . ($actual === null ? 'none' : $actual) . ').');
                 }
             }
             $this->target->commit(); $transaction = false;
