@@ -176,10 +176,36 @@ Checked-in tests must prove failure for:
 - reader rejection, controlled-extraction rejection, or extracted-tree mismatch;
 - fresh install that attempts historical migration replay.
 
-## Independent closure
+## Gate authority and implementation evidence
 
-Helper must independently review this contract and inspect at least one exact
-produced ZIP, sidecar set, deterministic rebuild, frozen-reader validation,
-controlled extraction, and baseline-only empty-database installation. Commercial
-Assessor closes the slice only after exact-head CI and that independent evidence
-are recorded. Until then, the release producer remains **IN PROGRESS**.
+Under the role clarification recorded in Syndicatum message 3035, Commercial
+Assessor owns the backend/package/security gate decision. Helper is not a
+standing backend approver and is involved only for a specifically requested
+technical review or a visible UI/UX contract.
+
+The implementation candidate is recorded at branch head
+`34d9f7781e447d2d7d3d4bb24f2a35ef26a9732b`. PR run
+[35496204277](https://github.com/jybanez/syndicatum/actions/runs/35496204277)
+passed all nine jobs, including the new `canonical-release-candidate` job. The
+PR job used merge candidate `ef55500b3a6e47ebc8562d9b20e3d80f70b9b6ef`
+and produced the same ZIP twice with these exact facts:
+
+- ZIP SHA-256: `c88ea6865d8526f6674945a6d1b99908af92f721effb940f806190ffbaf97565`;
+- manifest SHA-256: `5c6a636d24b92a6b76a1cdb170a1944fffbb5f893ef61d871cd10738391a7f11`;
+- content-tree SHA-256: `12b14af23f5a55fd6c63e86cca8f190ca71bdd0bd101f1d43a06ec89402e4d46`;
+- 256 exact package files from 285 explicit ship/exclude dispositions;
+- nine producer failure/normalization tests passed;
+- the frozen reader and controlled POSIX extractor accepted the exact ZIP and
+  reproduced the manifest inventory.
+
+The same deterministic ZIP bytes were locally passed through the frozen reader,
+materialized from verified package namespaces, and installed into empty pinned
+MySQL 8.4.11. Acceptance recorded 48 tables, the exact package/release/baseline
+identity, zero historical migration rows, healthy application/worker/MCP paths,
+and successful backup/restore.
+
+The annotated-tag production path is wired as the sole canonical emitter, and
+publication consumes rather than rebuilds its artifact. It has not yet executed
+from a new protected-main tag, so this record is **IMPLEMENTATION CANDIDATE
+COMPLETE / PRODUCTION TAG EVIDENCE OPEN** pending Commercial Assessor review,
+merge, and the authorized tag run.

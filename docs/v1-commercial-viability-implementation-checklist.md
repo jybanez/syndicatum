@@ -318,6 +318,19 @@ required release path must test at least one database mode/configuration
 representative of the supported production deployment, including strict SQL
 behavior; permissive local defaults alone are insufficient.
 
+The canonical V1 producer implementation candidate is now at
+`34d9f7781e447d2d7d3d4bb24f2a35ef26a9732b`. PR run
+[35496204277](https://github.com/jybanez/syndicatum/actions/runs/35496204277)
+passed all nine jobs. Its merge candidate rebuilt the 256-file release ZIP
+byte-identically, passed the frozen reader and controlled POSIX extractor, and
+recorded ZIP SHA-256
+`c88ea6865d8526f6674945a6d1b99908af92f721effb940f806190ffbaf97565`.
+The same ZIP bytes passed local empty-MySQL-8.4 installation with 48 tables,
+exact package/source/baseline identity, zero historical migration rows, health,
+worker/MCP, and backup/restore acceptance. The protected annotated-tag producer
+and publication-consumer path is implemented but has not yet executed for a new
+tag; therefore production canonical-artifact evidence remains open.
+
 - [x] Select `AGPL-3.0-only`, publish the canonical license text, and document
       the open-core boundary. Legal review and the third-party license inventory
       remain release-gate work.
@@ -409,6 +422,11 @@ behavior; permissive local defaults alone are insufficient.
       produce a passing checksummed evidence bundle and complete the exact
       archived-candidate lifecycle before Assessor review.
 - [x] Produce immutable release artifacts with checksums for RC1.
+- [ ] Execute the canonical V1 ZIP/manifest/checksum/provenance producer from a
+      new annotated protected-main tag and retain the exact published artifact
+      evidence. The implementation candidate and PR-safe deterministic
+      round-trip are green in run 35496204277; only protected tag CI may create
+      the production canonical artifact.
 - [x] Publish release notes and migration notes for RC1.
 - [x] Test clean installation of the `v1.0.0-rc.1` published artifact, not only
       from a working tree. For later releases, test upgrade from the immediately
