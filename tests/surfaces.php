@@ -261,6 +261,14 @@ try {
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
 
+    $suite->test('Apache denies repository internals and generated output', function () use ($suite, $root) {
+        $rewrites = file_get_contents($root . '/.htaccess');
+        $suite->true(
+            strpos($rewrites, 'RewriteRule ^(?:\\.git|output)(?:/|$) - [F,L,NC]') !== false,
+            'The application vhost must deny .git and generated output before the existing-file bypass.'
+        );
+    });
+
     $suite->test('public legal pages describe hosted privacy, Google sign-in, and service terms', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');
