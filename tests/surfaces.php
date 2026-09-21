@@ -269,8 +269,8 @@ try {
         $rewrites = file_get_contents($root . '/.htaccess');
         $suite->true(strpos($index, 'href="privacy"') !== false && strpos($index, 'href="terms"') !== false, 'The application surface must link both public legal pages.');
         $suite->true(strpos($source, 'menuGroups: [') !== false, 'The authenticated account menu must group account, legal, and session actions.');
-        $suite->true(strpos($source, '{ id: "privacy", label: "Privacy Policy" }') !== false && strpos($source, '{ id: "terms", label: "Terms of Service" }') !== false, 'The authenticated account menu must expose both legal pages.');
-        $suite->true(strpos($source, 'items: [{ id: "signout", label: "Logout", danger: true }]') !== false, 'Logout must follow the legal action group.');
+        $suite->true(strpos($source, 'id: "privacy", label: "Privacy Policy"') !== false && strpos($source, 'id: "terms", label: "Terms of Service"') !== false, 'The authenticated account menu must expose both legal pages.');
+        $suite->true(strpos($source, 'id: "signout", label: "Logout"') !== false, 'Logout must follow the legal action group.');
         $suite->true(strpos($source, 'el.public_policy_links.hidden = state.mode === "expanded";') !== false, 'Bottom legal links must be hidden after sign-in.');
         $suite->true(strpos($source, 'name: "public_origin"') !== false && strpos($source, '"general.public_origin": values.public_origin') !== false, 'System Settings must expose the canonical public Syndicatum origin.');
         $suite->true(strpos($privacy, "\$legalPageTitle = 'Privacy Policy';") !== false, 'The public privacy page is missing.');
@@ -310,9 +310,9 @@ try {
         $suite->true(strpos($source, 'entry.reason || "").toLowerCase() === "broadcast"') !== false, 'Broadcast detection must use addressee reason metadata.');
         $suite->true(strpos($source, 'message.addressees.length === 0') !== false, 'Historical unaddressed messages must render as project broadcasts.');
         $suite->true(strpos($source, 'chip.textContent = "Project timeline";') === false, 'Unaddressed messages must not render as a separate timeline addressing mode.');
-        $suite->true(strpos($source, 'chip.textContent = "Project broadcast";') !== false, 'Broadcasts must collapse participant chips into one broadcast label.');
-        $suite->true(strpos($source, 'identity.append(identityLine, renderAddresseeChips(current));') !== false, 'Message addressee chips must render under the sender identity.');
-        $suite->true(strpos($source, 'footer.appendChild(chips);') === false, 'Message addressee chips must not render in the footer action row.');
+        $suite->true(strpos($source, 'if (isBroadcastMessage(message)) return "Project broadcast";') !== false, 'The live Helper timeline must label broadcasts once.');
+        $suite->true(strpos($source, 'subtitle: messageAddresseesLabel(message)') !== false, 'The live Helper timeline must render addressee or broadcast context under the sender.');
+        $suite->true(strpos($source, 'footer.appendChild(chips);') === false, 'Addressing must not render in the footer action row.');
         $suite->true(strpos($index, 'Everyone active in this project will be notified.') !== false, 'Composer broadcast warning must not describe broadcasts as response tagging.');
     });
 
@@ -342,7 +342,7 @@ try {
         $suite->true(strpos($source, 'state.components.filterPopover = state.factories.createPopover') !== false, 'Timeline filters must mount through the Helper popover.');
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
         $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
-        $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.174";') !== false, 'The vendored Helper bundle must include the approved agent-icon release.');
+        $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.185";') !== false, 'The integrated Helper bundle must retain the current live revision.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -456,7 +456,7 @@ try {
     });
 
     $suite->test('Real avatars replace the colored initials fallback', function () use ($suite, $root) {
-        $source = file_get_contents($root . '/assets/app.mjs');
+        $source = str_replace("\r\n", "\n", file_get_contents($root . '/assets/app.mjs'));
         $styles = file_get_contents($root . '/assets/app.css');
         $avatarStart = strpos($source, 'function makeAvatar(');
         $avatarEnd = strpos($source, "\n}\n", $avatarStart);
@@ -509,8 +509,11 @@ try {
         $suite->true(strpos($source, "'diagnose_connection' => 'projects:read'") !== false, 'The diagnostic must require only project read access.');
         $suite->true(strpos($source, "'mcp_request_received' => true") !== false, 'The diagnostic must confirm that the server received the MCP call.');
         $suite->true(strpos($source, "'authentication_valid' => true") !== false, 'The diagnostic must report successful authentication.');
-        $suite->true(strpos($source, "'project_access_valid' => \$bindingContext !== null") !== false, 'Project authorization must be reported only for a successful discussion binding.');
-        $suite->true(strpos($source, "'discussion_binding' => \$bindingContext ? 'Successful' : 'Required'") !== false, 'The diagnostic must distinguish Successful from Required discussion binding.');
+        $suite->true(strpos($source, '$contextAuthorized = $bindingContext !== null || $serviceTokenAccess;') !== false, 'Project authorization must require a confirmed binding or authenticated service-token context.');
+        $suite->true(strpos($source, "'project_access_valid' => \$contextAuthorized") !== false, 'The diagnostic must report only established project authorization.');
+        $suite->true(strpos($source, "'discussion_binding' => \$serviceTokenAccess ? 'Not required'") !== false
+            && strpos($source, "\$bindingContext ? (\$contextType === 'interactive' ? 'Not changed' : 'Successful') : 'Required'") !== false,
+            'The diagnostic must distinguish service-token, interactive, successful, and required binding states.');
         $suite->true(strpos($source, "'prepare_discussion_binding'") !== false, 'The MCP binding preparation tool is missing.');
         $suite->true(strpos($source, "'readOnlyHint' => true") !== false, 'Read tools must retain their read-only annotation.');
         $suite->true(strpos($docs, '@Syndicatum diagnose connection') !== false, 'The user-facing diagnostic prompt must be documented.');

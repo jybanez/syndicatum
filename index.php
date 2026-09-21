@@ -17,117 +17,109 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
     <link rel="apple-touch-icon" href="assets/brand/web/apple-touch-icon-180x180.png?v=20260907115852" sizes="180x180">
     <link rel="mask-icon" href="assets/brand/web/safari-pinned-tab.svg?v=20260907115852" color="#2563EB">
     <link rel="manifest" href="manifest.webmanifest?v=20260907115852">
-    <link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css" data-ui-bundle="ui">
+    <link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css')); ?>" data-ui-bundle="ui">
     <link rel="stylesheet" href="assets/app.css?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/assets/app.css')); ?>">
 </head>
 <body>
     <div class="app-shell" id="app-shell" hidden>
         <header class="surface-chrome"><div class="helper-nav-host" id="navbar-host"></div></header>
-        <nav class="mobile-panel-switcher" id="mobile-panel-switcher" aria-label="Surface panels">
-            <button type="button" class="ui-button ui-button-quiet is-active" data-panel-button="left">Profile</button>
-            <button type="button" class="ui-button ui-button-quiet" data-panel-button="right">Projects</button>
-        </nav>
-
         <main class="surface-host">
-            <section class="two-column-surface workspace-surface" id="workspace-surface" hidden>
-                <aside class="surface-column workspace-profile-column is-mobile-active" data-panel="left">
-                    <section class="identity-card ui-panel">
-                        <div id="workspace-profile-avatar"></div>
-                        <div><p class="ui-eyebrow">Human profile</p><h1 id="workspace-profile-name">Syndicatum user</h1></div>
-                        <dl class="profile-details" id="workspace-profile-details"></dl>
-                        <div class="surface-actions">
-                            <button class="ui-button ui-button-primary" id="edit-profile-button" type="button">Edit Profile</button>
-                            <button class="ui-button ui-button-quiet" id="change-password-button" type="button">Change Password</button>
+            <section class="unified-workspace-surface" id="workspace-surface" hidden>
+                <div class="workspace-splitter-host" id="workspace-splitter-host">
+                    <aside class="surface-column project-navigation-column is-mobile-active" id="project-navigation-column" data-panel="projects">
+                        <div class="column-filter-row project-filter-row">
+                            <div id="project-search-mount" class="project-search"></div>
+                            <button type="button" class="ui-button ui-button-ghost column-action-trigger" id="project-list-actions-trigger" aria-label="Project list actions" title="Project actions">
+                                <span class="timeline-action-icon" id="project-list-actions-icon" aria-hidden="true"></span>
+                            </button>
                         </div>
-                    </section>
-                    <section class="workspace-card ui-panel">
-                        <p class="ui-eyebrow">Personal workspace</p>
-                        <h2 id="workspace-name">My workspace</h2>
-                        <p>Projects you own live here. Collaboration and communication happen inside each project.</p>
-                        <button class="ui-button ui-button-borderless" id="rename-workspace-button" type="button">Rename workspace</button>
-                    </section>
-                </aside>
-                <section class="surface-column workspace-projects-column" data-panel="right">
-                    <header class="surface-heading">
-                        <div><p class="ui-eyebrow">Workspace</p><h1>Projects <span class="ui-badge" id="workspace-project-count">0</span></h1></div>
-                        <button class="ui-button ui-button-primary" id="add-project-button" type="button" hidden>Add Project</button>
-                    </header>
-                    <div id="project-search-mount" class="project-search"></div>
-                    <div class="project-list" id="workspace-project-list"></div>
-                </section>
-            </section>
+                        <div class="project-list column-scroll-region" id="workspace-project-list"></div>
+                    </aside>
 
-            <section class="two-column-surface project-surface" id="project-surface" hidden>
-                <aside class="surface-column project-participants-column" data-panel="left">
-                    <section class="participant-section">
-                        <div class="surface-heading compact"><div><p class="ui-eyebrow">Participants</p><h2>People and agents <span class="ui-badge" id="participant-count">0</span></h2></div></div>
-                        <input class="ui-input" id="participant-search" type="search" placeholder="Search participants" aria-label="Search participants">
-                        <div class="participant-list" id="participant-list"></div>
-                    </section>
-                </aside>
-
-                <section class="surface-column project-messages-column" data-panel="right">
-                    <header class="project-overview timeline-project-overview">
-                        <div class="project-overview-heading">
-                            <h1 id="project-title">Project</h1>
-                            <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
-                                <span class="timeline-action-icon" id="project-actions-icon" aria-hidden="true"></span>
-                            </button>
-                        </div>
-                        <p class="project-description" id="project-description"></p>
-                        <div class="project-instructions" id="project-instructions" hidden></div>
-                        <span class="app-visually-hidden" id="status-badge" aria-live="polite">Loading</span>
-                        <span class="app-visually-hidden" id="timeline-count" aria-live="polite">0 messages</span>
-                        <span class="app-visually-hidden" id="connection-label">HTTP</span>
-                        <div class="project-view-switch" id="project-view-switch" role="group" aria-label="Project view" hidden>
-                            <button type="button" class="ui-button ui-button-ghost is-active" id="show-timeline" aria-pressed="true">Timeline</button>
-                            <button type="button" class="ui-button ui-button-ghost" id="show-responsibility" aria-pressed="false">Responsibility Inbox</button>
-                        </div>
-                    </header>
-                    <section class="composer-shell" id="composer-shell" hidden aria-label="Compose message">
-                        <div class="reply-context" id="reply-context" hidden></div>
-                        <div class="addressing-row" id="addressing-row">
-                            <div id="address-mode"></div><div id="addressee-select" class="addressee-select"></div>
-                            <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be notified.</p>
-                        </div>
-                        <div id="composer-host"></div>
-                    </section>
-                    <section class="filter-bar" id="timeline-filter-bar" aria-label="Timeline filters">
-                        <div id="search-mount" class="app-search"></div>
-                        <div class="filter-bar-actions">
-                            <button type="button" class="ui-button ui-button-ghost timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
-                                <span class="timeline-action-icon" id="filter-icon" aria-hidden="true"></span>
-                                <span class="ui-badge timeline-filter-count" id="filter-count" hidden>0</span>
-                            </button>
-                            <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="refresh-button" aria-label="Refresh timeline" title="Refresh">
-                                <span class="timeline-action-icon" id="refresh-icon" aria-hidden="true"></span>
-                            </button>
-                        </div>
-                        <div class="timeline-filter-panel" id="filter-popover-content" hidden>
-                            <div class="timeline-filter-section">
-                                <span class="timeline-filter-label">Messages</span>
-                                <div id="primary-filter"></div>
-                            </div>
-                            <div class="timeline-filter-section">
-                                <span class="timeline-filter-label">Sender</span>
-                                <div id="sender-filter" class="sender-filter"></div>
-                            </div>
-                            <div class="timeline-filter-section">
-                                <span class="timeline-filter-label">Date range</span>
-                                <div class="timeline-filter-dates">
-                                    <label>From<input class="ui-input date-filter" id="date-from" type="date"></label>
-                                    <label>Through<input class="ui-input date-filter" id="date-to" type="date"></label>
+                    <div class="workspace-inner-splitter-host" id="workspace-inner-splitter-host">
+                        <section class="surface-column project-messages-column" id="project-messages-column" data-panel="timeline">
+                            <header class="project-overview timeline-project-overview">
+                                <div class="project-overview-heading">
+                                    <h1 id="project-title">Select a project</h1>
+                                    <div class="project-overview-actions">
+                                        <button type="button" class="ui-button ui-button-primary timeline-icon-action new-message-trigger" id="new-message-trigger" aria-label="New message" title="New message" hidden>
+                                            <span class="timeline-action-icon" id="new-message-icon" aria-hidden="true"></span>
+                                        </button>
+                                        <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
+                                            <span class="timeline-action-icon" id="project-actions-icon" aria-hidden="true"></span>
+                                        </button>
+                                    </div>
                                 </div>
+                                <div class="project-instructions" id="project-instructions" hidden></div>
+                                <span class="app-visually-hidden" id="status-badge" aria-live="polite">Loading</span>
+                                <span class="app-visually-hidden" id="timeline-count" aria-live="polite">0 messages</span>
+                                <span class="app-visually-hidden" id="connection-label">HTTP</span>
+                                <div class="project-view-switch" id="project-view-switch" role="group" aria-label="Project view" hidden>
+                                    <button type="button" class="ui-button ui-button-ghost is-active" id="show-timeline" aria-pressed="true">Timeline</button>
+                                    <button type="button" class="ui-button ui-button-ghost" id="show-responsibility" aria-pressed="false">Responsibility Inbox</button>
+                                </div>
+                            </header>
+                            <section class="composer-shell" id="composer-shell" hidden aria-label="Compose message">
+                                <div class="reply-context" id="reply-context" hidden></div>
+                                <div class="addressing-row" id="addressing-row">
+                                    <div id="address-mode"></div><div id="addressee-select" class="addressee-select"></div>
+                                    <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be notified.</p>
+                                </div>
+                                <div id="composer-host"></div>
+                            </section>
+                            <section class="filter-bar" id="timeline-filter-bar" aria-label="Timeline filters">
+                                <div id="search-mount" class="app-search"></div>
+                                <div class="filter-bar-actions">
+                                    <button type="button" class="ui-button ui-button-ghost timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
+                                        <span class="timeline-action-icon" id="filter-icon" aria-hidden="true"></span>
+                                        <span class="ui-badge timeline-filter-count" id="filter-count" hidden>0</span>
+                                    </button>
+                                    <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="timeline-collapse-toggle" aria-label="Collapse all messages" title="Collapse all messages">
+                                        <span class="timeline-action-icon" id="timeline-collapse-icon" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="refresh-button" aria-label="Refresh timeline" title="Refresh">
+                                        <span class="timeline-action-icon" id="refresh-icon" aria-hidden="true"></span>
+                                    </button>
+                                </div>
+                                <div class="timeline-filter-panel" id="filter-popover-content" hidden>
+                                    <div class="timeline-filter-section">
+                                        <span class="timeline-filter-label">Messages</span>
+                                        <div id="primary-filter"></div>
+                                    </div>
+                                    <div class="timeline-filter-section">
+                                        <span class="timeline-filter-label">Sender</span>
+                                        <div id="sender-filter" class="sender-filter"></div>
+                                    </div>
+                                    <div class="timeline-filter-section">
+                                        <span class="timeline-filter-label">Date range</span>
+                                        <div class="timeline-filter-dates">
+                                            <label>From<input class="ui-input date-filter" id="date-from" type="date"></label>
+                                            <label>Through<input class="ui-input date-filter" id="date-to" type="date"></label>
+                                        </div>
+                                    </div>
+                                    <div class="timeline-filter-actions">
+                                        <button type="button" class="ui-button ui-button-borderless" id="clear-filters" hidden>Clear filters</button>
+                                    </div>
+                                </div>
+                            </section>
+                            <div class="timeline-notice" id="timeline-notice" hidden></div>
+                            <div class="timeline-scroll" id="timeline-scroll"><div id="timeline-host"></div></div>
+                            <div class="responsibility-scroll" id="responsibility-host" hidden></div>
+                        </section>
+
+                        <aside class="surface-column project-participants-column" id="project-participants-column" data-panel="team">
+                            <div class="column-filter-row team-filter-row">
+                                <input class="ui-input" id="participant-search" type="search" placeholder="Search team" aria-label="Search team participants">
+                                <button type="button" class="ui-button ui-button-ghost column-action-trigger" id="team-actions-trigger" aria-label="Team actions" title="Team actions" hidden>
+                                    <span class="timeline-action-icon" id="team-actions-icon" aria-hidden="true"></span>
+                                </button>
                             </div>
-                            <div class="timeline-filter-actions">
-                                <button type="button" class="ui-button ui-button-borderless" id="clear-filters" hidden>Clear filters</button>
-                            </div>
-                        </div>
-                    </section>
-                    <div class="timeline-notice" id="timeline-notice" hidden></div>
-                    <div class="timeline-scroll" id="timeline-scroll"><div id="timeline-host"></div></div>
-                    <div class="responsibility-scroll" id="responsibility-host" hidden></div>
-                </section>
+                            <section class="participant-section column-scroll-region">
+                                <div class="participant-list" id="participant-list"></div>
+                            </section>
+                        </aside>
+                    </div>
+                </div>
             </section>
 
             <section class="admin-surface" id="admin-surface" hidden>
@@ -137,9 +129,13 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
         </main>
     </div>
     <nav class="public-policy-links" id="public-policy-links" aria-label="Legal information">
+        <a href="support">Support</a>
+        <span aria-hidden="true">&middot;</span>
         <a href="privacy">Privacy Policy</a>
         <span aria-hidden="true">&middot;</span>
         <a href="terms">Terms of Service</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="license">Source &amp; License</a>
     </nav>
     <script type="module" src="assets/app.mjs?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/assets/app.mjs')); ?>"></script>
 </body>

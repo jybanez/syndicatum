@@ -1,4 +1,5 @@
-import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
+import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js?v=0.21.185";
+import { AI_ICONS } from "../vendor/pbb-helper/js/ui/ui.icons.ai.js";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { showCanonicalEvidence } from "./responsibility-evidence.mjs";
 
@@ -8,7 +9,11 @@ const MORE_ACTIONS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle c
 const CLAIM_CODE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 14a4.5 4.5 0 1 1 3.9-6.75l7.35.01v3h-2v2h-3v2H11.4A4.48 4.48 0 0 1 7.5 14Zm0-3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"></path></svg>';
 const SIGNING_SECRET_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v5.6c0 4.8 3.08 9.16 7.5 10.4 4.42-1.24 7.5-5.6 7.5-10.4V5L12 2Zm0 3.23 4.5 1.8v3.57c0 3.25-1.84 6.35-4.5 7.35-2.66-1-4.5-4.1-4.5-7.35V7.03L12 5.23Z" fill="currentColor"></path></svg>';
 const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+const COLLAPSE_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-7 3-3 3 3m-6 4 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+const EXPAND_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-3 3 3 3-3m-6-4 3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const APP_BASE_PATH = new URL(document.baseURI).pathname.replace(/\/$/, "");
+const WORKSPACE_MOBILE_QUERY = "(max-width: 980px)";
+const TIMELINE_MARKER_ICONS = new Map();
 
 const API = {
   session: "api/v1/session.php",
@@ -58,6 +63,8 @@ const state = {
   participants: [],
   messages: [],
   projectView: "timeline",
+  aiIconPackAvailable: false,
+  timelineDefaultCollapsed: false,
   filters: { primary: "all", q: "", sender: "", from: "", to: "" },
   draft: { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
@@ -68,31 +75,32 @@ const state = {
   messageGeneration: 0,
   filterTimer: null,
   pollingTimer: null,
+  foregroundSyncTimer: null,
   realtimeSocket: null,
   realtimeRetryTimer: null,
   realtimeRetryCount: 0,
   realtimeGeneration: 0,
   abortController: null,
-  mobilePanel: "left",
+  mobilePanel: "projects",
+  teamVisible: true,
   factories: {},
   components: {},
   recoveryStatus: null,
 };
 
 const el = Object.fromEntries([
-  "app-shell", "navbar-host", "mobile-panel-switcher", "workspace-surface", "project-surface", "admin-surface",
-  "workspace-profile-avatar", "workspace-profile-name", "workspace-profile-details", "workspace-name", "edit-profile-button", "change-password-button", "rename-workspace-button",
-  "workspace-project-count", "project-search-mount", "workspace-project-list", "add-project-button",
-  "status-badge", "project-title", "project-description", "project-instructions", "participant-count", "participant-list",
-  "participant-search", "project-actions-trigger", "project-actions-icon", "connection-label",
-  "timeline-count", "refresh-button", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
+  "app-shell", "navbar-host", "workspace-surface", "admin-surface",
+  "workspace-splitter-host", "workspace-inner-splitter-host", "project-navigation-column", "project-messages-column", "project-participants-column",
+  "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
+  "status-badge", "project-title", "project-instructions", "participant-list",
+  "participant-search", "new-message-trigger", "new-message-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
+  "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
-  "timeline-notice", "timeline-host", "timeline-scroll", "timeline-filter-bar", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
-  "project-view-switch", "show-timeline", "show-responsibility", "responsibility-host",
+  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
+  "project-view-switch", "show-timeline", "show-responsibility", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
   "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
-const panelButtons = Array.from(document.querySelectorAll("[data-panel-button]"));
 const panels = Array.from(document.querySelectorAll("[data-panel]"));
 
 function unwrap(payload) {
@@ -101,6 +109,24 @@ function unwrap(payload) {
 
 function id(value) {
   return value == null ? "" : String(value);
+}
+
+function readLocalPreference(key, fallback = "") {
+  try {
+    const value = localStorage.getItem(key);
+    return value == null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function writeLocalPreference(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch (_error) { /* Storage is optional. */ }
+}
+
+function storedSplitterRatio(key, fallback) {
+  const value = Number(readLocalPreference(key, String(fallback)));
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function csrfHeaders(extra = {}) {
@@ -148,6 +174,11 @@ function participantFrom(source = {}, fallbackKind = "agent") {
     runtime_name: String(source.runtime_name || source.runtime || ""),
     capabilities: source.capabilities || {},
     webhook: source.webhook || source.notification_webhook || null,
+    joined_at: source.joined_at || source.created_at || null,
+    last_message_at: source.last_message_at || null,
+    message_count: source.message_count === null || source.message_count === undefined ? null : Number(source.message_count),
+    email: source.email || null,
+    authentication_source: String(source.authentication_source || ""),
   };
 }
 
@@ -323,20 +354,29 @@ function helperIconHtml(name, size = 14) {
 function mountNavbar() {
   if (!state.factories.createNavbar) return;
   const items = [];
-  if (state.mode === "expanded" && capability("workspace.view", true)) items.push({ id: "workspace", label: "Home", icon: helperIconHtml("navigation.home"), className: "ui-button-borderless" });
-  if (state.surface === "project" && state.project) items.push({ id: "project", label: state.project.name, icon: helperIconHtml("data.grid"), className: "ui-button-borderless" });
-  if (state.mode === "expanded" && capability("admin.users")) items.push({ id: "users", label: "Users", icon: helperIconHtml("people.users"), className: "ui-button-borderless" });
-  if (state.mode === "expanded" && capability("admin.agents")) items.push({ id: "agents", label: "Agents", icon: helperIconHtml("comms.radio"), className: "ui-button-borderless" });
-  if (state.mode === "expanded" && capability("admin.audit")) items.push({ id: "audit", label: "Audit", icon: helperIconHtml("time.history"), className: "ui-button-borderless" });
-  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "delivery-health", label: "Delivery health", icon: helperIconHtml("actions.settings"), className: "ui-button-borderless" });
-  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) items.push({ id: "backup-restore", label: "Backup / Restore", icon: helperIconHtml("actions.download"), className: "ui-button-borderless" });
+  const workspaceVisible = ["workspace", "project"].includes(state.surface);
+  const mobileWorkspace = workspaceVisible && matchMedia(WORKSPACE_MOBILE_QUERY).matches;
+  if (state.mode === "expanded" && capability("workspace.view", true)) {
+    items.push({ id: "workspace", label: "Home", icon: helperIconHtml("navigation.home"), className: "ui-button-borderless desktop-workspace-nav" });
+    items.push({ id: "mobile-projects", label: "Projects", icon: helperIconHtml("data.grid"), className: "ui-button-borderless mobile-workspace-nav" });
+    items.push({ id: "mobile-timeline", label: "Timeline", icon: helperIconHtml("data.list"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
+    if (state.teamVisible) items.push({ id: "mobile-team", label: "Team", icon: helperIconHtml("people.users"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
+  }
   const actions = [];
-  if (state.mode === "expanded" && capability("admin.settings", isAdministrator())) actions.push({
-    id: "settings",
-    label: "System Settings",
+  const administratorItems = state.mode === "expanded" && isAdministrator() ? [
+    ...(capability("admin.users") ? [{ id: "users", label: "Users", icon: helperIconHtml("people.users") }] : []),
+    ...(capability("admin.audit") ? [{ id: "audit", label: "Audit", icon: helperIconHtml("time.history") }] : []),
+    ...(capability("admin.settings") ? [{ id: "settings", label: "Settings", icon: helperIconHtml("actions.settings") }] : []),
+    ...(capability("admin.settings") ? [{ id: "backup-restore", label: "Backup / Restore", icon: helperIconHtml("actions.download") }] : []),
+    ...(capability("admin.settings") ? [{ id: "delivery-health", label: "Delivery health", icon: helperIconHtml("actions.settings") }] : []),
+  ] : [];
+  if (administratorItems.length) actions.push({
+    id: "administrator",
+    label: "Administrator",
     icon: helperIconHtml("actions.settings"),
     iconOnly: true,
     className: "ui-button-borderless",
+    menuItems: administratorItems,
   });
   if (state.mode === "expanded") actions.push({
     id: "account",
@@ -350,9 +390,9 @@ function mountNavbar() {
         label: "Account",
         className: "syndicatum-account-menu-group",
         items: [
-          { id: "profile", label: "Profile" },
-          ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password" }] : []),
-          ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account" }] : []),
+          { id: "profile", label: "Profile", icon: helperIconHtml("people.profile") },
+          ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password", icon: helperIconHtml("actions.lock") }] : []),
+          ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account", icon: helperIconHtml("people.account") }] : []),
         ],
       },
       {
@@ -360,15 +400,17 @@ function mountNavbar() {
         label: "Legal",
         className: "syndicatum-account-menu-group",
         items: [
-          { id: "privacy", label: "Privacy Policy" },
-          { id: "terms", label: "Terms of Service" },
+          { id: "support", label: "Support", icon: helperIconHtml("comms.message") },
+          { id: "privacy", label: "Privacy Policy", icon: helperIconHtml("actions.lock") },
+          { id: "terms", label: "Terms of Service", icon: helperIconHtml("assets.document") },
+          { id: "license", label: "Source & License", icon: helperIconHtml("assets.document") },
         ],
       },
       {
         id: "session",
         label: "Session",
         className: "syndicatum-account-menu-group",
-        items: [{ id: "signout", label: "Logout", danger: true }],
+        items: [{ id: "signout", label: "Logout", icon: helperIconHtml("navigation.arrow-right"), danger: true }],
       },
     ],
   });
@@ -378,7 +420,7 @@ function mountNavbar() {
     brandSubtitle: state.surface === "project" && state.project ? state.project.name : "Human + agent collaboration",
     brandMedia: SYNDICATUM_BRAND_ICON,
     className: "syndicatum-navbar-single-row",
-    activeId: state.surface,
+    activeId: mobileWorkspace ? `mobile-${state.mobilePanel}` : (["workspace", "project"].includes(state.surface) ? "workspace" : state.surface),
     items,
     actions,
     sticky: true,
@@ -386,15 +428,21 @@ function mountNavbar() {
     mobileLayout: "scroll",
     onNavigate(item) {
       if (item?.id === "brand" || item?.id === "workspace") showWorkspaceSurface();
+      else if (item?.id === "mobile-projects") showWorkspaceSurface();
+      else if (item?.id === "mobile-timeline") showMobileWorkspacePanel("timeline");
+      else if (item?.id === "mobile-team") showMobileWorkspacePanel("team");
       else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
     },
-    onAction(action) { if (action?.id === "settings") void openSettings(); },
     onActionMenuSelect(_action, item) {
-      if (item?.id === "profile") openProfileModal();
+      if (["users", "audit", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
+      else if (item?.id === "settings") void openSettings();
+      else if (item?.id === "profile") openProfileModal();
       else if (item?.id === "password") openPasswordModal();
       else if (item?.id === "account-profile") openAccountProfile();
+      else if (item?.id === "support") location.assign("support");
       else if (item?.id === "privacy") location.assign("privacy");
       else if (item?.id === "terms") location.assign("terms");
+      else if (item?.id === "license") location.assign("license");
       else if (item?.id === "signout") void logout();
     },
   });
@@ -452,10 +500,66 @@ function appendLinkedText(host, text) {
 }
 
 function setMobilePanel(name) {
+  if (name === "team" && !state.teamVisible) name = "timeline";
   state.mobilePanel = name;
-  panelButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.panelButton === name));
   panels.forEach((panel) => panel.classList.toggle("is-mobile-active", panel.dataset.panel === name));
-  if (name === "right" && state.surface === "project") requestAnimationFrame(() => state.components.timeline?.resetReachEnd());
+  if (name === "timeline" && state.project) requestAnimationFrame(() => state.components.timeline?.resetReachEnd());
+  if (state.components.navbar) mountNavbar();
+}
+
+function showMobileWorkspacePanel(name) {
+  if (!selectedProjectId()) {
+    showWorkspaceSurface();
+    return;
+  }
+  const needsProjectRoute = state.surface !== "project";
+  setSurface("project");
+  setMobilePanel(name);
+  if (needsProjectRoute) {
+    updateApplicationRoute("project", state.project.public_id || selectedProjectId(), "push");
+  }
+}
+
+function mountWorkspaceSplitters() {
+  state.teamVisible = readLocalPreference("syndicatum.workspace.team", "shown") !== "hidden";
+  state.components.workspaceInnerSplitter = state.factories.createSplitter(el.workspace_inner_splitter_host, {
+    className: "workspace-inner-splitter",
+    orientation: "horizontal",
+    panePadding: 0,
+    chrome: false,
+    initialRatio: storedSplitterRatio("syndicatum.workspace.timelineRatio", 0.72),
+    minRatio: 0.55,
+    maxRatio: 0.84,
+    paneA: el.project_messages_column,
+    paneB: el.project_participants_column,
+    onResize(ratio) { writeLocalPreference("syndicatum.workspace.timelineRatio", ratio); },
+  });
+  state.components.workspaceOuterSplitter = state.factories.createSplitter(el.workspace_splitter_host, {
+    className: "workspace-outer-splitter",
+    orientation: "horizontal",
+    panePadding: 0,
+    initialRatio: storedSplitterRatio("syndicatum.workspace.projectsRatio", 0.23),
+    minRatio: 0.16,
+    maxRatio: 0.36,
+    paneA: el.project_navigation_column,
+    paneB: el.workspace_inner_splitter_host,
+    onResize(ratio) { writeLocalPreference("syndicatum.workspace.projectsRatio", ratio); },
+  });
+  syncTeamVisibility();
+}
+
+function syncTeamVisibility() {
+  el.workspace_surface.classList.toggle("is-team-hidden", !state.teamVisible);
+  if (!state.teamVisible && state.mobilePanel === "team") setMobilePanel("timeline");
+  else if (state.components.navbar) mountNavbar();
+}
+
+function setTeamVisible(visible) {
+  state.teamVisible = Boolean(visible);
+  writeLocalPreference("syndicatum.workspace.team", state.teamVisible ? "shown" : "hidden");
+  syncTeamVisibility();
+  renderProjectHeader();
+  if (state.teamVisible && matchMedia("(max-width: 980px)").matches) setMobilePanel("team");
 }
 
 function showLogin(message = "") {
@@ -596,31 +700,52 @@ function renderIdentity() {
 
 function renderProjectHeader() {
   const project = state.project || {};
-  el.project_view_switch.hidden = state.mode !== "expanded";
-  el.project_title.textContent = project.name || "PBB Coordination";
-  el.project_description.textContent = project.description || (state.mode === "legacy" ? "The existing shared Syndicatum coordination timeline." : "No project description has been added yet.");
+  const hasProject = Boolean(selectedProjectId());
+  el.project_view_switch.hidden = !hasProject || state.mode !== "expanded";
+  el.project_title.textContent = project.name || (state.mode === "legacy" ? "PBB Coordination" : "Select a project");
   const instructions = project.instructions || project.operating_instructions || "";
   el.project_instructions.textContent = instructions;
-  el.project_instructions.hidden = !instructions;
+  el.project_instructions.hidden = !hasProject || !instructions;
+  el.new_message_trigger.hidden = !hasProject || state.mode !== "expanded" || !can("messages.write") || state.projectView === "responsibility";
   state.components.projectActions?.destroy?.();
   state.components.projectActions = null;
   const actions = [];
-  if (state.mode === "expanded" && (can("project.manage") || can("project.admin"))) {
-    actions.push({ id: "edit", label: "Edit project" });
+  if (hasProject) actions.push({ id: "info", label: "Project Info", icon: helperIconHtml("status.info") });
+  if (hasProject && state.mode === "expanded" && (can("project.manage") || can("project.admin"))) {
+    actions.push({ id: "edit", label: "Edit project", icon: helperIconHtml("actions.edit") });
   }
-  if (state.mode === "expanded" && can("members.manage")) {
-    actions.push({ id: "invite", label: "Invite member" });
-  }
-  if (state.mode === "expanded" && can("agents.manage")) {
-    actions.push({ id: "add-agent", label: "Add agent" });
-  }
-  el.project_actions_trigger.hidden = actions.length === 0;
+  if (hasProject) actions.push({
+    id: "toggle-team",
+    label: state.teamVisible ? "Hide team" : "Show team",
+    icon: helperIconHtml(state.teamVisible ? "actions.hide" : "actions.view"),
+  });
+  el.project_actions_trigger.hidden = !hasProject || actions.length === 0;
   if (actions.length) {
     state.components.projectActions = state.factories.createDropdown(el.project_actions_trigger, actions, {
       align: "right",
       ariaLabel: "Project actions",
       onSelect(item) {
+        if (item.id === "info") openProjectInfoModal();
         if (item.id === "edit") openEditProjectModal();
+        if (item.id === "toggle-team") setTeamVisible(!state.teamVisible);
+      },
+    });
+  }
+  state.components.teamActions?.destroy?.();
+  state.components.teamActions = null;
+  const teamActions = [];
+  if (hasProject && state.mode === "expanded" && can("members.manage")) {
+    teamActions.push({ id: "invite", label: "Invite member", icon: helperIconHtml("people.users") });
+  }
+  if (hasProject && state.mode === "expanded" && can("agents.manage")) {
+    teamActions.push({ id: "add-agent", label: "Add agent", icon: helperIconHtml("people.agent") });
+  }
+  el.team_actions_trigger.hidden = teamActions.length === 0;
+  if (teamActions.length) {
+    state.components.teamActions = state.factories.createDropdown(el.team_actions_trigger, teamActions, {
+      align: "right",
+      ariaLabel: "Team actions",
+      onSelect(item) {
         if (item.id === "invite") openInviteMemberModal();
         if (item.id === "add-agent") openAddAgentModal();
       },
@@ -629,51 +754,239 @@ function renderProjectHeader() {
   renderIdentity();
 }
 
+function participantProviderLabel(provider) {
+  const normalized = String(provider || "").trim().toLowerCase();
+  const labels = { chatgpt: "ChatGPT", codex: "Codex", gemini: "Gemini", openai: "OpenAI" };
+  if (labels[normalized]) return labels[normalized];
+  return normalized ? normalized.replace(/(^|[-_\s])\w/g, (match) => match.toUpperCase()).replaceAll("_", " ").replaceAll("-", " ") : "Unspecified";
+}
+
+function participantCapabilityLabels(capabilities) {
+  if (Array.isArray(capabilities)) return capabilities.map(String).map((value) => value.trim()).filter(Boolean);
+  if (!capabilities || typeof capabilities !== "object") return [];
+  return Object.entries(capabilities)
+    .filter(([, value]) => value !== false && value != null && value !== "")
+    .map(([key, value]) => projectInfoLabel(value === true ? key : `${key}: ${String(value)}`));
+}
+
+function canEditParticipant(participant) {
+  if (participant.kind === "agent") return can("agents.manage");
+  if (participant.id === id(state.project?.current_participant?.id)) return true;
+  return participant.role !== "owner" && can("members.manage");
+}
+
+function openParticipantInfoModal(participant) {
+  const isAgent = participant.kind === "agent";
+  const editable = canEditParticipant(participant);
+  const canRemoveHuman = !isAgent && participant.role !== "owner"
+    && participant.id !== id(state.project?.current_participant?.id) && can("members.manage");
+  const hasProfileActions = (isAgent && can("agents.manage")) || canRemoveHuman;
+  const content = projectInfoElement("div", "participant-profile-content");
+  const layout = projectInfoElement("div", "participant-profile-layout");
+  const identity = projectInfoElement("aside", "participant-profile-identity");
+  const avatar = makeAvatar(participant, "profile");
+  avatar.querySelector(".participant-kind-mark")?.remove();
+  const avatarWrap = projectInfoElement("div", "participant-profile-avatar");
+  avatarWrap.append(avatar);
+  identity.append(avatarWrap, projectInfoElement("h2", "participant-profile-name", participant.display_name));
+  const badges = projectInfoElement("div", "participant-profile-badges");
+  const typeBadge = projectInfoElement("span", `participant-profile-badge is-${participant.kind}`);
+  const typeIcon = projectInfoElement("span", "participant-profile-badge-icon");
+  typeIcon.innerHTML = helperIconHtml(isAgent ? "people.agent" : "people.user", 17);
+  typeBadge.append(typeIcon, document.createTextNode(isAgent ? "Agent" : "Human"));
+  const status = String(participant.status || "active").toLowerCase();
+  const statusBadge = projectInfoElement("span", `participant-profile-badge participant-profile-membership-status is-${status}`);
+  statusBadge.append(projectInfoElement("span", "participant-profile-status-dot"), document.createTextNode(participantMembershipStatusLabel(status)));
+  badges.append(typeBadge, statusBadge);
+  identity.append(badges);
+
+  const details = projectInfoElement("div", "participant-profile-details");
+  const membership = participantProfileSection("people.users", "Project membership");
+  const membershipList = projectInfoElement("dl", "participant-profile-definition-list");
+  participantProfileDefinition(membershipList, "Project role", projectInfoLabel(participant.role || (isAgent ? "agent" : "member")));
+  if (participant.joined_at) participantProfileDefinition(membershipList, "Date added", participantProfileDate(participant.joined_at));
+  if (participant.last_message_at) participantProfileDefinition(membershipList, "Last message", participantProfileDate(participant.last_message_at));
+  if (participant.message_count !== null && Number.isFinite(participant.message_count)) participantProfileDefinition(membershipList, "Messages sent", participant.message_count);
+  membership.append(membershipList);
+  details.append(membership);
+
+  if (isAgent) {
+    const capabilities = participantCapabilityLabels(participant.capabilities);
+    if (participant.provider || participant.runtime_name || capabilities.length) {
+      const agentDetails = participantProfileSection("actions.settings", "Agent details");
+      const agentList = projectInfoElement("dl", "participant-profile-definition-list");
+      if (participant.provider) participantProfileDefinition(agentList, "Provider", participantProviderLabel(participant.provider));
+      if (participant.runtime_name) participantProfileDefinition(agentList, "Runtime", participant.runtime_name);
+      agentDetails.append(agentList);
+      if (capabilities.length) {
+        const capabilityBlock = projectInfoElement("div", "participant-profile-capabilities");
+        capabilityBlock.append(projectInfoElement("span", "participant-profile-subheading", "Capabilities"));
+        const chips = projectInfoElement("div", "participant-profile-capability-list");
+        capabilities.forEach((capability) => chips.append(projectInfoElement("span", "ui-badge participant-profile-capability", capability)));
+        capabilityBlock.append(chips);
+        agentDetails.append(capabilityBlock);
+      }
+      details.append(agentDetails);
+    }
+  } else if (participant.email || participant.authentication_source) {
+    const account = participantProfileSection("people.account", "Human account");
+    const accountList = projectInfoElement("dl", "participant-profile-definition-list");
+    if (participant.email) participantProfileDefinition(accountList, "Email", participant.email);
+    if (participant.authentication_source) participantProfileDefinition(accountList, "Sign-in method", participantAuthenticationLabel(participant.authentication_source));
+    account.append(accountList);
+    details.append(account);
+  }
+
+  if (can("project.admin") && (participant.id || participant.identity_id)) {
+    const technical = projectInfoElement("details", "participant-profile-technical");
+    const technicalSummary = projectInfoElement("summary", "participant-profile-technical-summary");
+    const technicalIcon = projectInfoElement("span", "participant-profile-section-icon");
+    technicalIcon.innerHTML = helperIconHtml("assets.document", 20);
+    technicalSummary.append(technicalIcon, projectInfoElement("strong", "", "Technical details"), projectInfoElement("span", "participant-profile-technical-hint", "Authorized administrators only"));
+    const technicalList = projectInfoElement("dl", "participant-profile-definition-list participant-profile-technical-list");
+    if (participant.id) participantProfileDefinition(technicalList, "Participant ID", participant.id);
+    if (participant.identity_id) participantProfileDefinition(technicalList, isAgent ? "Agent ID" : "User ID", participant.identity_id);
+    technical.append(technicalSummary, technicalList);
+    details.append(technical);
+  }
+
+  layout.append(identity, details);
+  content.append(layout);
+  const actions = [];
+  if (editable) actions.push({
+    id: "edit-participant",
+    label: `Edit ${isAgent ? "agent" : "human"}`,
+    icon: helperIconHtml("actions.edit"),
+    closeOnClick: false,
+    async onClick({ modal: participantModal }) {
+      await participantModal.close({ reason: "edit-participant" });
+      if (isAgent) void openEditAgentModal(participant);
+      else if (participant.id === id(state.project?.current_participant?.id)) openProfileModal();
+      else openManageMemberModal(participant);
+      return false;
+    },
+  });
+  actions.push({ id: "done", label: "Done", variant: "primary", autoFocus: true });
+  let profileMenu = null;
+  const modal = state.factories.createActionModal({
+    title: "Participant profile",
+    size: "lg",
+    className: "participant-profile-modal",
+    content,
+    actions,
+    headerActions: hasProfileActions ? [{
+      id: "participant-actions",
+      label: "Participant actions",
+      icon: MORE_ACTIONS_ICON,
+      iconOnly: true,
+      ariaLabel: "Participant actions",
+      variant: "ghost",
+      closeOnClick: false,
+      onClick() { return false; },
+    }] : [],
+    onOpen({ headerActions }) {
+      const trigger = headerActions?.querySelector('[aria-label="Participant actions"]');
+      if (!trigger) return;
+      const profileActions = isAgent ? [
+        { id: "generate-claim-code", label: "Generate claim code", icon: CLAIM_CODE_ICON },
+        { id: "rotate-webhook-secret", label: "Generate new signing secret", icon: SIGNING_SECRET_ICON },
+        { id: "remove-agent", label: "Remove from project", icon: REMOVE_ICON },
+      ] : [{ id: "remove-member", label: "Remove from project", icon: REMOVE_ICON }];
+      profileMenu = state.factories.createDropdown(trigger, profileActions, {
+        align: "right",
+        ariaLabel: "Participant actions",
+        async onSelect(item) {
+          if (item.id === "remove-agent") {
+            setTimeout(() => confirmAgentRemoval(participant, modal), 0);
+            return;
+          }
+          if (item.id === "remove-member") {
+            setTimeout(() => confirmMemberRemoval(participant, modal), 0);
+            return;
+          }
+          try {
+            const agentId = participant.identity_id;
+            if (item.id === "generate-claim-code") {
+              const credential = unwrap(await request(`${API.projectAgents}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {};
+              setTimeout(() => confirmAgentClaimGeneration(agentId, credential, null, participant.provider), 0);
+              return;
+            }
+            const webhook = unwrap(await request(`${API.projectAgentWebhook}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {};
+            const webhookUrl = String(webhook.endpoint_url || webhook.url || "").trim();
+            if (!webhookUrl) {
+              state.components.toast.warn("Set a webhook URL in Edit agent before generating a signing secret.");
+              return;
+            }
+            setTimeout(() => confirmSigningSecretRotation(agentId, { webhook_url: webhookUrl, webhook_enabled: webhook.enabled }, webhook), 0);
+          } catch (error) {
+            state.components.toast.warn(error.message, { title: "Participant action unavailable" });
+          }
+        },
+      });
+    },
+    onClose() {
+      profileMenu?.destroy?.();
+      profileMenu = null;
+    },
+  });
+  modal.open();
+}
+
+function participantMembershipStatusLabel(status) {
+  if (status === "active") return "Active in project";
+  if (["inactive", "suspended"].includes(status)) return "Inactive in project";
+  if (status === "removed") return "Removed from project";
+  return projectInfoLabel(status);
+}
+
+function participantAuthenticationLabel(source) {
+  const labels = { google: "Google", pbb_account: "PBB Account", account: "PBB Account", password: "Email and password", native: "Email and password" };
+  return labels[String(source || "").toLowerCase()] || projectInfoLabel(source);
+}
+
+function participantProfileDate(value) {
+  const date = new Date(normalizeUtcTimestamp(value));
+  return Number.isNaN(date.getTime()) ? String(value || "") : new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+}
+
+function participantProfileSection(icon, title) {
+  const section = projectInfoElement("section", "participant-profile-section");
+  const heading = projectInfoElement("header", "participant-profile-section-heading");
+  const iconWrap = projectInfoElement("span", "participant-profile-section-icon");
+  iconWrap.innerHTML = helperIconHtml(icon, 20);
+  heading.append(iconWrap, projectInfoElement("h3", "", title));
+  section.append(heading);
+  return section;
+}
+
+function participantProfileDefinition(host, label, value) {
+  const row = projectInfoElement("div", "participant-profile-definition");
+  row.append(projectInfoElement("dt", "", label), projectInfoElement("dd", "", value));
+  host.append(row);
+}
+
 function renderParticipants() {
-  el.participant_count.textContent = String(state.participants.length);
   el.participant_list.replaceChildren();
   const query = state.participantSearch.toLocaleLowerCase();
-  for (const participant of state.participants.filter((entry) => !query || `${entry.display_name} ${entry.kind} ${entry.role}`.toLocaleLowerCase().includes(query))) {
+  for (const participant of state.participants.filter((entry) => !query || `${entry.display_name} ${entry.kind} ${entry.role} ${entry.provider}`.toLocaleLowerCase().includes(query))) {
     const row = document.createElement("div");
     row.className = "participant-row";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `participant-card${state.filters.sender === participant.id ? " is-active" : ""}`;
+    button.className = "participant-card";
     button.appendChild(makeAvatar(participant));
     const copy = document.createElement("span");
     copy.className = "participant-card-copy";
     const name = document.createElement("strong");
     name.textContent = participant.display_name;
     const meta = document.createElement("span");
-    meta.textContent = `${participant.kind === "agent" ? "Agent" : "Human"}${participant.role ? ` · ${participant.role}` : ""}`;
+    meta.textContent = participant.kind === "agent"
+      ? `Agent · ${participantProviderLabel(participant.provider)}`
+      : `Human${participant.role ? ` · ${participant.role}` : ""}`;
     copy.append(name, meta);
     button.appendChild(copy);
-    button.addEventListener("click", () => {
-      state.filters.sender = state.filters.sender === participant.id ? "" : participant.id;
-      state.components.senderSelect?.setValue(state.filters.sender || null);
-      renderParticipants();
-      void reloadForFilters();
-      if (matchMedia("(max-width: 980px)").matches) setMobilePanel("right");
-    });
+    button.addEventListener("click", () => openParticipantInfoModal(participant));
     row.appendChild(button);
-    if (participant.kind === "agent" && can("agents.manage")) {
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "ui-button ui-button-borderless participant-edit";
-      edit.textContent = "Edit";
-      edit.setAttribute("aria-label", `Edit ${participant.display_name}`);
-      edit.addEventListener("click", () => openEditAgentModal(participant));
-      row.appendChild(edit);
-    } else if (participant.kind === "human" && participant.role !== "owner" && can("members.manage")
-      && participant.id !== id(state.project?.current_participant?.id)) {
-      const manage = document.createElement("button");
-      manage.type = "button";
-      manage.className = "ui-button ui-button-borderless participant-edit";
-      manage.textContent = "Manage";
-      manage.setAttribute("aria-label", `Manage ${participant.display_name}`);
-      manage.addEventListener("click", () => openManageMemberModal(participant));
-      row.appendChild(manage);
-    }
     el.participant_list.appendChild(row);
   }
 }
@@ -719,59 +1032,46 @@ function replyPreview(message) {
   };
 }
 
-function renderAddresseeChips(message) {
-  const chips = document.createElement("div");
-  chips.className = "addressee-chips";
-  if (isBroadcastMessage(message)) {
-    const chip = document.createElement("span");
-    chip.className = "addressee-chip is-broadcast";
-    chip.textContent = "Project broadcast";
-    chip.title = "Broadcast to the project";
-    chips.appendChild(chip);
-  } else {
-    message.addressees.slice(0, 5).forEach((entry) => {
-      const chip = document.createElement("span");
-      chip.className = `addressee-chip${entry.acknowledged_at ? " is-acknowledged" : ""}`;
-      const participant = state.participants.find((candidate) => candidate.id === entry.participant_id);
-      chip.textContent = `@${participant?.display_name || entry.display_name}`;
-      chip.title = entry.acknowledged_at ? "Acknowledged" : "Expected to respond";
-      chips.appendChild(chip);
-    });
-    if (message.addressees.length > 5) {
-      const more = document.createElement("span");
-      more.className = "addressee-chip";
-      more.textContent = `+${message.addressees.length - 5}`;
-      chips.appendChild(more);
-    }
-  }
-  return chips;
+function messageAddresseesLabel(message) {
+  if (isBroadcastMessage(message)) return "Project broadcast";
+  const names = message.addressees.slice(0, 5).map((entry) => {
+    const participant = state.participants.find((candidate) => id(candidate.id) === id(entry.participant_id));
+    return `@${participant?.display_name || entry.display_name}`;
+  });
+  if (message.addressees.length > 5) names.push(`+${message.addressees.length - 5}`);
+  return names.join("  ");
+}
+
+function updateTimelineCollapseButton() {
+  const label = state.timelineDefaultCollapsed ? "Expand all messages" : "Collapse all messages";
+  el.timeline_collapse_toggle.setAttribute("aria-label", label);
+  el.timeline_collapse_toggle.setAttribute("title", label);
+  el.timeline_collapse_toggle.classList.toggle("is-active", state.timelineDefaultCollapsed);
+  el.timeline_collapse_icon.innerHTML = state.timelineDefaultCollapsed ? EXPAND_ALL_ICON : COLLAPSE_ALL_ICON;
+}
+
+function setAllMessagesCollapsed(collapsed) {
+  state.timelineDefaultCollapsed = collapsed;
+  state.components.timeline?.update(undefined, { defaultCollapsed: collapsed });
+  if (collapsed) state.components.timeline?.collapseAll();
+  else state.components.timeline?.expandAll();
+  updateTimelineCollapseButton();
+}
+
+function messageCardPreview(message) {
+  if (message.deleted_at) return "This message was removed.";
+  return String(message.body || "").replace(/\s+/g, " ").trim() || "Empty message";
 }
 
 function mountMessageCard(host, item) {
-  const message = item.raw;
+  let renderedMessage = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
+    if (renderedMessage === current) return;
+    renderedMessage = current;
     host.replaceChildren();
-    const header = document.createElement("header");
-    header.className = "message-card-header";
-    header.appendChild(makeAvatar(current.sender));
-    const identity = document.createElement("div");
-    identity.className = "message-identity";
-    const identityLine = document.createElement("div");
-    identityLine.className = "message-identity-line";
-    const name = document.createElement("strong");
-    name.textContent = current.sender.display_name;
-    const kind = document.createElement("span");
-    kind.className = `participant-kind is-${current.sender.kind}`;
-    kind.textContent = current.sender.kind === "agent" ? "Agent" : "Human";
-    identityLine.append(name, kind);
-    identity.append(identityLine, renderAddresseeChips(current));
-    const time = document.createElement("time");
-    time.dateTime = current.created_at;
-    time.textContent = formatDate(current.created_at);
-    header.append(identity, time);
-    host.appendChild(header);
-
+    const details = document.createElement("div");
+    details.className = "message-card-details";
     const reply = replyPreview(current);
     if (reply) {
       const preview = document.createElement("button");
@@ -779,15 +1079,13 @@ function mountMessageCard(host, item) {
       preview.className = "message-reply-preview";
       preview.textContent = `Replying to ${reply.sender}: ${reply.body.slice(0, 140)}`;
       preview.addEventListener("click", () => jumpToMessage(reply.id));
-      host.appendChild(preview);
+      details.appendChild(preview);
     }
-
     const body = document.createElement("p");
     body.className = "message-card-body";
     if (current.deleted_at) body.textContent = "This message was removed.";
     else appendLinkedText(body, current.body);
-    host.appendChild(body);
-
+    details.appendChild(body);
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
     const actions = document.createElement("div");
@@ -802,8 +1100,13 @@ function mountMessageCard(host, item) {
       revisions.textContent = `${current.revision_count} revision${current.revision_count === 1 ? "" : "s"}`;
       actions.appendChild(revisions);
     }
-    footer.appendChild(actions);
-    host.appendChild(footer);
+    const messageId = document.createElement("span");
+    messageId.className = "message-card-id";
+    messageId.textContent = `#${current.id}`;
+    messageId.title = `Message ID ${current.id}`;
+    footer.append(actions, messageId);
+    details.appendChild(footer);
+    host.appendChild(details);
   }
   paint(item);
   return { update: paint };
@@ -818,14 +1121,39 @@ function actionButton(label, handler) {
   return button;
 }
 
+function timelineMarkerName(sender) {
+  if (sender.kind === "human") return "people.user";
+  if (!state.aiIconPackAvailable) return "people.agent";
+  const participant = state.participants.find((entry) => entry.id === sender.id);
+  const provider = String(participant?.provider || sender.provider || "").trim().toLowerCase();
+  return {
+    openai: "ai.openai", chatgpt: "ai.openai", codex: "ai.openai",
+    anthropic: "ai.anthropic", claude: "ai.claude",
+    gemini: "ai.gemini", deepseek: "ai.deepseek", ollama: "ai.ollama",
+    copilot: "ai.copilot", mistral: "ai.mistral",
+  }[provider] || "ai.generic";
+}
+
+function timelineMarkerHtml(sender) {
+  const name = timelineMarkerName(sender);
+  if (!TIMELINE_MARKER_ICONS.has(name)) {
+    TIMELINE_MARKER_ICONS.set(name, state.factories.createIcon(name, {
+      size: 14, fallback: sender.kind === "human" ? "people.user" : (state.aiIconPackAvailable ? "ai.generic" : "people.agent"),
+    }).outerHTML);
+  }
+  return TIMELINE_MARKER_ICONS.get(name);
+}
+
 function timelineItems(messages) {
   return messages.map((message) => ({
     id: message.id,
     className: `syndicatum-message${message.current_participant_state?.is_addressee ? " is-addressed" : ""}`,
     title: message.sender.display_name,
-    description: message.body,
+    subtitle: messageAddresseesLabel(message),
+    preview: messageCardPreview(message),
     timestamp: message.created_at,
     status: message.current_participant_state?.acknowledged_at ? "completed" : (message.current_participant_state?.is_addressee ? "requested" : "accepted"),
+    iconHtml: timelineMarkerHtml(message.sender),
     raw: message,
     contentKey: `${message.updated_at}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}`,
   }));
@@ -836,9 +1164,15 @@ function renderTimeline(mode = "replace", changed = state.messages) {
   const options = {
     ariaLabel: "Project timeline",
     groupByDate: true,
+    collapsible: true,
+    defaultCollapsed: state.timelineDefaultCollapsed,
     enableVirtualization: true,
     virtualThreshold: 1,
     virtualOverscan: 600,
+    estimateItemHeight(item, { startsGroup }) {
+      const bodyLength = String(item.raw?.body || "").length;
+      return (item.collapsed ? 95 : 135 + Math.min(1200, Math.ceil(bodyLength / 80) * 24)) + (startsGroup ? 40 : 0);
+    },
     endThreshold: 160,
     isLoading: state.loading,
     hasMore: state.hasOlder,
@@ -857,7 +1191,7 @@ function renderTimeline(mode = "replace", changed = state.messages) {
 }
 
 function messageQuery({ before = "", after = "", order = "desc" } = {}) {
-  const params = new URLSearchParams({ limit: "200", order });
+  const params = new URLSearchParams({ limit: "50", order });
   if (state.mode === "expanded") params.set("project_id", selectedProjectId());
   if (before) params.set("before", before);
   if (after) params.set("after", after);
@@ -893,7 +1227,6 @@ async function loadMessages(mode = "initial", generation = state.generation, mes
     const incoming = rows.map(normalizeMessage);
     const existing = new Set(state.messages.map((message) => message.id));
     const fresh = sortAndDedupe(incoming.filter((message) => !existing.has(message.id)));
-    if (mode === "newer" && fresh.length) state.components.responsibilityInbox?.markStale();
     const page = payload?.page || source?.page || payload?.meta?.page || {};
     if (mode === "initial") state.messages = sortAndDedupe(incoming);
     else state.messages = sortAndDedupe([...state.messages, ...incoming]);
@@ -907,7 +1240,10 @@ async function loadMessages(mode = "initial", generation = state.generation, mes
     } else {
       el.timeline_count.textContent = `${state.messages.length} loaded${state.hasOlder ? " · more available" : ""}`;
     }
-    if (mode === "newer" && fresh.length) state.components.toast.info(`${fresh.length} new message${fresh.length === 1 ? "" : "s"}`, { title: "Timeline updated" });
+    if (mode === "newer" && fresh.length) {
+      state.components.responsibilityInbox?.markStale();
+      state.components.toast.info(`${fresh.length} new message${fresh.length === 1 ? "" : "s"}`, { title: "Timeline updated" });
+    }
     return fresh.length;
   } finally {
     state.loading = false;
@@ -941,45 +1277,47 @@ function scheduleFilterReload() {
 
 function setSurface(name) {
   state.surface = name;
-  el.workspace_surface.hidden = name !== "workspace";
-  el.project_surface.hidden = name !== "project";
+  const workspaceVisible = ["workspace", "project"].includes(name);
+  el.workspace_surface.hidden = !workspaceVisible;
   el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health", "backup-restore"].includes(name);
-  el.mobile_panel_switcher.hidden = !["workspace", "project"].includes(name);
-  const labels = name === "project" ? ["Participants", "Timeline"] : ["Profile", "Projects"];
-  panelButtons.forEach((button, index) => { button.textContent = labels[index] || button.textContent; });
   mountNavbar();
 }
 
 function showWorkspaceSurface({ historyMode = "push" } = {}) {
-  closeRealtime();
-  clearTimeout(state.pollingTimer);
   setSurface("workspace");
   renderWorkspace();
-  setMobilePanel("left");
+  renderProjectHeader();
+  setMobilePanel("projects");
   updateApplicationRoute("workspace", "", historyMode);
+  if (state.project && !state.realtimeSocket) void connectRealtime(state.generation);
+}
+
+function renderWorkspaceActions() {
+  state.components.workspaceActions?.destroy?.();
+  state.components.workspaceActions = null;
+  const actions = [];
+  if (state.mode !== "expanded") {
+    el.project_list_actions_trigger.hidden = true;
+    return;
+  }
+  if (capability("project.create")) actions.push({ id: "new-project", label: "New Project", icon: helperIconHtml("actions.add") });
+  actions.push({ id: "rename-workspace", label: "Rename workspace", icon: helperIconHtml("actions.edit") });
+  el.project_list_actions_trigger.hidden = actions.length === 0;
+  if (!actions.length) return;
+  state.components.workspaceActions = state.factories.createDropdown(el.project_list_actions_trigger, actions, {
+    align: "right",
+    ariaLabel: "Project list actions",
+    onSelect(item) {
+      if (item.id === "new-project") openAddProjectModal();
+      if (item.id === "rename-workspace") openRenameWorkspaceModal();
+    },
+  });
 }
 
 function renderWorkspace() {
-  const user = state.session?.user || {};
-  const human = participantFrom({ ...user, kind: "human" }, "human");
-  el.workspace_profile_avatar.replaceChildren(makeAvatar(human));
-  el.workspace_profile_name.textContent = human.display_name;
-  el.workspace_profile_details.replaceChildren();
-  const authentication = user.authentication_source || user.auth_source || (user.pbb_user_id ? "account" : "native");
-  const authenticationLabel = authentication === "google" ? "Google" : (["account", "pbb_account"].includes(authentication) ? "PBB Account" : "Native");
-  [["Email", user.email], ["Username", user.username], ["Authentication", authenticationLabel]].forEach(([term, value]) => {
-    if (!value) return;
-    const dt = document.createElement("dt"); dt.textContent = term;
-    const dd = document.createElement("dd"); dd.textContent = value;
-    el.workspace_profile_details.append(dt, dd);
-  });
-  el.workspace_name.textContent = user.workspace?.name || state.session?.workspace?.name || "My workspace";
-  el.change_password_button.hidden = false;
-  el.change_password_button.textContent = accountUsesNativePassword() ? "Change Password" : "Manage PBB Account";
-  el.add_project_button.hidden = !capability("project.create");
+  renderWorkspaceActions();
   const query = state.projectSearch.toLocaleLowerCase();
   const projects = state.projects.filter((project) => !query || `${project.name} ${project.description || ""} ${project.role || ""}`.toLocaleLowerCase().includes(query));
-  el.workspace_project_count.textContent = String(projects.length);
   el.workspace_project_list.replaceChildren();
   if (!projects.length) {
     const empty = document.createElement("div"); empty.className = "empty-state ui-panel";
@@ -987,15 +1325,33 @@ function renderWorkspace() {
     el.workspace_project_list.append(empty); return;
   }
   projects.forEach((project) => {
-    const card = document.createElement("button"); card.type = "button"; card.className = "project-card ui-panel";
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `project-card ui-panel${project.id === selectedProjectId() ? " is-active" : ""}`;
+    if (project.id === selectedProjectId()) card.setAttribute("aria-current", "page");
     const top = document.createElement("span"); top.className = "project-card-top";
     const title = document.createElement("strong"); title.textContent = project.name;
-    const relationship = document.createElement("span"); relationship.className = "ui-badge"; relationship.textContent = project.collection === "Shared" ? "Shared" : "Owned";
-    top.append(title, relationship);
-    const description = document.createElement("span"); description.className = "project-card-description"; description.textContent = project.description || "No description";
-    const meta = document.createElement("span"); meta.className = "project-card-meta";
-    meta.textContent = [project.role, project.status, project.participant_count != null ? `${project.participant_count} participants` : "", project.last_activity_at ? `Active ${formatDate(project.last_activity_at)}` : ""].filter(Boolean).join(" · ");
-    card.append(top, description, meta);
+    top.appendChild(title);
+    const stats = document.createElement("span");
+    stats.className = "project-card-stats";
+    [
+      ["people.user", Number(project.human_count || 0), "human"],
+      ["people.agent", Number(project.agent_count || 0), "agent"],
+      ["comms.message", Number(project.message_count || 0), "message"],
+    ].forEach(([icon, count, label]) => {
+      const stat = document.createElement("span");
+      stat.className = "project-card-stat";
+      stat.setAttribute("aria-label", `${count} ${label}${count === 1 ? "" : "s"}`);
+      stat.title = stat.getAttribute("aria-label");
+      const iconHost = document.createElement("span");
+      iconHost.className = "project-card-stat-icon";
+      iconHost.innerHTML = helperIconHtml(icon, 16);
+      const value = document.createElement("span");
+      value.textContent = String(count);
+      stat.append(iconHost, value);
+      stats.appendChild(stat);
+    });
+    card.append(top, stats);
     card.addEventListener("click", () => void openWorkspaceProject(project, card));
     el.workspace_project_list.append(card);
   });
@@ -1106,7 +1462,7 @@ function openAddProjectModal() {
     [modalTextField("name", "Project name", { required: true }), modalTextField("slug", "Slug (optional)")],
     [{ type: "textarea", name: "description", label: "Description" }], [{ type: "textarea", name: "instructions", label: "Operating instructions" }],
   ], async onSubmit(values, context) {
-    try { const result = unwrap(await request(API.manageProjects, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(values) })); const project = result.project || result; project.id = id(project.id || project.project_id); project.collection = "My"; state.projects.unshift(project); state.components.toast.success("Project created."); void switchProject(project.id); return true; }
+    try { const result = unwrap(await request(API.manageProjects, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(values) })); const project = result.project || result; project.id = id(project.id || project.project_id); project.collection = "My"; project.human_count = Number(project.human_count ?? 1); project.agent_count = Number(project.agent_count ?? 0); project.message_count = Number(project.message_count ?? 0); state.projects.unshift(project); state.components.toast.success("Project created."); void switchProject(project.id); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
 }
@@ -1116,9 +1472,156 @@ function openEditProjectModal() {
   state.factories.createFormModal({ title: "Edit Project", submitLabel: "Save project", initialValues: { name: project.name || "", description: project.description || "", instructions: project.instructions || "" }, rows: [
     [modalTextField("name", "Project name", { required: true })], [{ type: "textarea", name: "description", label: "Description" }], [{ type: "textarea", name: "instructions", label: "Operating instructions" }],
   ], async onSubmit(values, context) {
-    try { const result = unwrap(await request(API.manageProjects, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), ...values }) })); state.project = { ...state.project, ...(result.project || result) }; state.projects = state.projects.map((entry) => entry.id === selectedProjectId() ? { ...entry, ...state.project } : entry); renderProjectHeader(); state.components.toast.success("Project updated."); return true; }
+    try { const result = unwrap(await request(API.manageProjects, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), ...values }) })); state.project = { ...state.project, ...(result.project || result) }; state.projects = state.projects.map((entry) => entry.id === selectedProjectId() ? { ...entry, ...state.project } : entry); renderWorkspace(); renderProjectHeader(); state.components.toast.success("Project updated."); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
+}
+
+function openProjectInfoModal() {
+  const project = state.project || {};
+  const editable = state.mode === "expanded" && (can("project.manage") || can("project.admin"));
+  const humans = state.participants.filter((participant) => participant.kind === "human").length;
+  const agents = state.participants.filter((participant) => participant.kind === "agent").length;
+  const messageCount = project.message_count !== null && project.message_count !== undefined && Number.isFinite(Number(project.message_count))
+    ? Number(project.message_count)
+    : null;
+  const status = String(project.status || "active").toLowerCase();
+  const owner = state.participants.find((participant) => participant.kind === "human" && participant.role === "owner");
+  const content = projectInfoElement("div", "project-info-content");
+
+  const hero = projectInfoElement("header", "project-info-hero");
+  const titleRow = projectInfoElement("div", "project-info-title-row");
+  titleRow.append(projectInfoElement("h2", "project-info-title", project.name || "Untitled project"));
+  const statusBadge = projectInfoElement("span", `ui-badge project-info-status is-${status}`);
+  statusBadge.append(projectInfoElement("span", "project-info-status-dot"), document.createTextNode(projectInfoLabel(status)));
+  titleRow.append(statusBadge);
+  hero.append(titleRow, projectInfoElement("p", "project-info-lead", "Key information and details about this project."));
+  content.append(hero);
+
+  const summary = projectInfoElement("section", "project-info-summary");
+  [
+    ["people.user", "Humans", humans, "Team members", "humans"],
+    ["people.agent", "Agents", agents, "AI agents", "agents"],
+    ["comms.message", "Messages", messageCount === null ? "—" : messageCount, messageCount === null ? "Count unavailable" : "Total messages", "messages"],
+  ].forEach(([icon, label, value, hint, kind]) => {
+    const card = projectInfoElement("article", `project-info-stat is-${kind}`);
+    const iconWrap = projectInfoElement("span", "project-info-stat-icon");
+    iconWrap.innerHTML = helperIconHtml(icon, 30);
+    const copy = projectInfoElement("span", "project-info-stat-copy");
+    copy.append(projectInfoElement("span", "project-info-stat-label", label), projectInfoElement("strong", "project-info-stat-value", value), projectInfoElement("span", "project-info-stat-hint", hint));
+    card.append(iconWrap, copy);
+    summary.append(card);
+  });
+  content.append(summary);
+
+  const detailGrid = projectInfoElement("section", "project-info-detail-grid");
+  const about = projectInfoElement("article", "project-info-card project-info-about");
+  about.append(projectInfoSectionHeading("assets.document", "About", "Project description, ownership, and purpose."));
+  const description = String(project.description || "").trim();
+  const descriptionBox = projectInfoElement("div", `project-info-description${description ? " has-description" : " is-empty"}`);
+  if (description) {
+    descriptionBox.append(projectInfoElement("p", "project-info-description-copy", description));
+  } else {
+    const emptyIcon = projectInfoElement("span", "project-info-empty-icon");
+    emptyIcon.innerHTML = helperIconHtml("assets.document", 26);
+    descriptionBox.append(emptyIcon, projectInfoElement("strong", "", "No description yet"), projectInfoElement("p", "", "Add a description to help your team understand this project."));
+    if (editable) {
+      const addDescription = projectInfoElement("button", "project-info-inline-action", "Add a description");
+      addDescription.type = "button";
+      addDescription.addEventListener("click", async () => {
+        await modal.close({ reason: "add-description" });
+        openEditProjectModal();
+      });
+      descriptionBox.append(addDescription);
+    }
+  }
+  about.append(descriptionBox);
+  const ownerBlock = projectInfoElement("div", "project-info-owner");
+  ownerBlock.append(projectInfoElement("span", "project-info-owner-label", "Project owner"));
+  const ownerRow = projectInfoElement("div", "project-info-owner-row");
+  const ownerIdentity = owner || { kind: "human", display_name: project.owner_display_name || "Unavailable", color_seed: hashColor(project.owner_display_name || "owner"), avatar_url: null };
+  ownerRow.append(makeAvatar(ownerIdentity));
+  const ownerCopy = projectInfoElement("span", "project-info-owner-copy");
+  ownerCopy.append(projectInfoElement("strong", "", ownerIdentity.display_name), projectInfoElement("span", "", "Project owner"));
+  ownerRow.append(ownerCopy);
+  ownerBlock.append(ownerRow);
+  about.append(ownerBlock);
+
+  const details = projectInfoElement("article", "project-info-card project-info-metadata");
+  details.append(projectInfoSectionHeading("actions.settings", "Project Details", "Access and project history."));
+  const metadata = projectInfoElement("dl", "project-info-metadata-list");
+  projectInfoMetadataRow(metadata, "Your role", projectInfoLabel(project.role || project.current_participant?.role || "Unavailable"));
+  projectInfoMetadataRow(metadata, "Created", projectInfoDate(project.created_at));
+  projectInfoMetadataRow(metadata, "Last updated", projectInfoDate(project.updated_at));
+  details.append(metadata);
+  detailGrid.append(about, details);
+  content.append(detailGrid);
+
+  const actions = [];
+  if (editable) actions.push({
+    id: "edit",
+    label: "Edit project",
+    closeOnClick: false,
+    async onClick({ modal: infoModal }) {
+      await infoModal.close({ reason: "edit-project" });
+      openEditProjectModal();
+      return false;
+    },
+  });
+  actions.push({ id: "done", label: "Done", variant: "primary", autoFocus: true });
+  const modal = state.factories.createActionModal({
+    title: "Project Info",
+    size: "xl",
+    className: "project-info-modal",
+    content,
+    actions,
+  });
+  modal.open();
+}
+
+function projectInfoElement(tagName, className = "", text = null) {
+  const node = document.createElement(tagName);
+  if (className) node.className = className;
+  if (text !== null) node.textContent = String(text);
+  return node;
+}
+
+function projectInfoLabel(value) {
+  const label = String(value || "Unavailable").replace(/[_-]+/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function projectInfoSectionHeading(icon, title, subtitle) {
+  const heading = projectInfoElement("header", "project-info-section-heading");
+  const iconWrap = projectInfoElement("span", "project-info-section-icon");
+  iconWrap.innerHTML = helperIconHtml(icon, 22);
+  const copy = projectInfoElement("span", "project-info-section-copy");
+  copy.append(projectInfoElement("strong", "", title), projectInfoElement("span", "", subtitle));
+  heading.append(iconWrap, copy);
+  return heading;
+}
+
+function projectInfoDate(value) {
+  if (!value) return { primary: "Unavailable", secondary: "" };
+  const date = new Date(normalizeUtcTimestamp(value));
+  if (Number.isNaN(date.getTime())) return { primary: String(value), secondary: "" };
+  const primary = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  const secondary = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time";
+  return { primary, secondary };
+}
+
+function projectInfoMetadataRow(host, label, value) {
+  const row = projectInfoElement("div", "project-info-metadata-row");
+  row.append(projectInfoElement("dt", "", label));
+  const definition = projectInfoElement("dd");
+  if (value && typeof value === "object") {
+    definition.append(projectInfoElement("span", "project-info-metadata-primary", value.primary));
+    if (value.secondary) definition.append(projectInfoElement("span", "project-info-metadata-secondary", value.secondary));
+  } else {
+    definition.textContent = String(value || "Unavailable");
+  }
+  row.append(definition);
+  host.append(row);
 }
 
 function showCredentialResult(title, label, value, expiresAt) {
@@ -1293,23 +1796,11 @@ function confirmMemberRemoval(participant, managerModal) {
 }
 
 function openManageMemberModal(participant) {
-  let modal = null;
-  modal = state.factories.createFormModal({
+  const modal = state.factories.createFormModal({
     title: `Manage ${participant.display_name}`,
     size: "sm",
     submitLabel: "Save member",
     initialValues: { role: participant.role || "member" },
-    headerActions: [{
-      id: "remove-member",
-      label: "Remove from project",
-      icon: REMOVE_ICON,
-      ariaLabel: `Remove ${participant.display_name} from project`,
-      variant: "ghost",
-      onClick() {
-        setTimeout(() => confirmMemberRemoval(participant, modal), 0);
-        return false;
-      },
-    }],
     rows: [[{ type: "select", name: "role", label: "Project role", required: true, options: [
       { value: "member", label: "Member" },
       { value: "viewer", label: "Viewer" },
@@ -1478,59 +1969,11 @@ async function openEditAgentModal(agent) {
   try { providers = await loadDiscussionProviders(); }
   catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
   const provider = providers.find(item => item.code === activation.provider) || providers[0];
-  let credentialMenu = null;
-  let editModal = null;
-  const updateCredentialStatus = () => {
-    const status = editModal?.refs?.rows?.querySelector(".agent-credential-status");
-    if (status) status.textContent = agentCredentialStatusText(credential, provider.code);
-  };
-  editModal = state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
+  const editModal = state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
     display_name: agent.display_name, avatar: null,
     provider: provider.code, activation_enabled: Boolean(activation.enabled), discussion_reference: provider.code === "codex" ? (activation.discussion_reference || "") : "", chatgpt_discussion_reference: provider.code === "chatgpt" ? (activation.discussion_reference || "") : "", gemini_discussion_reference: provider.code === "gemini" ? (activation.discussion_reference || "") : "", working_directory: activation.working_directory || "",
     responses_api_key: "", responses_model: activation.responses_model || "gpt-5.6-terra",
     webhook_enabled: Boolean(webhook.enabled), webhook_url: webhook.endpoint_url || webhook.url || "",
-  }, headerActions: [{
-    id: "agent-credential-actions",
-    label: "Credential actions",
-    icon: MORE_ACTIONS_ICON,
-    iconOnly: true,
-    ariaLabel: "Credential actions",
-    variant: "ghost",
-    closeOnClick: false,
-    onClick() { return false; },
-  }], onOpen({ headerActions }) {
-    const trigger = headerActions.querySelector('[aria-label="Credential actions"]');
-    if (!trigger) return;
-    credentialMenu?.destroy?.();
-    const credentialActions = [
-      { id: "generate-claim-code", label: credential.has_active_token ? "Generate replacement claim code" : "Generate new claim code", icon: CLAIM_CODE_ICON },
-      { id: "rotate-webhook-secret", label: "Generate new signing secret", icon: SIGNING_SECRET_ICON },
-      { id: "remove-agent", label: "Remove from project", icon: REMOVE_ICON },
-    ];
-    credentialMenu = state.factories.createDropdown(trigger, credentialActions, {
-      align: "right",
-      ariaLabel: "Agent credential actions",
-      onSelect(item) {
-        editModal.clearFormError();
-        if (item.id === "remove-agent") {
-          setTimeout(() => confirmAgentRemoval(agent, editModal), 0);
-          return;
-        }
-        if (item.id === "generate-claim-code") {
-          setTimeout(() => confirmAgentClaimGeneration(agentId, credential, updateCredentialStatus, provider.code), 0);
-          return;
-        }
-        const values = editModal.getValues();
-        if (!String(values.webhook_url || "").trim()) {
-          editModal.setFormError("Enter a webhook URL before generating a signing secret.");
-          return;
-        }
-        setTimeout(() => confirmSigningSecretRotation(agentId, values, webhook), 0);
-      },
-    });
-  }, onClose() {
-    credentialMenu?.destroy?.();
-    credentialMenu = null;
   }, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", previewUrl: agent.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true })],
@@ -2056,12 +2499,15 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   const generation = ++state.generation;
   const messageGeneration = ++state.messageGeneration;
   state.messages = [];
+  state.projectView = "timeline";
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
-  state.projectView = "timeline";
+  state.timelineDefaultCollapsed = false;
+  updateTimelineCollapseButton();
   state.oldestCursor = "";
   state.newestCursor = "";
   state.hasOlder = false;
+  dismissMessageComposerModal();
   state.draft = { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
   state.components.timeline?.destroy();
   state.components.timeline = null;
@@ -2081,6 +2527,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
     || (context.current_participant ? participantFrom(context.current_participant, "human") : null);
   const role = String(context.current_role || state.project.role || "viewer");
+  state.project.role = role;
   state.project.permissions = context.permissions || {
     "messages.read": true,
     "messages.write": ["owner", "admin", "member", "agent"].includes(role),
@@ -2089,8 +2536,10 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   };
   state.filters.sender = "";
   setSurface("project");
-  setMobilePanel("right");
+  setMobilePanel("timeline");
   updateApplicationRoute("project", state.project.public_id || nextId, historyMode);
+  writeLocalPreference("syndicatum.workspace.lastProject", state.project.public_id || nextId);
+  renderWorkspace();
   renderProjectHeader();
   showProjectView("timeline");
   rebuildParticipantControls();
@@ -2116,6 +2565,7 @@ function rebuildParticipantControls() {
     onChange(values) { state.draft.addressees = values.map(id); },
   });
   renderParticipants();
+  if (state.components.timeline && state.messages.length) renderTimeline();
 }
 
 async function refreshParticipants(projectGeneration = state.generation) {
@@ -2130,13 +2580,25 @@ async function refreshParticipants(projectGeneration = state.generation) {
     || state.project.current_participant;
   const activeIds = new Set(state.participants.map((participant) => participant.id));
   state.draft.addressees = state.draft.addressees.filter((participantId) => activeIds.has(participantId));
-  state.components.responsibilityInbox?.markStale();
   rebuildParticipantControls();
+}
+
+function scheduleForegroundParticipantRefresh() {
+  clearTimeout(state.foregroundSyncTimer);
+  state.foregroundSyncTimer = null;
+  if (document.visibilityState === "hidden" || state.mode !== "expanded" || state.surface !== "project" || !selectedProjectId()) return;
+  const projectGeneration = state.generation;
+  state.foregroundSyncTimer = setTimeout(() => {
+    state.foregroundSyncTimer = null;
+    if (document.visibilityState === "hidden" || state.mode !== "expanded" || state.surface !== "project" || projectGeneration !== state.generation) return;
+    void refreshParticipants(projectGeneration).catch(handleLoadError);
+  }, 100);
 }
 
 function renderComposerControls() {
   const writable = state.mode === "expanded" && can("messages.write");
-  el.composer_shell.hidden = !writable;
+  el.new_message_trigger.hidden = !writable || !selectedProjectId();
+  el.composer_shell.hidden = true;
   if (!writable) return;
   state.components.addressMode?.destroy();
   state.components.addressMode = state.factories.createSelect(el.address_mode, [
@@ -2152,13 +2614,84 @@ function renderComposerControls() {
   state.components.composer?.destroy();
   state.components.composer = state.factories.createChatComposer(el.composer_host, { value: "" }, {
     placeholder: "Write to the project timeline…",
-    helperText: "All project communications are visible to every project participant. Shift+Enter adds a new line.",
+    helperText: "Visible to all participants · Shift+Enter for a new line",
     showAttachmentButton: false,
     maxLength: Number(state.project?.message_max_length || 24000),
     onSend: sendMessage,
   });
+  enableCompactComposerAutosize();
   syncAddressingControls();
   renderReplyContext();
+}
+
+function openMessageComposerModal() {
+  if (state.mode !== "expanded" || !can("messages.write") || !selectedProjectId()) return;
+  const existing = state.components.composerModal;
+  if (existing?.getState?.().open) {
+    state.components.composer?.focus();
+    return;
+  }
+  el.composer_shell.hidden = false;
+  const title = state.draft.replyTo ? "Reply to message" : "New message";
+  let modal;
+  modal = state.factories.createActionModal({
+    title,
+    size: "lg",
+    className: "message-composer-modal",
+    content: el.composer_shell,
+    closeOnEscape: true,
+    autoBusy: false,
+    actions: [
+      { id: "cancel", label: "Cancel" },
+      {
+        id: "send-message",
+        label: "Send message",
+        variant: "primary",
+        icon: helperIconHtml("comms.message"),
+        closeOnClick: false,
+        busyMessage: "Sending message…",
+        async onClick() {
+          const input = el.composer_host.querySelector(".ui-chat-composer-input");
+          await sendMessage({ text: input?.value || "" });
+          return false;
+        },
+      },
+    ],
+    initialFocus: () => el.composer_host.querySelector(".ui-chat-composer-input"),
+    onClose() {
+      if (state.components.composerModal === modal) {
+        el.composer_shell.hidden = true;
+        state.components.composerModal = null;
+      }
+      modal.destroy();
+    },
+  });
+  state.components.composerModal = modal;
+  modal.open();
+  queueMicrotask(() => state.components.composer?.focus());
+}
+
+function dismissMessageComposerModal() {
+  const modal = state.components.composerModal;
+  state.components.composerModal = null;
+  el.composer_shell.hidden = true;
+  modal?.destroy?.();
+}
+
+function enableCompactComposerAutosize() {
+  const input = el.composer_host.querySelector(".ui-chat-composer-input");
+  if (!input) return;
+  const resize = () => {
+    input.style.height = "140px";
+    const nextHeight = Math.min(Math.max(input.scrollHeight, 140), 320);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > 320 ? "auto" : "hidden";
+  };
+  if (input.dataset.compactAutosize !== "true") {
+    input.dataset.compactAutosize = "true";
+    input.addEventListener("input", resize);
+  }
+  resize();
 }
 
 function syncAddressingControls() {
@@ -2201,7 +2734,7 @@ function setReply(message) {
   state.components.addresseeSelect?.setValue(state.draft.addressees);
   syncAddressingControls();
   renderReplyContext();
-  state.components.composer?.focus();
+  openMessageComposerModal();
 }
 
 function renderReplyContext() {
@@ -2216,6 +2749,14 @@ function renderReplyContext() {
 }
 
 async function sendMessage({ text }) {
+  if (!String(text || "").trim()) {
+    await state.factories.uiAlert("Write a message before sending.", {
+      title: "Message required",
+      variant: "warning",
+    });
+    state.components.composer?.focus();
+    return false;
+  }
   if (state.draft.mode === "direct" && !state.draft.addressees.length) {
     await state.factories.uiAlert("Select at least one expected responder, or choose Broadcast.", {
       title: "Addressees required",
@@ -2223,9 +2764,10 @@ async function sendMessage({ text }) {
       description: "Review the message addressing before sending.",
     });
     state.components.composer.focus();
-    return;
+    return false;
   }
   if (!state.draft.idempotencyKey) state.draft.idempotencyKey = makeIdempotencyKey();
+  state.components.composerModal?.setBusy(true, { message: "Sending message…" });
   state.components.composer.setBusy(true);
   try {
     const body = {
@@ -2244,10 +2786,14 @@ async function sendMessage({ text }) {
       state.messages = sortAndDedupe([message, ...state.messages]);
       renderTimeline("prepend", [message]);
     }
+    state.components.responsibilityInbox?.markStale();
     state.components.composer.clear();
+    enableCompactComposerAutosize();
     state.draft.idempotencyKey = "";
     restoreNormalAddressing();
     renderReplyContext();
+    await state.components.composerModal?.close({ reason: "sent" });
+    return true;
   } catch (error) {
     if (error.status === 422) {
       await state.factories.uiAlert(error.message || "Review the message and try again.", {
@@ -2257,9 +2803,11 @@ async function sendMessage({ text }) {
     } else {
       state.components.toast.warn(error.message, { title: "Message not sent" });
     }
+    return false;
   } finally {
     state.components.composer.setBusy(false);
-    state.components.composer.focus();
+    if (state.components.composerModal?.getState?.().open) state.components.composerModal.setBusy(false);
+    if (state.components.composerModal?.getState?.().open) state.components.composer.focus();
   }
 }
 
@@ -2276,6 +2824,7 @@ async function acknowledgeMessage(message) {
       };
     state.messages = state.messages.map((entry) => entry.id === message.id ? updated : entry);
     renderTimeline();
+    state.components.responsibilityInbox?.markStale();
     state.components.toast.success("Message acknowledged.");
   } catch (error) {
     state.components.toast.warn(error.message, { title: "Acknowledgement failed" });
@@ -2290,7 +2839,7 @@ function showProjectView(view) {
   el.show_responsibility.classList.toggle("is-active", inbox);
   el.show_timeline.setAttribute("aria-pressed", String(!inbox));
   el.show_responsibility.setAttribute("aria-pressed", String(inbox));
-  el.composer_shell.hidden = inbox || !can("messages.write");
+  el.new_message_trigger.hidden = inbox || !can("messages.write");
   el.timeline_filter_bar.hidden = inbox;
   el.timeline_notice.hidden = inbox || !el.timeline_notice.textContent;
   el.timeline_scroll.hidden = inbox;
@@ -2362,10 +2911,17 @@ async function openResponsibilityMessage(messageId) {
   }
 }
 
-function jumpToMessage(messageId) {
+async function jumpToMessage(messageId) {
+  if (!state.messages.some((message) => id(message.id) === id(messageId))) {
+    state.components.toast.info("That message is outside the currently loaded timeline. Use search to locate it.", { title: "Message not loaded" });
+    return;
+  }
+  state.components.timeline?.setCollapsed(messageId, false);
+  const result = await state.components.timeline?.scrollToItem?.(messageId, { align: "center", focus: true });
+  if (result?.found) return;
   const row = el.timeline_host.querySelector(`[data-item-id="${CSS.escape(id(messageId))}"]`);
-  if (row) row.scrollIntoView({ block: "center", behavior: "smooth" });
-  else state.components.toast.info("That message is outside the currently loaded timeline. Use search to locate it.", { title: "Message not loaded" });
+  if (row) { row.scrollIntoView({ block: "center" }); row.focus(); }
+  else if (result?.reason === "not-loaded") state.components.toast.info("That message is outside the currently loaded timeline. Use search to locate it.", { title: "Message not loaded" });
 }
 
 async function openSettings() {
@@ -2430,11 +2986,6 @@ async function openSettings() {
       google_client_secret: "",
     },
     rows: [
-      [{ type: "text", content: "Installation identity" }],
-      [{ type: "text", content: "Preview only — identity is read-only and will be populated by the future installation-state service." }],
-      [{ type: "input", name: "installation_id", label: "Installation ID", placeholder: "Not yet available", disabled: true }, { type: "input", name: "installed_release", label: "Installed release", placeholder: "Not yet available", disabled: true }],
-      [{ type: "input", name: "installed_baseline", label: "Schema baseline", placeholder: "Not yet available", disabled: true }, { type: "input", name: "installation_provenance", label: "Release provenance", placeholder: "Not yet available", disabled: true }],
-      [{ type: "divider" }],
       [{ type: "text", content: "General and messaging" }],
       [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
       [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
@@ -2526,10 +3077,13 @@ async function loadExpanded() {
   if (requestedProject) {
     await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
   } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
-      && (["delivery-health", "backup-restore"].includes(requestedRoute.surface) ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
+      && (["delivery-health", "backup-restore"].includes(requestedRoute.surface)
+        ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
     await showAdminSurface(requestedRoute.surface, { historyMode: "replace" });
   } else {
-    showWorkspaceSurface({ historyMode: "replace" });
+    const lastProject = readLocalPreference("syndicatum.workspace.lastProject", "");
+    const initialProject = state.projects.find((project) => project.public_id === lastProject || project.id === lastProject) || state.projects[0];
+    await switchProject(initialProject.id, { initial: true, historyMode: "replace" });
   }
 }
 
@@ -2542,12 +3096,13 @@ async function loadLegacy() {
   state.participants = (source.participants || []).map((participant) => participantFrom({ ...participant, id: participant.name }, "agent"));
   state.projects = [];
   setSurface("project");
+  renderWorkspace();
   renderProjectHeader();
   rebuildParticipantControls();
   renderComposerControls();
   await loadMessages("initial");
   el.status_badge.textContent = "Legacy";
-  setMobilePanel("right");
+  setMobilePanel("timeline");
   showApplication();
 }
 
@@ -2638,7 +3193,6 @@ function messageMatchesFilters(message) {
 function receiveRealtimeMessage(source) {
   const message = normalizeMessage(source);
   if (!message.id || state.messages.some((entry) => entry.id === message.id)) return;
-  state.components.responsibilityInbox?.markStale();
   const highest = state.messages.reduce((value, entry) => Math.max(value, Number(entry.sequence || 0)), 0);
   if (highest && message.sequence > highest + 1) {
     void loadMessages("newer").catch(handleLoadError);
@@ -2647,6 +3201,7 @@ function receiveRealtimeMessage(source) {
   if (!messageMatchesFilters(message)) return;
   state.messages = sortAndDedupe([...state.messages, message]);
   renderTimeline("prepend", [message]);
+  state.components.responsibilityInbox?.markStale();
   state.components.toast.info("1 new message", { title: "Timeline updated" });
 }
 
@@ -2759,11 +3314,22 @@ function startPolling() {
 async function bootstrap() {
   uiLoader.setPreferBundles(true);
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover", "ui.tabs", "ui.action.modal", "ui.file.uploader", "ui.data.inspector"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover", "ui.splitter"];
   await uiLoader.loadMany(names, options);
+  const iconModule = await uiLoader.get("ui.icons", options);
+  try {
+    if (typeof iconModule.registerIconPack === "function") {
+      iconModule.registerIconPack(AI_ICONS);
+      state.aiIconPackAvailable = true;
+    } else {
+      console.warn("[Syndicatum] Helper icon pack API is unavailable; using core agent markers.");
+    }
+  } catch (error) {
+    console.warn("[Syndicatum] Helper AI icon pack could not be registered; using core agent markers.", error);
+  }
   state.factories = {
     createNavbar: await uiLoader.get("ui.navbar", options),
-    createIcon: (await uiLoader.get("ui.icons", options))?.createIcon,
+    createIcon: iconModule.createIcon,
     createSearchField: await uiLoader.get("ui.search", options),
     createTimeline: await uiLoader.get("ui.timeline", options),
     createToastStack: await uiLoader.get("ui.toast", options),
@@ -2771,20 +3337,29 @@ async function bootstrap() {
     createSelect: await uiLoader.get("ui.select", options),
     createToggleGroup: await uiLoader.get("ui.toggle.group", options),
     createChatComposer: await uiLoader.get("ui.chat.composer", options),
+    createActionModal: await uiLoader.get("ui.action.modal", options),
     createFormModal: await uiLoader.get("ui.form.modal", options),
     createLoginFormModal: await uiLoader.get("ui.form.modal.login", options),
     uiAlert: await uiLoader.get("ui.dialog.alert", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
     createPopover: await uiLoader.get("ui.popover", options),
     createTabs: await uiLoader.get("ui.tabs", options),
-    createActionModal: await uiLoader.get("ui.action.modal", options),
     createFileUploader: await uiLoader.get("ui.file.uploader", options),
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
+    createSplitter: await uiLoader.get("ui.splitter", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
+  el.new_message_icon.innerHTML = helperIconHtml("actions.add", 18);
+  el.project_list_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
+  el.team_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
   el.filter_icon.innerHTML = helperIconHtml("data.filter", 18);
   el.refresh_icon.innerHTML = helperIconHtml("actions.refresh", 18);
+  updateTimelineCollapseButton();
+  el.new_message_trigger.addEventListener("click", openMessageComposerModal);
+  el.show_timeline.addEventListener("click", () => showProjectView("timeline"));
+  el.show_responsibility.addEventListener("click", () => showProjectView("responsibility"));
+  mountWorkspaceSplitters();
   const search = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search this project", clearText: "Clear", inputClass: "ui-input",
     onChange(value) { state.filters.q = value.trim(); scheduleFilterReload(); },
@@ -2828,15 +3403,12 @@ async function bootstrap() {
     void reloadForFilters();
   });
   el.refresh_button.addEventListener("click", () => void reloadForFilters());
-  el.show_timeline.addEventListener("click", () => showProjectView("timeline"));
-  el.show_responsibility.addEventListener("click", () => showProjectView("responsibility"));
-  el.edit_profile_button.addEventListener("click", openProfileModal);
-  el.change_password_button.addEventListener("click", () => accountUsesNativePassword() ? openPasswordModal() : openAccountProfile());
-  el.rename_workspace_button.addEventListener("click", openRenameWorkspaceModal);
-  el.add_project_button.addEventListener("click", openAddProjectModal);
+  el.timeline_collapse_toggle.addEventListener("click", () => setAllMessagesCollapsed(!state.timelineDefaultCollapsed));
   el.participant_search.addEventListener("input", () => { state.participantSearch = el.participant_search.value.trim(); renderParticipants(); });
   el.admin_refresh_button.addEventListener("click", () => void showAdminSurface(state.adminKind, { historyMode: "none" }));
-  panelButtons.forEach((button) => button.addEventListener("click", () => setMobilePanel(button.dataset.panelButton || "left")));
+  document.addEventListener("visibilitychange", scheduleForegroundParticipantRefresh);
+  addEventListener("focus", scheduleForegroundParticipantRefresh);
+  matchMedia(WORKSPACE_MOBILE_QUERY).addEventListener("change", mountNavbar);
   addEventListener("popstate", () => {
     if (state.mode !== "expanded") return;
     const route = currentApplicationRoute();
@@ -2846,7 +3418,8 @@ async function bootstrap() {
     if (routeProject) {
       void switchProject(routeProject.id, { initial: true, historyMode: "none" }).catch(handleLoadError);
     } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(route.surface)
-        && (["delivery-health", "backup-restore"].includes(route.surface) ? capability("admin.settings", isAdministrator()) : capability(`admin.${route.surface}`))) {
+        && (["delivery-health", "backup-restore"].includes(route.surface)
+          ? capability("admin.settings", isAdministrator()) : capability(`admin.${route.surface}`))) {
       void showAdminSurface(route.surface, { historyMode: "none" });
     } else {
       showWorkspaceSurface({ historyMode: "none" });

@@ -1,0 +1,186 @@
+[
+  {
+    "name": "social.facebook",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/facebook.svg",
+    "sha256": "b06d18d844ed621b89faffb1a33440cc0ec4f1ffea9f36191f50db19a47c59a6",
+    "title": "Facebook",
+    "brandColor": "#0866FF",
+    "source": "https://about.meta.com/brand/resources/facebook/logo",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://about.meta.com/brand/resources/facebook/logo"
+  },
+  {
+    "name": "social.instagram",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/instagram.svg",
+    "sha256": "f53af2d1fc5292ba1433b5c1faf50005ce6a997fa302d1816989929f379a59dc",
+    "title": "Instagram",
+    "brandColor": "#FF0069",
+    "source": "https://about.meta.com/brand/resources/instagram",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://about.meta.com/brand/resources/instagram"
+  },
+  {
+    "name": "social.youtube",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/youtube.svg",
+    "sha256": "5038808acbbc4e6edda16cbeb1cc6dec80e4e4ee4e227e039c41229fa222aa8c",
+    "title": "YouTube",
+    "brandColor": "#FF0000",
+    "source": "https://www.youtube.com/howyoutubeworks/resources/brand-resources/#logos-icons-and-colors",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://www.youtube.com/howyoutubeworks/resources/brand-resources/#logos-icons-and-colors"
+  },
+  {
+    "name": "social.tiktok",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/tiktok.svg",
+    "sha256": "6f54ac8d325faacea8935bdc44cbed60206a6b408641799e5fea1cba7c1a0af7",
+    "title": "TikTok",
+    "brandColor": "#000000",
+    "source": "https://tiktok.com",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://tiktok.com"
+  },
+  {
+    "name": "social.github",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/github.svg",
+    "sha256": "3bf8cceead820aec50d4ee825a3fd02c5a1cd6665cc9cf4cbf3d9c8861a204bb",
+    "title": "GitHub",
+    "brandColor": "#181717",
+    "source": "https://github.com/logos",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://github.com/logos"
+  },
+  {
+    "name": "social.whatsapp",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/whatsapp.svg",
+    "sha256": "8fb209a53a61618c3483594b3e070481a35575d6aaecbe00a6fe386670c8fb1c",
+    "title": "WhatsApp",
+    "brandColor": "#25D366",
+    "source": "https://about.meta.com/brand/resources/whatsapp/whatsapp-brand",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://about.meta.com/brand/resources/whatsapp/whatsapp-brand"
+  },
+  {
+    "name": "social.discord",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/discord.svg",
+    "sha256": "1d364b72c9eaf1fe37d17ca88cd8fb541308dc0f3b09e2ab3b824f380b3493d5",
+    "title": "Discord",
+    "brandColor": "#5865F2",
+    "source": "https://discord.com/branding",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://discord.com/branding"
+  },
+  {
+    "name": "social.x",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/x.svg",
+    "sha256": "693e68863eceb8dc9f72e2acd386ab9c20a10858dab2c076212f7084cb7a32fe",
+    "title": "X",
+    "brandColor": "#000000",
+    "source": "https://x.com",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://about.x.com/en/who-we-are/brand-toolkit"
+  },
+  {
+    "name": "social.reddit",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/reddit.svg",
+    "sha256": "00e5008d56567543cf956561e61d5bf9bf629f520c7488a4d9a00164c29dd8ba",
+    "title": "Reddit",
+    "brandColor": "#FF4500",
+    "source": "https://www.redditinc.com/brand",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://www.redditinc.com/brand"
+  },
+  {
+    "name": "social.telegram",
+    "package": "simple-icons@16.31.0",
+    "asset": "icons/telegram.svg",
+    "sha256": "147fd8f8923e7e5f463fe98c0eb9913bead6b2ae59935728cda141002ec8a7c9",
+    "title": "Telegram",
+    "brandColor": "#26A5E4",
+    "source": "https://telegram.org/tour/screenshots",
+    "license": "See upstream brand guidelines",
+    "guidelines": "https://telegram.org/tour/screenshots"
+  },
+  {
+    "name": "ai.openai",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/openai.svg",
+    "sha256": "a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186",
+    "title": "OpenAI",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/openai.svg",
+    "license": "MIT"
+  },
+  {
+    "name": "ai.anthropic",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/anthropic.svg",
+    "sha256": "e833fdfa7e7187a86a05b870925067556a506dcd4239089aed73e1e58c9366a3",
+    "title": "Anthropic",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/anthropic.svg",
+    "license": "MIT"
+  },
+  {
+    "name": "ai.claude",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/claude.svg",
+    "sha256": "365a70a7eb3956d9b9a96086058ebe04e1dbd8e291a756ad964e8a283fbd6d38",
+    "title": "Claude",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/claude.svg",
+    "license": "MIT",
+    "brandColor": "#D97757"
+  },
+  {
+    "name": "ai.gemini",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/gemini.svg",
+    "sha256": "87d5b3c4be75a66f54c1936482a263df68185545b741129badd1b7c2449c18d3",
+    "title": "Gemini",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/gemini.svg",
+    "license": "MIT"
+  },
+  {
+    "name": "ai.deepseek",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/deepseek.svg",
+    "sha256": "8f9443e351b6dacce71871790201b799d92e8bf96a45ef79aeb5e9bf4db423e2",
+    "title": "Deepseek",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/deepseek.svg",
+    "license": "MIT",
+    "brandColor": "#4D6BFE"
+  },
+  {
+    "name": "ai.ollama",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/ollama.svg",
+    "sha256": "3a268218fb2e6e81fa31df70f70b51331625047794db81db21d35359428fae7a",
+    "title": "Ollama",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/ollama.svg",
+    "license": "MIT"
+  },
+  {
+    "name": "ai.copilot",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/copilot.svg",
+    "sha256": "6708c5eb7fd426d3bd0de54edcecbb2a96bfcfd40ae1eb5745b0c12e19c8f1d2",
+    "title": "Copilot",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/copilot.svg",
+    "license": "MIT"
+  },
+  {
+    "name": "ai.mistral",
+    "package": "@lobehub/icons-static-svg@1.95.0",
+    "asset": "icons/mistral.svg",
+    "sha256": "a06cfa54e7deff7f7544175b006b7f8a03fbc5624c44f7d553a44d07ea96e629",
+    "title": "Mistral",
+    "source": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.0/icons/mistral.svg",
+    "license": "MIT"
+  }
+]

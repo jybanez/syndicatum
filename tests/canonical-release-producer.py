@@ -33,9 +33,13 @@ class CanonicalReleaseProducerTest(unittest.TestCase):
         self.assertEqual(destinations, sorted(destinations, key=lambda value: value.encode("ascii")))
         self.assertFalse(any(path.startswith("app/schema/mysql84/") for path in destinations))
         self.assertIn("schema/baselines/mysql84/schema.sql", destinations)
+        self.assertIn("schema/legacy-upgrade/plan.json", destinations)
+        legacy_migrations = [path for path in destinations if path.startswith("schema/legacy-upgrade/migrations/")]
+        self.assertEqual(len(legacy_migrations), 30)
         self.assertIn("metadata/runtime/Dockerfile", destinations)
-        forbidden = ("/.env", "/tests/", "/migrations/", "/docs/", "/runtime/avatars/")
+        forbidden = ("/.env", "/tests/", "/docs/", "/runtime/avatars/")
         self.assertFalse(any(any(token in "/" + path for token in forbidden) for path in destinations))
+        self.assertFalse(any(path.startswith("migrations/") for path in destinations))
 
     def test_missing_disposition_is_rejected(self) -> None:
         policy = copy.deepcopy(self.policy)
@@ -95,10 +99,17 @@ class CanonicalReleaseProducerTest(unittest.TestCase):
             for name in ("archive", "manifest", "checksum", "provenance"):
                 self.assertEqual(Path(one[name]).read_bytes(), Path(two[name]).read_bytes())
             manifest = json.loads(Path(one["manifest"]).read_text(encoding="ascii"))
+            packaged = {entry["path"]: entry for entry in manifest["files"]}
+            self.assertIn("schema/legacy-upgrade/plan.json", packaged)
+            self.assertEqual(len([path for path in packaged if path.startswith("schema/legacy-upgrade/migrations/")]), 30)
             self.assertFalse(manifest["contains_data"])
             self.assertFalse(manifest["contains_persistent_assets"])
             self.assertEqual(manifest["source_commit"], self.commit)
             with zipfile.ZipFile(one["archive"], "r") as archive:
+                plan_path = "schema/legacy-upgrade/plan.json"
+                plan_blob = producer.blob(ROOT, self.commit, "schema/mysql84/legacy-upgrade-plan.json")
+                self.assertEqual(archive.read(plan_path), plan_blob)
+                self.assertEqual(packaged[plan_path]["sha256"], producer.sha256(plan_blob))
                 infos = archive.infolist()
                 self.assertEqual([item.filename for item in infos], [item["path"] for item in manifest["files"]])
                 for info in infos:
