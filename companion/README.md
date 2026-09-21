@@ -62,6 +62,12 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+Version 0.10.1 makes device-authorization polling single-flight and prevents
+manual Refresh or retry alarms from bypassing an HTTP 429 cooldown. Pending
+approvals are checked at a bounded interval, and an expired code prompts a new
+connection attempt. Updating the unpacked extension requires the updater or a
+manual reload; changing the server checkout alone does not update Chrome.
+
 Version 0.10.0 displays the installed version and extension ID, adds a safe
 Copy diagnostics action, provides a recoverable in-place PowerShell updater,
 and produces deterministic release archives with fixed entry timestamps and

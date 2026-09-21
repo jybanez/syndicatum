@@ -9,6 +9,9 @@ const heartbeatTimers = new Map();
 let running = null;
 let queueWrites = Promise.resolve();
 let drainRunning = null;
+let authorizationPoll = null;
+let authorizationTimer = null;
+let nextAuthorizationPollAt = 0;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const uuid = () => crypto.randomUUID();
@@ -96,32 +99,69 @@ function serverPermission(baseUrl) {
 async function beginConnection(baseUrl) {
   baseUrl = normalizeBaseUrl(baseUrl);
   await validateServer(baseUrl);
-  await save({ baseUrl, status: "authorizing", serverHealth: "reachable", accountHealth: "authorizing", lastServerCheckAt: new Date().toISOString(), lastServerError: null, lastAccountError: null, lastError: null });
+  await save({ baseUrl, status: "authorizing", serverHealth: "reachable", accountHealth: "authorizing", authorizationRetryAt: null, lastServerCheckAt: new Date().toISOString(), lastServerError: null, lastAccountError: null, lastError: null });
   const data = await api("/api/v1/connector-device-authorizations.php", { method: "POST", body: JSON.stringify({ device_name: "Syndicatum browser companion", platform: "chrome-extension" }) });
   await save({ pending: { deviceCode: data.device_code, userCode: data.user_code, expiresAt: data.expires_at }, status: "authorizing" });
   await chrome.tabs.create({ url: new URL(data.verification_uri, `${baseUrl}/`).href, active: true });
-  setTimeout(() => void pollAuthorization(), 3000);
-  await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 0.5 });
+  await scheduleAuthorizationPoll(3000);
   return publicStatus();
 }
 
-async function pollAuthorization() {
+function clearAuthorizationTimer() {
+  if (authorizationTimer !== null) clearTimeout(authorizationTimer);
+  authorizationTimer = null;
+  nextAuthorizationPollAt = 0;
+}
+
+async function scheduleAuthorizationPoll(delayMs) {
+  clearAuthorizationTimer();
+  nextAuthorizationPollAt = Date.now() + delayMs;
+  authorizationTimer = setTimeout(() => {
+    authorizationTimer = null;
+    void pollAuthorization();
+  }, delayMs);
+  // An alarm also resumes polling if Chrome suspends the service worker.
+  await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: Math.max(0.5, delayMs / 60000) });
+}
+
+function pollAuthorization({ force = false } = {}) {
+  if (authorizationPoll) return authorizationPoll;
+  if (!force && Date.now() < nextAuthorizationPollAt) return Promise.resolve();
+  clearAuthorizationTimer();
+  authorizationPoll = pollAuthorizationOnce().finally(() => { authorizationPoll = null; });
+  return authorizationPoll;
+}
+
+async function pollAuthorizationOnce() {
   const current = await state();
   if (!current.pending?.deviceCode || current.accessToken) return;
-  if (Date.parse(current.pending.expiresAt) <= Date.now()) { await save({ pending: null, status: "disconnected", lastError: "Authorization expired." }); return; }
+  if (Date.parse(current.pending.expiresAt) <= Date.now()) {
+    await save({ pending: null, authorizationRetryAt: null, status: "disconnected", accountHealth: "disconnected", lastError: "Authorization expired. Connect again to request a new code." });
+    return;
+  }
+  if (Number(current.authorizationRetryAt || 0) > Date.now()) {
+    await scheduleAuthorizationPoll(Number(current.authorizationRetryAt) - Date.now());
+    return;
+  }
   try {
     const result = await api("/api/v1/connector-device-token.php", { method: "POST", body: JSON.stringify({ device_code: current.pending.deviceCode }) });
+    const latest = await state();
+    if (latest.pending?.deviceCode !== current.pending.deviceCode || latest.accessToken) return;
     if (result.status === "authorized") {
-      await save({ accessToken: result.access_token, deviceId: result.device_id, tokenExpiresAt: result.expires_at, pending: null, status: "connected", accountHealth: "authorized", lastAccountError: null, lastError: null });
+      await save({ accessToken: result.access_token, deviceId: result.device_id, tokenExpiresAt: result.expires_at, pending: null, authorizationRetryAt: null, status: "connected", accountHealth: "authorized", lastAccountError: null, lastError: null });
       setTimeout(() => void start(), 0);
     } else {
-      setTimeout(() => void pollAuthorization(), 3000);
-      await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 0.5 });
+      await save({ authorizationRetryAt: null, lastAccountError: null, lastError: null });
+      await scheduleAuthorizationPoll(15000);
     }
   } catch (error) {
-    await save({ accountHealth: "authorizing", lastAccountError: String(error?.message || error), lastError: String(error?.message || error) });
-    setTimeout(() => void pollAuthorization(), 5000);
-    await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 0.5 });
+    const latest = await state();
+    if (latest.pending?.deviceCode !== current.pending.deviceCode || latest.accessToken) return;
+    const message = error?.httpStatus === 429
+      ? "Too many authorization checks. Companion will retry shortly; please do not repeatedly press Refresh."
+      : String(error?.message || error);
+    await save({ accountHealth: "authorizing", authorizationRetryAt: error?.httpStatus === 429 ? Date.now() + 60000 : null, lastAccountError: message, lastError: message });
+    await scheduleAuthorizationPoll(error?.httpStatus === 429 ? 60000 : 15000);
   }
 }
 
@@ -479,11 +519,11 @@ async function connectProject(projectId) {
   }
 }
 
-async function start() {
+async function start(forceAuthorization = false) {
   if (running) return running;
   running = (async () => {
     const current = await state();
-    if (!current.accessToken) { if (current.pending) await pollAuthorization(); return; }
+    if (!current.accessToken) { if (current.pending) await pollAuthorization({ force: forceAuthorization }); return; }
     const bindings = await refreshBindings();
     await recover(bindings);
     await drain();
@@ -496,6 +536,7 @@ async function start() {
 
 async function disconnect() {
   const current = await state();
+  clearAuthorizationTimer();
   closeRealtime("Disconnected");
   await chrome.alarms.clearAll();
   await chrome.storage.local.remove(STATE_KEY);
@@ -516,7 +557,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     : action === "syndicatum.prepare-server-migration" ? prepareServerMigration(request.baseUrl)
     : action === "syndicatum.resume-server-migration" ? resumeServerMigration()
     : action === "syndicatum.cancel-server-migration" ? cancelServerMigration()
-    : action === "syndicatum.refresh" ? start().then(publicStatus)
+    : action === "syndicatum.refresh" ? start(true).then(publicStatus)
     : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)
     : action === "syndicatum.status" ? publicStatus()
     : null;
