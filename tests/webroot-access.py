@@ -51,7 +51,7 @@ def main() -> None:
         ):
             write(fixture, name)
         write(fixture, "index.php", "<?php echo 'application';")
-        write(fixture, "api/health.php", "<?php echo 'healthy';")
+        write(fixture, "api/v1/health.php", "<?php echo 'healthy';")
         write(fixture, "assets/app.css", "body { color: black; }")
         write(fixture, ".well-known/verification.txt", "verification")
         write(fixture, ".well-known/oauth-protected-resource.php", "<?php echo 'metadata';")
@@ -100,7 +100,7 @@ def main() -> None:
                 ("well-known file", "/.well-known/verification.txt", {200}),
                 ("well-known rewrite", "/.well-known/oauth-protected-resource", {200}),
                 ("application root", "/", {200}),
-                ("API health", "/api/health.php", {200}),
+                ("API health", "/api/v1/health.php", {200}),
                 ("static asset", "/assets/app.css", {200}),
                 ("authenticated route", "/users", {200}),
                 ("OAuth route", "/oauth/authorize", {200}),
