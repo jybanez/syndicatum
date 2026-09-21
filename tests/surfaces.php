@@ -264,8 +264,8 @@ try {
     $suite->test('Apache denies repository, local work, and runtime paths', function () use ($suite, $root) {
         $rewrites = file_get_contents($root . '/.htaccess');
         $suite->true(
-            strpos($rewrites, 'RewriteRule ^(?:\\.git|\\.agents|\\.codex|\\.playwright-cli|output|runtime)(?:/|$) - [F,L,NC]') !== false
-                && strpos($rewrites, 'RewriteRule ^\\.env(?:\\..*)?$ - [F,L,NC]') !== false,
+            strpos($rewrites, 'RewriteRule (^|/)\\.(?!well-known(?:/|$))[^/]+(?:/|$) - [F,L,NC]') !== false
+                && strpos($rewrites, 'RewriteRule ^(?:output|runtime)(?:/|$) - [F,L,NC]') !== false,
             'The application vhost must deny repository, local-work, environment, and runtime paths before the existing-file bypass.'
         );
     });
