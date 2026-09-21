@@ -1,8 +1,9 @@
 RewriteEngine On
 AddType application/manifest+json .webmanifest
 
-# Repository internals and generated output are never public application assets.
-RewriteRule ^(?:\.git|output)(?:/|$) - [F,L,NC]
+# Repository internals, local work, and runtime output are never public assets.
+RewriteRule ^(?:\.git|\.agents|\.codex|\.playwright-cli|output|runtime)(?:/|$) - [F,L,NC]
+RewriteRule ^\.env(?:\..*)?$ - [F,L,NC]
 
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"

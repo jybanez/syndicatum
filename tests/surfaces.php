@@ -261,11 +261,12 @@ try {
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
 
-    $suite->test('Apache denies repository internals and generated output', function () use ($suite, $root) {
+    $suite->test('Apache denies repository, local work, and runtime paths', function () use ($suite, $root) {
         $rewrites = file_get_contents($root . '/.htaccess');
         $suite->true(
-            strpos($rewrites, 'RewriteRule ^(?:\\.git|output)(?:/|$) - [F,L,NC]') !== false,
-            'The application vhost must deny .git and generated output before the existing-file bypass.'
+            strpos($rewrites, 'RewriteRule ^(?:\\.git|\\.agents|\\.codex|\\.playwright-cli|output|runtime)(?:/|$) - [F,L,NC]') !== false
+                && strpos($rewrites, 'RewriteRule ^\\.env(?:\\..*)?$ - [F,L,NC]') !== false,
+            'The application vhost must deny repository, local-work, environment, and runtime paths before the existing-file bypass.'
         );
     });
 
