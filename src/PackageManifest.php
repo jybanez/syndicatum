@@ -139,6 +139,7 @@ class PackageManifest
         $roles = $kind === 'release' ? [
             'application' => 'app/',
             'schema_baseline' => 'schema/baselines/',
+            'legacy_upgrade' => 'schema/legacy-upgrade/',
             'post_baseline_migration' => 'schema/post-baseline/',
             'package_metadata' => 'metadata/',
             'notice' => 'notices/',

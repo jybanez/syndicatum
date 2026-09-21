@@ -31,6 +31,7 @@
     "index.php",
     "legal-page.php",
     "license.php",
+    "migrations",
     "manifest.webmanifest",
     "mcp.php",
     "privacy.php",
@@ -47,7 +48,6 @@
     ".gitignore",
     "companion",
     "docs",
-        "migrations",
         "release/canonical-release-policy-v1.json",
         "tests",
     "tools"
@@ -141,6 +141,230 @@
     "provenance": "syndicatum-v1.0.0.provenance.json"
   },
   "dispositions": [
+    {
+      "source": "migrations/202609050001_expansion_foundation.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050001_expansion_foundation.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050002_collaboration_core.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050002_collaboration_core.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050003_account_oauth_attempts.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050003_account_oauth_attempts.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050004_project_instructions.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050004_project_instructions.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050005_agent_claim_expiry.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050005_agent_claim_expiry.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050006_legacy_revision_identity.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050006_legacy_revision_identity.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050007_avatars_and_agent_webhooks.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050007_avatars_and_agent_webhooks.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609050008_agent_activation_bindings.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609050008_agent_activation_bindings.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609060001_connector_devices.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609060001_connector_devices.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609060002_connector_authorization_channels.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609060002_connector_authorization_channels.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609060003_connector_device_activation_routes.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609060003_connector_device_activation_routes.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609070001_google_sso.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609070001_google_sso.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609070002_google_account_linking.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609070002_google_account_linking.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609070003_chatgpt_oauth.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609070003_chatgpt_oauth.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609070004_workspace_agent_triggers.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609070004_workspace_agent_triggers.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609080001_responses_api_activation.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609080001_responses_api_activation.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609110001_canonical_agents.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609110001_canonical_agents.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609110002_legacy_api_observability.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609110002_legacy_api_observability.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609120001_project_public_ids.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609120001_project_public_ids.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609130001_disable_chatgpt_proactive_activation.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609130001_disable_chatgpt_proactive_activation.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609130002_discussion_binding_codes.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609130002_discussion_binding_codes.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609140001_discussion_binding_intents.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609140001_discussion_binding_intents.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609140002_remove_legacy_discussion_binding_codes.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609140002_remove_legacy_discussion_binding_codes.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609140003_chatgpt_account_oauth.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609140003_chatgpt_account_oauth.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609170001_message_request_fingerprint.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609170001_message_request_fingerprint.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609180001_delivery_worker_heartbeat.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609180001_delivery_worker_heartbeat.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609180002_realtime_outbox_attempt_diagnostics.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609180002_realtime_outbox_attempt_diagnostics.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609180002_responsibility_events.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609180002_responsibility_events.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609180003_delivery_path_failure_categories.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609180003_delivery_path_failure_categories.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609180004_delivery_terminal_timestamps.php",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/migrations/202609180004_delivery_terminal_timestamps.php",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "schema/mysql84/legacy-upgrade-plan.json",
+      "action": "ship",
+      "path": "schema/legacy-upgrade/plan.json",
+      "role": "legacy_upgrade",
+      "mode": 420
+    },
+    {
+      "source": "src/LegacyMigrationPlan.php",
+      "action": "ship",
+      "path": "app/src/LegacyMigrationPlan.php",
+      "role": "application",
+      "mode": 420
+    },
     {
       "source": ".htaccess",
       "action": "ship",
@@ -1990,6 +2214,34 @@
       "mode": 420
     },
     {
+      "source": "src/LegacyClaimColumnOrder.php",
+      "action": "ship",
+      "path": "app/src/LegacyClaimColumnOrder.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/LegacyForwardUpgrader.php",
+      "action": "ship",
+      "path": "app/src/LegacyForwardUpgrader.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/LegacySchemaFingerprint.php",
+      "action": "ship",
+      "path": "app/src/LegacySchemaFingerprint.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/LegacyUpgradePackage.php",
+      "action": "ship",
+      "path": "app/src/LegacyUpgradePackage.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/McpConnectionHealth.php",
       "action": "ship",
       "path": "app/src/McpConnectionHealth.php",
@@ -2179,10 +2431,59 @@
       "mode": 420
     },
     {
+      "source": "vendor/pbb-helper/docs/icon-packs-sources.json",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/icon-packs-sources.json",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/docs/ui-icon-packs.md",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/ui-icon-packs.md",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.icons.ai.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.icons.ai.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.icons.files.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.icons.files.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.icons.social.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.icons.social.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "vendor/pbb-helper/js/ui/ui.loader.js",
       "action": "ship",
       "path": "app/vendor/pbb-helper/js/ui/ui.loader.js",
       "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/licenses/lobe-icons-MIT.txt",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/licenses/lobe-icons-MIT.txt",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/licenses/simple-icons-CC0.txt",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/licenses/simple-icons-CC0.txt",
+      "role": "notice",
       "mode": 420
     },
     {

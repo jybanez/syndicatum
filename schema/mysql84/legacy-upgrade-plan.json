@@ -1,0 +1,132 @@
+{
+  "contract_name": "syndicatum-legacy-v1-upgrade-plan",
+  "format_version": "1.0",
+  "source_migration_head": "202609170001_message_request_fingerprint",
+  "target_schema_head": "202609180004",
+  "target_baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
+  "canonicalization": "UTF-8 bytes; CRLF to LF only; lone CR rejected",
+  "historical_migrations": [
+    {
+      "id": "202609050001_expansion_foundation",
+      "sha256": "832d6d5254745f09966148f54ec4849816e5b81bed118795a18c573ea165949b"
+    },
+    {
+      "id": "202609050002_collaboration_core",
+      "sha256": "5333e980fc4883882389063055acb2c7bc6c68c870551e4a75cb0e82442de434"
+    },
+    {
+      "id": "202609050003_account_oauth_attempts",
+      "sha256": "05165978246c7279c62e9e4f6d98fa81489e7f3897296d1313936c24219938d0"
+    },
+    {
+      "id": "202609050004_project_instructions",
+      "sha256": "c3169904a26469143b0d7a468263ba741506c8353acdfc72b2c9263925ea84e6"
+    },
+    {
+      "id": "202609050005_agent_claim_expiry",
+      "sha256": "8ebe999dab8589a5730e850a20e6663620f8978623503b74fd44e8709b456791"
+    },
+    {
+      "id": "202609050006_legacy_revision_identity",
+      "sha256": "12a9dddda023adffd03449daeab4c8024292d53e22946b1a06df1b41c9e37e76"
+    },
+    {
+      "id": "202609050007_avatars_and_agent_webhooks",
+      "sha256": "7041572c944c49e723d66f9dfa39b2dd72fe4720e17053e37f8d93bea4e6f27a"
+    },
+    {
+      "id": "202609050008_agent_activation_bindings",
+      "sha256": "45a630505f7f453954824cf1513041067dd30e63d2ac06d517c7b5a4859b51df"
+    },
+    {
+      "id": "202609060001_connector_devices",
+      "sha256": "e41f4cf67d7cc9f164021bcf7bb75d452945d9523f789f0078bc165e90371ada"
+    },
+    {
+      "id": "202609060002_connector_authorization_channels",
+      "sha256": "6a587b7f2107f3013fbd660516e523e8da2dbdbe9fbd4bb3768614da48879e53"
+    },
+    {
+      "id": "202609060003_connector_device_activation_routes",
+      "sha256": "64cea801c4850d04f172c69c7b4f62023e7be8fc8093c1edce505377ced30401"
+    },
+    {
+      "id": "202609070001_google_sso",
+      "sha256": "2d712d47dcaa4f9f28084f82b44c3c673e7497d44817bed22ff29bef4923bd7e"
+    },
+    {
+      "id": "202609070002_google_account_linking",
+      "sha256": "392283c2e3243c70a806a710e37bccf06b7382274beea22596e1ba4c2a48e759"
+    },
+    {
+      "id": "202609070003_chatgpt_oauth",
+      "sha256": "bc3037994b7f3f74937061974c6bf35374ad8b0c9355095f9fc109d250be24f5"
+    },
+    {
+      "id": "202609070004_workspace_agent_triggers",
+      "sha256": "70865ca426ab8f5259c92651a3b8f060df782197f53fdab84d716b6ce8afa2d4"
+    },
+    {
+      "id": "202609080001_responses_api_activation",
+      "sha256": "b4f0d8925461cd6ceccc8ab309c6c1cc82c5ee427ff997cf4703a3cff0a6e7e7"
+    },
+    {
+      "id": "202609110001_canonical_agents",
+      "sha256": "81effff122950333eb4ab482ff46b84e7e7f6352479eed70486ca7d5ca2f8bcf"
+    },
+    {
+      "id": "202609110002_legacy_api_observability",
+      "sha256": "a0ded10c6650561edfe9947cc9c49c980e34a9c39b041b15fbf5582685a502fb"
+    },
+    {
+      "id": "202609120001_project_public_ids",
+      "sha256": "653ed169b15b828fca896151c4bc47d0b550aac7e353f5c22abac8d86ac6b3bb"
+    },
+    {
+      "id": "202609130001_disable_chatgpt_proactive_activation",
+      "sha256": "a63bba02d25cc9f2fa94732d87899c43e893b5c4f73258a4346c1cc94bd95d3f"
+    },
+    {
+      "id": "202609130002_discussion_binding_codes",
+      "sha256": "ff42b2d2f98025f4f964447c8b86cc7cacba1d6e382a56c8902ba43783996b12"
+    },
+    {
+      "id": "202609140001_discussion_binding_intents",
+      "sha256": "217145121ee96a25e500ee2f8f204ef701477870cc0eb0d7db905939355b156e"
+    },
+    {
+      "id": "202609140002_remove_legacy_discussion_binding_codes",
+      "sha256": "6ef231ebc233aa10404f97eb8e6cc856dd175b36c851c3beb44746321105ab9a"
+    },
+    {
+      "id": "202609140003_chatgpt_account_oauth",
+      "sha256": "8d5e8eeb6812f7a366a6e8b6fbaeb744a221833cd4fe0921af211c4beabe867b"
+    },
+    {
+      "id": "202609170001_message_request_fingerprint",
+      "sha256": "26634a6a91063c8584dd75399c186d642e9a0fdb7fb9ea62dabb71acfe7acdc6"
+    }
+  ],
+  "forward_migrations": [
+    {
+      "id": "202609180001_delivery_worker_heartbeat",
+      "sha256": "eaeb67ff590c0b62e4abef45d16f08df7e74573dd6dd204ba2dad7c5c55622d9"
+    },
+    {
+      "id": "202609180002_realtime_outbox_attempt_diagnostics",
+      "sha256": "b8e48853cc25b18030093fa7529271d0228dbe85c3eeb5634e8451c6fd5cc5a0"
+    },
+    {
+      "id": "202609180002_responsibility_events",
+      "sha256": "77818fb8c87481b1ecfacadb011b7346b0d4a732bc820194e00966a983c532a4"
+    },
+    {
+      "id": "202609180003_delivery_path_failure_categories",
+      "sha256": "40a1cfcf6d568f95dcf2517fc37172f030aa4b48b691f0982d1a5a0747e13a3c"
+    },
+    {
+      "id": "202609180004_delivery_terminal_timestamps",
+      "sha256": "7d08ee4e8292959dd8467b4f4f4e2f76da2c98c32e7eb1dc733565b819e9c50c"
+    }
+  ]
+}

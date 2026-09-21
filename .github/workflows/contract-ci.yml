@@ -544,6 +544,11 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12.6'
       - name: Package exact commit and verify candidate archive
         shell: bash
         run: |
@@ -554,11 +559,53 @@ jobs:
           (cd mysql-migration-candidate && sha256sum "$archive" > "$archive.sha256" && sha256sum --check "$archive.sha256")
           tar -xzf "mysql-migration-candidate/$archive" -C mysql-migration-candidate/unpacked
           test -f mysql-migration-candidate/unpacked/syndicatum/scripts/mysql57-to-84-migration-acceptance.ps1
+      - name: Prepare the pinned isolated legacy-adoption candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_ref=refs/heads/ci/legacy-upgrade-candidate-a006ce1
+          candidate_sha=a006ce1c243cdc3a229d7b03f092921d5613f01b
+          git fetch --no-tags origin "+${candidate_ref}:refs/remotes/origin/ci/legacy-upgrade-candidate-a006ce1"
+          resolved_sha="$(git rev-parse refs/remotes/origin/ci/legacy-upgrade-candidate-a006ce1^{commit})"
+          test "$resolved_sha" = "$candidate_sha"
+          env GITHUB_REPOSITORY=. GITHUB_WORKFLOW_REF=candidate \
+            GITHUB_WORKFLOW_SHA="$candidate_sha" GITHUB_RUN_ID=candidate GITHUB_RUN_ATTEMPT=1 \
+            python3 tools/release/canonical_release.py \
+            --repository . --commit "$candidate_sha" \
+            --tag candidate-legacy-uplift-a006ce1 \
+            --output-dir mysql-migration-candidate/legacy-package
+          test "$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.zip | cut -d ' ' -f 1)" = 84dd8c4feb9ff8abdf1f0f21a796ed5cbf6c77520c3eef494f5dcb8e6585302c
+          test "$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.manifest.json | cut -d ' ' -f 1)" = 3d53142b82e11cc2805c468067dd79e2f8d4cf849b24ab6b8c4e3bd95ea8fdda
+          provenance_sha256=d8d4e5603533523c9b8afeea3f669f984cb25f498767f33fadf9a3a594aef766
+          [[ "$provenance_sha256" =~ ^[0-9a-f]{64}$ ]]
+          actual_provenance_sha256="$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.provenance.json | cut -d ' ' -f 1)"
+          if [ "$actual_provenance_sha256" != "$provenance_sha256" ]; then
+            echo "Candidate provenance SHA-256 mismatch: actual=$actual_provenance_sha256 expected=$provenance_sha256" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = Path('mysql-migration-candidate/legacy-package')
+          manifest = json.loads((package / 'syndicatum-v1.0.0.manifest.json').read_text())
+          provenance = json.loads((package / 'syndicatum-v1.0.0.provenance.json').read_text())
+          pinned_tree = '7e53d334163f959d23c8c5ffd26ab56c5b4f66f8071eb64fe46a3f57c74ec4aa'
+          if manifest.get('content_tree_sha256') != pinned_tree or provenance.get('content_tree_sha256') != pinned_tree:
+              raise SystemExit('Candidate content-tree pin mismatch')
+          if provenance.get('canonical') is not False:
+              raise SystemExit('Candidate provenance is not explicitly noncanonical')
+          print('Pinned candidate content tree verified; canonical=false')
+          PY
+          stage_root="$(mktemp -d "$RUNNER_TEMP/legacy-candidate-stage.XXXXXXXX")"
+          public_root="$(mktemp -d "$RUNNER_TEMP/legacy-candidate-public.XXXXXXXX")"
+          php tests/legacy-candidate-package.php mysql-migration-candidate/legacy-package \
+            "$stage_root" "$public_root"
       - name: Run isolated MySQL 5.7 to 8.4 migration lifecycle
         shell: bash
         run: |
           set -euo pipefail
           pwsh -NoProfile -File ./mysql-migration-candidate/unpacked/syndicatum/scripts/mysql57-to-84-migration-acceptance.ps1 \
+            -CandidatePackageDir ./mysql-migration-candidate/legacy-package \
             2>&1 | tee mysql57-to-84-migration.log
       - name: Retain MySQL migration evidence
         if: always()

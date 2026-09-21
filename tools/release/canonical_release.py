@@ -197,6 +197,7 @@ def validate_policy(policy: dict[str, object], tree: dict[str, tuple[str, str, s
         seen_dest[folded] = destination
         expected = next((r for prefix, r in [
             ("app/", "application"), ("schema/baselines/", "schema_baseline"),
+            ("schema/legacy-upgrade/", "legacy_upgrade"),
             ("schema/post-baseline/", "post_baseline_migration"), ("metadata/", "package_metadata"),
             ("notices/", "notice"), ("plugins/", "plugin"), ("skills/", "skill"),
         ] if destination.startswith(prefix)), None)
