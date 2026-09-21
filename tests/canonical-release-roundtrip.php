@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../src/PackageManifest.php';
 require_once __DIR__ . '/../src/ArchiveSafetyReader.php';
+require_once __DIR__ . '/../src/LegacyMigrationPlan.php';
 
 if ($argc !== 9) {
     fwrite(STDERR, "Usage: php canonical-release-roundtrip.php ARCHIVE MANIFEST STAGING_ROOT PUBLIC_ROOT SOURCE_COMMIT SOURCE_TAG BASELINE_ID SCHEMA_HEAD\n");
@@ -26,6 +27,12 @@ $context = ArchiveValidationContext::forRelease($archiveSha, $manifestSha, [
 $reader = new ArchiveSafetyReader();
 $report = $reader->validate($archivePath, $manifestJson, $context);
 $stage = $reader->extractToNewStage($archivePath, $manifestJson, $context, $stagingRoot, $publicRoot);
+$legacyRoot = $stage->path() . '/schema/legacy-upgrade';
+$legacyPlan = new LegacyMigrationPlan($legacyRoot . '/plan.json', $legacyRoot . '/migrations');
+$legacyPlan->verifyFiles();
+if (count($legacyPlan->historicalMigrations()) !== 25 || count($legacyPlan->forwardMigrations()) !== 5) {
+    throw new RuntimeException('Authenticated release did not round-trip the pinned legacy migration inventory.');
+}
 $expected = [];
 foreach ($manifest['files'] as $entry) {
     $expected[$entry['path']] = $entry;
