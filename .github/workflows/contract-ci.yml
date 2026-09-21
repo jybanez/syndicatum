@@ -353,7 +353,7 @@ jobs:
         run: |
           set -euo pipefail
           node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs | tee ci-evidence/codex-portable.txt
-          node --test companion/test/package.test.mjs | tee ci-evidence/companion-portable.txt
+          node --test companion/test/*.test.mjs | tee ci-evidence/companion-portable.txt
       - name: Retain source-contract test evidence
         if: always()
         uses: actions/upload-artifact@v6
