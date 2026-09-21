@@ -12,6 +12,17 @@ permissions:
   contents: read
 
 jobs:
+  webroot-access:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Prove Apache deny and allow contract
+        run: python tests/webroot-access.py
+
   external-host-preflight-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
