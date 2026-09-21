@@ -560,13 +560,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          candidate_ref=refs/heads/ci/legacy-upgrade-candidate-a006ce1
+          candidate_sha=a006ce1c243cdc3a229d7b03f092921d5613f01b
+          git fetch --no-tags origin "+${candidate_ref}:refs/remotes/origin/ci/legacy-upgrade-candidate-a006ce1"
+          resolved_sha="$(git rev-parse refs/remotes/origin/ci/legacy-upgrade-candidate-a006ce1^{commit})"
+          test "$resolved_sha" = "$candidate_sha"
           python3 tools/release/canonical_release.py \
-            --repository . --commit a006ce1c243cdc3a229d7b03f092921d5613f01b \
+            --repository . --commit "$candidate_sha" \
             --tag candidate-legacy-uplift-a006ce1 \
             --output-dir mysql-migration-candidate/legacy-package
           test "$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.zip | cut -d ' ' -f 1)" = 84dd8c4feb9ff8abdf1f0f21a796ed5cbf6c77520c3eef494f5dcb8e6585302c
           test "$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.manifest.json | cut -d ' ' -f 1)" = 3d53142b82e11cc2805c468067dd79e2f8d4cf849b24ab6b8c4e3bd95ea8fdda
-          test "$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.provenance.json | cut -d ' ' -f 1)" = d8d4e5603533523c9b8afeea3a9a594aef766
+          provenance_sha256=d8d4e5603533523c9b8afeea3f669f984cb25f498767f33fadf9a3a594aef766
+          [[ "$provenance_sha256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum mysql-migration-candidate/legacy-package/syndicatum-v1.0.0.provenance.json | cut -d ' ' -f 1)" = "$provenance_sha256"
       - name: Run isolated MySQL 5.7 to 8.4 migration lifecycle
         shell: bash
         run: |
