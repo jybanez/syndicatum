@@ -89,6 +89,17 @@ schema/constraint shape, and a valid package identity. Unknown or partial
 lineage must fail closed. A second run against an already-upgraded database
 must return a verified no-op, not replay migrations or replace identity.
 
+The current protected-main implementation does **not** yet provide that path.
+`InstallationState::inspect()` reads only the first nine identity fields and
+compares the total migration-row count to `post_baseline_migrations` (zero in
+this release). A truthfully marked legacy installation with its preserved
+history would therefore fail readiness. `SchemaMigrator::migrate()` returns
+without checking that history when an identity table exists and no
+post-baseline migrations are declared. The upgrade implementation must add a
+separate lineage-aware readiness and checksum-verification branch; inserting
+an identity row alone is not an upgrade. `BaselineInstaller` must remain
+fresh/empty-database-only.
+
 ## Rehearsal and human acceptance
 
 1. Start from a consistent source snapshot and logical dump in a disposable,
