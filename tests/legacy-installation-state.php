@@ -11,17 +11,17 @@ class LegacyStateStatement extends PDOStatement
         $this->rows = $rows;
     }
 
-    public function execute($params = null)
+    public function execute(?array $params = null): bool
     {
         return true;
     }
 
-    public function fetchAll($mode = null, $arg1 = null, $arg2 = null)
+    public function fetchAll(int $mode = PDO::FETCH_DEFAULT, mixed ...$args): array
     {
         return $this->rows;
     }
 
-    public function fetchColumn($column = 0)
+    public function fetchColumn(int $column = 0): mixed
     {
         return $this->rows[0][0];
     }
@@ -41,7 +41,7 @@ class LegacyStatePdo extends PDO
         $this->ledger = $ledger;
     }
 
-    public function query($sql)
+    public function query(string $sql, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
     {
         if (strpos($sql, 'information_schema.tables') !== false) {
             return new LegacyStateStatement($this->tables);
@@ -55,7 +55,7 @@ class LegacyStatePdo extends PDO
         throw new RuntimeException('Unexpected readiness query.');
     }
 
-    public function prepare($sql, $options = [])
+    public function prepare(string $sql, array $options = []): PDOStatement|false
     {
         if (strpos($sql, 'chk_project_participants_identity') === false) {
             throw new RuntimeException('Unexpected readiness preflight.');
