@@ -166,6 +166,18 @@ try {
         throw 'Application health failed after restoring the 5.7 export into MySQL 8.4.'
     }
     Write-Host "MySQL migration acceptance passed: $sourceVersion export restored into $targetVersion with $targetState and healthy application behavior."
+} catch {
+    $failure = $_
+    Write-Step 'Capturing isolated migration container diagnostics before cleanup'
+    try { Invoke-Compose -Arguments @('ps', '--all') } catch { Write-Warning $_ }
+    foreach ($service in @('worker', 'app', 'db')) {
+        $container = "${projectName}-${service}-1"
+        try { Invoke-Docker -Arguments @('inspect', '--format', '{{json .State}}', $container) } catch { Write-Warning $_ }
+        try { Invoke-Compose -Arguments @('logs', '--no-color', '--timestamps', $service) } catch { Write-Warning $_ }
+    }
+    try { Invoke-Docker -Arguments @('inspect', '--format', '{{json .Config.Healthcheck}}', "${projectName}-worker-1") } catch { Write-Warning $_ }
+    try { Invoke-Compose -Arguments @('exec', '-T', 'app', 'php', 'scripts/chat-db.php', 'installation-status') } catch { Write-Warning $_ }
+    throw $failure
 } finally {
     Write-Step "Removing isolated migration project $projectName and its volumes"
     try { Invoke-Compose -Arguments @('down', '--volumes', '--remove-orphans') } catch { Write-Warning $_ }
