@@ -177,6 +177,56 @@ function Read-DeliveryCounts {
     return (Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $query) -Capture).Trim()
 }
 
+function Read-ClaimColumns {
+    $code = @'
+require "/var/www/html/src/Db.php";
+$q = "SELECT table_name,ordinal_position,column_name,column_type,is_nullable,column_default,extra,character_set_name,collation_name,generation_expression FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN ('agents','chat_agents') ORDER BY table_name,ordinal_position";
+echo json_encode(Db::pdo()->query($q)->fetchAll(PDO::FETCH_ASSOC), JSON_THROW_ON_ERROR), "\n";
+'@
+    $output = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '--entrypoint', 'php', 'app', '-r', $code) -Capture
+    $json = [regex]::Match($output, '(?s)\[.*\]').Value
+    if (-not $json) { throw 'Claim-column inventory probe did not return JSON.' }
+    return @(ConvertFrom-Json -InputObject $json)
+}
+
+function Read-ClaimRowDigest {
+    $code = 'require "/var/www/html/src/Db.php"; $rows=[]; foreach (["agents","chat_agents"] as $table) { $items=Db::pdo()->query("SELECT * FROM " . $table . " ORDER BY id")->fetchAll(PDO::FETCH_ASSOC); foreach ($items as &$item) { ksort($item); } unset($item); $rows[$table]=$items; } echo hash("sha256", json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)), "\n";'
+    $output = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '--entrypoint', 'php', 'app', '-r', $code) -Capture
+    $digest = [regex]::Match($output, '[a-f0-9]{64}').Value
+    if (-not $digest) { throw 'Claim-row digest probe did not return a digest.' }
+    return $digest
+}
+
+function Assert-ClaimColumns([object[]]$Before, [object[]]$After, [switch]$Legacy, [switch]$CrossVersion) {
+    if ($Before.Count -ne 34 -or $After.Count -ne 34) { throw 'Expected exactly 17 claim columns in each of two tables.' }
+    foreach ($table in @('agents', 'chat_agents')) {
+        $old = @($Before | Where-Object { $_.TABLE_NAME -eq $table })
+        $new = @($After | Where-Object { $_.TABLE_NAME -eq $table })
+        for ($index = 0; $index -lt 17; $index++) {
+            $expected = $old[$index]
+            if ($Legacy -and $index -eq 9) { $expected = $old[10] }
+            if ($Legacy -and $index -eq 10) { $expected = $old[9] }
+            $actual = $new[$index]
+            # MySQL 8.4 normalizes some 5.7 metadata (for example integer display widths).
+            # The exact 8.4 schema fingerprint is checked before this cross-version comparison.
+            $definition = if ($CrossVersion) { @('COLUMN_NAME') } else { @('COLUMN_NAME', 'COLUMN_TYPE', 'IS_NULLABLE', 'COLUMN_DEFAULT', 'EXTRA', 'CHARACTER_SET_NAME', 'COLLATION_NAME', 'GENERATION_EXPRESSION') }
+            foreach ($field in $definition) {
+                if ($actual.$field -cne $expected.$field) {
+                    throw "Claim-column definition or order changed unexpectedly: $table ordinal $($index + 1) $field."
+                }
+            }
+            if ([int]$actual.ORDINAL_POSITION -ne $index + 1) { throw "Unexpected ordinal in $table." }
+        }
+        $first = if ($Legacy) { 'claim_expires_at' } else { 'claim_secret_version' }
+        $second = if ($Legacy) { 'claim_secret_version' } else { 'claim_expires_at' }
+        if ($new[9].COLUMN_NAME -ne $first -or $new[10].COLUMN_NAME -ne $second -or
+            $new[9].COLUMN_TYPE -ne $(if ($Legacy) { 'datetime' } else { 'varchar(24)' }) -or
+            $new[10].COLUMN_TYPE -ne $(if ($Legacy) { 'varchar(24)' } else { 'datetime' })) {
+            throw "Claim-column layout does not match the expected physical order: $table."
+        }
+    }
+}
+
 try {
     Write-Step 'Starting pinned MySQL 5.7 source and applying the complete schema'
     Write-AcceptanceEnvironment -MySqlImage $SourceImage -DatabaseImage $databaseImage57 -SqlMode $sourceSqlMode
@@ -195,6 +245,19 @@ try {
     $stateSql = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --batch --skip-column-names -uroot "$MYSQL_DATABASE" -e "SELECT CONCAT_WS(''|'',(SELECT COUNT(*) FROM users WHERE username=''migration_owner''),(SELECT COUNT(*) FROM workspaces WHERE name=''Migration Workspace''),(SELECT COUNT(*) FROM projects WHERE slug=''migration-project''),(SELECT COUNT(*) FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE u.username=''migration_owner'' AND pm.status=''active''),(SELECT COUNT(*) FROM project_participants pp JOIN projects p ON p.id=pp.project_id WHERE p.slug=''migration-project''),(SELECT COUNT(*) FROM messages WHERE message_uuid=''22222222-2222-4222-8222-222222222222'' AND body=''Migration acceptance message''),(SELECT COUNT(*) FROM message_addressees ma JOIN messages m ON m.id=ma.message_id WHERE m.message_uuid=''22222222-2222-4222-8222-222222222222'' AND ma.reason=''direct''))"'
     $sourceState = (Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $stateSql) -Capture).Trim()
     if ($sourceState -ne $expectedState) { throw "Unexpected 5.7 fixture state: $sourceState" }
+
+    Write-Step 'Reproducing only the preserved legacy claim-column order before export'
+    $targetClaimColumns = Read-ClaimColumns
+    Assert-ClaimColumns -Before $targetClaimColumns -After $targetClaimColumns
+    $claimRowsBefore = Read-ClaimRowDigest
+    $claimOrderSql = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "ALTER TABLE chat_agents MODIFY COLUMN claim_secret_version VARCHAR(24) COLLATE utf8mb4_unicode_ci NULL AFTER claim_expires_at; ALTER TABLE agents MODIFY COLUMN claim_secret_version VARCHAR(24) COLLATE utf8mb4_unicode_ci NULL AFTER claim_expires_at"'
+    Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $claimOrderSql) -Capture | Out-Null
+    $legacyClaimColumns = Read-ClaimColumns
+    Assert-ClaimColumns -Before $targetClaimColumns -After $legacyClaimColumns -Legacy
+    $claimRowsAfter = Read-ClaimRowDigest
+    if ($claimRowsAfter -ne $claimRowsBefore) { throw 'Claim rows or values changed while reproducing the legacy order.' }
+    if ((Read-LedgerSnapshot) -ne $sourceLedger) { throw 'Claim-order fixture changed the exact 30-row ledger.' }
+    Write-Host "Preserved only the legacy claim-column ordinals; affected row/value sha256=$claimRowsAfter"
 
     Write-Step 'Exporting the 5.7 database and replacing it with a fresh pinned 8.4 database'
     $dumpInContainer = "/tmp/$projectName.sql"
@@ -224,6 +287,11 @@ try {
         throw "Expected fail-closed legacy_upgrade_incomplete; observed $($preState.state)."
     }
     $preFingerprint = Read-SchemaFingerprint
+    if ($preFingerprint -ne 'ee76b3cbe9969031141613e24fc345777983817be132d4b78950e2a5fa86754a') {
+        throw "Restored legacy prefix[5] fingerprint differs from the pinned reference: $preFingerprint"
+    }
+    Write-Host "Restored pre-adoption prefix[5] sha256=$preFingerprint"
+    Assert-ClaimColumns -Before $targetClaimColumns -After (Read-ClaimColumns) -Legacy -CrossVersion
     $preDelivery = Read-DeliveryCounts
     if ($preDelivery -ne '0|0|0|0') { throw "Unexpected queued delivery fixture before adoption: $preDelivery" }
     $workerProbe = @(& docker compose @script:ComposeOptions run --rm --no-deps worker 2>&1)
@@ -263,6 +331,8 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
     $upgradeOutput = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', "${candidatePackagePath}:/tmp/legacy-package:ro", '-v', "${testHelpersPath}:/var/www/html/tests:ro", '--entrypoint', 'php', 'app', '-r', $upgradeCode) -Capture
     if ($upgradeOutput -notmatch '"changed":true') { throw "Authenticated upgrade did not confirm the bridge: $upgradeOutput" }
     if ((Read-LedgerSnapshot) -ne $restoredLedger) { throw 'Authenticated bridge changed the 30-row migration ledger.' }
+    Assert-ClaimColumns -Before $targetClaimColumns -After (Read-ClaimColumns) -CrossVersion
+    if ((Read-ClaimRowDigest) -ne $claimRowsBefore) { throw 'Authenticated claim-column bridge changed rows or values.' }
     if ((Read-IdentityCount) -ne 1) { throw 'Authenticated bridge did not create exactly one installation identity table.' }
     $postState = Read-InstallationState
     if ($postState.state -ne 'legacy_upgraded_ready' -or -not $postState.ready) {
