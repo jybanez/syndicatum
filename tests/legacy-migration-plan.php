@@ -35,6 +35,14 @@ foreach ($forward as $migration) {
 }
 $plan->verifyLedgerRows($sourceRows, 'source');
 $plan->verifyLedgerRows($targetRows, 'target');
+legacyPlanAssert(count($plan->pendingForwardMigrations($sourceRows)) === 5, 'Source ledger did not expose five pending forward migrations.');
+legacyPlanAssert(count($plan->pendingForwardMigrations(array_slice($targetRows, 0, 27))) === 3, 'Forward prefix did not expose its unapplied suffix.');
+legacyPlanAssert(count($plan->pendingForwardMigrations($targetRows)) === 0, 'Complete target ledger was not a no-op.');
+legacyPlanReject(function () use ($plan, $targetRows) {
+    $rows = array_slice($targetRows, 0, 26);
+    $rows[25] = $targetRows[27];
+    $plan->pendingForwardMigrations($rows);
+}, 'Skipped forward migration was accepted.');
 legacyPlanReject(function () use ($plan, $sourceRows) {
     $plan->verifyLedgerRows($sourceRows, 'target');
 }, 'Missing forward rows were accepted as target-ready.');

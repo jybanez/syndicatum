@@ -57,6 +57,30 @@ class LegacyMigrationPlan
         $this->verifyLedgerRows($rows, $phase);
     }
 
+    /**
+     * Return the unapplied forward suffix after exact historical-ledger preflight.
+     * A partial forward prefix is accepted only so an interrupted upgrade can
+     * resume; no historical or forward row may be rewritten or skipped.
+     */
+    public function pendingForwardMigrations(array $rows)
+    {
+        $history = $this->historicalMigrations();
+        $forward = $this->forwardMigrations();
+        if (count($rows) < count($history) || count($rows) > count($history) + count($forward)) {
+            throw new RuntimeException('Legacy migration ledger has a missing or extra row.');
+        }
+        $expected = array_merge($history, $forward);
+        foreach ($rows as $index => $row) {
+            if (!is_array($row) || !isset($row['version'], $row['checksum'])
+                || !is_string($row['version']) || !is_string($row['checksum'])
+                || !hash_equals($expected[$index]['id'], $row['version'])
+                || !hash_equals($expected[$index]['sha256'], strtolower($row['checksum']))) {
+                throw new RuntimeException('Legacy migration ledger is not an exact source plus forward prefix.');
+            }
+        }
+        return array_slice($forward, count($rows) - count($history));
+    }
+
     public function verifyLedgerRows(array $rows, $phase)
     {
         if ($phase !== 'source' && $phase !== 'target') {
