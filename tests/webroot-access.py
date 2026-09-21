@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pathlib
+import os
 import shutil
 import subprocess
 import tempfile
@@ -36,6 +37,9 @@ def status(base: str, path: str) -> int:
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="syndicatum-webroot-") as temporary:
         fixture = pathlib.Path(temporary)
+        # tempfile creates mode 0700 on Linux; Apache's www-data must traverse
+        # the bind-mounted fixture in CI, even though it remains test-only.
+        os.chmod(fixture, 0o755)
         shutil.copyfile(ROOT / ".htaccess", fixture / ".htaccess")
         for name in (
             ".git/config", ".env.example", "output/history.sql", "runtime/app.log",
@@ -71,7 +75,9 @@ def main() -> None:
                     pass
                 time.sleep(0.25)
             else:
-                raise AssertionError("Isolated Apache did not become ready")
+                raise AssertionError(
+                    "Isolated Apache did not become ready:\n" + docker("logs", container)
+                )
 
             checks = [
                 ("repository metadata", "/.git/config", {403, 404}),
