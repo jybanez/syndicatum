@@ -2431,10 +2431,59 @@
       "mode": 420
     },
     {
+      "source": "vendor/pbb-helper/docs/icon-packs-sources.json",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/icon-packs-sources.json",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/docs/ui-icon-packs.md",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/ui-icon-packs.md",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.icons.ai.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.icons.ai.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.icons.files.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.icons.files.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/js/ui/ui.icons.social.js",
+      "action": "ship",
+      "path": "app/vendor/pbb-helper/js/ui/ui.icons.social.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "vendor/pbb-helper/js/ui/ui.loader.js",
       "action": "ship",
       "path": "app/vendor/pbb-helper/js/ui/ui.loader.js",
       "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/licenses/lobe-icons-MIT.txt",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/licenses/lobe-icons-MIT.txt",
+      "role": "notice",
+      "mode": 420
+    },
+    {
+      "source": "vendor/pbb-helper/licenses/simple-icons-CC0.txt",
+      "action": "ship",
+      "path": "notices/vendor/pbb-helper/licenses/simple-icons-CC0.txt",
+      "role": "notice",
       "mode": 420
     },
     {
