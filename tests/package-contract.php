@@ -597,8 +597,21 @@ if (!is_string($baselineSchema) || !is_array($baselineMetadataArray)) {
     packageContractFail('Committed MySQL 8.4 baseline artifacts are missing or invalid.');
 }
 $committedBaseline = BaselineMetadata::fromArray($baselineMetadataArray);
-if (!hash_equals($baselineMetadataArray['schema_sha256'], hash('sha256', $baselineSchema))) {
-    packageContractFail('Committed baseline SQL digest does not match baseline metadata.');
+// This test reads a mutable checkout, whose Windows text conversion may be
+// CRLF. The signed release package and BaselineInstaller still verify exact
+// packaged bytes; checkout line endings are not package authority.
+if (strpos(str_replace("\r\n", '', $baselineSchema), "\r") !== false) {
+    packageContractFail('Committed baseline SQL contains unsupported lone-CR bytes.');
+}
+$canonicalBaselineSchema = str_replace("\r\n", "\n", $baselineSchema);
+if (!hash_equals($baselineMetadataArray['schema_sha256'], hash('sha256', $canonicalBaselineSchema))) {
+    packageContractFail('Canonical baseline SQL digest does not match baseline metadata.');
+}
+if (!hash_equals(hash('sha256', $canonicalBaselineSchema), hash('sha256', str_replace("\r\n", "\n", str_replace("\n", "\r\n", $canonicalBaselineSchema))))) {
+    packageContractFail('CRLF-only baseline checkout variance changed canonical bytes.');
+}
+if (hash_equals($baselineMetadataArray['schema_sha256'], hash('sha256', $canonicalBaselineSchema . "\n-- true edit\n"))) {
+    packageContractFail('True baseline SQL content edit retained its digest.');
 }
 preg_match_all('/^CREATE TABLE `([a-z0-9_]+)`/m', $baselineSchema, $baselineTableMatches);
 $baselineTableNames = $baselineTableMatches[1];
