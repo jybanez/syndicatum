@@ -1,5 +1,11 @@
 # V1 baseline-only installer impact map
 
+**Status update (2026-09-22):** Historical transition inventory. The active
+baseline-dump install/backup/restore contract is
+`docs/v1-baseline-dump-install-backup-restore.md`. References below to
+post-baseline migration handling are compatibility context, not a requirement
+for normal fresh installation or restoration.
+
 Status: pre-implementation evidence for the open canonical-release-producer
 gate. This map records every currently identified path that creates, infers, or
 tests installation/schema state before fresh-install behavior changes.

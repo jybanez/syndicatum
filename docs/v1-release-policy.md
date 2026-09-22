@@ -1,5 +1,11 @@
 # V1 release and compatibility policy — candidate
 
+**Baseline-first clarification (2026-09-22):** For the installer and recovery
+workflow, use the current tested baseline dump, not historical migration
+replay. See `docs/v1-baseline-dump-install-backup-restore.md`. Any migration
+language below describes exceptional compatibility or development history,
+not the normal V1 installer/backup/restore contract.
+
 **Status:** Proposed policy for the first whole-application V1 release. No V1
 application tag or published release is authorized or implied by this document.
 The [implementation checklist](v1-commercial-viability-implementation-checklist.md)

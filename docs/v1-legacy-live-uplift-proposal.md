@@ -1,5 +1,12 @@
 # V1 legacy live-baseline uplift proposal
 
+**Status update (2026-09-22):** Archived compatibility analysis, not the active
+installer/backup/restore plan. The owner-directed path is to adapt a protected
+copy to the current tested codebase, validate it, then export/import a complete
+baseline dump as described in `docs/v1-baseline-dump-install-backup-restore.md`.
+Do not run this proposal's migration-ledger uplift as the normal deployment
+or recovery workflow.
+
 **Status:** Draft compatibility contract; not authorization to change the serving instance.
 
 ## Purpose and boundary

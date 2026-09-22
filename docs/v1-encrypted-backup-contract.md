@@ -1,5 +1,12 @@
 # V1 Encrypted Backup Contract
 
+**Status:** Historical data-only recovery contract. Superseded as the primary
+installer/backup/restore design by
+`docs/v1-baseline-dump-install-backup-restore.md`. Its implementation remains
+available for compatibility, but it does not satisfy the owner-directed
+full-schema-and-records dump requirement. Do not cite it as full-snapshot
+acceptance evidence.
+
 ## Scope
 
 V1 creates an authenticated, encrypted, data-only recovery envelope and restores
