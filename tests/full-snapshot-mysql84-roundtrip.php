@@ -33,6 +33,27 @@ try {
         'package_format_version' => '1.0', 'installation_id' => '123e4567-e89b-42d3-a456-426614174000',
         'installed_at' => '2026-09-22T00:00:00Z',
     ]);
+    $engineCount = (int) $source->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' AND engine = 'InnoDB'")->fetchColumn();
+    if ($engineCount !== count($baseline['tables'])) { throw new RuntimeException('Consistent snapshot source has nontransactional tables.'); }
+    $writer = new PDO('mysql:host=' . $host . ';port=' . $port . ';dbname=' . $sourceName . ';charset=utf8mb4', $user, $password,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+    $source->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    $source->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+    try {
+        $writer->exec("INSERT INTO users (display_name, created_at, updated_at) VALUES ('Concurrent one', UTC_TIMESTAMP(), UTC_TIMESTAMP())");
+        if ((int) $source->query('SELECT COUNT(*) FROM users')->fetchColumn() !== 0) {
+            throw new RuntimeException('A write committed after snapshot start entered the snapshot.');
+        }
+        $writer->exec("INSERT INTO users (display_name, created_at, updated_at) VALUES ('Concurrent two', UTC_TIMESTAMP(), UTC_TIMESTAMP())");
+        if ((int) $source->query('SELECT COUNT(*) FROM users')->fetchColumn() !== 0) {
+            throw new RuntimeException('Snapshot mixed rows from concurrent commits.');
+        }
+    } finally { $source->rollBack(); }
+    if ((int) $writer->query('SELECT COUNT(*) FROM users')->fetchColumn() !== 2) {
+        throw new RuntimeException('Concurrent writer did not commit independently.');
+    }
+    $writer->exec('DELETE FROM users');
+    echo json_encode(['consistency' => 'ok', 'innodb_tables' => $engineCount, 'concurrent_commits_excluded' => 2]) . PHP_EOL;
     putenv('SNAPSHOT_SOURCE_DB=' . $sourceName);
     putenv('SNAPSHOT_TARGET_DB=' . $targetName);
     require __DIR__ . '/full-snapshot-package.php';

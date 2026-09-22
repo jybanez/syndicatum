@@ -112,12 +112,15 @@ dump contract. Do not label the current backup UI, release, or installer as
 full-snapshot capable until the producer and restore path are implemented and
 tested end to end.
 
-`FullSnapshotSql` is an in-progress SQL component for that new path. It writes
+`FullSnapshotSql` is the SQL component for that new path. It writes
 all baseline tables and records, creates triggers after rows, and refuses a
-nonempty import target. Its isolated MySQL 8.4 component test is **not** an
-encrypted package, asset/config restore, live-copy proof, or application-ready
-acceptance result. The old package validator intentionally rejects `.sql` in
-data-only backups; the full-snapshot package needs a distinct versioned
+nonempty import target. It checks that every source table uses transactional
+InnoDB, then reads rows in one MySQL 8.4 repeatable-read consistent snapshot.
+The disposable CI fixture commits two concurrent writes after snapshot start
+and verifies neither enters the snapshot. This proves the database row-capture
+boundary; it does not make filesystem avatars transactional or prove app/worker
+readiness. The old package validator intentionally rejects `.sql` in
+data-only backups; the full-snapshot transport therefore uses its own versioned
 manifest/validator rather than weakening that format in place.
 
 The separate full-snapshot transport uses the existing authenticated

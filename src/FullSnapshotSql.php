@@ -14,6 +14,7 @@ final class FullSnapshotSql
         self::assertNoUnsupportedObjects($pdo);
         $tables = self::tableNames($pdo);
         $baseline->assertBaselineTables($tables);
+        self::assertTransactionalTables($pdo, $tables);
         $metadata = $baseline->toArray();
         $policies = [];
         foreach ($metadata['tables'] as $table) { $policies[$table['name']] = $table; }
@@ -209,6 +210,19 @@ final class FullSnapshotSql
     private static function tableNames(PDO $pdo)
     {
         return $pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name")->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    private static function assertTransactionalTables(PDO $pdo, array $tables)
+    {
+        $engines = $pdo->query("SELECT table_name, engine FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name")->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (array_keys($engines) !== $tables) {
+            throw new RuntimeException('SQL snapshot table inventory changed before the consistent read.');
+        }
+        foreach ($engines as $name => $engine) {
+            if ($engine !== 'InnoDB') {
+                throw new RuntimeException('SQL snapshot requires transactional InnoDB tables: ' . $name . '.');
+            }
+        }
     }
 
     private static function columns(PDO $pdo, $table)
