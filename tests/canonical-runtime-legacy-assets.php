@@ -77,9 +77,14 @@ try {
         new LegacyMigrationPlan($scratchPlan, $scratchMigrations);
     }, 'Tampered installed plan was accepted.');
     unlink($scratchPlan);
-    rejectsRuntimeAssets(function () use ($scratchPlan, $scratchMigrations) {
-        new LegacyMigrationPlan($scratchPlan, $scratchMigrations);
-    }, 'Missing installed plan was accepted.');
+    set_error_handler(function () { return true; });
+    try {
+        rejectsRuntimeAssets(function () use ($scratchPlan, $scratchMigrations) {
+            new LegacyMigrationPlan($scratchPlan, $scratchMigrations);
+        }, 'Missing installed plan was accepted.');
+    } finally {
+        restore_error_handler();
+    }
 } finally {
     foreach (glob($scratchMigrations . '/*.php') ?: [] as $file) {
         unlink($file);
