@@ -170,6 +170,13 @@ jobs:
           cp -a "$package_root/plugins" "$install_root/plugins"
           cp -a "$package_root/skills" "$install_root/skills"
           php tests/canonical-runtime-legacy-assets.php "$package_root" "$install_root"
+          docker build --file "$package_root/metadata/runtime/Dockerfile" \
+            --tag "syndicatum-package-runtime:${GITHUB_SHA}" "$package_root"
+          docker run --rm --entrypoint php \
+            --mount "type=bind,source=$package_root,target=/package,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/tests,target=/checks,readonly" \
+            "syndicatum-package-runtime:${GITHUB_SHA}" \
+            /checks/canonical-runtime-legacy-assets.php /package /var/www/html
           package_sha="$(cut -d ' ' -f 1 canonical-candidate/first/syndicatum-v1.0.0.sha256)"
           export SYNDICATUM_ACCEPTANCE_INGRESS_FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/realtime-acceptance-ingress.php"
           pwsh -NoProfile -File scripts/docker-acceptance.ps1 \
