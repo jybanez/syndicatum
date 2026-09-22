@@ -2,6 +2,8 @@
 
 require_once dirname(__DIR__) . '/src/FullSnapshotProducer.php';
 require_once dirname(__DIR__) . '/src/FullSnapshotRestore.php';
+require_once dirname(__DIR__) . '/src/BackupProducer.php';
+require_once dirname(__DIR__) . '/src/StagedBackupRestore.php';
 
 function fullPackagePdo($name)
 {
@@ -53,6 +55,23 @@ try {
     $secrets = ['PBB_AGENTCHAT_SECRET' => str_repeat('s', 32), 'SYNDICATUM_MASTER_KEY' => str_repeat('m', 32)];
     $envelope = $root . '/output/snapshot.syndicatum-backup';
     $producer = new FullSnapshotProducer($source, $baseline, $root . '/staging', $root . '/source-assets', dirname(__DIR__));
+    $heldAvatar = $root . '/source-assets/' . $avatarName . '.held';
+    if (!rename($root . '/source-assets/' . $avatarName, $heldAvatar)) { throw new RuntimeException('Avatar failure fixture could not be prepared.'); }
+    try {
+        try { $producer->produce($root . '/output/failed.syndicatum-backup', $key, $secrets);
+            throw new RuntimeException('Producer accepted a missing referenced avatar.'); }
+        catch (RuntimeException $expected) {
+            if (strpos($expected->getMessage(), 'avatar') === false) { throw $expected; }
+        }
+    } finally {
+        if (!rename($heldAvatar, $root . '/source-assets/' . $avatarName)) {
+            throw new RuntimeException('Avatar fixture could not be restored.');
+        }
+    }
+    if (file_exists($root . '/output/failed.syndicatum-backup')
+        || array_values(array_diff(scandir($root . '/staging'), ['.', '..'])) !== []) {
+        throw new RuntimeException('Producer failure left an artifact or plaintext stage.');
+    }
     $made = $producer->produce($envelope, $key, $secrets);
     if (!$made['plaintext_cleanup_verified'] || $made['asset_count'] !== 1
         || array_values(array_diff(scandir($root . '/staging'), ['.', '..'])) !== []) {
@@ -63,6 +82,19 @@ try {
     $bytes[strlen($bytes) - 1] = chr(ord($bytes[strlen($bytes) - 1]) ^ 1);
     file_put_contents($tampered, $bytes);
     $restore = new FullSnapshotRestore($target, $baseline, $root . '/staging', $root . '/target-assets', dirname(__DIR__), $targetName);
+    $legacyRestore = new StagedBackupRestore(new PdoBackupRestoreTarget($target), $baseline, $root . '/staging', dirname(__DIR__));
+    try { $legacyRestore->inspect($envelope, $key, $secrets); throw new RuntimeException('Full snapshot was accepted by legacy NDJSON importer.'); }
+    catch (InvalidArgumentException $expected) { /* distinct manifest discriminator required */ }
+    $legacyEnvelope = $root . '/output/legacy.syndicatum-backup';
+    (new BackupProducer(new PdoBackupDatabaseSource($source), $baseline, $root . '/staging', $root . '/source-assets', dirname(__DIR__)))
+        ->produce($legacyEnvelope, $key, ['source_commit' => $baselineArray['source_commit'],
+            'application_version' => $baselineArray['application_version'], 'schema_baseline' => $baselineArray['baseline_id'],
+            'schema_head' => $baselineArray['schema_head']], $secrets);
+    try { $restore->restore($legacyEnvelope, $key, $secrets); throw new RuntimeException('Legacy NDJSON was accepted by full-snapshot importer.'); }
+    catch (InvalidArgumentException $expected) { /* distinct manifest discriminator required */ }
+    if (array_values(array_diff(scandir($root . '/staging'), ['.', '..'])) !== []) {
+        throw new RuntimeException('Cross-format refusal left decrypted staging behind.');
+    }
     try { $restore->restore($tampered, $key, $secrets); throw new RuntimeException('Tampered envelope was accepted.'); }
     catch (InvalidArgumentException $expected) { /* authenticated refusal */ }
     $wrongTarget = new FullSnapshotRestore($target, $baseline, $root . '/staging', $root . '/target-assets', dirname(__DIR__), 'wrong_target');
@@ -88,6 +120,30 @@ try {
     } finally { BackupEnvelope::removePrivateStage($private['stage_path'], $root . '/staging'); }
     try { $restore->restore($badSqlEnvelope, $key, $secrets); throw new RuntimeException('Authenticated tampered SQL was accepted.'); }
     catch (InvalidArgumentException $expected) { /* member hash mismatch required */ }
+    if (array_values(array_diff(scandir($root . '/staging'), ['.', '..'])) !== []) {
+        throw new RuntimeException('Restore validation failure left decrypted staging behind.');
+    }
+    $private = BackupEnvelope::decryptToPrivateStage($envelope, $root . '/staging', $key);
+    try {
+        $zip = new ZipArchive();
+        if ($zip->open($private['archive_path']) !== true) { throw new RuntimeException('Test archive could not be opened.'); }
+        $zip->addFromString(FullSnapshotManifest::SQL_PATH, "USE mysql;\n");
+        $zip->setCompressionName(FullSnapshotManifest::SQL_PATH, ZipArchive::CM_STORE);
+        $zip->setExternalAttributesName(FullSnapshotManifest::SQL_PATH, ZipArchive::OPSYS_UNIX, (0100000 | 0600) << 16);
+        $zip->close();
+        $unsafeManifest = FullSnapshotManifest::parse($private['manifest_json']);
+        $unsafeManifest['sql']['sha256'] = hash('sha256', "USE mysql;\n");
+        $unsafeManifest['sql']['bytes'] = strlen("USE mysql;\n");
+        $unsafeEnvelope = $root . '/output/unsafe-sql.syndicatum-backup';
+        BackupEnvelope::encrypt($private['archive_path'], FullSnapshotManifest::encode($unsafeManifest), $unsafeEnvelope, $key,
+            ['application_version' => $baselineArray['application_version'], 'schema_baseline' => $baselineArray['baseline_id'],
+                'schema_head' => $baselineArray['schema_head'], 'source_commit' => $baselineArray['source_commit']]);
+    } finally { BackupEnvelope::removePrivateStage($private['stage_path'], $root . '/staging'); }
+    try { $restore->restore($unsafeEnvelope, $key, $secrets); throw new RuntimeException('Authenticated unsafe SQL was imported.'); }
+    catch (InvalidArgumentException $expected) { /* SQL grammar refusal after validated extraction */ }
+    if (array_values(array_diff(scandir($root . '/staging'), ['.', '..'])) !== []) {
+        throw new RuntimeException('Restore import failure left decrypted staging behind.');
+    }
     $restored = $restore->restore($envelope, $key, $secrets);
     if (!$restored['plaintext_cleanup_verified'] || $restored['cutover_performed'] !== false
         || $restored['table_count'] !== 48 || $restored['asset_count'] !== 1
