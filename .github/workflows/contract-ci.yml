@@ -165,8 +165,11 @@ jobs:
           cp -a "$package_root/app/." "$install_root/"
           mkdir -p "$install_root/schema"
           cp -a "$package_root/schema/baselines/mysql84" "$install_root/schema/mysql84"
+          cp -a "$package_root/schema/legacy-upgrade/plan.json" "$install_root/schema/mysql84/legacy-upgrade-plan.json"
+          cp -a "$package_root/schema/legacy-upgrade/migrations" "$install_root/migrations"
           cp -a "$package_root/plugins" "$install_root/plugins"
           cp -a "$package_root/skills" "$install_root/skills"
+          php tests/canonical-runtime-legacy-assets.php "$package_root" "$install_root"
           package_sha="$(cut -d ' ' -f 1 canonical-candidate/first/syndicatum-v1.0.0.sha256)"
           export SYNDICATUM_ACCEPTANCE_INGRESS_FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/realtime-acceptance-ingress.php"
           pwsh -NoProfile -File scripts/docker-acceptance.ps1 \

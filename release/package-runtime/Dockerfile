@@ -24,6 +24,10 @@ RUN a2enconf syndicatum
 WORKDIR /var/www/html
 COPY --chown=www-data:www-data app/ /var/www/html/
 COPY --chown=www-data:www-data schema/baselines/mysql84/ /var/www/html/schema/mysql84/
+# Both paths are materialized from the authenticated legacy-upgrade entries
+# in this same canonical package, not from a host migration checkout.
+COPY --chown=www-data:www-data schema/legacy-upgrade/plan.json /var/www/html/schema/mysql84/legacy-upgrade-plan.json
+COPY --chown=www-data:www-data schema/legacy-upgrade/migrations/ /var/www/html/migrations/
 COPY --chown=www-data:www-data plugins/ /var/www/html/plugins/
 COPY --chown=www-data:www-data skills/ /var/www/html/skills/
 COPY --chmod=755 app/docker/entrypoint.sh /usr/local/bin/syndicatum-entrypoint
