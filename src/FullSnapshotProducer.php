@@ -43,6 +43,7 @@ final class FullSnapshotProducer
             throw new InvalidArgumentException('Full-snapshot output directory must be private.');
         }
         BackupEnvelope::keyId($encryptionKey);
+        $version = FullSnapshotSql::assertMySql84($this->pdo);
         $identity = $this->pdo->query('SELECT application_version, schema_baseline, schema_head, release_source_commit AS source_commit, installation_id FROM syndicatum_installation_identity WHERE singleton_id = 1')->fetch(PDO::FETCH_ASSOC);
         if (!is_array($identity)) { throw new RuntimeException('Full-snapshot source installation identity is missing.'); }
         $baseline = $this->baseline->toArray();
@@ -53,8 +54,6 @@ final class FullSnapshotProducer
         }
         $database = (string) $this->pdo->query('SELECT DATABASE()')->fetchColumn();
         if (!preg_match('/\A[a-z][a-z0-9_]{0,63}\z/', $database)) { throw new RuntimeException('Full-snapshot source database name is invalid.'); }
-        $version = (string) $this->pdo->query('SELECT VERSION()')->fetchColumn();
-        if (!preg_match('/\A(8\.4\.\d+)/', $version, $versionMatch)) { throw new RuntimeException('Full-snapshot source requires MySQL 8.4.x.'); }
         $stage = $this->stageRoot . DIRECTORY_SEPARATOR . 'full-snapshot-' . bin2hex(random_bytes(12));
         if (!mkdir($stage, 0700)) { throw new RuntimeException('Full-snapshot private stage could not be created.'); }
         @chmod($stage, 0700);
@@ -76,7 +75,7 @@ final class FullSnapshotProducer
                 'created_at' => gmdate('Y-m-d\TH:i:s\Z'), 'application_version' => $identity['application_version'],
                 'schema_baseline' => $identity['schema_baseline'], 'schema_head' => $identity['schema_head'],
                 'source_commit' => strtolower($identity['source_commit']), 'source_installation_id' => $identity['installation_id'],
-                'source_database' => $database, 'mysql_version' => $versionMatch[1],
+                'source_database' => $database, 'mysql_version' => $version,
                 'sql' => ['path' => FullSnapshotManifest::SQL_PATH, 'sha256' => $sql['sha256'], 'bytes' => $sql['bytes'],
                     'table_count' => $sql['table_count'], 'trigger_count' => $sql['trigger_count'],
                     'row_counts' => $sql['row_counts'], 'row_hashes' => $sql['row_hashes']],

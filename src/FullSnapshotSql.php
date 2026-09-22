@@ -258,12 +258,18 @@ final class FullSnapshotSql
         return $count;
     }
 
-    private static function assertMySql84(PDO $pdo)
+    public static function assertMySql84(PDO $pdo)
     {
         $version = (string) $pdo->query('SELECT VERSION()')->fetchColumn();
+        return self::assertSupportedVersion($version);
+    }
+
+    public static function assertSupportedVersion($version)
+    {
         if (!preg_match('/\A(\d+\.\d+\.\d+)/', $version, $match) || version_compare($match[1], '8.4.0', '<') || version_compare($match[1], '9.0.0', '>=')) {
             throw new RuntimeException('SQL snapshot requires MySQL 8.4.x.');
         }
+        return $match[1];
     }
 
     private static function assertIdentifier($name)

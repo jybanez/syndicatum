@@ -36,6 +36,7 @@ final class FullSnapshotRestore
 
     public function restore($envelopePath, $key, array $targetSecrets)
     {
+        FullSnapshotSql::assertMySql84($this->pdo);
         $actualDatabase = (string) $this->pdo->query('SELECT DATABASE()')->fetchColumn();
         if (!hash_equals($this->expectedDatabase, $actualDatabase)) {
             throw new RuntimeException('Full-snapshot connection is not the explicitly approved target database.');

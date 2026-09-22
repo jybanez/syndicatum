@@ -21,6 +21,23 @@ function snapshotTestTreeRemove($root)
     rmdir($root);
 }
 
+/** Write a minimal stored ZIP without libzip's duplicate-name normalization. */
+function snapshotTestZipWithMembers($path, array $members)
+{
+    $local = ''; $central = '';
+    foreach ($members as $member) {
+        $name = $member['path']; $bytes = $member['bytes'];
+        $crc = crc32($bytes); $length = strlen($bytes); $offset = strlen($local);
+        $local .= pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, 0, 0, $crc, $length, $length, strlen($name), 0)
+            . $name . $bytes;
+        $central .= pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 0x0314, 20, 0, 0, 0, 0, $crc,
+            $length, $length, strlen($name), 0, 0, 0, 0, (0100000 | 0600) << 16, $offset) . $name;
+    }
+    $count = count($members);
+    $end = pack('VvvvvVVv', 0x06054b50, 0, 0, $count, $count, strlen($central), strlen($local), 0);
+    snapshotTestFile($path, $local . $central . $end);
+}
+
 $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'full-snapshot-format-' . bin2hex(random_bytes(8));
 if (!mkdir($root, 0700)) { throw new RuntimeException('Private fixture root failed.'); }
 try {
@@ -76,5 +93,19 @@ try {
     $zip->close();
     try { FullSnapshotArchive::extractVerified($unsafe, $manifest, $root . '/unsafe-extracted'); throw new RuntimeException('Unsafe SQL member was accepted.'); }
     catch (InvalidArgumentException $expected) { /* unsafe path required */ }
+    foreach (['database/snapshot.sql', $avatar] as $duplicatePath) {
+        $other = $duplicatePath === 'database/snapshot.sql' ? $avatar : 'database/snapshot.sql';
+        $duplicate = $root . '/duplicate-' . ($other === $avatar ? 'sql' : 'asset') . '.zip';
+        snapshotTestZipWithMembers($duplicate, [
+            ['path' => $duplicatePath, 'bytes' => file_get_contents($payload . '/' . $duplicatePath)],
+            ['path' => $duplicatePath, 'bytes' => file_get_contents($payload . '/' . $duplicatePath)],
+            ['path' => 'secrets/recovery.json', 'bytes' => file_get_contents($payload . '/secrets/recovery.json')],
+        ]);
+        try { FullSnapshotArchive::extractVerified($duplicate, $manifest, $root . '/duplicate-extracted');
+            throw new RuntimeException('Duplicate full-snapshot member was accepted: ' . $duplicatePath); }
+        catch (InvalidArgumentException $expected) {
+            if (strpos($expected->getMessage(), 'duplicate member') === false) { throw $expected; }
+        }
+    }
     echo json_encode(['status' => 'ok', 'archive_sha256' => hash_file('sha256', $archive), 'members' => 3]) . PHP_EOL;
 } finally { snapshotTestTreeRemove($root); }

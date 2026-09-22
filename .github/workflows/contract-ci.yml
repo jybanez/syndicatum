@@ -302,12 +302,14 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: pdo_mysql, zip
+          extensions: pdo_mysql, pdo_sqlite, zip
           coverage: none
         env:
           fail-fast: true
       - name: Validate isolated full-snapshot format
-        run: php tests/full-snapshot-format.php
+        run: |
+          php tests/full-snapshot-format.php
+          php tests/full-snapshot-version.php
       - name: Round-trip encrypted complete SQL snapshot into empty MySQL 8.4
         shell: bash
         run: |
