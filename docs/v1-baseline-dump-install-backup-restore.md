@@ -112,6 +112,14 @@ dump contract. Do not label the current backup UI, release, or installer as
 full-snapshot capable until the producer and restore path are implemented and
 tested end to end.
 
+`FullSnapshotSql` is an in-progress SQL component for that new path. It writes
+all baseline tables and records, creates triggers after rows, and refuses a
+nonempty import target. Its isolated MySQL 8.4 component test is **not** an
+encrypted package, asset/config restore, live-copy proof, or application-ready
+acceptance result. The old package validator intentionally rejects `.sql` in
+data-only backups; the full-snapshot package needs a distinct versioned
+manifest/validator rather than weakening that format in place.
+
 Acceptance requires: exact package provenance; repeatable fresh import from
 the pinned dump; encrypted full-snapshot creation; empty-target restore without
 migration replay; schema, row, asset, secret, and sequence verification;
