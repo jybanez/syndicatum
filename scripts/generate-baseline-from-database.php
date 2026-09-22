@@ -83,7 +83,7 @@ function topologicalRestoreOrder(array $tables, array $foreignKeys)
 
 $options = getopt('', [
     'output-directory:', 'baseline-id:', 'application-version:', 'schema-head:',
-    'migration-cutover:', 'source-commit:',
+    'migration-cutover:', 'source-commit:', 'source-kind::',
 ]);
 $outputDirectory = requiredArgument($options, 'output-directory');
 $baselineId = requiredArgument($options, 'baseline-id');
@@ -91,6 +91,10 @@ $applicationVersion = requiredArgument($options, 'application-version');
 $schemaHead = requiredArgument($options, 'schema-head');
 $migrationCutover = requiredArgument($options, 'migration-cutover');
 $sourceCommit = strtolower(requiredArgument($options, 'source-commit'));
+$sourceKind = isset($options['source-kind']) ? $options['source-kind'] : 'legacy';
+if (!in_array($sourceKind, ['legacy', 'baseline'], true)) {
+    failBaselineGeneration('Source kind must be legacy or baseline.');
+}
 if (!preg_match('/\A[a-f0-9]{40}\z/', $sourceCommit)) {
     failBaselineGeneration('Source commit must be a full 40-character Git commit.');
 }
@@ -120,20 +124,41 @@ if (!$sourceTables) {
     failBaselineGeneration('Baseline source database contains no tables.');
 }
 $identityTable = 'syndicatum_installation_identity';
-if (in_array($identityTable, $sourceTables, true)) {
+if ($sourceKind === 'legacy' && in_array($identityTable, $sourceTables, true)) {
     failBaselineGeneration('Legacy source unexpectedly contains the baseline-owned installation identity table.');
 }
+if ($sourceKind === 'baseline' && !in_array($identityTable, $sourceTables, true)) {
+    failBaselineGeneration('Baseline source is missing the installation identity table.');
+}
 $tables = $sourceTables;
-$tables[] = $identityTable;
+if ($sourceKind === 'legacy') {
+    $tables[] = $identityTable;
+}
 sort($tables, SORT_STRING);
 
 $migrationCount = (int) $pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn();
-if ($migrationCount < 1) {
-    failBaselineGeneration('Baseline source database has no recorded legacy migrations.');
+$legacyHead = null;
+if ($sourceKind === 'legacy') {
+    if ($migrationCount < 1) {
+        failBaselineGeneration('Legacy source database has no recorded migrations.');
+    }
+    $legacyHead = (string) $pdo->query('SELECT version FROM syndicatum_schema_migrations ORDER BY applied_at DESC, version DESC LIMIT 1')->fetchColumn();
+    if (strpos($legacyHead, $schemaHead . '_') !== 0 && $legacyHead !== $schemaHead) {
+        failBaselineGeneration('Legacy migration head does not match the declared numeric schema head.');
+    }
+} elseif ($migrationCount !== 0) {
+    failBaselineGeneration('Baseline source must not contain historical migration rows.');
 }
-$legacyHead = (string) $pdo->query('SELECT version FROM syndicatum_schema_migrations ORDER BY applied_at DESC, version DESC LIMIT 1')->fetchColumn();
-if (strpos($legacyHead, $schemaHead . '_') !== 0 && $legacyHead !== $schemaHead) {
-    failBaselineGeneration('Legacy migration head does not match the declared numeric schema head.');
+if ($sourceKind === 'baseline') {
+    $identity = $pdo->query('SELECT application_version, schema_baseline, schema_head FROM syndicatum_installation_identity WHERE singleton_id = 1')->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($identity) || $identity['application_version'] !== $applicationVersion || $identity['schema_baseline'] !== $baselineId || $identity['schema_head'] !== $schemaHead) {
+        failBaselineGeneration('Baseline source installation identity differs from the requested artifact identity.');
+    }
+    $roles = $pdo->query('SELECT id, code, name FROM system_roles ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    if (count($roles) !== 2 || (int) $roles[0]['id'] !== 1 || $roles[0]['code'] !== 'user' || $roles[0]['name'] !== 'User'
+        || (int) $roles[1]['id'] !== 2 || $roles[1]['code'] !== 'administrator' || $roles[1]['name'] !== 'Administrator') {
+        failBaselineGeneration('Baseline source fixed role catalog differs from the required seeds.');
+    }
 }
 
 $foreignKeys = $pdo->query(
@@ -165,11 +190,13 @@ $tableColumns = [];
 foreach ($columnRows as $row) {
     $tableColumns[$row['TABLE_NAME']][] = $row['COLUMN_NAME'];
 }
-$tableColumns[$identityTable] = [
-    'singleton_id', 'application_version', 'schema_baseline', 'schema_head', 'baseline_source_commit',
-    'release_source_commit', 'package_sha256', 'package_format_version', 'installation_id', 'installed_at',
-    'last_upgrade_id', 'last_upgrade_from_version', 'last_upgrade_to_version', 'last_upgraded_at',
-];
+if ($sourceKind === 'legacy') {
+    $tableColumns[$identityTable] = [
+        'singleton_id', 'application_version', 'schema_baseline', 'schema_head', 'baseline_source_commit',
+        'release_source_commit', 'package_sha256', 'package_format_version', 'installation_id', 'installed_at',
+        'last_upgrade_id', 'last_upgrade_from_version', 'last_upgrade_to_version', 'last_upgraded_at',
+    ];
+}
 
 $statements = [
     '-- Syndicatum authoritative MySQL 8.4 baseline.',
@@ -185,7 +212,8 @@ foreach ($sourceTables as $table) {
     }
     $statements[] = normalizeCreateTable($statement['Create Table']);
 }
-$statements[] = "CREATE TABLE `syndicatum_installation_identity` (\n"
+if ($sourceKind === 'legacy') {
+    $statements[] = "CREATE TABLE `syndicatum_installation_identity` (\n"
     . "  `singleton_id` tinyint unsigned NOT NULL,\n"
     . "  `application_version` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,\n"
     . "  `schema_baseline` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,\n"
@@ -204,6 +232,7 @@ $statements[] = "CREATE TABLE `syndicatum_installation_identity` (\n"
     . "  UNIQUE KEY `uq_syndicatum_installation_id` (`installation_id`),\n"
     . "  CONSTRAINT `chk_syndicatum_installation_singleton` CHECK (`singleton_id` = 1)\n"
     . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+}
 
 $triggers = $pdo->query(
     "SELECT trigger_name FROM information_schema.triggers
@@ -224,7 +253,7 @@ $schema = implode("\n\n", $statements) . "\n";
 
 $schemaTablePolicies = [];
 foreach ($tables as $table) {
-    $identityColumns = $table === $identityTable
+    $identityColumns = $table === $identityTable && $sourceKind === 'legacy'
         ? ['singleton_id']
         : (isset($primaryKeys[$table]) ? $primaryKeys[$table] : []);
     if (!$identityColumns) {
@@ -283,6 +312,7 @@ if (file_put_contents($metadataPath, $metadataJson) !== strlen($metadataJson)) {
 }
 
 echo json_encode([
+    'source_kind' => $sourceKind,
     'schema' => $schemaPath,
     'metadata' => $metadataPath,
     'tables' => count($tables),

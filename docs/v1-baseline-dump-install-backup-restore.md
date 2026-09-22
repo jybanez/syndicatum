@@ -43,6 +43,16 @@ MySQL 8.4 database yielded 48 tables, 3 triggers, 2 fixed roles, and zero
 historical migration rows. That structural proof is not a complete UI or
 backup/restore acceptance test.
 
+For the **next** reviewed baseline, `scripts/generate-baseline-from-database.php`
+accepts `--source-kind=baseline` against a quiesced, tested MySQL 8.4 baseline
+database. It verifies installation identity, fixed roles, and an empty legacy
+migration ledger, then emits `schema.sql` and `baseline.json` to an isolated
+output directory. The generation must be repeated with identical bytes, and
+the emitted dump must be imported into a fresh empty target before review.
+The default `--source-kind=legacy` remains for historical reproduction only.
+Generated output is a candidate, not authority until reviewed and pinned in a
+release. The existing pinned dump is not silently replaced by this process.
+
 ## Backup builder
 
 1. Accept only a healthy source whose code, schema, installation identity,
