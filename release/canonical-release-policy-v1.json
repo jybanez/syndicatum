@@ -1836,6 +1836,13 @@
       "mode": 420
     },
     {
+      "source": "scripts/create-full-snapshot.php",
+      "action": "ship",
+      "path": "app/scripts/create-full-snapshot.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "scripts/docker-acceptance.ps1",
       "action": "exclude",
       "path": "",
@@ -1930,6 +1937,13 @@
       "source": "scripts/restore-encrypted-backup.php",
       "action": "ship",
       "path": "app/scripts/restore-encrypted-backup.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/restore-full-snapshot.php",
+      "action": "ship",
+      "path": "app/scripts/restore-full-snapshot.php",
       "role": "application",
       "mode": 420
     },
@@ -2112,6 +2126,41 @@
       "source": "src/BackupTablePolicy.php",
       "action": "ship",
       "path": "app/src/BackupTablePolicy.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/FullSnapshotArchive.php",
+      "action": "ship",
+      "path": "app/src/FullSnapshotArchive.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/FullSnapshotManifest.php",
+      "action": "ship",
+      "path": "app/src/FullSnapshotManifest.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/FullSnapshotProducer.php",
+      "action": "ship",
+      "path": "app/src/FullSnapshotProducer.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/FullSnapshotRestore.php",
+      "action": "ship",
+      "path": "app/src/FullSnapshotRestore.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/FullSnapshotSql.php",
+      "action": "ship",
+      "path": "app/src/FullSnapshotSql.php",
       "role": "application",
       "mode": 420
     },
