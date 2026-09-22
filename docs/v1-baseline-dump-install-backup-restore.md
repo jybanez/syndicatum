@@ -120,6 +120,27 @@ acceptance result. The old package validator intentionally rejects `.sql` in
 data-only backups; the full-snapshot package needs a distinct versioned
 manifest/validator rather than weakening that format in place.
 
+The separate full-snapshot transport uses the existing authenticated
+`BackupEnvelope` with a strict `syndicatum-full-snapshot` manifest (version
+`1.0`). Its archive has exactly `database/snapshot.sql`,
+`secrets/recovery.json`, and sorted declared `assets/avatars/<digest>.<type>`
+members. The manifest records creation time, application/baseline/schema head,
+source commit and installation ID, source database and MySQL version, SQL
+table/trigger counts and per-table row counts/digests, and each member's SHA-256 and
+byte length. No secret value appears in the plaintext manifest. The encrypted
+recovery document retains the existing closed secret classifications.
+
+`scripts/create-full-snapshot.php` requires explicit private output/staging/
+avatar paths and operator confirmation that source writes/assets are quiesced.
+`scripts/restore-full-snapshot.php` requires an explicit host,
+port, database, user, target-asset directory, and exact empty-target approval;
+the target password comes from an environment variable, not command arguments.
+The importer authenticates and validates every declared member before database
+import, requires an empty database and asset directory, and never cuts over.
+The producer and importer verify private-stage cleanup before reporting success.
+This is an isolated technical path, **not yet** a production-ready Admin UI or
+app/worker/human-workflow acceptance result.
+
 Acceptance requires: exact package provenance; repeatable fresh import from
 the pinned dump; encrypted full-snapshot creation; empty-target restore without
 migration replay; schema, row, asset, secret, and sequence verification;

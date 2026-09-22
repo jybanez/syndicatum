@@ -27,12 +27,16 @@ $target = snapshotPdo($targetName);
 $stage = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-full-sql-test-' . bin2hex(random_bytes(8));
 if (!mkdir($stage, 0700)) { throw new RuntimeException('Snapshot test stage could not be created.'); }
 $sql = $stage . DIRECTORY_SEPARATOR . 'snapshot.sql';
+$unsafeSql = $stage . DIRECTORY_SEPARATOR . 'unsafe.sql';
 try {
     $export = FullSnapshotSql::export($source, $baseline, $sql);
     if ($export['table_count'] !== 48 || $export['trigger_count'] !== 3 || $export['row_counts']['users'] < 1) {
         throw new RuntimeException('SQL snapshot export inventory is incomplete.');
     }
-    $import = FullSnapshotSql::importIntoEmpty($target, $baseline, $sql, $export['row_counts']);
+    file_put_contents($unsafeSql, "USE mysql;\n");
+    try { FullSnapshotSql::importIntoEmpty($target, $baseline, $unsafeSql, $export['row_counts']); throw new RuntimeException('Unsafe SQL statement was accepted.'); }
+    catch (InvalidArgumentException $expected) { /* target remains empty */ }
+    $import = FullSnapshotSql::importIntoEmpty($target, $baseline, $sql, $export['row_counts'], $export['row_hashes']);
     if ($import['cutover_performed'] !== false || $import['table_count'] !== 48) {
         throw new RuntimeException('SQL snapshot import result is invalid.');
     }
@@ -52,5 +56,6 @@ try {
         'user_count' => $export['row_counts']['users'], 'cutover_performed' => false], JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } finally {
     if (is_file($sql)) { @unlink($sql); }
+    if (is_file($unsafeSql)) { @unlink($unsafeSql); }
     @rmdir($stage);
 }

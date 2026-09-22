@@ -277,6 +277,52 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  mysql84-full-snapshot-roundtrip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      PBB_AGENTCHAT_DB_HOST: 127.0.0.1
+      PBB_AGENTCHAT_DB_PORT: "3306"
+      PBB_AGENTCHAT_DB_USER: root
+      PBB_AGENTCHAT_DB_PASS: ""
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql, zip
+          coverage: none
+        env:
+          fail-fast: true
+      - name: Validate isolated full-snapshot format
+        run: php tests/full-snapshot-format.php
+      - name: Round-trip encrypted complete SQL snapshot into empty MySQL 8.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-full-snapshot
+          php tests/full-snapshot-mysql84-roundtrip.php | tee ci-full-snapshot/mysql84-roundtrip.json
+      - name: Retain full-snapshot round-trip evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql84-full-snapshot-${{ github.sha }}-${{ github.run_attempt }}
+          path: ci-full-snapshot/
+          if-no-files-found: warn
+          retention-days: 30
+
   source-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

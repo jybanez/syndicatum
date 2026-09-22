@@ -29,6 +29,8 @@ final class FullSnapshotSql
             $snapshotActive = true;
             self::write($out, "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;\nSET SESSION time_zone = '+00:00';\nSET FOREIGN_KEY_CHECKS = 0;\n");
             $counts = [];
+            $rowHashes = [];
+            $referencedAvatars = [];
             foreach ($tables as $table) {
                 self::assertIdentifier($table);
                 $columns = self::columns($pdo, $table);
@@ -50,17 +52,24 @@ final class FullSnapshotSql
                 $query = 'SELECT * FROM `' . $table . '` ORDER BY ' . implode(', ', $order);
                 $rows = $pdo->query($query);
                 $counts[$table] = 0;
+                $rowHash = hash_init('sha256');
                 while ($row = $rows->fetch(PDO::FETCH_ASSOC)) {
                     if (array_keys($row) !== $policy['columns']) {
                         throw new RuntimeException('SQL snapshot row columns changed: ' . $table . '.');
                     }
                     $values = [];
                     foreach ($policy['columns'] as $column) {
+                        if (is_resource($row[$column])) { $row[$column] = stream_get_contents($row[$column]); }
+                        self::hashCell($rowHash, $row[$column]);
+                        if (is_string($row[$column]) && preg_match_all('#api/v1/avatar\.php\?file=([a-f0-9]{40}\.(?:jpg|png|webp))#', $row[$column], $avatarMatches)) {
+                            foreach ($avatarMatches[1] as $avatarName) { $referencedAvatars[$avatarName] = true; }
+                        }
                         $values[] = self::sqlValue($row[$column], isset($binary[$column]));
                     }
                     self::write($out, 'INSERT INTO `' . $table . '` (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', $values) . ");\n");
                     $counts[$table]++;
                 }
+                $rowHashes[$table] = hash_final($rowHash);
             }
             $triggers = $pdo->query("SELECT trigger_name FROM information_schema.triggers WHERE trigger_schema = DATABASE() ORDER BY trigger_name")->fetchAll(PDO::FETCH_COLUMN);
             foreach ($triggers as $trigger) {
@@ -81,8 +90,11 @@ final class FullSnapshotSql
             $pdo->commit();
             $snapshotActive = false;
             fclose($out);
+            $avatarNames = array_keys($referencedAvatars); sort($avatarNames, SORT_STRING);
             return ['path' => $path, 'sha256' => hash_file('sha256', $path), 'bytes' => filesize($path),
-                'row_counts' => $counts, 'table_count' => count($tables), 'trigger_count' => count($triggers)];
+                'row_counts' => $counts, 'row_hashes' => $rowHashes,
+                'table_count' => count($tables), 'trigger_count' => count($triggers),
+                'referenced_avatars' => $avatarNames];
         } catch (Throwable $error) {
             if ($snapshotActive) { $pdo->rollBack(); }
             if (is_resource($out)) { fclose($out); }
@@ -91,7 +103,7 @@ final class FullSnapshotSql
         }
     }
 
-    public static function importIntoEmpty(PDO $pdo, BaselineMetadata $baseline, $path, array $expectedCounts)
+    public static function importIntoEmpty(PDO $pdo, BaselineMetadata $baseline, $path, array $expectedCounts, array $expectedHashes = [])
     {
         self::assertMySql84($pdo);
         if (!is_file($path) || is_link($path)) { throw new InvalidArgumentException('SQL snapshot must be a regular file.'); }
@@ -102,6 +114,7 @@ final class FullSnapshotSql
         $quote = null;
         $escaped = false;
         $executed = 0;
+        $trustedTables = array_fill_keys(array_map(function ($table) { return $table['name']; }, $baseline->toArray()['tables']), true);
         $originalForeignKeyChecks = (int) $pdo->query('SELECT @@SESSION.FOREIGN_KEY_CHECKS')->fetchColumn();
         try {
             while (!feof($input)) {
@@ -119,7 +132,10 @@ final class FullSnapshotSql
                     }
                     if ($char === "'" || $char === '"' || $char === '`') { $quote = $char; $statement .= $char; }
                     elseif ($char === ';') {
-                        if (trim($statement) !== '') { $pdo->exec(trim($statement)); $executed++; }
+                        if (trim($statement) !== '') {
+                            self::assertImportStatement(trim($statement), $trustedTables);
+                            $pdo->exec(trim($statement)); $executed++;
+                        }
                         $statement = '';
                     } else { $statement .= $char; }
                 }
@@ -134,6 +150,17 @@ final class FullSnapshotSql
                 self::assertIdentifier($table);
                 if (!is_int($count) || $count < 0 || (int) $pdo->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() !== $count) {
                     throw new RuntimeException('SQL snapshot restored row count differs: ' . $table . '.');
+                }
+            }
+            if ($expectedHashes) {
+                if (array_keys($expectedHashes) !== $tables) { throw new RuntimeException('SQL snapshot row-hash inventory does not match the baseline.'); }
+                $policies = [];
+                foreach ($baseline->toArray()['tables'] as $table) { $policies[$table['name']] = $table; }
+                foreach ($expectedHashes as $table => $digest) {
+                    if (!is_string($digest) || !preg_match('/\A[a-f0-9]{64}\z/', $digest)
+                        || !hash_equals($digest, self::tableRowHash($pdo, $table, $policies[$table]['columns']))) {
+                        throw new RuntimeException('SQL snapshot restored row digest differs: ' . $table . '.');
+                    }
                 }
             }
             return ['table_count' => count($tables), 'row_counts' => $expectedCounts, 'statements' => $executed,
@@ -152,6 +179,31 @@ final class FullSnapshotSql
         $hex = bin2hex((string) $value);
         if ($hex === '') { return "''"; }
         return $binary ? '0x' . $hex : 'CONVERT(0x' . $hex . ' USING utf8mb4)';
+    }
+
+    private static function hashCell($hash, $value)
+    {
+        if ($value === null) { hash_update($hash, "\x00"); return; }
+        if (!is_scalar($value)) { throw new RuntimeException('SQL snapshot hash encountered a non-scalar value.'); }
+        $bytes = (string) $value;
+        hash_update($hash, "\x01" . pack('N', strlen($bytes)) . $bytes);
+    }
+
+    private static function tableRowHash(PDO $pdo, $table, array $columns)
+    {
+        $order = array_map(function ($column) { self::assertIdentifier($column); return '`' . $column . '`'; }, self::primaryKeyColumns($pdo, $table));
+        if (!$order) { throw new RuntimeException('SQL snapshot restored table lacks a primary key: ' . $table . '.'); }
+        $rows = $pdo->query('SELECT * FROM `' . $table . '` ORDER BY ' . implode(', ', $order));
+        $hash = hash_init('sha256');
+        while ($row = $rows->fetch(PDO::FETCH_ASSOC)) {
+            if (array_keys($row) !== $columns) { throw new RuntimeException('SQL snapshot restored table columns differ: ' . $table . '.'); }
+            foreach ($columns as $column) {
+                $value = $row[$column];
+                if (is_resource($value)) { $value = stream_get_contents($value); }
+                self::hashCell($hash, $value);
+            }
+        }
+        return hash_final($hash);
     }
 
     private static function tableNames(PDO $pdo)
@@ -219,6 +271,23 @@ final class FullSnapshotSql
         if (!is_string($name) || !preg_match('/\A[a-z][a-z0-9_]{0,63}\z/', $name)) {
             throw new RuntimeException('SQL snapshot contains an invalid database identifier.');
         }
+    }
+
+    private static function assertImportStatement($sql, array $trustedTables)
+    {
+        if (in_array($sql, [
+            'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci',
+            "SET SESSION time_zone = '+00:00'",
+            'SET FOREIGN_KEY_CHECKS = 0',
+            'SET FOREIGN_KEY_CHECKS = 1',
+        ], true)) { return; }
+        if (preg_match('/\ACREATE TABLE `([a-z][a-z0-9_]{0,63})`\s*\(/s', $sql, $match)
+            || preg_match('/\AINSERT INTO `([a-z][a-z0-9_]{0,63})`\s*\(/s', $sql, $match)) {
+            if (isset($trustedTables[$match[1]])) { return; }
+        }
+        if (preg_match('/\ACREATE TRIGGER `([a-z][a-z0-9_]{0,63})`\s+(?:BEFORE|AFTER)\s+(?:INSERT|UPDATE|DELETE)\s+ON `([a-z][a-z0-9_]{0,63})`\s+FOR EACH ROW\s+/is', $sql, $match)
+            && isset($trustedTables[$match[2]])) { return; }
+        throw new InvalidArgumentException('SQL snapshot contains a statement outside the trusted import grammar.');
     }
 
     private static function write($stream, $bytes)
