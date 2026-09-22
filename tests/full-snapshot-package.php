@@ -41,7 +41,8 @@ try {
         if (!mkdir($root . DIRECTORY_SEPARATOR . $name, 0700)) { throw new RuntimeException('Private package test directory could not be created.'); }
     }
     $avatarName = str_repeat('a', 40) . '.png';
-    $avatarBytes = 'private-fixture-avatar';
+    $avatarBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true);
+    if (!is_string($avatarBytes)) { throw new RuntimeException('Avatar fixture decoding failed.'); }
     file_put_contents($root . '/source-assets/' . $avatarName, $avatarBytes);
     $source->prepare('INSERT INTO users (display_name, avatar_url, created_at, updated_at) VALUES (?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())')
         ->execute(["Proof; O'Brien 🌿", 'api/v1/avatar.php?file=' . $avatarName]);
