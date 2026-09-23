@@ -12,13 +12,27 @@ require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
  */
 class RealtimeIntegration
 {
+    const BACKUP_ROOM = 'syndicatum.backups.global';
+    const BACKUP_EVENT = 'syndicatum.backup.updated';
+    const RESTORE_EVENT = 'syndicatum.restore.updated';
+
     private $settings;
     private $transport;
+    private $publishCurl;
 
     public function __construct($settings, $transport = null)
     {
         $this->settings = $settings;
         $this->transport = $transport;
+        $this->publishCurl = null;
+    }
+
+    public function __destruct()
+    {
+        if ($this->publishCurl !== null) {
+            curl_close($this->publishCurl);
+            $this->publishCurl = null;
+        }
     }
 
     public function isEnabled()
@@ -33,7 +47,7 @@ class RealtimeIntegration
     /**
      * Build a least-privilege admission payload for one authorized project participant.
      */
-    public function buildAdmission(array $participant, $projectIdentifier)
+    public function buildAdmission(array $participant, $projectIdentifier, array $additionalRooms = [])
     {
         if (!$this->isEnabled()) {
             throw new RuntimeException('Realtime integration is disabled.');
@@ -55,6 +69,16 @@ class RealtimeIntegration
         $tokenId = 'rt_' . bin2hex(self::secureRandomBytes(10));
         $userId = 'participant:' . $participantId;
 
+        $rooms = [$room];
+        foreach ($additionalRooms as $additionalRoom) {
+            $additionalRoom = trim((string) $additionalRoom);
+            if ($additionalRoom === '' || !preg_match('/\A[a-z0-9][a-z0-9._-]{0,179}\z/', $additionalRoom)) {
+                throw new InvalidArgumentException('A Realtime room is invalid.');
+            }
+            $rooms[] = $additionalRoom;
+        }
+        $rooms = array_values(array_unique($rooms));
+
         $claims = [
             'iss' => $config['issuer'],
             'sub' => $userId,
@@ -68,7 +92,7 @@ class RealtimeIntegration
             'display_name' => $displayName,
             'roles' => [],
             'capabilities' => ['session.connect', 'room.join'],
-            'allowed_rooms' => [$room],
+            'allowed_rooms' => $rooms,
             'allowed_room_prefixes' => [],
             'attachment_policy' => [],
         ];
@@ -81,6 +105,7 @@ class RealtimeIntegration
             'project_code' => $config['project_code'],
             'raw_room' => $rawRoom,
             'room' => $room,
+            'rooms' => $rooms,
             'expires_at' => gmdate('c', $expiresAt),
             'session' => [
                 'token_id' => $tokenId,
@@ -90,6 +115,42 @@ class RealtimeIntegration
                 'allowed_rooms' => $claims['allowed_rooms'],
                 'allowed_room_prefixes' => [],
                 'attachment_policy' => [],
+            ],
+        ];
+    }
+
+    /** Build an administrator-only admission for the application-wide Backup room. */
+    public function buildBackupAdmission(array $user)
+    {
+        if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
+        $userId = isset($user['id']) ? (int) $user['id'] : 0;
+        $displayName = isset($user['display_name']) ? trim((string) $user['display_name']) : '';
+        if ($userId < 1 || $displayName === '') {
+            throw new InvalidArgumentException('An administrator identity is required for Backup Realtime admission.');
+        }
+        $config = $this->admissionConfig();
+        $issuedAt = time();
+        $expiresAt = $issuedAt + $config['token_ttl_seconds'];
+        $tokenId = 'rt_backup_' . bin2hex(self::secureRandomBytes(10));
+        $subject = 'administrator:' . $userId;
+        $rooms = [self::BACKUP_ROOM];
+        $claims = [
+            'iss' => $config['issuer'], 'sub' => $subject, 'aud' => $config['audience'],
+            'iat' => $issuedAt, 'exp' => $expiresAt, 'jti' => $tokenId,
+            'project_code' => $config['project_code'], 'app_code' => $config['client_code'],
+            'user_id' => $subject, 'display_name' => $displayName, 'roles' => ['administrator'],
+            'capabilities' => ['session.connect', 'room.join'],
+            'allowed_rooms' => $rooms, 'allowed_room_prefixes' => [], 'attachment_policy' => [],
+        ];
+        return [
+            'enabled' => true, 'token' => $this->signJwt($claims, $config['signing_secret']),
+            'websocket_url' => $config['websocket_url'], 'app_code' => $config['client_code'],
+            'project_code' => $config['project_code'], 'room' => self::BACKUP_ROOM, 'rooms' => $rooms,
+            'expires_at' => gmdate('c', $expiresAt),
+            'session' => [
+                'token_id' => $tokenId, 'user_id' => $subject, 'display_name' => $displayName,
+                'capabilities' => $claims['capabilities'], 'allowed_rooms' => $rooms,
+                'allowed_room_prefixes' => [], 'attachment_policy' => [],
             ],
         ];
     }
@@ -134,7 +195,54 @@ class RealtimeIntegration
             'meta' => ['source_module' => 'syndicatum-connector-authorization'],
             'event_id' => 'connector-authorization-' . $authorizationId,
         ]);
-        if ((int) ($response['status'] ?? 0) !== 202) { throw new RuntimeException($this->safeResponseError($response)); }
+        if ((int) (isset($response['status']) ? $response['status'] : 0) !== 202) { throw new RuntimeException($this->safeResponseError($response)); }
+        return true;
+    }
+
+    /** Publish the complete canonical backup snapshot. Failure is terminal to the caller; there is no alternate transport. */
+    public function publishBackupUpdated(array $backup)
+    {
+        if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
+        $operationId = trim((string) (isset($backup['operation_id']) ? $backup['operation_id'] : ''));
+        $revision = (int) (isset($backup['revision']) ? $backup['revision'] : 0);
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $operationId) || $revision < 1) {
+            throw new InvalidArgumentException('Backup Realtime snapshot is invalid.');
+        }
+        $config = $this->publishConfig();
+        $response = $this->sendPublishRequest($config, [
+            'client_code' => $config['client_code'],
+            'project_code' => $config['project_code'],
+            'room' => self::BACKUP_ROOM,
+            'event_type' => self::BACKUP_EVENT,
+            'payload' => ['backup' => $backup],
+            'meta' => ['source_module' => 'syndicatum-backup-service'],
+            'event_id' => 'backup-' . strtolower($operationId) . '-revision-' . $revision,
+        ]);
+        if ((int) (isset($response['status']) ? $response['status'] : 0) !== 202) {
+            throw new RuntimeException('Backup Realtime publish failed: ' . $this->safeResponseError($response));
+        }
+        return true;
+    }
+
+    /** Publish a complete in-app restore snapshot to the administrator Backup room. */
+    public function publishRestoreUpdated(array $restore)
+    {
+        if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
+        $operationId = trim((string) ($restore['operation_id'] ?? ''));
+        $revision = (int) ($restore['revision'] ?? 0);
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $operationId) || $revision < 1) {
+            throw new InvalidArgumentException('Restore Realtime snapshot is invalid.');
+        }
+        $config = $this->publishConfig();
+        $response = $this->sendPublishRequest($config, [
+            'client_code'=>$config['client_code'], 'project_code'=>$config['project_code'],
+            'room'=>self::BACKUP_ROOM, 'event_type'=>self::RESTORE_EVENT,
+            'payload'=>['restore'=>$restore], 'meta'=>['source_module'=>'syndicatum-restore-service'],
+            'event_id'=>'restore-'.strtolower($operationId).'-revision-'.$revision,
+        ]);
+        if ((int) ($response['status'] ?? 0) !== 202) {
+            throw new RuntimeException('Restore Realtime publish failed: ' . $this->safeResponseError($response));
+        }
         return true;
     }
 
@@ -281,8 +389,18 @@ class RealtimeIntegration
             throw new RuntimeException('Unable to encode the Realtime publish request.');
         }
 
-        $curl = curl_init($config['publish_url']);
+        if ($this->publishCurl === null) {
+            $this->publishCurl = curl_init();
+            if ($this->publishCurl === false) {
+                $this->publishCurl = null;
+                throw new RuntimeException('Realtime publish connection could not be initialized.');
+            }
+        } else {
+            curl_reset($this->publishCurl);
+        }
+        $curl = $this->publishCurl;
         $options = [
+            CURLOPT_URL => $config['publish_url'],
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => $config['connect_timeout_seconds'],
@@ -301,11 +419,9 @@ class RealtimeIntegration
         $responseBody = curl_exec($curl);
         if ($responseBody === false) {
             $error = curl_error($curl);
-            curl_close($curl);
             return ['status' => 0, 'body' => '', 'transport_error' => $error];
         }
         $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
 
         return ['status' => $status, 'body' => (string) $responseBody];
     }

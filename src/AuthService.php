@@ -21,17 +21,17 @@ class AuthService
     public function login($identity, $password)
     {
         $identity = strtolower(trim((string) $identity));
-        if ($identity === '' || (string) $password === '') {
-            throw new InvalidArgumentException('Identity and password are required.');
+        if (!filter_var($identity, FILTER_VALIDATE_EMAIL) || (string) $password === '') {
+            throw new InvalidArgumentException('Email address and password are required.');
         }
 
         $statement = $this->pdo->prepare(
             "SELECT * FROM users
              WHERE status = 'active' AND deleted_at IS NULL
-               AND (LOWER(normalized_email) = ? OR LOWER(username) = ?)
+               AND LOWER(normalized_email) = ?
              LIMIT 1"
         );
-        $statement->execute([$identity, $identity]);
+        $statement->execute([$identity]);
         $user = $statement->fetch();
 
         if (!$user || empty($user['password_hash']) || !password_verify((string) $password, $user['password_hash'])) {
@@ -52,15 +52,11 @@ class AuthService
     public function register(array $input)
     {
         $email = strtolower(trim(isset($input['email']) ? (string) $input['email'] : ''));
-        $username = strtolower(trim(isset($input['username']) ? (string) $input['username'] : ''));
         $displayName = trim(isset($input['display_name']) ? (string) $input['display_name'] : '');
         $password = isset($input['password']) ? (string) $input['password'] : '';
         $confirmation = isset($input['password_confirmation']) ? (string) $input['password_confirmation'] : '';
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 191) {
             throw new InvalidArgumentException('Enter a valid email address.');
-        }
-        if (!preg_match('/^[a-z0-9._-]{3,80}$/', $username)) {
-            throw new InvalidArgumentException('Username must be 3–80 characters using letters, numbers, dots, underscores, or hyphens.');
         }
         if ($displayName === '' || strlen($displayName) > 120) {
             throw new InvalidArgumentException('Display name is required and must not exceed 120 characters.');
@@ -74,17 +70,17 @@ class AuthService
 
         $this->pdo->beginTransaction();
         try {
-            $collision = $this->pdo->prepare('SELECT id FROM users WHERE normalized_email = ? OR username = ? LIMIT 1 FOR UPDATE');
-            $collision->execute([$email, $username]);
+            $collision = $this->pdo->prepare('SELECT id FROM users WHERE normalized_email = ? LIMIT 1 FOR UPDATE');
+            $collision->execute([$email]);
             if ($collision->fetchColumn() !== false) {
-                throw new InvalidArgumentException('That email address or username is already registered.');
+                throw new InvalidArgumentException('That email address is already registered.');
             }
             $now = Db::now();
             $insert = $this->pdo->prepare(
                 "INSERT INTO users (normalized_email, username, password_hash, display_name, status, created_at, updated_at)
                  VALUES (?, ?, ?, ?, 'active', ?, ?)"
             );
-            $insert->execute([$email, $username, password_hash($password, PASSWORD_DEFAULT), $displayName, $now, $now]);
+            $insert->execute([$email, null, password_hash($password, PASSWORD_DEFAULT), $displayName, $now, $now]);
             $userId = (int) $this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO user_system_roles (user_id, role_id, granted_by_user_id, created_at)
                 SELECT ?, id, NULL, ? FROM system_roles WHERE code = 'user'")->execute([$userId, $now]);
@@ -95,7 +91,7 @@ class AuthService
         } catch (Exception $exception) {
             if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             if ($exception instanceof PDOException && (string) $exception->getCode() === '23000') {
-                throw new InvalidArgumentException('That email address or username is already registered.');
+                throw new InvalidArgumentException('That email address is already registered.');
             }
             throw $exception;
         }
@@ -336,8 +332,7 @@ class AuthService
                 "INSERT INTO users (normalized_email, username, password_hash, display_name, status, created_at, updated_at)
                  VALUES (?, ?, ?, ?, 'active', ?, ?)"
             );
-            $username = preg_replace('/[^a-z0-9._-]+/', '-', strstr($identity, '@', true));
-            $insert->execute([$identity, $username, password_hash((string) $password, PASSWORD_DEFAULT), $displayName, $now, $now]);
+            $insert->execute([$identity, null, password_hash((string) $password, PASSWORD_DEFAULT), $displayName, $now, $now]);
             $userId = (int) $this->pdo->lastInsertId();
 
             $roles = $this->pdo->prepare(
@@ -363,7 +358,7 @@ class AuthService
     public function publicUser($userId)
     {
         $statement = $this->pdo->prepare(
-            'SELECT u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.pbb_user_id, u.google_subject, u.status,
+            'SELECT u.id, u.normalized_email, u.display_name, u.avatar_url, u.pbb_user_id, u.google_subject, u.status,
                     CASE WHEN u.password_hash IS NULL OR u.password_hash = \'\' THEN 0 ELSE 1 END AS has_native_password,
                     w.id AS workspace_id, w.name AS workspace_name
              FROM users u LEFT JOIN workspaces w ON w.owner_user_id = u.id WHERE u.id = ?'
@@ -380,7 +375,6 @@ class AuthService
         return [
             'id' => (int) $user['id'],
             'email' => $user['normalized_email'],
-            'username' => $user['username'],
             'display_name' => $user['display_name'],
             'avatar_url' => $user['avatar_url'],
             'pbb_user_id' => $user['pbb_user_id'],

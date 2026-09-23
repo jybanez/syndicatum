@@ -2,6 +2,7 @@
 
 require_once dirname(dirname(__DIR__)) . '/src/Api.php';
 require_once dirname(dirname(__DIR__)) . '/src/Db.php';
+require_once dirname(dirname(__DIR__)) . '/src/AuthService.php';
 require_once dirname(dirname(__DIR__)) . '/src/SettingsService.php';
 require_once dirname(dirname(__DIR__)) . '/src/RealtimeIntegration.php';
 
@@ -24,20 +25,21 @@ try {
         Api::json(['error' => true, 'code' => 'method_not_allowed', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET']);
     }
 
-    $projectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
-    if ($projectId < 1) {
-        throw new InvalidArgumentException('A valid project_id is required.');
-    }
-
     $pdo = Db::pdo();
-    $requestAuth = new RequestAuth($pdo);
-    $access = $requestAuth->projectAccess($projectId, 'messages:read');
+    $projectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
     $settings = new SettingsService($pdo);
     $realtime = new RealtimeIntegration($settings);
+    if (!$realtime->isEnabled()) { Api::json(['data' => ['enabled' => false]]); }
 
-    if (!$realtime->isEnabled()) {
-        Api::json(['data' => ['enabled' => false]]);
+    if ($projectId < 1) {
+        $user = (new AuthService($pdo))->requireAdministrator();
+        try { $admission = $realtime->buildBackupAdmission($user); }
+        catch (InvalidArgumentException $exception) { throw new RuntimeException('REALTIME_CONFIGURATION_INVALID'); }
+        Api::json(['data' => $admission]);
     }
+
+    $requestAuth = new RequestAuth($pdo);
+    $access = $requestAuth->projectAccess($projectId, 'messages:read');
 
     $projects = new ProjectRepository($pdo);
     $participant = null;
@@ -52,7 +54,10 @@ try {
     }
 
     try {
-        $admission = $realtime->buildAdmission($participant, $projectId);
+        $roles = isset($access['identity']['user']['system_roles']) && is_array($access['identity']['user']['system_roles'])
+            ? $access['identity']['user']['system_roles'] : [];
+        $additionalRooms = in_array('administrator', $roles, true) ? [RealtimeIntegration::BACKUP_ROOM] : [];
+        $admission = $realtime->buildAdmission($participant, $projectId, $additionalRooms);
     } catch (InvalidArgumentException $exception) {
         // Configuration errors are operational details and must not be
         // returned to participants with setting names or secret context.
@@ -65,6 +70,9 @@ try {
     $code = $exception->getMessage();
     if ($code === 'AUTHENTICATION_REQUIRED') {
         Api::json(['error' => true, 'code' => 'authentication_required', 'message' => 'Authentication is required.'], 401);
+    }
+    if ($code === 'ADMINISTRATOR_REQUIRED') {
+        Api::json(['error' => true, 'code' => 'administrator_required', 'message' => 'Administrator access is required.'], 403);
     }
     if ($code === 'PROJECT_NOT_FOUND') {
         Api::json(['error' => true, 'code' => 'project_not_found', 'message' => 'Project not found.'], 404);

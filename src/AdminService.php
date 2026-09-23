@@ -17,14 +17,14 @@ class AdminService
     public function users()
     {
         $rows = $this->pdo->query(
-            "SELECT u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.status,
+            "SELECT u.id, u.normalized_email, u.display_name, u.avatar_url, u.status,
                     u.pbb_user_id, u.google_subject, u.created_at, u.updated_at, w.id AS workspace_id, w.name AS workspace_name,
                     GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS role_codes
              FROM users u
              LEFT JOIN workspaces w ON w.owner_user_id = u.id
              LEFT JOIN user_system_roles ur ON ur.user_id = u.id
              LEFT JOIN system_roles r ON r.id = ur.role_id
-             GROUP BY u.id, u.normalized_email, u.username, u.display_name, u.avatar_url, u.status,
+             GROUP BY u.id, u.normalized_email, u.display_name, u.avatar_url, u.status,
                       u.pbb_user_id, u.google_subject, u.created_at, u.updated_at, w.id, w.name
              ORDER BY u.display_name, u.id"
         )->fetchAll();
@@ -68,14 +68,10 @@ class AdminService
     public function createUser(array $input, $actorUserId)
     {
         $email = strtolower(trim(isset($input['email']) ? (string) $input['email'] : ''));
-        $username = strtolower(trim(isset($input['username']) ? (string) $input['username'] : ''));
         $displayName = trim(isset($input['display_name']) ? (string) $input['display_name'] : '');
         $password = isset($input['password']) ? (string) $input['password'] : '';
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException('Email is invalid.');
-        }
-        if ($email === '' && $username === '') {
-            throw new InvalidArgumentException('Email or username is required.');
         }
         if ($displayName === '' || strlen($password) < 12) {
             throw new InvalidArgumentException('Display name and a password of at least 12 characters are required.');
@@ -92,7 +88,7 @@ class AdminService
                 "INSERT INTO users (normalized_email, username, password_hash, display_name, avatar_url, status, created_at, updated_at)
                  VALUES (?, ?, ?, ?, ?, 'active', ?, ?)"
             );
-            $statement->execute([$email === '' ? null : $email, $username === '' ? null : $username,
+            $statement->execute([$email, null,
                 password_hash($password, PASSWORD_DEFAULT), $displayName,
                 $this->avatarUrl(isset($input['avatar_url']) ? $input['avatar_url'] : null),
                 $now, $now]);
@@ -251,7 +247,7 @@ class AdminService
     private function normalizeUserRow(array $row)
     {
         return [
-            'id' => (int) $row['id'], 'email' => $row['normalized_email'], 'username' => $row['username'],
+            'id' => (int) $row['id'], 'email' => $row['normalized_email'],
             'display_name' => $row['display_name'], 'avatar_url' => $row['avatar_url'], 'status' => $row['status'],
             'pbb_user_id' => $row['pbb_user_id'],
             'authentication_source' => $row['google_subject'] !== null ? 'google' : ($row['pbb_user_id'] !== null ? 'account' : 'native'),
