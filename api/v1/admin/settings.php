@@ -4,6 +4,7 @@ require_once dirname(dirname(dirname(__DIR__))) . '/src/Api.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/Db.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/AuthService.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/SettingsService.php';
+require_once dirname(dirname(dirname(__DIR__))) . '/src/CurrentBackupStorage.php';
 
 try {
     $pdo = Db::pdo();
@@ -22,6 +23,14 @@ try {
         $changes = isset($body['settings']) && is_array($body['settings']) ? $body['settings'] : [];
         if (empty($changes)) {
             throw new InvalidArgumentException('At least one setting change is required.');
+        }
+        if (array_key_exists('recovery.backup_base_path', $changes)) {
+            try {
+                $storage = new CurrentBackupStorage(dirname(dirname(dirname(__DIR__))), $changes['recovery.backup_base_path']);
+                $changes['recovery.backup_base_path'] = $storage->base();
+            } catch (Throwable $error) {
+                throw new InvalidArgumentException('Base location for generated backups is invalid or unavailable: ' . $error->getMessage());
+            }
         }
         $data = $settings->update($changes, $user['id']);
         Api::json(['data' => ['settings' => $data]]);

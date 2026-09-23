@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/PrivateStorage.php';
+
 class AvatarService
 {
     const MAX_BYTES = 2097152;
@@ -12,7 +14,7 @@ class AvatarService
         $configured = getenv('SYNDICATUM_AVATAR_DIR');
         $this->directory = $directory ?: ($configured !== false && trim((string) $configured) !== ''
             ? (string) $configured
-            : dirname(dirname(dirname(dirname(__DIR__)))) . DIRECTORY_SEPARATOR . 'private' . DIRECTORY_SEPARATOR . 'syndicatum-avatars');
+            : PrivateStorage::file('syndicatum-avatars'));
     }
 
     public function storeData(array $input)

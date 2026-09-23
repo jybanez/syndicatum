@@ -19,6 +19,7 @@ class SettingsService
             'general.support_url' => ['section' => 'general', 'type' => 'url', 'default' => ''],
             'messaging.max_message_bytes' => ['section' => 'messaging', 'type' => 'integer', 'default' => 24000, 'min' => 1024, 'max' => 1048576],
             'messaging.max_reply_depth' => ['section' => 'messaging', 'type' => 'integer', 'default' => 12, 'min' => 1, 'max' => 100],
+            'recovery.backup_base_path' => ['section' => 'recovery', 'type' => 'path', 'default' => '', 'max' => 2048],
             'realtime.enabled' => ['section' => 'integrations', 'type' => 'boolean', 'default' => false],
             'realtime.base_url' => ['section' => 'integrations', 'type' => 'url', 'default' => ''],
             'realtime.publish_url' => ['section' => 'integrations', 'type' => 'url', 'default' => ''],
@@ -232,6 +233,14 @@ class SettingsService
             return $value;
         }
         $value = trim((string) $value);
+        if ($definition['type'] === 'path') {
+            $isWindowsDrive = preg_match('/\A[A-Za-z]:[\\\\\/]/', $value) === 1;
+            $isUnc = preg_match('/\A\\\\\\\\[^\\\\\/]+[\\\\\/][^\\\\\/]+/', $value) === 1;
+            $isUnix = strpos($value, '/') === 0;
+            if ($value === '' || strpos($value, "\0") !== false || (!$isWindowsDrive && !$isUnc && !$isUnix)) {
+                throw new InvalidArgumentException($key . ' must be an absolute server filesystem path.');
+            }
+        }
         if ($definition['type'] === 'origin') {
             if ($value === '' || !filter_var($value, FILTER_VALIDATE_URL)) {
                 throw new InvalidArgumentException($key . ' must be an absolute origin URL.');

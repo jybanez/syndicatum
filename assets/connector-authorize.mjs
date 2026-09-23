@@ -1,4 +1,4 @@
-import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
+import { uiLoader } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.203";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 
@@ -16,7 +16,6 @@ function redirectWithBusy(context, url) {
   return false;
 }
 
-uiLoader.setPreferBundles(true);
 const options = { css: false };
 await uiLoader.loadMany(["ui.form.modal", "ui.form.modal.login"], options);
 const createLoginFormModal = await uiLoader.get("ui.form.modal.login", options);

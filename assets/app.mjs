@@ -1,7 +1,8 @@
-import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js?v=0.21.185";
-import { AI_ICONS } from "../vendor/pbb-helper/js/ui/ui.icons.ai.js";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.203";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { showCanonicalEvidence } from "./responsibility-evidence.mjs";
+import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
+import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
@@ -45,7 +46,10 @@ const API = {
   recoveryStatus: "api/v1/admin/recovery-status.php",
   releasePackage: "api/v1/admin/release-package.php",
   backups: "api/v1/admin/backups.php",
+  restores: "api/v1/admin/restores.php",
   backupDownloads: "api/v1/admin/backup-downloads.php",
+  backupRecoveryKey: "api/v1/admin/backup-recovery-key.php",
+  kickstartDownload: "api/v1/admin/kickstart-download.php",
   restoreInspections: "api/v1/admin/restore-inspections.php",
   stagedRestores: "api/v1/admin/staged-restores.php",
   artifactDownload: "api/v1/admin/artifact-download.php",
@@ -57,6 +61,9 @@ const state = {
   projectSearch: "",
   participantSearch: "",
   adminKind: "",
+  recoveryStatus: null,
+  backupGridColumnWidths: null,
+  backupPage: null,
   session: null,
   projects: [],
   project: null,
@@ -80,6 +87,8 @@ const state = {
   realtimeRetryTimer: null,
   realtimeRetryCount: 0,
   realtimeGeneration: 0,
+  realtimeRooms: new Set(),
+  realtimeError: null,
   abortController: null,
   mobilePanel: "projects",
   teamVisible: true,
@@ -263,13 +272,21 @@ function applicationPath(path = "") {
   return `${APP_BASE_PATH}/${suffix}`;
 }
 
+function applicationResourceUrl(path) {
+  const source = String(path || "").trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(source) || source.startsWith("//")) return source;
+  return new URL(source.replace(/^\/+/, ""), document.baseURI).href;
+}
+
 function routeForSurface(surface, projectId = "") {
   if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
-  if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(surface)) return applicationPath(surface);
+  if (surface === "backup-restore") return `${applicationPath()}?admin=backup-restore`;
+  if (["users", "agents", "audit", "delivery-health"].includes(surface)) return applicationPath(surface);
   return applicationPath();
 }
 
 function currentApplicationRoute() {
+  if (new URLSearchParams(location.search).get("admin") === "backup-restore") return { surface: "backup-restore", projectId: "" };
   const pathname = location.pathname.startsWith(`${APP_BASE_PATH}/`)
     ? location.pathname.slice(APP_BASE_PATH.length)
     : location.pathname;
@@ -601,9 +618,9 @@ function showLogin(message = "") {
     mediaUrl: "assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852",
     mediaAlt: "Syndicatum",
     backgroundTone: "none",
-    identifierKind: "username",
-    identifierLabel: "Email or username",
-    identifierPlaceholder: "Enter email or username",
+    identifierKind: "email",
+    identifierLabel: "Email address",
+    identifierPlaceholder: "Enter your email address",
     fields: { identifier: "identity", password: "password" },
     submitLabel: "Sign in",
     cancelLabel: state.session?.capabilities?.self_registration === false ? "Cancel" : "Register",
@@ -653,7 +670,6 @@ function openRegistrationModal() {
       [{ type: "text", content: "Create a standard human account and your personal workspace." }],
       [{ type: "input", name: "display_name", label: "Display name", autocomplete: "name", required: true }],
       [{ type: "input", input: "email", name: "email", label: "Email address", autocomplete: "email", required: true }],
-      [{ type: "input", name: "username", label: "Username", autocomplete: "username", required: true }],
       [{ type: "input", input: "password", name: "password", label: "Password", autocomplete: "new-password", required: true, help: "Use at least 12 characters." }],
       [{ type: "input", input: "password", name: "password_confirmation", label: "Confirm password", autocomplete: "new-password", required: true }],
     ],
@@ -1276,6 +1292,7 @@ function scheduleFilterReload() {
 }
 
 function setSurface(name) {
+  if (name !== "backup-restore") { state.backupPage?.destroy(); state.backupPage = null; }
   state.surface = name;
   const workspaceVisible = ["workspace", "project"].includes(name);
   el.workspace_surface.hidden = !workspaceVisible;
@@ -2134,28 +2151,6 @@ function showRecoveryReceipt(titleText, receipt, download = null, operation = nu
   modal.open();
 }
 
-function openReleasePackage(status) {
-  const modal = state.factories.createFormModal({
-    title: "Get clean package", submitLabel: "Authorize download",
-    initialValues: { verified_source: false },
-    rows: [
-      [{ type: "text", content: "Syndicatum will only download the pinned CI-built release. This running instance cannot build or mint canonical executable code." }],
-      [{ type: "display", name: "sha", label: "Pinned SHA-256", value: status.release.sha256 || "Unavailable" }],
-      [{ type: "display", name: "commit", label: "Source commit", value: status.release.source_commit || "Unavailable" }],
-      [{ type: "checkbox", name: "verified_source", label: "I understand this retrieves the verified CI artifact and does not build a package locally.", required: true }],
-    ],
-    async onSubmit(values, context) {
-      try {
-        if (!values.verified_source) throw new Error("Confirm the CI-built release boundary.");
-        const result = unwrap(await request(API.releasePackage, { method: "POST", headers: csrfHeaders(), body: "{}" }));
-        recoveryDownload(result.download.token);
-        state.components.toast.success("Verified CI-built package download authorized.");
-        return true;
-      } catch (error) { context.setFormError(error.message); return false; }
-    },
-  });
-  modal.open();
-}
 
 function openBuildBackup() {
   const idempotencyKey = makeIdempotencyKey();
@@ -2313,34 +2308,528 @@ function openRestoreUploader() {
   modal.open();
 }
 
+function recoveryProgressSteps(labels) {
+  const list = document.createElement("ol");
+  list.className = "recovery-progress";
+  list.setAttribute("aria-label", "Operation progress");
+  const items = [];
+  const controls = [];
+  labels.forEach((label) => {
+    const item = document.createElement("li");
+    item.dataset.state = "pending";
+    const barHost = document.createElement("div");
+    barHost.className = "recovery-progress-bar";
+    const bar = state.factories.createProgress(barHost, { value: 0, label }, {
+      style: "striped", size: "sm", rounded: true,
+      showLabel: true, showPercent: true, ariaLabel: `${label} progress`,
+    });
+    item.appendChild(barHost);
+    list.appendChild(item);
+    items.push(item);
+    controls.push(bar);
+  });
+  return { list, items, controls, labels, destroy() { controls.forEach((control) => control.destroy()); } };
+}
+
+function previewRecoveryProgress(steps, status, onOverallProgress, onComplete) {
+  const { items, controls, labels } = steps;
+  let index = 0;
+  let percent = 0;
+  const showStage = () => {
+    items[index].dataset.state = "in-progress";
+    status.textContent = `Preview only — no backup is running. Stage ${index + 1} of ${items.length}: ${labels[index]}.`;
+  };
+  showStage();
+  const timer = setInterval(() => {
+    percent = Math.min(percent + 10, 100);
+    controls[index].setValue(percent);
+    onOverallProgress(Math.round((index * 100 + percent) / items.length));
+    if (percent < 100) return;
+    controls[index].update({}, { style: "gradient", animate: false });
+    items[index].dataset.state = "complete";
+    index += 1;
+    if (index === items.length) {
+      clearInterval(timer);
+      status.textContent = "Preview complete. Recovery service is unavailable; no backup was created.";
+      onComplete();
+      return;
+    }
+    percent = 0;
+    showStage();
+  }, 90);
+  return () => clearInterval(timer);
+}
+
+function recoverySize(bytes) {
+  if (bytes === null || bytes === undefined || bytes === "") return "Unavailable";
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return "Unavailable";
+  if (value < 1024) return value + " B";
+  const unit = value < 1048576 ? "KB" : value < 1073741824 ? "MB" : "GB";
+  const divisor = unit === "KB" ? 1024 : unit === "MB" ? 1048576 : 1073741824;
+  return (value / divisor).toFixed(1) + " " + unit;
+}
+
+function backupOverallProgress(backup) {
+  const raw = backup.overall_progress_percent ?? backup.overall_progress ?? backup.progress_percent;
+  if (raw === null || raw === undefined || raw === "") return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? Math.round(value) : null;
+}
+
+function backupSizeOrProgress(backup) {
+  const status = String(backup.status || "").toLowerCase();
+  if (status !== "running" && !(backup.preview === true && ["preview complete", "preview cancelled"].includes(status))) {
+    return recoverySize(backup.size_bytes);
+  }
+  const progress = backupOverallProgress(backup);
+  return progress === null ? "" : `${progress}%`;
+}
+
+function backupInitiator(backup) {
+  const candidates = [
+    backup.initiated_by_name,
+    backup.initiated_by_display_name,
+    backup.initiated_by?.display_name,
+    backup.created_by_display_name,
+    backup.created_by?.display_name,
+    backup.created_by_name,
+    backup.initiated_by,
+  ];
+  return candidates.find((value) => typeof value === "string" && value.trim())?.trim() || "Unavailable";
+}
+
+function backupIncludesData(backup) {
+  const value = backup.includes_data ?? backup.include_existing_data ?? null;
+  if (value === true || value === 1 || value === "1") return true;
+  if (value === false || value === 0 || value === "0") return false;
+  return null;
+}
+
+function backupInitiatedAt(backup) {
+  return backup.initiated_at || backup.started_at || backup.created_at || null;
+}
+
+function backupFinishedAt(backup) {
+  return backup.finished_at || backup.completed_at || null;
+}
+
+function backupCreatedAt(backup) {
+  if (!["ready", "succeeded"].includes(String(backup.status || "").toLowerCase())) return null;
+  return backup.artifact_created_at || backupFinishedAt(backup);
+}
+
+function backupIndeterminateProgress(label) {
+  const host = document.createElement("div");
+  host.className = "recovery-backup-indeterminate";
+  state.factories.createProgress(host, { label }, {
+    style: "indeterminate", size: "sm", rounded: true,
+    showLabel: false, showPercent: false, ariaLabel: label,
+  });
+  return host;
+}
+
+function backupDuration(backup) {
+  const initiated = Date.parse(backupInitiatedAt(backup) || "");
+  const finished = Date.parse(backupFinishedAt(backup) || "");
+  if (!Number.isFinite(initiated) || !Number.isFinite(finished) || finished < initiated) return "Unavailable";
+  const totalSeconds = Math.round((finished - initiated) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+let openBackupDetails = null;
+
+function openBackupMetadata(backup) {
+  if (openBackupDetails?.id === String(backup.id) && openBackupDetails.modal.getState().open) {
+    openBackupDetails.update(backup);
+    return;
+  }
+  const content = document.createElement("div");
+  content.className = "recovery-backup-metadata";
+  let modal = null;
+  let actionState = "";
+  const actionsFor = (current) => {
+    const ready = ["ready", "succeeded"].includes(String(current.status || "").toLowerCase());
+    const canDownload = ready && current.preview !== true && Boolean(current.download?.token);
+    return [
+      { id: "close", label: "Close" },
+      ...(ready ? [{
+        id: "download", label: "Download", variant: "primary", disabled: !canDownload,
+        onClick() { recoveryDownload(current.download.token); },
+      }] : []),
+    ];
+  };
+  const update = (current) => {
+    const preview = current.preview === true;
+    const status = String(current.status || "Unknown");
+    const normalizedStatus = status.toLowerCase();
+    const running = normalizedStatus === "running";
+    const previewFinished = preview && ["preview complete", "preview cancelled"].includes(normalizedStatus);
+    const dataSelection = backupIncludesData(current);
+    const initiatedAt = backupInitiatedAt(current);
+    const finishedAt = backupFinishedAt(current);
+    const timingFields = [
+      ["Initiated", initiatedAt ? formatDate(initiatedAt) : "Unavailable"],
+      ["Finished", finishedAt ? formatDate(finishedAt) : running ? "In progress" : "Unavailable"],
+      ["Duration", finishedAt ? backupDuration(current) : running ? "In progress" : "Unavailable"],
+    ];
+    content.replaceChildren();
+    if (preview || running) {
+      const notice = document.createElement("p");
+      notice.className = "recovery-workflow-notice";
+      notice.textContent = preview
+        ? previewFinished ? `${status}. No backup job or file was created.`
+          : running ? "Simulated running backup for layout preview only. No real job or backup file exists."
+            : "Sample data for layout preview only. No backup file exists to download."
+        : "Backup is running. A file and download will be available only after it is ready.";
+      content.appendChild(notice);
+    }
+    const details = document.createElement("dl");
+    details.className = "recovery-backup-metadata-list";
+    const fields = running || previewFinished ? [
+      ...timingFields,
+      ["Status", status],
+      ["Overall progress", backupOverallProgress(current) === null ? "" : `${backupOverallProgress(current)}%`],
+      ["Package type", dataSelection === null ? "" : dataSelection ? "Full clone" : "Clean installation"],
+      ["Initiated by", backupInitiator(current)],
+    ] : [
+      ["Filename", current.filename || current.file_name || current.name || "Unavailable"],
+      ...timingFields,
+      ["Size", backupSizeOrProgress(current)],
+      ["Status", status],
+      ["Package type", dataSelection === null ? "" : dataSelection ? "Full clone" : "Clean installation"],
+      ["Initiated by", backupInitiator(current)],
+    ];
+    if (normalizedStatus === "failed") fields.push(["Details", current.error_message || current.message || "This backup did not complete."]);
+    fields.forEach(([label, value]) => {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const description = document.createElement("dd");
+      description.textContent = value;
+      details.append(term, description);
+    });
+    content.appendChild(details);
+    const nextActionState = `${["ready", "succeeded"].includes(normalizedStatus)}:${preview}:${Boolean(current.download?.token)}`;
+    if (modal && nextActionState !== actionState) modal.setActions(actionsFor(current));
+    actionState = nextActionState;
+  };
+  update(backup);
+  modal = state.factories.createActionModal({
+    title: backup.preview === true ? "Backup details · Preview" : "Backup details", size: "md", content,
+    actions: actionsFor(backup),
+    onClose() {
+      if (openBackupDetails?.modal === modal) openBackupDetails = null;
+      modal.destroy();
+    },
+  });
+  openBackupDetails = { id: String(backup.id), modal, update };
+  modal.open();
+}
+
+const PREVIEW_BACKUPS = [
+  { id: "preview-running", preview: true, created_at: "2026-09-22T10:20:00+08:00", size_bytes: null, status: "Running", overall_progress_percent: 42, includes_data: true, initiated_by_name: "Sample Admin" },
+  { id: "preview-001", preview: true, filename: "sample-backup-2026-09-22.syndicatum-backup", created_at: "2026-09-22T09:15:00+08:00", finished_at: "2026-09-22T09:18:24+08:00", size_bytes: 38168166, status: "Ready", includes_data: true, initiated_by_name: "Sample Admin" },
+  { id: "preview-002", preview: true, filename: "sample-backup-2026-09-21.syndicatum-backup", created_at: "2026-09-21T22:40:00+08:00", finished_at: "2026-09-21T22:42:11+08:00", size_bytes: 19608371, status: "Ready", includes_data: false, initiated_by_name: "Sample Operator" },
+  { id: "preview-003", preview: true, filename: "sample-backup-2026-09-20.syndicatum-backup", created_at: "2026-09-20T08:30:00+08:00", finished_at: "2026-09-20T08:31:47+08:00", size_bytes: null, status: "Failed", initiated_by_name: "Sample Admin", error_message: "Sample failure shown for layout preview." },
+];
+
+let backupConfirmationPending = false;
+let backupProgressModal = null;
+let previewRunningBackup = null;
+
+function previewBackupRows() {
+  return previewRunningBackup
+    ? [previewRunningBackup, ...PREVIEW_BACKUPS.filter((backup) => backup.id !== previewRunningBackup.id)]
+    : PREVIEW_BACKUPS;
+}
+
+function refreshPreviewBackupGrid() {
+  if (state.backupGridPreview) state.components.backupGrid?.setRows?.(previewBackupRows());
+  if (previewRunningBackup && openBackupDetails?.id === String(previewRunningBackup.id)) {
+    openBackupDetails.update(previewRunningBackup);
+  }
+}
+
+function confirmBackupStart() {
+  if (backupConfirmationPending || backupProgressModal) return;
+  backupConfirmationPending = true;
+  const body = document.createElement("div");
+  body.className = "ui-dialog-body";
+  const icon = document.createElement("div");
+  icon.className = "ui-dialog-variant-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML = helperIconHtml("status.warning", 44);
+  const text = document.createElement("div");
+  text.className = "ui-dialog-text";
+  const message = document.createElement("p");
+  message.className = "ui-dialog-message";
+  message.textContent = "Show a simulated portable-package backup preview? The recovery service is unavailable, so no backup will be created.";
+  const option = document.createElement("label");
+  option.className = "recovery-backup-data-option";
+  const includeData = document.createElement("input");
+  includeData.type = "checkbox";
+  includeData.checked = true;
+  const label = document.createElement("span");
+  label.textContent = "Include user-generated data";
+  option.append(includeData, label);
+  const explanation = document.createElement("p");
+  explanation.className = "recovery-backup-data-help";
+  explanation.textContent = "Uncheck for a clean installation package. The current database baseline, system settings, presets, persistent files, and protected configuration remain included.";
+  text.append(message, option, explanation);
+  body.append(icon, text);
+  let startSelected = false;
+  const modal = state.factories.createActionModal({
+    title: "Backup preview", size: "sm", className: "ui-dialog ui-dialog--warning recovery-backup-warning-dialog", content: body,
+    actions: [
+      { id: "cancel", label: "Cancel" },
+      { id: "start", label: "Show preview", variant: "primary", onClick() { startSelected = true; } },
+    ],
+    onClose() {
+      const includeExistingData = includeData.checked;
+      backupConfirmationPending = false;
+      modal.destroy();
+      if (startSelected) openBackupProgress({ includeExistingData });
+    },
+  });
+  modal.open();
+}
+
+function openBackupProgress({ includeExistingData = true } = {}) {
+  if (backupProgressModal) return;
+  previewRunningBackup = {
+    id: "preview-running", preview: true,
+    created_at: new Date().toISOString(), size_bytes: null, status: "Running",
+    overall_progress_percent: 0, includes_data: includeExistingData,
+    initiated_by_name: state.session?.user?.display_name || "Sample Admin",
+  };
+  refreshPreviewBackupGrid();
+  const content = document.createElement("div");
+  content.className = "recovery-workflow-modal";
+  const status = document.createElement("p");
+  status.className = "recovery-workflow-notice";
+  status.setAttribute("role", "status");
+  status.textContent = `Preview only — ${includeExistingData ? "full clone with user-generated data" : "clean installation without user-generated data"}. Recovery service is unavailable; no backup will be created.`;
+  const steps = recoveryProgressSteps([
+    "Preparing backup", "Collecting production runtime", "Exporting database",
+    "Collecting persistent files", "Securing configuration",
+    "Building encrypted package", "Verifying package", "Complete",
+  ]);
+  content.append(status, steps.list);
+  const overall = document.createElement("span");
+  overall.className = "recovery-overall-progress";
+  overall.textContent = "Overall progress: 0%";
+  let stopPreview = null;
+  let cancelConfirmationPending = false;
+  let cancelConfirmationModal = null;
+  let settleCancelConfirmation = null;
+  let previewComplete = false;
+  const focusCompletedClose = () => {
+    if (backupProgressModal !== modal || !modal.getState().open) return;
+    modal.refs.footer.querySelector('[data-action-autofocus="true"]')?.focus();
+  };
+  const confirmCancellation = () => new Promise((resolve) => {
+    let cancelSelected = false;
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    settleCancelConfirmation = settle;
+    const body = document.createElement("div");
+    body.className = "ui-dialog-body ui-dialog-body--compact";
+    const icon = document.createElement("div");
+    icon.className = "ui-dialog-variant-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = helperIconHtml("status.warning", 44);
+    const text = document.createElement("div");
+    text.className = "ui-dialog-text";
+    const message = document.createElement("p");
+    message.className = "ui-dialog-message";
+    message.textContent = "Stop the backup progress preview? No backup has been created.";
+    text.appendChild(message);
+    body.append(icon, text);
+    const confirmation = state.factories.createActionModal({
+      title: "Cancel backup preview?", size: "sm",
+      className: "ui-dialog ui-dialog--warning recovery-backup-warning-dialog", content: body,
+      showCloseButton: false, closeOnBackdrop: false,
+      actions: [
+        { id: "keep", label: "Keep preview" },
+        { id: "cancel", label: "Cancel preview", variant: "danger", onClick() { cancelSelected = true; } },
+      ],
+      onClose() {
+        if (cancelConfirmationModal === confirmation) cancelConfirmationModal = null;
+        if (settleCancelConfirmation === settle) settleCancelConfirmation = null;
+        settle(cancelSelected && !previewComplete);
+        confirmation.destroy();
+        if (previewComplete) requestAnimationFrame(focusCompletedClose);
+      },
+    });
+    cancelConfirmationModal = confirmation;
+    confirmation.open();
+  });
+  const modal = state.factories.createActionModal({
+    title: "Backup Now · Preview", size: "lg", className: "recovery-backup-preview-modal", content,
+    actions: [{ id: "cancel", label: "Cancel" }],
+    onOpen({ footer }) { footer.prepend(overall); },
+    async onBeforeClose() {
+      if (cancelConfirmationPending) return false;
+      if (previewComplete) return true;
+      cancelConfirmationPending = true;
+      try {
+        const confirmed = await confirmCancellation();
+        if (confirmed) stopPreview?.();
+        return confirmed;
+      } finally {
+        cancelConfirmationPending = false;
+      }
+    },
+    onClose() {
+      settleCancelConfirmation?.(false);
+      settleCancelConfirmation = null;
+      cancelConfirmationModal?.destroy();
+      cancelConfirmationModal = null;
+      stopPreview?.();
+      steps.destroy();
+      if (previewRunningBackup && !previewComplete) {
+        previewRunningBackup = { ...previewRunningBackup, status: "Preview cancelled", finished_at: new Date().toISOString() };
+      }
+      refreshPreviewBackupGrid();
+      if (backupProgressModal === modal) backupProgressModal = null;
+      modal.destroy();
+    },
+  });
+  backupProgressModal = modal;
+  modal.open();
+  stopPreview = previewRecoveryProgress(steps, status, (value) => {
+    overall.textContent = `Overall progress: ${value}%`;
+    if (previewRunningBackup) {
+      previewRunningBackup.overall_progress_percent = value;
+      refreshPreviewBackupGrid();
+    }
+  }, () => {
+    previewComplete = true;
+    if (previewRunningBackup) {
+      previewRunningBackup = { ...previewRunningBackup, status: "Preview complete", overall_progress_percent: 100, finished_at: new Date().toISOString() };
+    }
+    refreshPreviewBackupGrid();
+    modal.setActions([{ id: "close", label: "Close", autoFocus: true }]);
+    modal.refs.footer.prepend(overall);
+    if (cancelConfirmationModal) {
+      if (cancelConfirmationModal.getState().open) void cancelConfirmationModal.close({ reason: "preview-complete" });
+    } else requestAnimationFrame(focusCompletedClose);
+  });
+}
+
+function openRestoreProgress(file) {
+  const content = document.createElement("div");
+  content.className = "recovery-workflow-modal";
+  const selected = document.createElement("p");
+  selected.className = "recovery-selected-file";
+  selected.textContent = "Selected file: " + file.name;
+  const status = document.createElement("p");
+  status.className = "recovery-workflow-notice";
+  status.setAttribute("role", "alert");
+  const validName = file.name.toLowerCase().endsWith(".syndicatum-backup");
+  if (!validName) status.textContent = "Select a .syndicatum-backup file. Nothing was uploaded.";
+  else if (file.size < 1 || file.size > 256 * 1024 * 1024) status.textContent = "Select a backup file between 1 byte and 256 MB. Nothing was uploaded.";
+  else status.textContent = "Restore service unavailable. Nothing was uploaded or changed.";
+  const steps = recoveryProgressSteps([
+    "Uploading", "Validating backup", "Checking contents", "Preparing restore",
+    "Restoring database", "Restoring files", "Verifying system", "Complete",
+  ]);
+  content.append(selected, status, steps.list);
+  const modal = state.factories.createActionModal({
+    title: "Restore backup", size: "lg", content,
+    actions: [{ id: "close", label: "Close" }],
+    onClose() { steps.destroy(); modal.destroy(); },
+  });
+  modal.open();
+}
+
+function renderBackupGrid(host, backups, unavailable) {
+  state.components.backupGrid?.destroy?.();
+  state.backupGridPreview = unavailable;
+  const gridHost = document.createElement("div");
+  gridHost.className = "recovery-backup-grid";
+  host.appendChild(gridHost);
+  const width = Math.max(800, el.admin_list.clientWidth - 16);
+  const columnWidths = state.backupGridColumnWidths || {
+    initiated_at: Math.round(width * .21),
+    created_at: Math.round(width * .21),
+    size_bytes: Math.round(width * .12),
+    status: Math.round(width * .12),
+    includes_data: Math.round(width * .12),
+    initiated_by_name: Math.round(width * .22),
+  };
+  const rows = unavailable ? previewBackupRows() : backups;
+  state.components.backupGrid = state.factories.createGrid(gridHost, rows, {
+    className: "recovery-backups-grid",
+    chrome: false,
+    toolbarStart: unavailable ? "Preview data — sample backups only; no files exist. Select a row to view details." : null,
+    columns: [
+      { key: "initiated_at", label: "Initiated", format: (_value, backup) => backupInitiatedAt(backup) ? formatDate(backupInitiatedAt(backup)) : "" },
+      {
+        key: "created_at", label: "Created", sortable: false,
+        renderCell({ row: backup }) {
+          if (String(backup.status || "").toLowerCase() === "running") return backupIndeterminateProgress("Backup file being created");
+          const createdAt = backupCreatedAt(backup);
+          return createdAt ? formatDate(createdAt) : "";
+        },
+      },
+      { key: "size_bytes", label: "Size", format: (_value, backup) => backupSizeOrProgress(backup) },
+      { key: "status", label: "Status", format: (value) => String(value || "Unknown") },
+      {
+        key: "includes_data", label: "Data", sortable: false,
+        renderCell({ row: backup }) {
+          const status = String(backup.status || "").toLowerCase();
+          if (backup.preview === true && ["preview complete", "preview cancelled"].includes(status)) return "";
+          if (status === "running") return backupIndeterminateProgress("Backup in progress");
+          const included = backupIncludesData(backup);
+          if (included === null) return "";
+          const marker = document.createElement("span");
+          marker.className = `recovery-backup-data-marker ${included ? "is-included" : "is-excluded"}`;
+          marker.setAttribute("role", "img");
+          marker.setAttribute("aria-label", included ? "Includes existing data" : "Does not include existing data");
+          marker.title = included ? "Includes existing data" : "Does not include existing data";
+          marker.innerHTML = helperIconHtml(included ? "status.success" : "status.error", 18);
+          return marker;
+        },
+      },
+      { key: "initiated_by_name", label: "Initiated by", format: (_value, backup) => backupInitiator(backup) },
+    ],
+    columnWidths,
+    enableColumnResize: true,
+    minColumnWidth: 100,
+    enableSort: false,
+    enableSearch: false,
+    enablePagination: false,
+    emptyText: unavailable ? "Backup service unavailable." : "No backups yet.",
+    onRowClick(backup) { openBackupMetadata(backup); },
+    onColumnResize({ columnWidths: resized }) { state.backupGridColumnWidths = resized; },
+  });
+}
+
 function renderBackupRestoreSurface(recovery = null, error = null) {
+  state.backupPage?.destroy();
+  state.backupPage = null;
+  state.components.backupGrid?.destroy?.();
+  state.components.backupGrid = null;
+  state.components.adminTabs?.destroy?.();
+  state.components.adminTabs = null;
   el.admin_list.replaceChildren();
-  const intro = document.createElement("section");
-  intro.className = "backup-restore-intro ui-panel";
-  const introCopy = document.createElement("div");
-  const eyebrow = document.createElement("p");
-  eyebrow.className = "ui-eyebrow";
-  eyebrow.textContent = "Administrator recovery controls";
-  const title = document.createElement("h2");
-  title.textContent = "Installation portability and recovery";
-  const description = document.createElement("p");
-  description.textContent = "Retrieve a verified CI release, build an encrypted backup, or validate and stage a restore without live overwrite or automatic cutover.";
-  introCopy.append(eyebrow, title, description);
-  const status = document.createElement("span");
-  status.className = "ui-badge backup-restore-preview-status";
-  status.textContent = error ? "Unavailable" : (recovery ? "Connected" : "Loading");
-  intro.append(introCopy, status);
-
-  const note = document.createElement("p");
-  note.className = "backup-restore-note";
-  note.textContent = error || "Restore is restricted to a separately configured empty staging database. Cutover remains a separate, unimplemented approval step.";
-
+  const unavailable = error || "Recovery services are not installed on this server yet.";
   const tabsHost = document.createElement("div");
   tabsHost.className = "backup-restore-tabs";
-  el.admin_list.append(intro, note, tabsHost);
+  el.admin_list.appendChild(tabsHost);
   state.components.adminTabs = state.factories.createTabs(tabsHost, {
     ariaLabel: "Backup and restore workflows",
-    activeId: "overview",
+    activeId: "backup",
     onChange(_tab, activeId) {
       requestAnimationFrame(() => {
         const activeTab = Array.from(tabsHost.querySelectorAll('[role="tab"]')).find((entry) => entry.dataset.tabId === String(activeId));
@@ -2352,58 +2841,90 @@ function renderBackupRestoreSurface(recovery = null, error = null) {
         id: "overview",
         label: "Overview",
         render(host) {
+          state.backupPage?.destroy();
+          state.backupPage = null;
+          state.components.backupGrid?.destroy?.();
+          state.components.backupGrid = null;
           const grid = document.createElement("div");
           grid.className = "backup-restore-overview-grid";
           grid.append(
-            recoveryOperationPanel("Installation identity", recovery?.installation?.message || "The immutable installed release identity anchors package and backup compatibility.", recovery?.installation?.available ? "Verified" : "Unavailable", [
-              ["Installation ID", recovery?.installation?.installation_id], ["Installed version", recovery?.installation?.application_version], ["Package baseline", recovery?.installation?.schema_baseline],
-            ]),
-            recoveryOperationPanel("Backup contract", "Backups are authenticated, encrypted, non-executable, and written with no-replacement semantics.", recovery?.backup?.available ? "Ready" : "Unavailable", [
-              ["Encryption", recovery?.backup?.encrypted ? "Required" : "Unavailable"], ["Executable code", recovery?.backup?.executable ? "Included" : "Excluded"], ["Existing destinations", "Never replaced"],
-            ]),
-            recoveryOperationPanel("Restore boundary", "The serving database is never a restore target.", recovery?.restore_target?.ready ? "Ready" : "Unavailable", [
-              ["Separate target", recovery?.restore_target?.configured ? "Configured" : "Not configured"], ["Empty-target check", recovery?.restore_target?.ready ? "Passed" : "Not ready"], ["Automatic cutover", "Never"],
-            ]),
+            recoveryOperationPanel(
+              "Installation identity",
+              recovery?.installation?.message || "The immutable installed release identity anchors package and backup compatibility.",
+              recovery?.installation?.available ? "Verified" : "Unavailable",
+              [["Installation ID", recovery?.installation?.installation_id], ["Installed version", recovery?.installation?.application_version], ["Package baseline", recovery?.installation?.schema_baseline]],
+            ),
+            recoveryOperationPanel(
+              "Backup contract",
+              "Backups are authenticated, encrypted, non-executable, and written with no-replacement semantics.",
+              recovery?.backup?.available ? "Ready" : "Unavailable",
+              [["Encryption", recovery?.backup?.encrypted ? "Required" : "Unavailable"], ["Executable code", recovery?.backup?.executable ? "Included" : "Excluded"], ["Existing destinations", "Never replaced"]],
+            ),
+            recoveryOperationPanel(
+              "Restore boundary",
+              "The serving database is never a restore target.",
+              recovery?.restore_target?.ready ? "Ready" : "Unavailable",
+              [["Separate target", recovery?.restore_target?.configured ? "Configured" : "Not configured"], ["Empty-target check", recovery?.restore_target?.ready ? "Passed" : "Not ready"], ["Automatic cutover", "Never"]],
+            ),
           );
           host.appendChild(grid);
         },
       },
       {
-        id: "clean-package",
-        label: "Get clean package",
-        render(host) {
-          host.appendChild(recoveryOperationPanel(
-            "Get the canonical clean installation package",
-            "Retrieve the mounted immutable CI-built release after checking its pinned SHA-256. The serving instance never builds or mints it.",
-            recovery?.release?.available ? "Verified" : "Unavailable",
-            [["Source", "CI-built immutable release"], ["SHA-256", recovery?.release?.sha256], ["Source commit", recovery?.release?.source_commit]],
-            { label: "Get clean package", disabled: !recovery?.release?.available, onClick: () => openReleasePackage(recovery) },
-          ));
-        },
-      },
-      {
         id: "backup",
-        label: "Build backup",
+        label: "Backup",
         render(host) {
-          host.appendChild(recoveryOperationPanel(
-            "Build a verified backup",
-            "Create an encrypted, non-executable package containing trusted durable data and required persistent assets, then verify it before download.",
-            recovery?.backup?.available ? "Ready" : "Unavailable",
-            [["Encryption", "AES-256-GCM authenticated"], ["Persistent assets", "Verified allowlist"], ["Destination policy", "Private, server-selected, no replacement"]],
-            { label: "Build encrypted backup", disabled: !recovery?.backup?.available, onClick: openBuildBackup },
-          ));
+          state.backupPage?.destroy();
+          state.backupPage = null;
+          const panel = document.createElement("section");
+          panel.className = "recovery-workflow-panel recovery-backup-panel";
+          host.appendChild(panel);
+          state.backupPage = mountCurrentBackup({ host: panel, factories: state.factories,
+            api: API, request, csrfHeaders, toast: state.components.toast, formatDate,
+            realtime: {
+              room: "syndicatum.backups.global",
+              state() {
+                return { joined: state.realtimeRooms.has("syndicatum.backups.global"), error: state.realtimeError };
+              },
+            },
+          });
         },
       },
       {
         id: "restore",
         label: "Restore",
         render(host) {
+          state.backupPage?.destroy();
+          state.backupPage = null;
+          state.components.backupGrid?.destroy?.();
+          state.components.backupGrid = null;
+          const panel = document.createElement("section");
+          panel.className = "recovery-workflow-panel";
+          host.appendChild(panel);
+          state.backupPage = mountCurrentRestore({ host: panel, factories: state.factories,
+            api: API, request, csrfHeaders, toast: state.components.toast, formatDate,
+            realtime: {
+              room: "syndicatum.backups.global",
+              state() { return { joined: state.realtimeRooms.has("syndicatum.backups.global"), error: state.realtimeError }; },
+            },
+          });
+        },
+      },
+      {
+        id: "release-package",
+        label: "Release package",
+        render(host) {
+          state.backupPage?.destroy();
+          state.backupPage = null;
+          state.components.backupGrid?.destroy?.();
+          state.components.backupGrid = null;
           host.appendChild(recoveryOperationPanel(
-            "Restore from a verified backup",
-            "Authenticate and inspect an encrypted backup, review its compatibility and reset/reissue policy, then stage it only to the separate empty target.",
-            recovery?.restore_target?.ready ? "Ready" : "Unavailable",
-            [["Package validation", "Authenticated before trust"], ["Target", recovery?.restore_target?.message], ["Live overwrite / cutover", "Never / never"]],
-            { label: "Select backup to inspect", disabled: !recovery?.restore_target?.ready, onClick: openRestoreUploader },
+            "Get the canonical clean installation package",
+            error || "Retrieve the mounted immutable CI-built release after checking its pinned SHA-256. The serving instance never builds or mints it.",
+            recovery?.release?.available ? "Verified" : "Unavailable",
+            [["Source", "CI-built immutable release"], ["SHA-256", recovery?.release?.sha256],
+              ["Source commit", recovery?.release?.source_commit]],
+            { label: "Get clean package", disabled: !recovery?.release?.available, onClick: () => openReleasePackage(recovery) },
           ));
         },
       },
@@ -2422,17 +2943,45 @@ async function loadBackupRestoreSurface() {
   }
 }
 
+function openReleasePackage(status) {
+  const modal = state.factories.createFormModal({
+    title: "Get clean package", submitLabel: "Authorize download",
+    initialValues: { verified_source: false },
+    rows: [
+      [{ type: "text", content: "Syndicatum will only download the pinned CI-built release. This running instance cannot build or mint canonical executable code." }],
+      [{ type: "display", name: "sha", label: "Pinned SHA-256", value: status.release.sha256 || "Unavailable" }],
+      [{ type: "display", name: "commit", label: "Source commit", value: status.release.source_commit || "Unavailable" }],
+      [{ type: "checkbox", name: "verified_source", label: "I understand this retrieves the verified CI artifact and does not build a package locally.", required: true }],
+    ],
+    async onSubmit(values, context) {
+      try {
+        if (!values.verified_source) throw new Error("Confirm the CI-built release boundary.");
+        const result = unwrap(await request(API.releasePackage, { method: "POST", headers: csrfHeaders(), body: "{}" }));
+        recoveryDownload(result.download.token);
+        state.components.toast.success("Verified CI-built package download authorized.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+  });
+  modal.open();
+}
+
+
 async function showAdminSurface(kind, { historyMode = "push" } = {}) {
   const settingsSurface = ["delivery-health", "backup-restore"].includes(kind);
   if (settingsSurface ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
+  el.admin_surface.classList.toggle("is-backup-restore", kind === "backup-restore");
   updateApplicationRoute(kind, "", historyMode);
+  state.components.backupGrid?.destroy?.();
+  state.components.backupGrid = null;
   state.components.adminTabs?.destroy();
   state.components.adminTabs = null;
   el.admin_refresh_button.hidden = kind === "backup-restore";
   el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : (kind === "backup-restore" ? "Backup / Restore" : kind[0].toUpperCase() + kind.slice(1));
   if (kind === "backup-restore") {
     void loadBackupRestoreSurface();
+    if (!state.realtimeSocket) void connectRealtime(state.generation);
     return;
   }
   el.admin_list.replaceChildren(); const loading = document.createElement("p"); loading.textContent = "Loading…"; el.admin_list.append(loading);
@@ -2448,10 +2997,11 @@ async function showAdminSurface(kind, { historyMode = "push" } = {}) {
     rows.forEach((row) => {
       const card = document.createElement("article"); card.className = "admin-card ui-panel";
       const title = document.createElement("strong"); title.textContent = row.display_name || row.name || row.action || `${kind.slice(0, -1)} ${row.id || ""}`;
-      const summary = document.createElement("p"); summary.textContent = kind === "audit" ? [row.actor_display_name || "System", row.subject_type, row.subject_id, formatDate(row.created_at)].filter(Boolean).join(" · ") : [row.email, row.username, row.status, row.kind, ...(row.system_roles || row.roles || [])].filter(Boolean).join(" · ");
+      const summary = document.createElement("p"); summary.textContent = kind === "audit" ? [row.actor_display_name || "System", row.subject_type, row.subject_id, formatDate(row.created_at)].filter(Boolean).join(" · ") : [row.email, row.status, row.kind, ...(row.system_roles || row.roles || [])].filter(Boolean).join(" · ");
       card.append(title, summary); el.admin_list.append(card);
     });
   } catch (error) { el.admin_list.replaceChildren(); const failure = document.createElement("p"); failure.className = "empty-state ui-panel"; failure.textContent = error.message; el.admin_list.append(failure); }
+  if (!state.realtimeSocket) void connectRealtime(state.generation);
 }
 
 function renderAdminDeliveryHealth(report) {
@@ -2910,7 +3460,6 @@ async function openResponsibilityMessage(messageId) {
     state.components.toast.warn(error.message, { title: "Canonical message unavailable" });
   }
 }
-
 async function jumpToMessage(messageId) {
   if (!state.messages.some((message) => id(message.id) === id(messageId))) {
     state.components.toast.info("That message is outside the currently loaded timeline. Use search to locate it.", { title: "Message not loaded" });
@@ -2932,11 +3481,13 @@ async function openSettings() {
   const value = (key, fallback = "") => settings[key]?.value ?? settings[key] ?? fallback;
   const configured = (key) => Boolean(settings[key]?.configured);
   const locked = (key) => Boolean(settings[key]?.locked);
+  const backupBaseLocation = String(value("recovery.backup_base_path") || "").trim();
   const modal = state.factories.createFormModal({
     title: "System Settings",
     size: "lg",
     submitLabel: "Save settings",
     busyMessage: "Saving settings…",
+    manageBusyOnSubmit: false,
     context: { badge: "Global administration", summary: "Integration settings are optional. Blank secrets keep their current value." },
     extraActionsPlacement: "start",
     extraActions: [{
@@ -2964,6 +3515,7 @@ async function openSettings() {
       site_name: value("general.installation_name", "Syndicatum"),
       public_origin: value("general.public_origin"),
       message_max_length: value("messaging.max_message_bytes", 24000),
+      backup_base_location: backupBaseLocation,
       realtime_enabled: Boolean(value("realtime.enabled", false)),
       realtime_base_url: value("realtime.base_url"),
       realtime_client_code: value("realtime.client_code"),
@@ -2989,6 +3541,10 @@ async function openSettings() {
       [{ type: "text", content: "General and messaging" }],
       [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
       [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
+      [{ type: "divider" }],
+      [{ type: "text", content: "Backup storage" }],
+      [{ type: "input", name: "backup_base_location", label: "Base location for generated backups", placeholder: "C:\\private\\syndicatum-backups", required: true, disabled: locked("recovery.backup_base_path") }],
+      [{ type: "text", content: "Absolute directory on the Syndicatum server, outside the public web root. This is not a browser download folder." }],
       [{ type: "divider" }],
       [{ type: "text", content: "Optional PBB Realtime integration" }],
       [{ type: "checkbox", name: "realtime_enabled", label: "Enable Realtime", disabled: locked("realtime.enabled") }],
@@ -3016,10 +3572,20 @@ async function openSettings() {
       [{ type: "checkbox", name: "self_registration_enabled", label: "Allow people to register from the login form", disabled: locked("security.self_registration_enabled") }],
     ],
     async onSubmit(values, context) {
+      const backupPath = String(values.backup_base_location || "").trim();
+      const absoluteBackupPath = /^[A-Za-z]:[\\/]/.test(backupPath)
+        || /^\\\\[^\\/]+[\\/][^\\/]+/.test(backupPath)
+        || backupPath.startsWith("/");
+      if (!absoluteBackupPath) {
+        context.setErrors({ backup_base_location: "Enter an absolute server path, such as C:\\private\\syndicatum-backups or /srv/syndicatum/backups." });
+        context.setFormError("Base location for generated backups must be an absolute server filesystem path.");
+        return false;
+      }
       const updates = {
         "general.installation_name": values.site_name,
         "general.public_origin": values.public_origin,
         "messaging.max_message_bytes": Number(values.message_max_length),
+        "recovery.backup_base_path": backupPath,
         "realtime.enabled": Boolean(values.realtime_enabled),
         "realtime.base_url": values.realtime_base_url,
         "realtime.client_code": values.realtime_client_code,
@@ -3042,6 +3608,7 @@ async function openSettings() {
       if (values.realtime_backend_ingress_secret) updates["realtime.backend_ingress_secret"] = { operation: "replace", value: values.realtime_backend_ingress_secret };
       if (values.account_client_secret) updates["account.client_secret"] = { operation: "replace", value: values.account_client_secret };
       if (values.google_client_secret) updates["google.client_secret"] = { operation: "replace", value: values.google_client_secret };
+      context.setBusy(true, { message: "Saving settings…" });
       try {
         await request(API.settings, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ settings: updates }) });
         state.components.toast.success("System settings saved.");
@@ -3049,6 +3616,8 @@ async function openSettings() {
       } catch (error) {
         context.setFormError(error.message);
         return false;
+      } finally {
+        if (context.modal.getState().open) context.setBusy(false);
       }
     },
   });
@@ -3174,6 +3743,7 @@ function closeRealtime() {
   state.realtimeRetryCount = 0;
   const socket = state.realtimeSocket;
   state.realtimeSocket = null;
+  state.realtimeRooms = new Set();
   socket?.close?.();
 }
 
@@ -3207,7 +3777,12 @@ function receiveRealtimeMessage(source) {
 
 async function connectRealtime(projectGeneration = state.generation) {
   if (state.mode !== "expanded" || projectGeneration !== state.generation) return;
-  if (!state.project?.capabilities?.realtime?.enabled) {
+  const projectRealtime = state.project?.capabilities?.realtime;
+  const backupOnly = !state.project && isAdministrator();
+  if (!backupOnly && !projectRealtime?.enabled) {
+    state.realtimeError = "PBB Realtime is disabled for this project.";
+    el.status_badge.textContent = "Realtime unavailable";
+    window.dispatchEvent(new CustomEvent("syndicatum:realtime-error", { detail: { message: state.realtimeError } }));
     startPolling();
     return;
   }
@@ -3215,23 +3790,35 @@ async function connectRealtime(projectGeneration = state.generation) {
   state.pollingTimer = null;
   const attempt = ++state.realtimeGeneration;
   try {
-    const admissionPath = state.project.capabilities.realtime.admission_url || `api/v1/realtime-admission.php?project_id=${encodeURIComponent(selectedProjectId())}`;
+    const admissionPath = applicationResourceUrl(backupOnly
+      ? "api/v1/realtime-admission.php"
+      : projectRealtime.admission_url || `api/v1/realtime-admission.php?project_id=${encodeURIComponent(selectedProjectId())}`);
     const admission = unwrap(await request(admissionPath));
-    if (!admission?.enabled) { startPolling(); return; }
-    if (!admission.token || !admission.websocket_url || !admission.room) throw new Error("Realtime admission is incomplete.");
+    if (!admission?.enabled) {
+      state.realtimeError = "PBB Realtime admission is disabled.";
+      el.status_badge.textContent = "Polling";
+      window.dispatchEvent(new CustomEvent("syndicatum:realtime-error", { detail: { message: state.realtimeError } }));
+      if (!backupOnly) startPolling();
+      return;
+    }
+    const rooms = Array.from(new Set([
+      ...(Array.isArray(admission?.rooms) ? admission.rooms : []),
+      admission?.room,
+    ].filter(Boolean)));
+    if (!admission.token || !admission.websocket_url || rooms.length === 0) throw new Error("Realtime admission is incomplete.");
     const websocketUrl = new URL(admission.websocket_url, window.location.href);
     if (window.location.protocol === "https:" && websocketUrl.protocol !== "wss:") {
       const error = new Error("Realtime is configured with an insecure WebSocket endpoint. An HTTPS page requires wss://.");
       error.realtimeConfiguration = true;
       throw error;
     }
-    const sdkUrl = state.project.capabilities.realtime.sdk_module_url || "/vendor/pbb-realtime/js/sdk/index.js";
+    const sdkUrl = applicationResourceUrl(projectRealtime?.sdk_module_url || "vendor/pbb-realtime/js/sdk/index.js");
     const sdk = await import(sdkUrl);
     let joinRequested = false;
-    let joined = false;
+    const joinedRooms = new Set();
     let client;
     const joinTimeout = setTimeout(() => {
-      if (!joined) client?.close?.();
+      if (joinedRooms.size !== rooms.length) client?.close?.();
     }, 15000);
     const handleMessage = (raw) => {
       let envelope;
@@ -3239,19 +3826,26 @@ async function connectRealtime(projectGeneration = state.generation) {
       if (envelope?.phase === "ack" && envelope?.type === "session.auth.request") {
         if (!joinRequested) {
           joinRequested = true;
-          client.sendRequest("room.join.request", admission.room, sdk.buildRoomJoinPayload());
+          rooms.forEach((room) => client.sendRequest("room.join.request", room, sdk.buildRoomJoinPayload()));
         }
         return;
       }
       if (envelope?.phase === "ack" && envelope?.type === "room.join.request") {
-        joined = true;
+        const joinedRoom = String(envelope?.room || envelope?.payload?.room || "");
+        if (joinedRoom) joinedRooms.add(joinedRoom);
+        if (joinedRooms.size !== rooms.length) return;
         clearTimeout(joinTimeout);
         state.realtimeRetryTimer = null;
         state.realtimeRetryCount = 0;
+        state.realtimeRooms = new Set(joinedRooms);
+        state.realtimeError = null;
         clearTimeout(state.pollingTimer);
         state.pollingTimer = null;
         el.status_badge.textContent = "Realtime";
-        void loadMessages("newer", projectGeneration).catch(handleLoadError);
+        window.dispatchEvent(new CustomEvent("syndicatum:realtime-ready", { detail: { rooms: [...joinedRooms] } }));
+        if (state.project && joinedRooms.has(admission.room)) {
+          void loadMessages("newer", projectGeneration).catch(handleLoadError);
+        }
         return;
       }
       if (envelope?.phase === "error") {
@@ -3260,6 +3854,14 @@ async function connectRealtime(projectGeneration = state.generation) {
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) {
         receiveRealtimeMessage(envelope.payload.message);
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.backup.updated" && envelope.payload?.backup) {
+        window.dispatchEvent(new CustomEvent("syndicatum:backup-updated", { detail: { backup: envelope.payload.backup } }));
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.restore.updated" && envelope.payload?.restore) {
+        window.dispatchEvent(new CustomEvent("syndicatum:restore-updated", { detail: { restore: envelope.payload.restore } }));
         return;
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.participants.changed") {
@@ -3276,6 +3878,9 @@ async function connectRealtime(projectGeneration = state.generation) {
         clearTimeout(joinTimeout);
         if (attempt !== state.realtimeGeneration || projectGeneration !== state.generation) return;
         state.realtimeSocket = null;
+        state.realtimeRooms = new Set();
+        state.realtimeError = "The PBB Realtime connection closed.";
+        window.dispatchEvent(new CustomEvent("syndicatum:realtime-error", { detail: { message: state.realtimeError } }));
         el.status_badge.textContent = "Realtime reconnecting";
         scheduleRealtimeReconnect(projectGeneration);
       },
@@ -3285,6 +3890,9 @@ async function connectRealtime(projectGeneration = state.generation) {
   } catch (error) {
     if (attempt !== state.realtimeGeneration || projectGeneration !== state.generation) return;
     console.warn("[Syndicatum] Realtime connection attempt failed.", error);
+    state.realtimeRooms = new Set();
+    state.realtimeError = error?.message || "PBB Realtime connection failed.";
+    window.dispatchEvent(new CustomEvent("syndicatum:realtime-error", { detail: { message: state.realtimeError } }));
     if (error?.realtimeConfiguration) {
       el.status_badge.textContent = "Realtime configuration error";
       state.components.toast.warn(error.message, { title: "Realtime unavailable" });
@@ -3312,9 +3920,8 @@ function startPolling() {
 }
 
 async function bootstrap() {
-  uiLoader.setPreferBundles(true);
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dropdown", "ui.popover", "ui.splitter"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -3341,6 +3948,9 @@ async function bootstrap() {
     createFormModal: await uiLoader.get("ui.form.modal", options),
     createLoginFormModal: await uiLoader.get("ui.form.modal.login", options),
     uiAlert: await uiLoader.get("ui.dialog.alert", options),
+    uiConfirm: await uiLoader.get("ui.dialog.confirm", options),
+    createProgress: await uiLoader.get("ui.progress", options),
+    createGrid: await uiLoader.get("ui.grid", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
     createPopover: await uiLoader.get("ui.popover", options),
     createTabs: await uiLoader.get("ui.tabs", options),

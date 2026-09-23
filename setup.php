@@ -12,7 +12,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
     <title>Set up Syndicatum</title>
     <meta name="theme-color" content="#0d1523">
     <link rel="icon" href="assets/brand/web/favicon.ico?v=20260907115852" sizes="any">
-    <link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css" data-ui-bundle="ui">
+    <link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.203" data-ui-bundle="ui">
     <link rel="stylesheet" href="assets/setup.css?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/assets/setup.css')); ?>">
 </head>
 <body>

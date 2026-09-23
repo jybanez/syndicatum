@@ -350,6 +350,9 @@ button, input, textarea { font: inherit; }
 .project-overview { display: grid; gap: 12px; }
 .participant-section { padding: 0 2px 16px; }
 .admin-surface { min-height: 0; overflow: auto; padding: 20px; box-sizing: border-box; align-self: stretch; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-panel); box-shadow: var(--app-shadow); }
+.admin-surface.is-backup-restore:not([hidden]) { display: flex; flex-direction: column; overflow: hidden; }
+.admin-surface.is-backup-restore .surface-heading { flex: 0 0 auto; }
+.admin-surface.is-backup-restore .admin-list { display: block; flex: 1 1 auto; min-height: 0; }
 .admin-card { display: grid; gap: 7px; padding: 15px; }
 .admin-card p { margin: 0; color: var(--app-muted); line-height: 1.5; overflow-wrap: anywhere; }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
@@ -487,7 +490,6 @@ button, input, textarea { font: inherit; }
   .message-card-footer { align-items: stretch; }
   .message-actions { width: auto; justify-content: flex-start; }
 }
-
 .project-view-switch { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .project-view-switch .ui-button { min-height: 34px; padding: 6px 11px; }
 .project-view-switch .is-active { border-color: #6e94d7; background: rgba(44, 71, 117, .68); color: #f2f7ff; }
@@ -536,8 +538,10 @@ button, input, textarea { font: inherit; }
 .backup-restore-intro p:not(.ui-eyebrow), .backup-restore-operation p, .backup-restore-note { margin: 7px 0 0; color: var(--app-muted); line-height: 1.5; }
 .backup-restore-preview-status, .backup-restore-unavailable { flex: 0 0 auto; }
 .backup-restore-note { padding: 0 4px; }
-.backup-restore-tabs { min-width: 0; }
-.backup-restore-tabs .ui-tabpanel { padding-top: 16px; }
+.backup-restore-tabs { min-width: 0; min-height: 0; height: 100%; }
+.backup-restore-tabs .ui-tabs { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.backup-restore-tabs .ui-tablist { flex: 0 0 auto; }
+.backup-restore-tabs .ui-tabpanel { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 16px 0 0; border: 0; border-radius: 0; background: transparent; }
 .backup-restore-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .backup-restore-operation { display: grid; align-content: start; gap: 16px; padding: 18px; }
 .backup-restore-operation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -570,4 +574,68 @@ button, input, textarea { font: inherit; }
   .backup-restore-intro, .backup-restore-operation-heading { display: grid; }
   .backup-restore-details { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .backup-restore-details dd { margin-bottom: 8px; }
+}
+.recovery-workflow-panel { display: grid; gap: 16px; padding: 18px; min-width: 0; }
+.recovery-workflow-panel h2 { margin: 0; }
+.recovery-workflow-panel > p { margin: 0; line-height: 1.5; }
+.recovery-workflow-panel > .ui-button { justify-self: start; }
+.recovery-backup-panel { height: 100%; min-height: 0; box-sizing: border-box; grid-template-rows: auto minmax(0, 1fr); align-content: stretch; gap: 12px; padding: 0; overflow: hidden; }
+.recovery-backup-controls { display: grid; justify-items: end; gap: 8px; min-width: 0; }
+.recovery-backup-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.recovery-backup-controls .recovery-backup-realtime-error { justify-self: stretch; }
+.recovery-backup-grid { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.recovery-backup-grid .ui-grid { flex: 1 1 auto; min-height: 0; height: 100%; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+.recovery-backup-grid .ui-grid-toolbar-slot { color: var(--app-muted); font-size: 13px; }
+.recovery-backup-grid .ui-grid-table-wrap { min-height: 0; height: 100%; max-height: none; overflow: auto; border: 0; border-radius: 0; }
+.recovery-backup-grid .ui-grid-row { cursor: pointer; }
+.recovery-backup-grid .ui-grid-row .ui-grid-cell:nth-child(3),
+.recovery-backup-grid .ui-grid-row .ui-grid-cell:nth-child(4),
+.recovery-backup-grid .ui-grid-row .ui-grid-cell:nth-child(5) { text-align: center; }
+.recovery-backup-data-marker { display: inline-flex; align-items: center; vertical-align: middle; }
+.recovery-backup-data-marker.is-included { color: var(--ui-success, #45c47a); }
+.recovery-backup-data-marker.is-excluded { color: var(--ui-danger, #ff5f67); }
+.recovery-backup-warning-dialog .ui-form-modal-alert.is-warning { display: flex; align-items: center; gap: 12px; }
+.recovery-backup-warning-dialog .ui-form-modal-alert.is-warning svg { flex: 0 0 auto; color: var(--ui-warning, #ffcf55); fill: none; }
+.recovery-backup-indeterminate { width: min(100%, 110px); margin-inline: auto; }
+.recovery-backup-metadata { display: grid; gap: 16px; min-width: 0; }
+.recovery-backup-metadata-list { display: grid; grid-template-columns: minmax(100px, max-content) minmax(0, 1fr); gap: 10px 18px; margin: 0; }
+.recovery-backup-metadata-list dt { color: var(--app-muted); }
+.recovery-backup-metadata-list dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.recovery-key-copy-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.recovery-key-copy-value { min-width: 0; overflow-wrap: anywhere; }
+.recovery-key-copy-action { align-self: center; padding: 5px; }
+.recovery-key-copy-action svg { display: block; }
+.recovery-backup-delete-action { margin-right: auto; }
+.recovery-availability-note, .recovery-workflow-notice { color: var(--app-muted); }
+.recovery-workflow-modal { display: grid; gap: 14px; min-width: 0; }
+.recovery-workflow-modal p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.recovery-workflow-notice { border: 1px solid var(--app-border); border-radius: 8px; padding: 12px; }
+.recovery-backup-warning-dialog .ui-dialog-variant-icon svg { fill: none; }
+.recovery-backup-data-option { display: flex; align-items: center; gap: 9px; margin-top: 16px; cursor: pointer; font-weight: 600; }
+.recovery-backup-data-option input { margin: 0; accent-color: var(--ui-accent); }
+.recovery-backup-data-help { margin: 6px 0 0 24px; color: var(--app-muted); font-size: 13px; line-height: 1.4; }
+.recovery-selected-file { font-weight: 600; }
+.recovery-progress { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.recovery-progress li { display: grid; min-width: 0; }
+.recovery-progress-bar, .recovery-progress-bar .ui-progress { min-width: 0; }
+.recovery-backup-preview-modal .ui-modal-footer .ui-dialog-footer-actions { width: auto; margin-left: auto; }
+.recovery-overall-progress { color: var(--app-muted); font-size: 13px; font-weight: 600; }
+.recovery-backup-load-error[hidden] { display: none; }
+.recovery-backup-load-error { margin: 0; color: var(--ui-danger, #ff5f67); }
+.recovery-restore-choices { display: grid; align-content: start; gap: 12px; min-height: 0; overflow: auto; }
+.recovery-restore-choices > h2, .recovery-restore-choices > p, .recovery-restore-choice h3, .recovery-restore-choice p { margin: 0; }
+.recovery-restore-choices > p, .recovery-restore-choice p { color: var(--app-muted); line-height: 1.5; }
+.recovery-restore-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 8px; }
+.recovery-restore-choice { display: grid; align-content: start; gap: 12px; padding: 18px; }
+.recovery-restore-choice .ui-button { justify-self: start; margin-top: 4px; }
+.recovery-restore-loading, .recovery-restore-upload { display: grid; gap: 12px; }
+.recovery-restore-upload > p { margin: 0; color: var(--app-muted); }
+.recovery-restore-upload > label { font-weight: 600; }
+.recovery-restore-upload .ui-field-error { margin: -6px 0 0; color: var(--ui-danger, #ff5f67); font-size: 13px; }
+.recovery-restore-upload .ui-field-error[hidden] { display: none; }
+@media (max-width: 700px) {
+  .recovery-workflow-panel:not(.recovery-backup-panel) { overflow-x: auto; }
+  .recovery-backup-metadata-list { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .recovery-backup-metadata-list dd { margin-bottom: 10px; }
+  .recovery-restore-choice-grid { grid-template-columns: minmax(0, 1fr); }
 }

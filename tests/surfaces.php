@@ -696,7 +696,7 @@ try {
             $response = surfaceRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectId, surfaceHeaders($tokens[$role]));
             $suite->same(200, $response['status'], $role . ': ' . $response['raw']);
             $suite->same($role === 'project_admin' ? 'admin' : $role, $response['body']['data']['current_role']);
-            $suite->same('/vendor/pbb-realtime/js/sdk/index.js', $response['body']['data']['capabilities']['realtime']['sdk_module_url']);
+            $suite->same('vendor/pbb-realtime/js/sdk/index.js', $response['body']['data']['capabilities']['realtime']['sdk_module_url'], 'The SDK URL must remain relative so installations mounted below the web root do not request /vendor from the host root.');
             surfaceAssertCapabilities($suite, $response['body']['data']['permissions'], $expected);
         }
         $agent = surfaceRequest($baseUrl, 'GET', '/api/v1/project.php?project_id=' . $projectId, ['Authorization: Bearer ' . $agentToken]);

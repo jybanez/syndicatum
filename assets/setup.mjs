@@ -1,4 +1,4 @@
-import { uiLoader } from "../vendor/pbb-helper/js/ui/ui.loader.js";
+import { uiLoader } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.203";
 
 const steps = [
   { id: "ownership", title: "Ownership", subtitle: "Prove control" },
@@ -105,7 +105,6 @@ function renderStep({ focusStepper = false } = {}) {
 }
 
 async function bootstrap() {
-  uiLoader.setPreferBundles(true);
   const options = { css: false };
   await uiLoader.load("ui.stepper", options);
   const createStepper = await uiLoader.get("ui.stepper", options);

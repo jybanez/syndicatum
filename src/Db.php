@@ -1,14 +1,20 @@
 <?php
 
+require_once __DIR__ . '/PrivateStorage.php';
+
 class Db
 {
     public static function config()
     {
+        $database = self::privateDatabase();
         return [
-            'host' => getenv('PBB_AGENTCHAT_DB_HOST') ?: '127.0.0.1',
-            'database' => getenv('PBB_AGENTCHAT_DB_NAME') ?: 'pbb_agentchat',
-            'username' => getenv('PBB_AGENTCHAT_DB_USER') ?: 'root',
-            'password' => getenv('PBB_AGENTCHAT_DB_PASS') === false ? '' : getenv('PBB_AGENTCHAT_DB_PASS'),
+            'host' => getenv('PBB_AGENTCHAT_DB_HOST') ?: (isset($database['PBB_AGENTCHAT_DB_HOST']) ? $database['PBB_AGENTCHAT_DB_HOST'] : '127.0.0.1'),
+            'port' => getenv('PBB_AGENTCHAT_DB_PORT') ?: (isset($database['PBB_AGENTCHAT_DB_PORT']) ? $database['PBB_AGENTCHAT_DB_PORT'] : '3306'),
+            'database' => getenv('PBB_AGENTCHAT_DB_NAME') ?: (isset($database['PBB_AGENTCHAT_DB_NAME']) ? $database['PBB_AGENTCHAT_DB_NAME'] : 'pbb_agentchat'),
+            'username' => getenv('PBB_AGENTCHAT_DB_USER') ?: (isset($database['PBB_AGENTCHAT_DB_USER']) ? $database['PBB_AGENTCHAT_DB_USER'] : 'root'),
+            'password' => getenv('PBB_AGENTCHAT_DB_PASS') === false
+                ? (isset($database['PBB_AGENTCHAT_DB_PASS']) ? $database['PBB_AGENTCHAT_DB_PASS'] : '')
+                : getenv('PBB_AGENTCHAT_DB_PASS'),
             'secret' => self::environmentSecret('PBB_AGENTCHAT_SECRET'),
             'previous_secret' => self::environmentSecret('PBB_AGENTCHAT_PREVIOUS_SECRET'),
         ];
@@ -18,8 +24,9 @@ class Db
     {
         $config = self::config();
         $dsn = sprintf(
-            'mysql:host=%s;dbname=%s;charset=utf8mb4',
+            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
             $config['host'],
+            $config['port'],
             $config['database']
         );
 
@@ -119,7 +126,7 @@ class Db
     {
         $path = getenv('PBB_AGENTCHAT_SECRETS_FILE');
         if ($path === false || trim((string) $path) === '') {
-            $path = dirname(dirname(dirname(dirname(__DIR__)))) . '/private/syndicatum-secrets.php';
+            $path = PrivateStorage::file('syndicatum-secrets.php');
         }
 
         if (!is_file($path)) {
@@ -132,5 +139,17 @@ class Db
         }
 
         return $secrets;
+    }
+
+    private static function privateDatabase()
+    {
+        $path = getenv('PBB_AGENTCHAT_DATABASE_FILE');
+        if ($path === false || trim((string) $path) === '') {
+            $path = PrivateStorage::file('syndicatum-database.php');
+        }
+        if (!is_file($path)) { return []; }
+        $database = require $path;
+        if (!is_array($database)) { throw new RuntimeException('Syndicatum private database file must return an array.'); }
+        return $database;
     }
 }
