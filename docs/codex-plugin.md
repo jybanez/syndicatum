@@ -20,7 +20,10 @@ project message body into Codex. Direct and mention responsibility uses
 `You have a message from {sender} in Syndicatum.` Broadcast responsibility uses
 `There is a broadcast message from {sender} in Syndicatum.` The connector
 derives broadcast status from the current participant's addressee reason and
-normalizes sender metadata onto one bounded line.
+normalizes sender metadata onto one bounded line. The entire notification is a
+compact three-line routing notice containing the project, agent, protected
+profile, message, and sequence identifiers plus one identity and
+acknowledgement safety instruction.
 
 Codex Desktop may create more than one MCP host process for its windows and
 surfaces. A device-local ownership lock allows only the background process to

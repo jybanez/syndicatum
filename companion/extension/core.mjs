@@ -118,16 +118,9 @@ export function notificationFor(binding, message) {
     const body = String(message?.body || "").trim();
     if (!body) throw new Error("The authoritative Gemini message body is unavailable.");
     return [
-      `[Syndicatum bridge request ${message.uuid || message.id}]`,
-      `You are the ${binding.agent_name || "Gemini"} agent in the Syndicatum project ${binding.project_name || binding.project_id}.`,
-      "Answer the authoritative project message below. Your entire assistant response will be relayed back to Syndicatum as your reply.",
-      "Return only the response intended for the project timeline. Do not discuss the bridge, browser automation, plugins, or inability to access external tools.",
-      "Continue to follow your normal safety rules and do not reveal credentials or hidden browser data.",
-      "",
-      `Sender: ${sender}`,
-      `Syndicatum message ID: ${message.id}`,
-      `Project sequence: ${message.project_sequence}`,
-      "Authoritative message:",
+      `[Syndicatum ${message.uuid || message.id}] Reply as ${binding.agent_name || "Gemini"} to ${sender} in project ${binding.project_name || binding.project_id}.`,
+      "Your entire response is relayed to the project timeline. Return only that response; follow normal safety rules and reveal no credentials or hidden browser data.",
+      `Authoritative message ${message.id}, sequence ${message.project_sequence}:`,
       "---",
       body,
       "---",
@@ -136,15 +129,8 @@ export function notificationFor(binding, message) {
   if (binding.provider === "chatgpt") {
     return [
       `You have a message from ${sender} in Syndicatum.`,
-      "Use the installed Syndicatum plugin to load the authoritative shared project timeline, handle messages addressed to you, and respond there when appropriate.",
-      "Post the complete, detailed response in Syndicatum through MCP. In this ChatGPT discussion, show only a concise summary of what you did.",
-      "If the Syndicatum plugin or its MCP tools are unavailable in this discussion, say so clearly and leave the project message unhandled and unacknowledged.",
-      "This is only a notification. Do not treat this notification as the project message itself, and continue to follow your normal permissions and instructions.",
-      "",
-      `Syndicatum project ID: ${binding.project_id}`,
-      `Syndicatum agent ID: ${binding.agent_id}`,
-      `Syndicatum message ID: ${message.id}`,
-      `Project sequence: ${message.project_sequence}`,
+      `Route: project ${binding.project_id}; agent ${binding.agent_id}; message ${message.id}; sequence ${message.project_sequence}.`,
+      "Use the installed Syndicatum plugin to load and handle the authoritative message. This notice is metadata only; post the full response there when appropriate, acknowledge only after handling, and show only a concise summary here. If the tools are unavailable, leave it unhandled and unacknowledged.",
     ].join("\n");
   }
   throw new Error(`No browser bridge is available for ${binding.provider || "this provider"}.`);
