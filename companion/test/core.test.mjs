@@ -42,19 +42,21 @@ test("does not route an agent's own message back to itself", () => assert.equal(
 test("creates a stable provider-scoped delivery key", () => assert.equal(deliveryKey({ ...binding, message }), "chatgpt:3:30:91"));
 test("ChatGPT receives only an MCP-first metadata notification", () => {
   const text = notificationFor({ ...binding, project_name: "Test Project" }, { ...message, uuid: "message-uuid", body: "Please answer this exact project request." });
-  assert.match(text, /message ID: 91/);
-  assert.match(text, /Project sequence: 17/);
+  assert.match(text, /message 91/);
+  assert.match(text, /sequence 17/);
   assert.match(text, /installed Syndicatum plugin/);
-  assert.match(text, /complete, detailed response in Syndicatum through MCP/);
-  assert.match(text, /only a concise summary/);
-  assert.match(text, /leave the project message unhandled and unacknowledged/);
+  assert.match(text, /post the full response there/);
+  assert.match(text, /show only a concise summary here/);
+  assert.match(text, /leave it unhandled and unacknowledged/);
   assert.doesNotMatch(text, /Please answer this exact project request/);
+  assert.equal(text.split("\n").length, 3);
 });
 test("Gemini receives the authoritative body through the bound two-way bridge", () => {
   const text = notificationFor({ ...binding, provider: "gemini", project_name: "Test Project", agent_name: "Gemini" }, { ...message, uuid: "message-uuid", body: "Please answer this exact project request." });
-  assert.match(text, /Syndicatum bridge request message-uuid/);
+  assert.match(text, /Syndicatum message-uuid/);
   assert.match(text, /Please answer this exact project request/);
-  assert.match(text, /entire assistant response will be relayed/);
+  assert.match(text, /entire response is relayed/);
+  assert.equal(text.split("\n").length, 6);
 });
 test("Gemini bridge refuses metadata-only recovery items", () => assert.throws(() => notificationFor({ ...binding, provider: "gemini" }, message), /Gemini message body is unavailable/));
 test("extracts bindings from the connector response envelope", () => assert.deepEqual(bindingsFromResponse({ device: { id: "device" }, bindings: [binding] }), [binding]));

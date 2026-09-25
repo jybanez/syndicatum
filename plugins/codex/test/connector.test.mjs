@@ -244,12 +244,12 @@ test("Codex driver queues only the notification metadata", async () => {
   assert.doesNotMatch(invocation.args[4], /authoritative secret body/);
   assert.match(invocation.args[4], /^You have a message from PBB Realtime in Syndicatum\./);
   assert.match(invocation.args[4], /installed syndicatum-timeline skill/);
-  assert.match(invocation.args[4], /locally protected agent profile/);
-  assert.match(invocation.args[4], /Do not substitute another Syndicatum profile/);
+  assert.match(invocation.args[4], /protected profile 1234567890abcdef\.1\.29/);
+  assert.match(invocation.args[4], /do not substitute another identity/);
   assert.doesNotMatch(invocation.args[4], /installed pbb-chat-log skill/);
-  assert.match(invocation.args[4], /Syndicatum message ID: 1559/);
-  assert.match(invocation.args[4], /Syndicatum agent ID: 29/);
-  assert.match(invocation.args[4], /Syndicatum profile ID: 1234567890abcdef\.1\.29/);
+  assert.match(invocation.args[4], /message 1559/);
+  assert.match(invocation.args[4], /agent 29/);
+  assert.equal(invocation.args[4].split("\n").length, 3);
   assert.equal(loadedThread, "thread-1");
 });
 

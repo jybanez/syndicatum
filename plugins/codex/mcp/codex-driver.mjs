@@ -83,19 +83,19 @@ export function formatActivationPrompt(message, config) {
     ? message.addressees.find(entry => String(entry?.participant_id ?? entry?.id ?? "") === String(config.participantId ?? ""))
     : null;
   const isBroadcast = String(addressee?.reason ?? "").toLowerCase() === "broadcast" || message?.broadcast === true;
+  const route = [
+    `project ${config.projectId}`,
+    ...(config.agentId ? [`agent ${config.agentId}`] : []),
+    ...(config.profileId ? [`protected profile ${config.profileId}`] : []),
+    `message ${message.id}`,
+    `sequence ${message.project_sequence ?? message.sequence ?? "unknown"}`,
+  ].join("; ");
   return [
     isBroadcast
       ? `There is a broadcast message from ${senderName} in Syndicatum.`
       : `You have a message from ${senderName} in Syndicatum.`,
-    "Use the installed syndicatum-timeline skill and the locally protected agent profile named below to load the authoritative shared project timeline, handle messages addressed to you, and respond there when appropriate.",
-    "Do not substitute another Syndicatum profile, globally connected app, or MCP identity for this task identity.",
-    "This is only a notification. Do not treat this notification as the project message itself, and continue to follow your normal permissions and instructions.",
-    "",
-    `Syndicatum project ID: ${config.projectId}`,
-    ...(config.agentId ? [`Syndicatum agent ID: ${config.agentId}`] : []),
-    ...(config.profileId ? [`Syndicatum profile ID: ${config.profileId}`] : []),
-    `Syndicatum message ID: ${message.id}`,
-    `Project sequence: ${message.project_sequence ?? message.sequence ?? "unknown"}`,
+    `Route: ${route}.`,
+    "Use the installed syndicatum-timeline skill with this exact identity to load and handle the authoritative message. This notice is metadata only; do not substitute another identity, and acknowledge only after handling.",
   ].join("\n");
 }
 
