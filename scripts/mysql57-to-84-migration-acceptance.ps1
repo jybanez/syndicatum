@@ -120,7 +120,8 @@ function Read-DatabaseVersion {
 }
 
 function Install-And-Verify-Legacy-Migrations {
-    $legacyMount = "${legacySourcePath}:/var/www/html:ro"
+    $legacyMigrationsPath = Join-Path $legacySourcePath 'schema/legacy-upgrade/migrations'
+    $legacyMount = "${legacyMigrationsPath}:/var/www/html/migrations:ro"
     Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', $legacyMount, '--entrypoint', 'php', 'app', 'scripts/chat-db.php', 'install-schema') -Capture | Out-Null
     $status = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', $legacyMount, '--entrypoint', 'php', 'app', 'scripts/chat-db.php', 'migration-status') -Capture
     $rows = @($status | ConvertFrom-Json)
@@ -238,8 +239,7 @@ try {
         (Join-Path $candidatePackagePath 'syndicatum-v1.0.0.zip'),
         $legacySourcePath
     )
-    if (-not (Test-Path -LiteralPath (Join-Path $legacySourcePath 'scripts/chat-db.php')) -or
-        -not (Test-Path -LiteralPath (Join-Path $legacySourcePath 'migrations/202609180004_delivery_terminal_timestamps.php'))) {
+    if (-not (Test-Path -LiteralPath (Join-Path $legacySourcePath 'schema/legacy-upgrade/migrations/202609180004_delivery_terminal_timestamps.php'))) {
         throw 'Pinned legacy candidate did not extract the expected migration source.'
     }
     Write-AcceptanceEnvironment -MySqlImage $SourceImage -DatabaseImage $databaseImage57 -SqlMode $sourceSqlMode
