@@ -146,10 +146,10 @@ final class LegacyForwardUpgrader
             $bridge = new LegacyClaimColumnOrder($this->package->baselineSchemaPath());
             $bridge->apply($this->pdo, ['agents', 'chat_agents']);
             $this->addParticipantCheck();
+            $this->createIdentity();
             if (!hash_equals(self::TARGET_SCHEMA_SHA256, LegacySchemaFingerprint::sha256($this->pdo))) {
                 throw new RuntimeException('Upgraded schema is not the exact protected V1 baseline before its migration suffix.');
             }
-            $this->createIdentity();
             (new PostBaselineMigrator($this->pdo, $this->package->baselineMetadataPath(),
                 $this->package->postMigrationDirectory()))->migrate(true);
             $this->assertComplete();

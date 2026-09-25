@@ -155,6 +155,27 @@ function Read-LedgerSnapshot {
     return $digest
 }
 
+function Read-CurrentLedgerSnapshot {
+    $query = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --raw --batch --skip-column-names -uroot "$MYSQL_DATABASE" -e "SELECT version, checksum FROM syndicatum_schema_migrations ORDER BY version"'
+    $output = Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $query) -Capture
+    $lines = @($output -split "`r?`n" | Where-Object { $_ -ne '' })
+    $plan = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\schema\mysql84\legacy-upgrade-plan.json') -Raw | ConvertFrom-Json
+    $baseline = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\schema\mysql84\baseline.json') -Raw | ConvertFrom-Json
+    $expected = @($plan.historical_migrations) + @($plan.forward_migrations) + @($baseline.post_baseline_migrations)
+    $expected = @($expected | Sort-Object -Property id)
+    if ($lines.Count -ne $expected.Count) {
+        throw "Expected $($expected.Count) current ledger rows; actual=$($lines.Count)."
+    }
+    for ($index = 0; $index -lt $expected.Count; $index++) {
+        $fields = @($lines[$index] -split "`t")
+        if ($fields.Count -ne 2 -or $fields[0] -cne $expected[$index].id -or $fields[1] -cne $expected[$index].sha256) {
+            throw "Current ledger differs from the declared legacy and post-baseline plans at row $index."
+        }
+    }
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes(($lines -join "`n") + "`n")
+    return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+}
+
 function Read-IdentityCount {
     $query = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --raw --batch --skip-column-names -uroot "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=''syndicatum_installation_identity''"'
     return [int](Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $query) -Capture).Trim()
@@ -349,8 +370,8 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
     if ((Read-ClaimRowDigest) -ne $claimRowsBefore) { throw 'Authenticated claim-column bridge changed rows or values.' }
     if ((Read-IdentityCount) -ne 1) { throw 'Authenticated bridge did not create exactly one installation identity table.' }
     $postState = Read-InstallationState
-    if ($postState.state -ne 'legacy_upgraded_ready' -or -not $postState.ready) {
-        throw "Authenticated bridge did not reach legacy_upgraded_ready; observed $($postState.state)."
+    if ($postState.state -ne 'post_baseline_upgrade_required' -or $postState.ready) {
+        throw "Authenticated bridge did not stop at the protected baseline before the current suffix; observed $($postState.state)."
     }
     $checkQuery = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --raw --batch --skip-column-names -uroot "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name=''project_participants'' AND constraint_name=''chk_project_participants_identity'' AND constraint_type=''CHECK''"'
     if ([int](Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $checkQuery) -Capture).Trim() -ne 1) {
@@ -360,10 +381,15 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
 
     Write-Step 'Starting the adopted application and worker under their unchanged healthchecks'
     Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), 'app', 'worker')
-    if ((Read-LedgerSnapshot) -ne $restoredLedger) { throw 'App/worker startup changed the 30-row migration ledger.' }
+    $currentLedger = Read-CurrentLedgerSnapshot
+    Write-Host "Verified legacy ledger plus declared post-baseline suffix; sha256=$currentLedger"
     if ((Read-DeliveryCounts) -ne $preDelivery) { throw 'App/worker startup replayed stale delivery work.' }
     $targetState = (Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $stateSql) -Capture).Trim()
     if ($targetState -ne $expectedState) { throw "Restored 8.4 fixture state differs: $targetState" }
+    $readyState = Read-InstallationState
+    if ($readyState.state -ne 'legacy_upgraded_ready' -or -not $readyState.ready) {
+        throw "Adopted application did not reach legacy_upgraded_ready after its declared suffix; observed $($readyState.state)."
+    }
     $health = Invoke-RestMethod -Uri "http://127.0.0.1:$HttpPort/api/v1/health.php" -TimeoutSec 15
     if ($health.data.core.status -ne 'ok' -or -not $health.data.core.database -or -not $health.data.core.expanded_schema) {
         throw 'Application health failed after restoring the 5.7 export into MySQL 8.4.'
