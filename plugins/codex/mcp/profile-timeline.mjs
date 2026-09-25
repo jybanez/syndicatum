@@ -31,6 +31,12 @@ export class ProfileTimelineClient {
     return { profile: publicAgentProfile(profile), participants: result.data ?? [] };
   }
 
+  async bootstrap(profileId) {
+    const { profile, client } = await this.context(profileId);
+    const result = await client.request(`/api/v1/project-bootstrap.php?project_id=${encodeURIComponent(profile.project_id)}`);
+    return { profile: publicAgentProfile(profile), bootstrap: result.data ?? result };
+  }
+
   async messages(profileId, input = {}) {
     const { profile, client } = await this.context(profileId);
     const query = new URLSearchParams({ project_id: String(profile.project_id), limit: String(clamp(input.limit, 1, 200, 50)) });
@@ -48,6 +54,54 @@ export class ProfileTimelineClient {
     return { profile: publicAgentProfile(profile), message: result.data ?? result.message ?? result };
   }
 
+  async tasks(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const query = new URLSearchParams({ project_id: String(profile.project_id) });
+    if (String(input.status || "").trim()) query.set("status", String(input.status).trim());
+    if (input.assigned_to_me === true) query.set("assignee", "me");
+    else if (input.assignee_participant_id) query.set("assignee", positiveId(input.assignee_participant_id, "participant"));
+    if (String(input.query || "").trim()) query.set("q", String(input.query).trim());
+    const result = await client.request(`/api/v1/project-tasks.php?${query}`);
+    return { profile: publicAgentProfile(profile), tasks: result.data ?? [] };
+  }
+
+  async task(profileId, taskId) {
+    const { profile, client } = await this.context(profileId);
+    const id = positiveId(taskId, "task");
+    const result = await client.request(`/api/v1/project-task.php?project_id=${encodeURIComponent(profile.project_id)}&id=${encodeURIComponent(id)}&include=events`);
+    return { profile: publicAgentProfile(profile), task: result.data ?? result };
+  }
+
+  async createTask(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const title = String(input.title || "").trim();
+    if (!title) throw new Error("A task title is required.");
+    const payload = { title };
+    for (const key of ["description", "acceptance_criteria", "priority", "due_at"]) {
+      if (input[key] !== undefined) payload[key] = input[key];
+    }
+    if (input.assignee_participant_id !== undefined && input.assignee_participant_id !== null && input.assignee_participant_id !== "") {
+      payload.assignee_participant_id = Number(positiveId(input.assignee_participant_id, "participant"));
+    }
+    if (input.source_message_id !== undefined && input.source_message_id !== null && input.source_message_id !== "") {
+      payload.source_message_id = Number(positiveId(input.source_message_id, "source message"));
+    }
+    const result = await client.request(`/api/v1/project-tasks.php?project_id=${encodeURIComponent(profile.project_id)}`, { method: "POST", body: JSON.stringify(payload) });
+    return { profile: publicAgentProfile(profile), task: result.data ?? result };
+  }
+
+  async updateTask(profileId, taskId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const id = positiveId(taskId, "task");
+    const version = Number(positiveId(input.version, "task version"));
+    const payload = { version };
+    for (const key of ["status", "blocked_reason", "completion_summary", "note"]) {
+      if (input[key] !== undefined) payload[key] = input[key];
+    }
+    const result = await client.request(`/api/v1/project-task.php?project_id=${encodeURIComponent(profile.project_id)}&id=${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    return { profile: publicAgentProfile(profile), task: result.data ?? result };
+  }
+
   async post(profileId, input = {}) {
     const { profile, client } = await this.context(profileId);
     const body = String(input.body || "").trim();
@@ -58,6 +112,7 @@ export class ProfileTimelineClient {
       direct_participant_ids: numericIds(input.direct_participant_ids),
       mention_participant_ids: numericIds(input.mention_participant_ids),
       broadcast: input.broadcast === true,
+      action_requested: input.action_requested === true,
       idempotency_key: idempotencyKey,
     };
     if (input.reply_to_message_id !== undefined && input.reply_to_message_id !== null) payload.reply_to_message_id = Number(positiveId(input.reply_to_message_id, "reply message"));

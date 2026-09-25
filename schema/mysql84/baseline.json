@@ -3,10 +3,10 @@
     "format_version": "1.0",
     "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
     "application_version": "1.0.0",
-    "schema_head": "202609180004",
+    "schema_head": "202609250009",
     "migration_cutover": "202609180004",
     "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
-    "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e",
+    "schema_sha256": "e01a02ab077fcd279d5a9ce862848043d9d091c27e2e8ced226498ec9ac37769",
     "mysql": {
         "minimum": "8.4.0",
         "maximum_exclusive": "9.0.0",
@@ -19,7 +19,52 @@
             "STRICT_TRANS_TABLES"
         ]
     },
-    "post_baseline_migrations": [],
+    "post_baseline_migrations": [
+        {
+            "id": "202609240001",
+            "sha256": "e59d192f5c7a2165172955cc7a58da757861928ebbd4c26088b1b5d1c51c338e"
+        },
+        {
+            "id": "202609240002",
+            "sha256": "a34556c19689526960bb8c2dd6bf79ff93ccee8bfcd0f76ae9b45929c8361b6e"
+        },
+        {
+            "id": "202609250001",
+            "sha256": "9781ce91b75751e8bbda78c674ec8f1dc1198f37d77e1632a7c656d15ee68e86"
+        },
+        {
+            "id": "202609250002",
+            "sha256": "7025913582377c2b146a0cc6626f29a46e7819042d07d6f1996604f2506b1bc7"
+        },
+        {
+            "id": "202609250003",
+            "sha256": "7c65b5ad6c4881c5f0090c5a42d369b8b41627d3755a9a686de0dbcf89d5e621"
+        },
+        {
+            "id": "202609250004",
+            "sha256": "6028842e3bfef79b1c2da5ed96aa86b832d4efbe1ef0a2c4755a9cf23b9cd0f2"
+        },
+        {
+            "id": "202609250005",
+            "sha256": "3f15a9feea27342782ffe1570a01fc69bbfe18eb0f03af9d28f19d8b03e58c70"
+        },
+        {
+            "id": "202609250006",
+            "sha256": "2c28f640ca4955b6bf67eee2737c6a8d58c077da4bcc2726f80f9282fdac32df"
+        },
+        {
+            "id": "202609250007",
+            "sha256": "29544f14bdef865d69ac11a73b3d3fa12e446832419a533f595a1e9365197641"
+        },
+        {
+            "id": "202609250008",
+            "sha256": "dcad99852946a52d4b2334816438cdfad501814a09404d263cd8364860f31908"
+        },
+        {
+            "id": "202609250009",
+            "sha256": "7fc12204d261e698e45028b6cbd598c902e7cee87b6988f67dae155b0273e200"
+        }
+    ],
     "tables": [
         {
             "name": "account_oauth_attempts",
@@ -611,6 +656,7 @@
                 "request_fingerprint",
                 "correlation_id",
                 "reply_depth",
+                "action_requested",
                 "created_at",
                 "updated_at",
                 "deleted_at"
@@ -744,6 +790,11 @@
                 "project_id",
                 "agent_id",
                 "display_name",
+                "role_title",
+                "role_summary",
+                "role_instructions",
+                "role_version",
+                "supervising_participant_id",
                 "avatar_url",
                 "provider",
                 "runtime_name",
@@ -858,6 +909,155 @@
             ]
         },
         {
+            "name": "project_task_events",
+            "backup_policy": "durable",
+            "restore_order": 500,
+            "columns": [
+                "id",
+                "task_id",
+                "project_id",
+                "actor_participant_id",
+                "event_type",
+                "from_status",
+                "to_status",
+                "body",
+                "metadata_json",
+                "created_at"
+            ],
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_tasks",
+            "backup_policy": "durable",
+            "restore_order": 490,
+            "columns": [
+                "id",
+                "public_id",
+                "project_id",
+                "title",
+                "description",
+                "acceptance_criteria",
+                "status",
+                "priority",
+                "assignee_participant_id",
+                "supervising_participant_id",
+                "created_by_participant_id",
+                "source_message_id",
+                "due_at",
+                "blocked_reason",
+                "completion_summary",
+                "version",
+                "started_at",
+                "submitted_at",
+                "completed_at",
+                "cancelled_at",
+                "created_at",
+                "updated_at"
+            ],
+            "identity_columns": [
+                "id",
+                "public_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_template_agents",
+            "backup_policy": "durable",
+            "restore_order": 530,
+            "columns": [
+                "id",
+                "template_id",
+                "preset_key",
+                "display_name",
+                "provider",
+                "role_title",
+                "role_summary",
+                "role_instructions",
+                "supervising_agent_id",
+                "sort_order",
+                "created_at",
+                "updated_at"
+            ],
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_template_categories",
+            "backup_policy": "durable",
+            "restore_order": 510,
+            "columns": [
+                "id",
+                "slug",
+                "name",
+                "description",
+                "sort_order",
+                "status",
+                "created_at",
+                "updated_at"
+            ],
+            "identity_columns": [
+                "id",
+                "slug"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "project_templates",
+            "backup_policy": "durable",
+            "restore_order": 520,
+            "columns": [
+                "id",
+                "public_id",
+                "category_id",
+                "name",
+                "description",
+                "instructions",
+                "origin",
+                "status",
+                "version",
+                "created_by_user_id",
+                "updated_by_user_id",
+                "created_at",
+                "updated_at",
+                "archived_at"
+            ],
+            "identity_columns": [
+                "id",
+                "public_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
             "name": "projects",
             "backup_policy": "durable",
             "restore_order": 260,
@@ -870,6 +1070,10 @@
                 "slug",
                 "description",
                 "instructions",
+                "source_template_public_id",
+                "source_template_name",
+                "source_template_version",
+                "context_version",
                 "status",
                 "created_at",
                 "updated_at",

@@ -40,6 +40,7 @@ class ResponsibilityEventService
              JOIN message_addressees ma ON ma.message_id = m.id
                 AND ma.participant_id = ? AND ma.reason = ?
              WHERE m.id = ? AND m.project_id = ?
+               AND m.action_requested = 1
                AND NOT EXISTS (SELECT 1 FROM responsibility_events source_event
                    WHERE source_event.event_message_id = m.id)
              FOR UPDATE'

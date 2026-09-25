@@ -5,15 +5,26 @@ function node(tag, className = "", value = "") {
   return result;
 }
 
+function humanTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  }).formatToParts(date).filter((part) => part.type !== "literal")
+    .map((part) => [part.type, part.value]));
+  return `${parts.month} ${parts.day}, ${parts.year} ${parts.hour}:${parts.minute} ${parts.dayPeriod}`;
+}
+
 export function evidenceDetails(message, parent = null) {
   const replyId = message.reply_to_message_id || message.reply_to?.id || null;
   return {
     identity: `Canonical message #${message.id}`,
     sequence: `Project sequence ${message.sequence}`,
-    sender: `From ${message.sender?.display_name || "Unknown participant"}`,
-    created: `Sent ${message.created_at}`,
+    sender: message.sender?.display_name || "Unknown participant",
+    created: humanTimestamp(message.created_at),
     addressed: message.addressees?.length
-      ? `Addressed to ${message.addressees.map((entry) => entry.display_name).join(", ")}`
+      ? message.addressees.map((entry) => entry.display_name).join(", ")
       : "Project broadcast",
     revision: `${Number(message.revision_count || 0)} revision${Number(message.revision_count || 0) === 1 ? "" : "s"}`,
     tombstone: message.deleted_at ? `Removed ${message.deleted_at}; historical evidence retained` : "Current visible revision",

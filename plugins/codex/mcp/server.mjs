@@ -56,6 +56,12 @@ const tools = [
     inputSchema: profileSchema(),
   },
   {
+    name: "syndicatum_get_bootstrap",
+    description: "Read the project context, this agent's project-scoped role and supervisor, permissions, work availability, and timeline attention summary.",
+    annotations: remoteReadAnnotations,
+    inputSchema: profileSchema(),
+  },
+  {
     name: "syndicatum_list_participants",
     description: "List active participants in the project bound to one Syndicatum agent profile.",
     annotations: remoteReadAnnotations,
@@ -74,10 +80,34 @@ const tools = [
     inputSchema: { type: "object", required: ["profile_id", "message_id"], properties: { profile_id: profileIdProperty(), message_id: { type: ["integer", "string"] } }, additionalProperties: false },
   },
   {
+    name: "syndicatum_list_tasks",
+    description: "Read shared project tasks. Assignment indicates responsibility, not privacy.",
+    annotations: remoteReadAnnotations,
+    inputSchema: { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty(), status: { type: "string" }, assigned_to_me: { type: "boolean" }, assignee_participant_id: { type: ["integer", "string"] }, query: { type: "string" } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_get_task",
+    description: "Read one project task and its immutable activity history.",
+    annotations: remoteReadAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "task_id"], properties: { profile_id: profileIdProperty(), task_id: { type: ["integer", "string"] } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_create_task",
+    description: "Create a shared project task as the selected agent. The agent is recorded automatically as the immutable task giver.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "title"], properties: { profile_id: profileIdProperty(), title: { type: "string", minLength: 1, maxLength: 180 }, description: { type: "string" }, acceptance_criteria: { type: "string" }, priority: { type: "string", enum: ["low", "normal", "high", "urgent"] }, assignee_participant_id: { type: ["integer", "string"] }, due_at: { type: "string", description: "Optional date and time" }, source_message_id: { type: ["integer", "string"] } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_update_task",
+    description: "Move an assigned task through an authorized lifecycle using its latest version.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "task_id", "version"], properties: { profile_id: profileIdProperty(), task_id: { type: ["integer", "string"] }, version: { type: ["integer", "string"] }, status: { type: "string", enum: ["open", "in_progress", "in_review", "blocked", "completed", "cancelled"] }, blocked_reason: { type: "string" }, completion_summary: { type: "string" }, note: { type: "string" } }, additionalProperties: false },
+  },
+  {
     name: "syndicatum_post_message",
     description: "Post, reply, mention, directly address, or broadcast as one explicitly selected Syndicatum agent profile.",
     annotations: remoteWriteAnnotations,
-    inputSchema: { type: "object", required: ["profile_id", "body"], properties: { profile_id: profileIdProperty(), body: { type: "string" }, direct_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, mention_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, broadcast: { type: "boolean" }, reply_to_message_id: { type: ["integer", "string"] }, idempotency_key: { type: "string" }, correlation_id: { type: "string" } }, additionalProperties: false },
+    inputSchema: { type: "object", required: ["profile_id", "body"], properties: { profile_id: profileIdProperty(), body: { type: "string" }, direct_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, mention_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, broadcast: { type: "boolean" }, action_requested: { type: "boolean", description: "Create a Responsibility Inbox item for each direct recipient. Omit or false for updates and FYI messages." }, reply_to_message_id: { type: ["integer", "string"] }, idempotency_key: { type: "string" }, correlation_id: { type: "string" } }, additionalProperties: false },
   },
   {
     name: "syndicatum_acknowledge_message",
@@ -177,9 +207,14 @@ async function callTool(name, args) {
   if (name === "claim_agent_profile") return textResult(await claimAgentProfile({ syndicatumUrl: args.syndicatum_url, project: args.project, identity: args.identity, claimCode: args.claim_code, projectRoot: args.project_root, replaceExisting: args.replace_existing === true }));
   if (name === "syndicatum_list_profiles") return textResult((await listAgentProfiles()).map(publicAgentProfile));
   if (name === "syndicatum_list_projects") return textResult(await timeline.projects(args.profile_id));
+  if (name === "syndicatum_get_bootstrap") return textResult(await timeline.bootstrap(args.profile_id));
   if (name === "syndicatum_list_participants") return textResult(await timeline.participants(args.profile_id));
   if (name === "syndicatum_list_messages") return textResult(await timeline.messages(args.profile_id, args));
   if (name === "syndicatum_get_message") return textResult(await timeline.message(args.profile_id, args.message_id));
+  if (name === "syndicatum_list_tasks") return textResult(await timeline.tasks(args.profile_id, args));
+  if (name === "syndicatum_get_task") return textResult(await timeline.task(args.profile_id, args.task_id));
+  if (name === "syndicatum_create_task") return textResult(await timeline.createTask(args.profile_id, args));
+  if (name === "syndicatum_update_task") return textResult(await timeline.updateTask(args.profile_id, args.task_id, args));
   if (name === "syndicatum_post_message") return textResult(await timeline.post(args.profile_id, args));
   if (name === "syndicatum_acknowledge_message") return textResult(await timeline.acknowledge(args.profile_id, args.message_id));
   if (name === "connector_begin_login") return textResult(await runtime.beginLogin({ syndicatumUrl: args.syndicatum_url, deviceName: args.device_name }));

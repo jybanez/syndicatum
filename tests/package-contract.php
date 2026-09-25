@@ -83,7 +83,7 @@ foreach ($baselineArray['tables'] as $table) {
     $policyCounts[$table['backup_policy']]++;
     $baselineByName[$table['name']] = $table;
 }
-if ($policyCounts !== ['durable' => 28, 'reset' => 17, 'excluded' => 3]) {
+if ($policyCounts !== ['durable' => 33, 'reset' => 17, 'excluded' => 3]) {
     packageContractFail('Reviewed durable/reset/excluded table counts changed unexpectedly.');
 }
 foreach (['syndicatum_sessions', 'oauth_access_tokens', 'message_events_outbox', 'agent_webhook_deliveries'] as $name) {
@@ -617,8 +617,8 @@ preg_match_all('/^CREATE TABLE `([a-z0-9_]+)`/m', $baselineSchema, $baselineTabl
 $baselineTableNames = $baselineTableMatches[1];
 sort($baselineTableNames, SORT_STRING);
 $committedBaseline->assertBaselineTables($baselineTableNames);
-if (count($baselineTableNames) !== 48 || substr_count($baselineSchema, 'CREATE TRIGGER') !== 3) {
-    packageContractFail('Committed baseline must contain the reviewed 48 tables and three triggers.');
+if (count($baselineTableNames) !== 53 || substr_count($baselineSchema, 'CREATE TRIGGER') !== 3) {
+    packageContractFail('Committed baseline must contain the reviewed 53 tables and three triggers.');
 }
 if (stripos($baselineSchema, 'DROP TABLE') !== false
     || preg_match('/INSERT\s+INTO\s+`?syndicatum_schema_migrations`?/i', $baselineSchema)
@@ -627,7 +627,18 @@ if (stripos($baselineSchema, 'DROP TABLE') !== false
 }
 if ($baselineMetadataArray['source_commit'] !== '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d'
     || $baselineMetadataArray['migration_cutover'] !== '202609180004'
-    || $baselineMetadataArray['post_baseline_migrations'] !== []) {
+    || count($baselineMetadataArray['post_baseline_migrations']) !== 11
+    || $baselineMetadataArray['post_baseline_migrations'][0]['id'] !== '202609240001'
+    || $baselineMetadataArray['post_baseline_migrations'][1]['id'] !== '202609240002'
+    || $baselineMetadataArray['post_baseline_migrations'][2]['id'] !== '202609250001'
+    || $baselineMetadataArray['post_baseline_migrations'][3]['id'] !== '202609250002'
+    || $baselineMetadataArray['post_baseline_migrations'][4]['id'] !== '202609250003'
+    || $baselineMetadataArray['post_baseline_migrations'][5]['id'] !== '202609250004'
+    || $baselineMetadataArray['post_baseline_migrations'][6]['id'] !== '202609250005'
+    || $baselineMetadataArray['post_baseline_migrations'][7]['id'] !== '202609250006'
+    || $baselineMetadataArray['post_baseline_migrations'][8]['id'] !== '202609250007'
+    || $baselineMetadataArray['post_baseline_migrations'][9]['id'] !== '202609250008'
+    || $baselineMetadataArray['post_baseline_migrations'][10]['id'] !== '202609250009') {
     packageContractFail('Committed baseline provenance or cutover identity changed unexpectedly.');
 }
 

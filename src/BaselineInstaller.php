@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/BaselineMetadata.php';
 require_once __DIR__ . '/InstallationIdentity.php';
+require_once __DIR__ . '/PostBaselineMigrator.php';
 
 class BaselineInstaller
 {
@@ -32,10 +33,6 @@ class BaselineInstaller
         if (!hash_equals(strtolower($metadataArray['schema_sha256']), hash('sha256', $schema))) {
             throw new RuntimeException('Baseline schema digest does not match trusted metadata.');
         }
-        if ($metadataArray['post_baseline_migrations']) {
-            throw new RuntimeException('This installer does not yet accept a baseline with post-cutover migrations.');
-        }
-
         $originalForeignKeyChecks = (int) $this->pdo->query('SELECT @@SESSION.FOREIGN_KEY_CHECKS')->fetchColumn();
         try {
             foreach ($this->splitStatements($schema) as $statement) {
@@ -46,11 +43,12 @@ class BaselineInstaller
             throw $exception;
         }
 
+        $postMigrations = (new PostBaselineMigrator($this->pdo, $this->metadataPath))->migrate(false);
         $actualTables = $this->tableNames();
         $metadata->assertBaselineTables($actualTables);
         $migrationRows = (int) $this->pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn();
-        if ($migrationRows !== 0) {
-            throw new RuntimeException('Fresh baseline installation fabricated historical migration rows.');
+        if ($migrationRows !== count($metadataArray['post_baseline_migrations'])) {
+            throw new RuntimeException('Fresh baseline installation did not apply the declared post-baseline migration suffix.');
         }
         $roles = $this->pdo->query('SELECT code FROM system_roles ORDER BY code')->fetchAll(PDO::FETCH_COLUMN);
         if ($roles !== ['administrator', 'user']) {
@@ -68,7 +66,9 @@ class BaselineInstaller
             'package_sha256' => strtolower($identity['package_sha256']),
             'installation_id' => $identity['installation_id'],
             'table_count' => count($actualTables),
-            'historical_migration_rows' => $migrationRows,
+            'historical_migration_rows' => 0,
+            'post_baseline_migration_rows' => $migrationRows,
+            'post_baseline_migrations_applied' => $postMigrations,
         ];
     }
 

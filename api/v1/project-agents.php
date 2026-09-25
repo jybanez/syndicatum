@@ -63,7 +63,10 @@ try {
     $result = [];
     $changed = false;
     if (array_key_exists('display_name', $body) || array_key_exists('provider', $body)
-        || array_key_exists('runtime_name', $body) || array_key_exists('avatar_url', $body)) {
+        || array_key_exists('runtime_name', $body) || array_key_exists('avatar_url', $body)
+        || array_key_exists('role_title', $body) || array_key_exists('role_summary', $body)
+        || array_key_exists('role_instructions', $body)
+        || array_key_exists('supervising_participant_id', $body)) {
         $result = $service->updateAgentProfile($projectId, $user['id'], $agentId, $body);
         $changed = true;
     }

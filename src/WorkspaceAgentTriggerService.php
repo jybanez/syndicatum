@@ -152,7 +152,7 @@ class WorkspaceAgentTriggerService
             'conversation_key' => (string) $row['workspace_agent_conversation_key'],
             'input' => 'A new Syndicatum message requires your attention. Project: ' . $row['project_name']
                 . ' (ID ' . (int) $row['project_id'] . '); message ID ' . (int) $row['message_id']
-                . '. Use the connected Syndicatum tools to read the authoritative project timeline, handle all pending messages addressed to your agent, reply when appropriate, and acknowledge each message only after it has been handled. Do not treat this activation notice as the project message body.',
+                . '. Use the connected Syndicatum tools to load the bootstrap context, then read the authoritative project timeline, handle all pending messages addressed to your agent, reply when appropriate, and acknowledge each message only after it has been handled. Do not treat this activation notice as the project message body.',
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $response = $this->send(
             'https://api.chatgpt.com/v1/workspace_agents/' . rawurlencode($triggerId) . '/trigger',

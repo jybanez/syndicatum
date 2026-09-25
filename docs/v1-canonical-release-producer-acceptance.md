@@ -107,8 +107,9 @@ Baseline metadata `source_commit` identifies the commit that froze the baseline
 SQL and may predate the release commit. It is not required to self-reference the
 release commit that contains or consumes the metadata. The package manifest and
 provenance independently bind the exact release source commit. Initial V1
-baseline metadata uses cutover=head `202609180004` with no post-baseline
-migrations; later post-baseline identifiers must be unique 12-digit values.
+baseline metadata keeps cutover `202609180004` and advances schema head through
+an explicit checksummed post-baseline inventory. Post-baseline identifiers must
+be unique 12-digit values.
 The normalized cutover `202609180004` maps exactly to the historical migration
 identity `202609180004_delivery_terminal_timestamps`; the numeric baseline ID is
 not a second migration and must never be inserted as fabricated migration
@@ -128,8 +129,9 @@ Baseline acceptance proves that:
   schema under the declared charset, collation, and SQL modes;
 - every resulting live table has an exact trusted `BaselineMetadata`
   classification;
-- installation records baseline ID and schema head `202609180004` without
-  synthesizing historical migration rows;
+- installation records the baseline ID and current schema head without
+  synthesizing historical migration rows, while recording only post-baseline
+  migrations it actually applies;
 - the legacy migration engine, when invoked after baseline installation, skips
   all migrations at or before the cutover and considers only declared,
   checksummed post-baseline migrations;

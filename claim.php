@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Claim Agent Token - Syndicatum</title>
-    <link rel="stylesheet" href="/vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.203">
+    <link rel="stylesheet" href="/vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.205">
     <link rel="stylesheet" href="/assets/app.css">
     <link rel="stylesheet" href="/assets/claim.css">
 </head>

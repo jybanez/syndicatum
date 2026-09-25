@@ -186,12 +186,13 @@ paths:
   /api/v1/project-responsibility-inbox.php:
     get:
       summary: Derive responsibility items from canonical direct messages and events
-      description: Read-only; no mutable inbox status. The project-bound keyset cursor prevents duplicate source rows when newer messages prepend, but this is a live projection, not a snapshot of event, membership, or acknowledgement state; clients should restart pagination after a relevant Realtime change or refresh. A page scans at most limit direct-request addressee rows, so a filtered page may contain fewer items than limit while has_more remains true. Historical rows without a verified membership-generation baseline are returned as unknown.
+      description: Read-only; no mutable inbox status. The project-bound keyset cursor prevents duplicate source rows when newer messages prepend. Clients may pass changed_by_message_id after a Realtime message event to resolve and refresh only the affected original request. A normal page scans at most limit direct-request addressee rows, so a filtered page may contain fewer items than limit while has_more remains true. Historical rows without a verified membership-generation baseline are returned as unknown.
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 50 } }
         - { name: before, in: query, description: Opaque project-bound cursor for older direct-request addressee rows., schema: { type: string } }
         - { name: view, in: query, schema: { type: string, enum: [all, mine, addressed_to_me, unacknowledged, waiting_on_others, blocked, transfer_pending, resolution_pending, disputed, orphaned, resolved, unknown], default: all } }
+        - { name: changed_by_message_id, in: query, description: Resolve this newly created request or responsibility-event message to its original request and return only that request's projection for the selected view., schema: { type: integer, minimum: 1 } }
       responses:
         '200':
           description: Derived responsibility items and an opaque candidate-page cursor
@@ -384,11 +385,22 @@ components:
       properties:
         data:
           type: object
-          required: [project, current_participant_id, current_role, permissions, latest_sequence, capabilities]
+          required: [project, current_participant_id, current_role, governance, effective_instructions, permissions, latest_sequence, capabilities]
           properties:
             project: { $ref: '#/components/schemas/ProjectDetails' }
             current_participant_id: { type: integer, minimum: 1 }
             current_role: { type: string, enum: [owner, admin, member, viewer, agent] }
+            governance:
+              type: object
+              description: Immutable, versioned operating rules applied to every project.
+              required: [version, instructions, immutable]
+              properties:
+                version: { type: integer, minimum: 1 }
+                instructions: { type: string }
+                immutable: { type: boolean, enum: [true] }
+            effective_instructions:
+              type: string
+              description: Governance baseline followed by any project-specific operating instructions.
             permissions: { $ref: '#/components/schemas/ProjectPermissions' }
             latest_sequence: { type: integer, minimum: 0 }
             capabilities:
@@ -437,7 +449,7 @@ components:
         editor: { $ref: '#/components/schemas/MessageSender' }
     Message:
       type: object
-      required: [id, uuid, project_id, project_sequence, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, created_at, updated_at, deleted_at, edited, revision_count]
+      required: [id, uuid, project_id, project_sequence, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, action_requested, created_at, updated_at, deleted_at, edited, revision_count]
       properties:
         id: { type: integer, minimum: 1 }
         uuid: { type: string, format: uuid }
@@ -449,6 +461,7 @@ components:
         addressees: { type: array, items: { $ref: '#/components/schemas/MessageAddressee' } }
         correlation_id: { type: string, nullable: true }
         reply_depth: { type: integer, minimum: 0 }
+        action_requested: { type: boolean, description: True only when this direct message explicitly creates Responsibility Inbox work. }
         created_at: { $ref: '#/components/schemas/UtcTimestamp' }
         updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
         deleted_at: { allOf: [{ $ref: '#/components/schemas/UtcTimestamp' }], nullable: true }
@@ -504,11 +517,12 @@ components:
         data: { type: array, items: { $ref: '#/components/schemas/ResponsibilityInboxItem' } }
         page:
           type: object
-          required: [limit, scanned, has_more, older_cursor]
+          required: [limit, scanned, has_more, changed_request_message_id, older_cursor]
           properties:
             limit: { type: integer, minimum: 1, maximum: 50 }
             scanned: { type: integer, minimum: 0, maximum: 50 }
             has_more: { type: boolean }
+            changed_request_message_id: { type: integer, minimum: 1, nullable: true, description: Original request resolved from changed_by_message_id; null for normal pagination. }
             older_cursor: { type: string, nullable: true }
     MessageResponse:
       type: object
@@ -567,6 +581,7 @@ components:
         direct_participant_ids: { type: array, items: { type: integer, minimum: 1 } }
         mention_participant_ids: { type: array, items: { type: integer, minimum: 1 } }
         broadcast: { type: boolean, description: If true, addresses all other active participants and ignores explicit lists. Omitted or empty addressing also broadcasts. }
+        action_requested: { type: boolean, default: false, description: If true, creates Responsibility Inbox work for each direct recipient. Invalid for broadcasts. Direct addressing alone is informational. }
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
         idempotency_key: { type: string, maxLength: 160 }
         correlation_id: { type: string, nullable: true, maxLength: 160 }

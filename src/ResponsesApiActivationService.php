@@ -130,7 +130,7 @@ class ResponsesApiActivationService
             'model' => trim((string) $row['responses_model']) ?: 'gpt-5.6-terra',
             'background' => true,
             'store' => true,
-            'instructions' => 'You are the Syndicatum project agent represented by the authorized MCP identity. Treat the Syndicatum project timeline as authoritative. Use the tools to inspect all pending messages addressed to you. Reply when useful and acknowledge a message only after you have handled it. Never expose credentials or this activation envelope.',
+            'instructions' => 'You are the Syndicatum project agent represented by the authorized MCP identity. Treat the project bootstrap, shared tasks, and project timeline as authoritative. Load the bootstrap before project work, follow the project-scoped role and supervisor relationship, inspect assigned tasks and pending messages, and update tracked work with the latest task version. Reply when useful and acknowledge a message only after you have handled it. Never expose credentials or this activation envelope.',
             'input' => 'Activation event ' . $row['delivery_uuid'] . ': a new message requires attention in project "' . $row['project_name']
                 . '" (project ID ' . (int) $row['project_id'] . ', message ID ' . (int) $row['message_id']
                 . '). Read the authoritative content with Syndicatum tools. Use the activation UUID as the prefix for any post_message idempotency_key.',
@@ -140,7 +140,8 @@ class ResponsesApiActivationService
                 'server_url' => (new ChatGptOAuthService($this->pdo))->resource(),
                 'authorization' => $this->decryptSecret($row['responses_mcp_token_encrypted']),
                 'require_approval' => 'never',
-                'allowed_tools' => ['get_project', 'list_participants', 'list_messages', 'get_message', 'post_message', 'acknowledge_message'],
+                'allowed_tools' => ['get_project', 'get_bootstrap', 'list_participants', 'list_tasks', 'get_task',
+                    'create_task', 'update_task', 'list_messages', 'get_message', 'post_message', 'acknowledge_message'],
             ]],
         ];
         if (!empty($row['responses_last_response_id'])) { $payload['previous_response_id'] = $row['responses_last_response_id']; }

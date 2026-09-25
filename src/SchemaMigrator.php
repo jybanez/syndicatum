@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/PostBaselineMigrator.php';
 
 class SchemaMigrator
 {
@@ -16,11 +17,7 @@ class SchemaMigrator
     public function migrate()
     {
         if (Db::tableExists($this->pdo, 'syndicatum_installation_identity')) {
-            $metadata = $this->baselineMetadata();
-            if (empty($metadata['post_baseline_migrations'])) {
-                return [];
-            }
-            throw new RuntimeException('Declared post-baseline migration execution is not implemented for this baseline.');
+            return (new PostBaselineMigrator($this->pdo))->migrate(true);
         }
         $this->acquireLock();
 
@@ -72,11 +69,7 @@ class SchemaMigrator
     public function status()
     {
         if (Db::tableExists($this->pdo, 'syndicatum_installation_identity')) {
-            $metadata = $this->baselineMetadata();
-            if (empty($metadata['post_baseline_migrations'])) {
-                return [];
-            }
-            throw new RuntimeException('Declared post-baseline migration status is not implemented for this baseline.');
+            return (new PostBaselineMigrator($this->pdo))->status();
         }
         $this->ensureMigrationTable();
         $applied = $this->appliedMigrations();

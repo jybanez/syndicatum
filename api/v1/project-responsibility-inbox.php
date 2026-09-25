@@ -19,6 +19,8 @@ try {
         'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 50,
         'before' => isset($_GET['before']) ? trim((string) $_GET['before']) : '',
         'view' => isset($_GET['view']) ? trim((string) $_GET['view']) : 'all',
+        'changed_by_message_id' => isset($_GET['changed_by_message_id'])
+            ? (int) $_GET['changed_by_message_id'] : null,
     ]));
 } catch (Exception $exception) {
     projectApiError($exception);

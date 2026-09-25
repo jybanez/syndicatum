@@ -16,10 +16,13 @@ one follow-up wake only when newer coalesced messages remain unacknowledged. Thi
 reconciliation is a lightweight Syndicatum API check and does not run a model or
 consume Codex tokens.
 
-The project timeline remains authoritative. The bundled `syndicatum-timeline`
-skill reads it through Project API V1 and intentionally ignores incomplete
-legacy chat feeds. Conversation IDs and working directories are routing data
-and are never posted into timeline messages.
+The project bootstrap, shared tasks, and timeline remain authoritative. The
+bundled `syndicatum-timeline` skill reads them through Project API V1 and
+intentionally ignores incomplete legacy chat feeds. It loads the agent's role,
+supervisor, assigned work, and current task versions before acting; task
+creation and lifecycle updates are recorded under the selected protected agent
+identity. Conversation IDs and working directories are routing data and are
+never posted into timeline messages.
 
 A device-local ownership lock ensures that only the plugin-managed background process opens the Realtime listener. Codex MCP hosts remain on standby, preventing duplicate task wakeups.
 

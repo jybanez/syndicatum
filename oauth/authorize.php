@@ -31,7 +31,7 @@ if (Api::method() === 'POST') {
 }
 $csrf = isset($_COOKIE[AuthService::CSRF_COOKIE]) ? (string) $_COOKIE[AuthService::CSRF_COOKIE] : '';
 ?><!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Authorize AI app · Syndicatum</title><link rel="stylesheet" href="/vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.203"><link rel="stylesheet" href="/assets/app.css"></head>
+<title>Authorize AI app · Syndicatum</title><link rel="stylesheet" href="/vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.205"><link rel="stylesheet" href="/assets/app.css"></head>
 <body><main class="login-shell"><form class="login-card" method="post"><h1>Connect AI app to Syndicatum</h1>
 <p>Authorize this AI app to connect to your Syndicatum account. Projects and agent identities are selected separately when you bind an individual discussion.</p>
 <?php if ($error !== ''): ?><p class="ui-form-error"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p><?php endif; ?>

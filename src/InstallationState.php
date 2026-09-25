@@ -56,13 +56,18 @@ class InstallationState
             foreach ([
                 'application_version' => 'application_version',
                 'schema_baseline' => 'baseline_id',
-                'schema_head' => 'schema_head',
                 'baseline_source_commit' => 'source_commit',
             ] as $identityField => $metadataField) {
                 if (!hash_equals((string) $metadataArray[$metadataField], (string) $identity[$identityField])) {
                     return ['state' => 'identity_mismatch', 'ready' => false, 'table_count' => count($tables)];
                 }
             }
+            $permittedHeads = [$metadataArray['migration_cutover'], $metadataArray['schema_head']];
+            foreach ($metadataArray['post_baseline_migrations'] as $migration) { $permittedHeads[] = $migration['id']; }
+            if (!in_array((string) $identity['schema_head'], array_unique($permittedHeads), true)) {
+                return ['state' => 'identity_mismatch', 'ready' => false, 'table_count' => count($tables)];
+            }
+            $postBaselineUpgradeRequired = !hash_equals((string) $metadataArray['schema_head'], (string) $identity['schema_head']);
             $ledger = $this->pdo->query(
                 'SELECT version, checksum FROM syndicatum_schema_migrations ORDER BY version'
             )->fetchAll(PDO::FETCH_ASSOC);
@@ -84,18 +89,30 @@ class InstallationState
                 if (!preg_match('/\Alegacy-v1:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i', (string) $identity['last_upgrade_id'])
                     || !hash_equals($planMetadata['source_migration_head'], (string) $identity['last_upgrade_from_version'])
                     || !hash_equals((string) $metadataArray['application_version'], (string) $identity['last_upgrade_to_version'])
-                    || !hash_equals($planMetadata['target_schema_head'], (string) $identity['schema_head'])
+                    || !hash_equals($planMetadata['target_schema_head'], (string) $metadataArray['migration_cutover'])
                     || !hash_equals($planMetadata['target_baseline_id'], (string) $identity['schema_baseline'])
                     || $identity['last_upgraded_at'] < $identity['installed_at']) {
                     return ['state' => 'legacy_upgrade_mismatch', 'ready' => false, 'table_count' => count($tables)];
                 }
                 try {
-                    $plan->verifyLedgerRows($ledger, 'target');
+                    $postIds = array_column($metadataArray['post_baseline_migrations'], 'id');
+                    $legacyLedger = array_values(array_filter($ledger, function ($row) use ($postIds) {
+                        return !in_array($row['version'], $postIds, true);
+                    }));
+                    $plan->verifyLedgerRows($legacyLedger, 'target');
                 } catch (RuntimeException $exception) {
                     return ['state' => 'legacy_upgrade_incomplete', 'ready' => false, 'table_count' => count($tables), 'migration_rows' => $migrationRows];
                 }
                 if (!$this->hasParticipantIdentityCheck()) {
                     return ['state' => 'legacy_upgrade_incomplete', 'ready' => false, 'table_count' => count($tables), 'migration_rows' => $migrationRows];
+                }
+                if ($postBaselineUpgradeRequired) {
+                    return ['state' => 'post_baseline_upgrade_required', 'ready' => false,
+                        'table_count' => count($tables), 'migration_rows' => $migrationRows];
+                }
+                if (!$this->postBaselineLedgerMatches($ledger, $metadataArray['post_baseline_migrations'])) {
+                    return ['state' => 'migration_state_mismatch', 'ready' => false,
+                        'table_count' => count($tables), 'migration_rows' => $migrationRows];
                 }
                 return [
                     'state' => 'legacy_upgraded_ready',
@@ -105,7 +122,12 @@ class InstallationState
                     'identity' => $identity,
                 ];
             }
-            if ($migrationRows !== count($metadataArray['post_baseline_migrations'])) {
+            if ($postBaselineUpgradeRequired) {
+                return ['state' => 'post_baseline_upgrade_required', 'ready' => false,
+                    'table_count' => count($tables), 'migration_rows' => $migrationRows];
+            }
+            if ($migrationRows !== count($metadataArray['post_baseline_migrations'])
+                || !$this->postBaselineLedgerMatches($ledger, $metadataArray['post_baseline_migrations'])) {
                 return [
                     'state' => 'migration_state_mismatch',
                     'ready' => false,
@@ -138,6 +160,17 @@ class InstallationState
             throw new RuntimeException('INSTALLATION_REQUIRED: ' . $status['state']);
         }
         return $status;
+    }
+
+    private function postBaselineLedgerMatches(array $ledger, array $declared)
+    {
+        $expected = [];
+        foreach ($declared as $migration) { $expected[$migration['id']] = $migration['sha256']; }
+        $actual = [];
+        foreach ($ledger as $row) {
+            if (isset($expected[$row['version']])) { $actual[$row['version']] = strtolower($row['checksum']); }
+        }
+        return $actual === $expected;
     }
 
     private function tableNames()

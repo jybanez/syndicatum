@@ -1,6 +1,7 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.203";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.205";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
-import { showCanonicalEvidence } from "./responsibility-evidence.mjs";
+import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260925215000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -8,12 +9,12 @@ const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="as
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
 const MORE_ACTIONS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.75" fill="currentColor"></circle><circle cx="12" cy="12" r="1.75" fill="currentColor"></circle><circle cx="19" cy="12" r="1.75" fill="currentColor"></circle></svg>';
 const CLAIM_CODE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 14a4.5 4.5 0 1 1 3.9-6.75l7.35.01v3h-2v2h-3v2H11.4A4.48 4.48 0 0 1 7.5 14Zm0-3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"></path></svg>';
-const SIGNING_SECRET_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v5.6c0 4.8 3.08 9.16 7.5 10.4 4.42-1.24 7.5-5.6 7.5-10.4V5L12 2Zm0 3.23 4.5 1.8v3.57c0 3.25-1.84 6.35-4.5 7.35-2.66-1-4.5-4.1-4.5-7.35V7.03L12 5.23Z" fill="currentColor"></path></svg>';
 const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const COLLAPSE_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-7 3-3 3 3m-6 4 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const EXPAND_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-3 3 3 3-3m-6-4 3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const APP_BASE_PATH = new URL(document.baseURI).pathname.replace(/\/$/, "");
 const WORKSPACE_MOBILE_QUERY = "(max-width: 980px)";
+const TEMPLATE_MOBILE_QUERY = "(max-width: 680px)";
 const TIMELINE_MARKER_ICONS = new Map();
 
 const API = {
@@ -22,10 +23,14 @@ const API = {
   context: "api/v1/project.php",
   participants: "api/v1/project-participants.php",
   messages: "api/v1/project-messages.php",
+  tasks: "api/v1/project-tasks.php",
+  task: "api/v1/project-task.php",
   acknowledge: "api/v1/project-message-acknowledge.php",
   responsibilityInbox: "api/v1/project-responsibility-inbox.php",
   message: "api/v1/project-message.php",
   settings: "api/v1/admin/settings.php",
+  projectTemplates: "api/v1/admin/project-templates.php",
+  projectTemplateLibrary: "api/v1/project-templates.php",
   integrationTest: "api/v1/admin/integration-test.php",
   profile: "api/v1/profile.php",
   googleLink: "api/v1/google-link.php",
@@ -69,11 +74,20 @@ const state = {
   project: null,
   participants: [],
   messages: [],
+  tasks: [],
+  templates: [],
+  templateCategories: [],
+  selectedTemplateId: "",
+  collapsedTemplateCategoryIds: new Set(),
+  templateMobileView: "library",
+  selectedGuideArticleId: "workspace-projects",
+  guideQuery: "",
+  taskFilter: "active",
   projectView: "timeline",
   aiIconPackAvailable: false,
   timelineDefaultCollapsed: false,
   filters: { primary: "all", q: "", sender: "", from: "", to: "" },
-  draft: { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
+  draft: { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
   newestCursor: "",
   hasOlder: false,
@@ -99,15 +113,15 @@ const state = {
 
 const el = Object.fromEntries([
   "app-shell", "navbar-host", "workspace-surface", "admin-surface",
-  "workspace-splitter-host", "workspace-inner-splitter-host", "project-navigation-column", "project-messages-column", "project-participants-column",
+  "workspace-splitter-host", "workspace-inner-splitter-host", "workspace-work-splitter-host", "project-navigation-column", "project-messages-column", "project-tasks-column", "project-participants-column",
   "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
-  "status-badge", "project-title", "project-instructions", "participant-list",
+  "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-status-filter", "new-task-trigger", "task-guide-trigger",
   "participant-search", "new-message-trigger", "new-message-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
-  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "addressee-select", "broadcast-warning", "composer-host",
+  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-host",
   "project-view-switch", "show-timeline", "show-responsibility", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
-  "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
+  "admin-eyebrow", "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
 const panels = Array.from(document.querySelectorAll("[data-panel]"));
@@ -182,6 +196,11 @@ function participantFrom(source = {}, fallbackKind = "agent") {
     provider: String(source.provider || ""),
     runtime_name: String(source.runtime_name || source.runtime || ""),
     capabilities: source.capabilities || {},
+    role_title: source.role_title || "",
+    role_summary: source.role_summary || "",
+    role_instructions: source.role_instructions || "",
+    role_version: source.role_version === null || source.role_version === undefined ? null : Number(source.role_version),
+    supervisor: source.supervisor || null,
     webhook: source.webhook || source.notification_webhook || null,
     joined_at: source.joined_at || source.created_at || null,
     last_message_at: source.last_message_at || null,
@@ -281,7 +300,8 @@ function applicationResourceUrl(path) {
 function routeForSurface(surface, projectId = "") {
   if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
   if (surface === "backup-restore") return `${applicationPath()}?admin=backup-restore`;
-  if (["users", "agents", "audit", "delivery-health"].includes(surface)) return applicationPath(surface);
+  if (surface === "guide") return `${applicationPath("guide")}#${encodeURIComponent(state.selectedGuideArticleId || "workspace-projects")}`;
+  if (["users", "agents", "audit", "templates", "delivery-health"].includes(surface)) return applicationPath(surface);
   return applicationPath();
 }
 
@@ -295,7 +315,11 @@ function currentApplicationRoute() {
     try { return { surface: "project", projectId: decodeURIComponent(parts[1]) }; }
     catch (_error) { return { surface: "workspace", projectId: "" }; }
   }
-  if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(parts[0])) return { surface: parts[0], projectId: "" };
+  if (parts[0] === "guide") {
+    try { return { surface: "guide", projectId: "", articleId: decodeURIComponent(location.hash.replace(/^#/, "")) || "workspace-projects" }; }
+    catch (_error) { return { surface: "guide", projectId: "", articleId: "workspace-projects" }; }
+  }
+  if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(parts[0])) return { surface: parts[0], projectId: "" };
   const legacyProjectId = new URLSearchParams(location.search).get("project") || "";
   return legacyProjectId ? { surface: "project", projectId: legacyProjectId } : { surface: "workspace", projectId: "" };
 }
@@ -303,7 +327,7 @@ function currentApplicationRoute() {
 function updateApplicationRoute(surface, projectId = "", historyMode = "push") {
   if (historyMode === "none") return;
   const path = routeForSurface(surface, projectId);
-  if (`${location.pathname}${location.search}` === path) return;
+  if (`${location.pathname}${location.search}${location.hash}` === path) return;
   history[historyMode === "replace" ? "replaceState" : "pushState"]({ surface, projectId }, "", path);
 }
 
@@ -374,15 +398,15 @@ function mountNavbar() {
   const workspaceVisible = ["workspace", "project"].includes(state.surface);
   const mobileWorkspace = workspaceVisible && matchMedia(WORKSPACE_MOBILE_QUERY).matches;
   if (state.mode === "expanded" && capability("workspace.view", true)) {
-    items.push({ id: "workspace", label: "Home", icon: helperIconHtml("navigation.home"), className: "ui-button-borderless desktop-workspace-nav" });
-    items.push({ id: "mobile-projects", label: "Projects", icon: helperIconHtml("data.grid"), className: "ui-button-borderless mobile-workspace-nav" });
     items.push({ id: "mobile-timeline", label: "Timeline", icon: helperIconHtml("data.list"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
+    items.push({ id: "mobile-tasks", label: "Tasks", icon: helperIconHtml("actions.check"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
     if (state.teamVisible) items.push({ id: "mobile-team", label: "Team", icon: helperIconHtml("people.users"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
   }
   const actions = [];
   const administratorItems = state.mode === "expanded" && isAdministrator() ? [
     ...(capability("admin.users") ? [{ id: "users", label: "Users", icon: helperIconHtml("people.users") }] : []),
     ...(capability("admin.audit") ? [{ id: "audit", label: "Audit", icon: helperIconHtml("time.history") }] : []),
+    ...(capability("admin.settings") ? [{ id: "templates", label: "Templates", icon: helperIconHtml("assets.document") }] : []),
     ...(capability("admin.settings") ? [{ id: "settings", label: "Settings", icon: helperIconHtml("actions.settings") }] : []),
     ...(capability("admin.settings") ? [{ id: "backup-restore", label: "Backup / Restore", icon: helperIconHtml("actions.download") }] : []),
     ...(capability("admin.settings") ? [{ id: "delivery-health", label: "Delivery health", icon: helperIconHtml("actions.settings") }] : []),
@@ -407,6 +431,7 @@ function mountNavbar() {
         label: "Account",
         className: "syndicatum-account-menu-group",
         items: [
+          { id: "guide", label: "User Guide", icon: helperIconHtml("assets.document") },
           { id: "profile", label: "Profile", icon: helperIconHtml("people.profile") },
           ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password", icon: helperIconHtml("actions.lock") }] : []),
           ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account", icon: helperIconHtml("people.account") }] : []),
@@ -437,21 +462,22 @@ function mountNavbar() {
     brandSubtitle: state.surface === "project" && state.project ? state.project.name : "Human + agent collaboration",
     brandMedia: SYNDICATUM_BRAND_ICON,
     className: "syndicatum-navbar-single-row",
-    activeId: mobileWorkspace ? `mobile-${state.mobilePanel}` : (["workspace", "project"].includes(state.surface) ? "workspace" : state.surface),
+    activeId: mobileWorkspace ? `mobile-${state.mobilePanel}` : (["workspace", "project"].includes(state.surface) ? "" : state.surface),
     items,
     actions,
     sticky: true,
     mobileCollapse: false,
     mobileLayout: "scroll",
     onNavigate(item) {
-      if (item?.id === "brand" || item?.id === "workspace") showWorkspaceSurface();
-      else if (item?.id === "mobile-projects") showWorkspaceSurface();
+      if (item?.id === "brand") showWorkspaceSurface();
       else if (item?.id === "mobile-timeline") showMobileWorkspacePanel("timeline");
+      else if (item?.id === "mobile-tasks") showMobileWorkspacePanel("tasks");
       else if (item?.id === "mobile-team") showMobileWorkspacePanel("team");
-      else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
+      else if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
     },
     onActionMenuSelect(_action, item) {
-      if (["users", "audit", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
+      if (["users", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
+      else if (item?.id === "guide") showGuideSurface();
       else if (item?.id === "settings") void openSettings();
       else if (item?.id === "profile") openProfileModal();
       else if (item?.id === "password") openPasswordModal();
@@ -539,16 +565,28 @@ function showMobileWorkspacePanel(name) {
 
 function mountWorkspaceSplitters() {
   state.teamVisible = readLocalPreference("syndicatum.workspace.team", "shown") !== "hidden";
+  state.components.workspaceWorkSplitter = state.factories.createSplitter(el.workspace_work_splitter_host, {
+    className: "workspace-work-splitter",
+    orientation: "horizontal",
+    panePadding: 0,
+    chrome: false,
+    initialRatio: storedSplitterRatio("syndicatum.workspace.tasksRatio", 0.52),
+    minRatio: 0.42,
+    maxRatio: 0.68,
+    paneA: el.project_tasks_column,
+    paneB: el.project_participants_column,
+    onResize(ratio) { writeLocalPreference("syndicatum.workspace.tasksRatio", ratio); },
+  });
   state.components.workspaceInnerSplitter = state.factories.createSplitter(el.workspace_inner_splitter_host, {
     className: "workspace-inner-splitter",
     orientation: "horizontal",
     panePadding: 0,
     chrome: false,
-    initialRatio: storedSplitterRatio("syndicatum.workspace.timelineRatio", 0.72),
-    minRatio: 0.55,
-    maxRatio: 0.84,
+    initialRatio: storedSplitterRatio("syndicatum.workspace.timelineRatio", 0.64),
+    minRatio: 0.48,
+    maxRatio: 0.76,
     paneA: el.project_messages_column,
-    paneB: el.project_participants_column,
+    paneB: el.workspace_work_splitter_host,
     onResize(ratio) { writeLocalPreference("syndicatum.workspace.timelineRatio", ratio); },
   });
   state.components.workspaceOuterSplitter = state.factories.createSplitter(el.workspace_splitter_host, {
@@ -719,9 +757,6 @@ function renderProjectHeader() {
   const hasProject = Boolean(selectedProjectId());
   el.project_view_switch.hidden = !hasProject || state.mode !== "expanded";
   el.project_title.textContent = project.name || (state.mode === "legacy" ? "PBB Coordination" : "Select a project");
-  const instructions = project.instructions || project.operating_instructions || "";
-  el.project_instructions.textContent = instructions;
-  el.project_instructions.hidden = !hasProject || !instructions;
   el.new_message_trigger.hidden = !hasProject || state.mode !== "expanded" || !can("messages.write") || state.projectView === "responsibility";
   state.components.projectActions?.destroy?.();
   state.components.projectActions = null;
@@ -805,6 +840,12 @@ function openParticipantInfoModal(participant) {
   const avatarWrap = projectInfoElement("div", "participant-profile-avatar");
   avatarWrap.append(avatar);
   identity.append(avatarWrap, projectInfoElement("h2", "participant-profile-name", participant.display_name));
+  if (isAgent && participant.role_title) {
+    identity.append(projectInfoElement("p", "participant-profile-role-title", participant.role_title));
+  }
+  if (isAgent && participant.role_summary) {
+    identity.append(projectInfoElement("p", "participant-profile-role-summary", participant.role_summary));
+  }
   const badges = projectInfoElement("div", "participant-profile-badges");
   const typeBadge = projectInfoElement("span", `participant-profile-badge is-${participant.kind}`);
   const typeIcon = projectInfoElement("span", "participant-profile-badge-icon");
@@ -813,13 +854,36 @@ function openParticipantInfoModal(participant) {
   const status = String(participant.status || "active").toLowerCase();
   const statusBadge = projectInfoElement("span", `participant-profile-badge participant-profile-membership-status is-${status}`);
   statusBadge.append(projectInfoElement("span", "participant-profile-status-dot"), document.createTextNode(participantMembershipStatusLabel(status)));
-  badges.append(typeBadge, statusBadge);
+  if (!isAgent) badges.append(typeBadge);
+  badges.append(statusBadge);
   identity.append(badges);
 
   const details = projectInfoElement("div", "participant-profile-details");
   const membership = participantProfileSection("people.users", "Project membership");
   const membershipList = projectInfoElement("dl", "participant-profile-definition-list");
-  participantProfileDefinition(membershipList, "Project role", projectInfoLabel(participant.role || (isAgent ? "agent" : "member")));
+  participantProfileDefinition(membershipList, "Project role", isAgent
+    ? (participant.role_title || "Agent")
+    : projectInfoLabel(participant.role || "member"));
+  if (isAgent) {
+    if (participant.supervisor) {
+      const supervisor = state.participants.find((entry) => entry.id === id(participant.supervisor.participant_id));
+      if (supervisor) {
+        const supervisorButton = projectInfoElement("button", "participant-profile-supervisor-link",
+          `${participant.supervisor.display_name || supervisor.display_name}${participant.supervisor.active === false ? " (inactive)" : ""}`);
+        supervisorButton.type = "button";
+        supervisorButton.addEventListener("click", async () => {
+          await modal.close({ reason: "open-supervisor" });
+          openParticipantInfoModal(supervisor);
+        });
+        participantProfileDefinition(membershipList, "Reports to", supervisorButton);
+      } else {
+        participantProfileDefinition(membershipList, "Reports to",
+          `${participant.supervisor.display_name || "Unavailable participant"}${participant.supervisor.active === false ? " (inactive)" : ""}`);
+      }
+    } else {
+      participantProfileDefinition(membershipList, "Reports to", "No supervisor assigned");
+    }
+  }
   if (participant.joined_at) participantProfileDefinition(membershipList, "Date added", participantProfileDate(participant.joined_at));
   if (participant.last_message_at) participantProfileDefinition(membershipList, "Last message", participantProfileDate(participant.last_message_at));
   if (participant.message_count !== null && Number.isFinite(participant.message_count)) participantProfileDefinition(membershipList, "Messages sent", participant.message_count);
@@ -828,11 +892,21 @@ function openParticipantInfoModal(participant) {
 
   if (isAgent) {
     const capabilities = participantCapabilityLabels(participant.capabilities);
+    const projectInstructions = String(state.project?.instructions || state.project?.operating_instructions || "").trim();
+    if (participant.role_instructions || projectInstructions) {
+      const responsibilities = participantProfileSection("assets.document", "Responsibilities");
+      if (participant.role_instructions) responsibilities.append(
+        participantProfileInstructionBlock("Role instructions", participant.role_instructions));
+      if (projectInstructions) responsibilities.append(
+        participantProfileInstructionBlock("Project instructions", projectInstructions));
+      details.append(responsibilities);
+    }
     if (participant.provider || participant.runtime_name || capabilities.length) {
-      const agentDetails = participantProfileSection("actions.settings", "Agent details");
+      const agentDetails = participantProfileSection("actions.settings", "Connection");
       const agentList = projectInfoElement("dl", "participant-profile-definition-list");
       if (participant.provider) participantProfileDefinition(agentList, "Provider", participantProviderLabel(participant.provider));
       if (participant.runtime_name) participantProfileDefinition(agentList, "Runtime", participant.runtime_name);
+      participantProfileDefinition(agentList, "Assignment status", participantMembershipStatusLabel(status));
       agentDetails.append(agentList);
       if (capabilities.length) {
         const capabilityBlock = projectInfoElement("div", "participant-profile-capabilities");
@@ -862,6 +936,10 @@ function openParticipantInfoModal(participant) {
     const technicalList = projectInfoElement("dl", "participant-profile-definition-list participant-profile-technical-list");
     if (participant.id) participantProfileDefinition(technicalList, "Participant ID", participant.id);
     if (participant.identity_id) participantProfileDefinition(technicalList, isAgent ? "Agent ID" : "User ID", participant.identity_id);
+    if (isAgent && participant.role_version !== null) participantProfileDefinition(technicalList, "Role version", participant.role_version);
+    if (state.project?.context_version !== null && state.project?.context_version !== undefined) {
+      participantProfileDefinition(technicalList, "Project context version", state.project.context_version);
+    }
     technical.append(technicalSummary, technicalList);
     details.append(technical);
   }
@@ -905,7 +983,6 @@ function openParticipantInfoModal(participant) {
       if (!trigger) return;
       const profileActions = isAgent ? [
         { id: "generate-claim-code", label: "Generate claim code", icon: CLAIM_CODE_ICON },
-        { id: "rotate-webhook-secret", label: "Generate new signing secret", icon: SIGNING_SECRET_ICON },
         { id: "remove-agent", label: "Remove from project", icon: REMOVE_ICON },
       ] : [{ id: "remove-member", label: "Remove from project", icon: REMOVE_ICON }];
       profileMenu = state.factories.createDropdown(trigger, profileActions, {
@@ -925,15 +1002,7 @@ function openParticipantInfoModal(participant) {
             if (item.id === "generate-claim-code") {
               const credential = unwrap(await request(`${API.projectAgents}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {};
               setTimeout(() => confirmAgentClaimGeneration(agentId, credential, null, participant.provider), 0);
-              return;
             }
-            const webhook = unwrap(await request(`${API.projectAgentWebhook}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {};
-            const webhookUrl = String(webhook.endpoint_url || webhook.url || "").trim();
-            if (!webhookUrl) {
-              state.components.toast.warn("Set a webhook URL in Edit agent before generating a signing secret.");
-              return;
-            }
-            setTimeout(() => confirmSigningSecretRotation(agentId, { webhook_url: webhookUrl, webhook_enabled: webhook.enabled }, webhook), 0);
           } catch (error) {
             state.components.toast.warn(error.message, { title: "Participant action unavailable" });
           }
@@ -975,9 +1044,21 @@ function participantProfileSection(icon, title) {
   return section;
 }
 
+function participantProfileInstructionBlock(label, value) {
+  const text = String(value || "").trim();
+  const block = projectInfoElement("details", "participant-profile-instructions");
+  if (text.length <= 240) block.open = true;
+  const summary = projectInfoElement("summary", "participant-profile-instructions-summary", label);
+  block.append(summary, projectInfoElement("p", "participant-profile-instructions-copy", text));
+  return block;
+}
+
 function participantProfileDefinition(host, label, value) {
   const row = projectInfoElement("div", "participant-profile-definition");
-  row.append(projectInfoElement("dt", "", label), projectInfoElement("dd", "", value));
+  const description = projectInfoElement("dd");
+  if (value instanceof Node) description.append(value);
+  else description.textContent = String(value ?? "");
+  row.append(projectInfoElement("dt", "", label), description);
   host.append(row);
 }
 
@@ -1055,7 +1136,8 @@ function messageAddresseesLabel(message) {
     return `@${participant?.display_name || entry.display_name}`;
   });
   if (message.addressees.length > 5) names.push(`+${message.addressees.length - 5}`);
-  return names.join("  ");
+  const recipients = names.join("  ");
+  return message.action_requested ? `Action requested from ${recipients}` : recipients;
 }
 
 function updateTimelineCollapseButton() {
@@ -1079,12 +1161,21 @@ function messageCardPreview(message) {
   return String(message.body || "").replace(/\s+/g, " ").trim() || "Empty message";
 }
 
+function canAcknowledgeMessage(message) {
+  return state.mode === "expanded"
+    && message.current_participant_state?.is_addressee
+    && !message.current_participant_state?.acknowledged_at
+    && (can("messages.acknowledge") || message.permissions?.acknowledge);
+}
+
 function mountMessageCard(host, item) {
   let renderedMessage = null;
+  let renderedContentKey = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
-    if (renderedMessage === current) return;
+    if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
     renderedMessage = current;
+    renderedContentKey = nextItem.contentKey;
     host.replaceChildren();
     const details = document.createElement("div");
     details.className = "message-card-details";
@@ -1107,8 +1198,13 @@ function mountMessageCard(host, item) {
     const actions = document.createElement("div");
     actions.className = "message-actions";
     if (state.mode === "expanded" && can("messages.write")) actions.appendChild(actionButton("Reply", () => setReply(current)));
-    if (state.mode === "expanded" && current.current_participant_state?.is_addressee && !current.current_participant_state?.acknowledged_at && (can("messages.acknowledge") || current.permissions?.acknowledge)) {
-      actions.appendChild(actionButton("Acknowledge", () => acknowledgeMessage(current)));
+    if (canAcknowledgeMessage(current)) {
+      const acknowledge = actionButton("Acknowledge", async () => {
+        acknowledge.disabled = true;
+        try { await acknowledgeMessage(current); }
+        finally { if (acknowledge.isConnected) acknowledge.disabled = false; }
+      });
+      actions.appendChild(acknowledge);
     }
     if (current.revision_count) {
       const revisions = document.createElement("span");
@@ -1135,6 +1231,55 @@ function actionButton(label, handler) {
   button.textContent = label;
   button.addEventListener("click", handler);
   return button;
+}
+
+function messageLinkedTasks(messageId) {
+  return state.tasks.filter((task) => id(task.source_message_id) === id(messageId));
+}
+
+function messageContextMenu(message) {
+  const items = [];
+  const linkedTasks = messageLinkedTasks(message.id);
+  if (linkedTasks.length) items.push({
+    id: "linked-tasks",
+    label: linkedTasks.length === 1 ? "View linked task" : `View linked tasks (${linkedTasks.length})`,
+    icon: "actions.view",
+  });
+  if (state.mode === "expanded" && can("messages.write") && !message.deleted_at
+      && (!message.action_requested || !linkedTasks.length)) items.push({
+    id: "create-task", label: message.action_requested ? "Convert to task" : "Create task", icon: "actions.check",
+  });
+  return items.length ? { ariaLabel: `Message actions for #${message.id}`, items } : null;
+}
+
+function openLinkedMessageTasks(message) {
+  const linkedTasks = messageLinkedTasks(message.id);
+  if (linkedTasks.length === 1) {
+    void openTaskDetails(linkedTasks[0].id);
+    return;
+  }
+  const content = document.createElement("div");
+  content.className = "linked-message-task-list";
+  linkedTasks.forEach((task) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `ui-panel linked-message-task is-${task.status}`;
+    const title = document.createElement("strong"); title.textContent = task.title;
+    const meta = document.createElement("span"); meta.textContent = `${taskStatusLabel(task.status)} · ${task.priority} priority`;
+    button.append(title, meta);
+    button.addEventListener("click", async () => {
+      await modal.close({ reason: "open-task" });
+      void openTaskDetails(task.id);
+    });
+    content.append(button);
+  });
+  const modal = state.factories.createActionModal({
+    title: `Tasks linked to message #${message.id}`,
+    size: "md",
+    content,
+    actions: [{ id: "close", label: "Close", variant: "primary" }],
+  });
+  modal.open();
 }
 
 function timelineMarkerName(sender) {
@@ -1170,8 +1315,9 @@ function timelineItems(messages) {
     timestamp: message.created_at,
     status: message.current_participant_state?.acknowledged_at ? "completed" : (message.current_participant_state?.is_addressee ? "requested" : "accepted"),
     iconHtml: timelineMarkerHtml(message.sender),
+    contextMenu: messageContextMenu(message),
     raw: message,
-    contentKey: `${message.updated_at}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}`,
+    contentKey: `${message.updated_at}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
   }));
 }
 
@@ -1194,6 +1340,17 @@ function renderTimeline(mode = "replace", changed = state.messages) {
     hasMore: state.hasOlder,
     emptyText: "No messages match these filters.",
     mountItemContent: mountMessageCard,
+    async onContextMenuAction(action, item) {
+      const message = item.raw;
+      if (action.id === "create-task") {
+        setTimeout(() => openCreateTaskModal(message), 0);
+        return;
+      }
+      if (action.id === "linked-tasks") {
+        setTimeout(() => openLinkedMessageTasks(message), 0);
+        return;
+      }
+    },
     onReachEnd() {
       const viewport = el.timeline_host.querySelector(".ui-timeline-viewport");
       if (viewport?.clientHeight > 0) void loadMessages("older").catch(handleLoadError);
@@ -1257,7 +1414,7 @@ async function loadMessages(mode = "initial", generation = state.generation, mes
       el.timeline_count.textContent = `${state.messages.length} loaded${state.hasOlder ? " · more available" : ""}`;
     }
     if (mode === "newer" && fresh.length) {
-      state.components.responsibilityInbox?.markStale();
+      fresh.forEach((message) => state.components.responsibilityInbox?.refreshFromRealtime(message.id));
       state.components.toast.info(`${fresh.length} new message${fresh.length === 1 ? "" : "s"}`, { title: "Timeline updated" });
     }
     return fresh.length;
@@ -1296,7 +1453,7 @@ function setSurface(name) {
   state.surface = name;
   const workspaceVisible = ["workspace", "project"].includes(name);
   el.workspace_surface.hidden = !workspaceVisible;
-  el.admin_surface.hidden = !["users", "agents", "audit", "delivery-health", "backup-restore"].includes(name);
+  el.admin_surface.hidden = !["users", "agents", "audit", "templates", "delivery-health", "backup-restore", "guide"].includes(name);
   mountNavbar();
 }
 
@@ -1474,20 +1631,448 @@ function openRenameWorkspaceModal() {
   }}).open();
 }
 
+function workflowField(name, label, value = "", { textarea = false, required = false, help = "", maxlength = null } = {}) {
+  const field = document.createElement("div"); field.className = "project-workflow-field"; field.dataset.field = name;
+  const caption = document.createElement("label"); caption.htmlFor = `project-workflow-${name}`; caption.textContent = label;
+  if (required) { const marker = document.createElement("span"); marker.textContent = " Required"; caption.append(marker); }
+  const control = document.createElement(textarea ? "textarea" : "input"); control.id = caption.htmlFor; control.name = name; control.value = value || "";
+  control.className = textarea ? "ui-textarea" : "ui-input"; if (required) control.required = true; if (maxlength) control.maxLength = maxlength;
+  const error = document.createElement("p"); error.className = "project-workflow-field-error"; error.id = `${control.id}-error`; error.hidden = true;
+  field.append(caption, control);
+  if (help) { const note = document.createElement("p"); note.className = "project-workflow-help"; note.textContent = help; field.append(note); }
+  field.append(error); return { field, control, error };
+}
+
+function clearWorkflowErrors(root) {
+  root.querySelector(".project-workflow-errors")?.remove();
+  root.querySelectorAll("[aria-invalid='true']").forEach((control) => { control.removeAttribute("aria-invalid"); control.removeAttribute("aria-describedby"); });
+  root.querySelectorAll(".project-workflow-field-error").forEach((error) => { error.hidden = true; error.textContent = ""; });
+}
+
+function showWorkflowErrors(root, issues) {
+  clearWorkflowErrors(root);
+  const unique = issues.filter((issue, index) => issues.findIndex((entry) => entry.name === issue.name) === index);
+  const summary = document.createElement("div"); summary.className = "project-workflow-errors ui-alert ui-alert-danger"; summary.setAttribute("role", "alert");
+  const lead = document.createElement("p"); lead.textContent = "Please address the following issues before continuing:";
+  const list = document.createElement("ul"); unique.forEach((issue) => { const item = document.createElement("li"); item.textContent = issue.summary; list.append(item); });
+  summary.append(lead, list); root.prepend(summary);
+  unique.forEach((issue) => {
+    const field = root.querySelector(`[data-field="${issue.name}"]`); const control = field?.querySelector("input, select, textarea"); const error = field?.querySelector(".project-workflow-field-error");
+    if (!control || !error) return; control.setAttribute("aria-invalid", "true"); control.setAttribute("aria-describedby", error.id); error.textContent = issue.detail; error.hidden = false;
+    control.addEventListener("input", () => { control.removeAttribute("aria-invalid"); control.removeAttribute("aria-describedby"); error.hidden = true; }, { once: true });
+  });
+  root.querySelector("[aria-invalid='true']")?.focus();
+}
+
+function mountTemplateMobileNavigation(browser, tree, detail, { initialView = "library", onChange = null } = {}) {
+  const navigation = document.createElement("div"); navigation.className = "template-mobile-navigation"; navigation.setAttribute("aria-label", "Template browser view");
+  const libraryButton = document.createElement("button"); libraryButton.type = "button"; libraryButton.className = "ui-button"; libraryButton.textContent = "Library";
+  const previewButton = document.createElement("button"); previewButton.type = "button"; previewButton.className = "ui-button"; previewButton.textContent = "Preview";
+  const buttons = { library: libraryButton, preview: previewButton };
+  const setView = (view, { focus = false } = {}) => {
+    const next = view === "preview" ? "preview" : "library";
+    browser.dataset.mobileView = next;
+    Object.entries(buttons).forEach(([key, button]) => {
+      const active = key === next;
+      button.classList.toggle("ui-button-primary", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    onChange?.(next);
+    if (focus && matchMedia(TEMPLATE_MOBILE_QUERY).matches) {
+      const pane = next === "library" ? tree : detail.querySelector(".template-main") || detail;
+      pane.tabIndex = -1;
+      pane.scrollTop = 0;
+      pane.focus({ preventScroll: true });
+    }
+  };
+  Object.entries(buttons).forEach(([view, button]) => button.addEventListener("click", () => setView(view, { focus: true })));
+  navigation.append(libraryButton, previewButton);
+  tree.tabIndex = -1;
+  browser.append(navigation, tree, detail);
+  setView(initialView);
+  return { setView };
+}
+
+function renderTemplatePicker(workflow) {
+  const browser = document.createElement("div"); browser.className = "template-browser project-template-picker";
+  const tree = document.createElement("aside"); tree.className = "template-tree ui-panel"; tree.setAttribute("aria-label", "Template library");
+  const heading = document.createElement("div"); heading.className = "template-tree-heading";
+  const title = document.createElement("h2"); title.textContent = "Template library";
+  const count = document.createElement("span"); count.textContent = String(state.templates.length); heading.append(title, count); tree.append(heading);
+  const detailHost = document.createElement("div"); detailHost.className = "project-template-detail-host";
+  const renderDetail = () => detailHost.replaceChildren(renderTemplateDetailPanel(templateById(workflow.selectedTemplateId), { readOnly: true }));
+  let mobileNavigation = null;
+  state.templateCategories.forEach((category) => {
+    const templates = state.templates.filter((template) => id(template.category_id) === id(category.id)); if (!templates.length) return;
+    const categoryId = id(category.id); const branch = document.createElement("details"); branch.className = "template-tree-category"; branch.open = !workflow.collapsedCategoryIds.has(categoryId);
+    branch.addEventListener("toggle", () => branch.open ? workflow.collapsedCategoryIds.delete(categoryId) : workflow.collapsedCategoryIds.add(categoryId));
+    const summary = document.createElement("summary"); summary.title = category.description || category.name;
+    const categoryTitle = document.createElement("span"); categoryTitle.textContent = category.name; const categoryCount = document.createElement("span"); categoryCount.textContent = String(templates.length); summary.append(categoryTitle, categoryCount); branch.append(summary);
+    const list = document.createElement("ul"); templates.forEach((template) => {
+      const item = document.createElement("li"); const button = document.createElement("button"); button.type = "button"; button.className = "template-tree-item";
+      const selected = id(template.id) === id(workflow.selectedTemplateId); button.classList.toggle("is-active", selected); button.setAttribute("aria-current", selected ? "true" : "false");
+      const name = document.createElement("span"); name.textContent = template.name; button.append(name);
+      button.addEventListener("click", () => { workflow.selectedTemplateId = id(template.id); tree.querySelectorAll(".template-tree-item").forEach((entry) => { const active = entry === button; entry.classList.toggle("is-active", active); entry.setAttribute("aria-current", active ? "true" : "false"); }); renderDetail(); if (matchMedia(TEMPLATE_MOBILE_QUERY).matches) mobileNavigation?.setView("preview", { focus: true }); });
+      item.append(button); list.append(item);
+    }); branch.append(list); tree.append(branch);
+  });
+  renderDetail();
+  mobileNavigation = mountTemplateMobileNavigation(browser, tree, detailHost, { initialView: workflow.mobileView, onChange(view) { workflow.mobileView = view; } });
+  return browser;
+}
+
 function openAddProjectModal() {
-  state.factories.createFormModal({ title: "Add Project", size: "lg", submitLabel: "Create project", rows: [
-    [modalTextField("name", "Project name", { required: true }), modalTextField("slug", "Slug (optional)")],
-    [{ type: "textarea", name: "description", label: "Description" }], [{ type: "textarea", name: "instructions", label: "Operating instructions" }],
-  ], async onSubmit(values, context) {
-    try { const result = unwrap(await request(API.manageProjects, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(values) })); const project = result.project || result; project.id = id(project.id || project.project_id); project.collection = "My"; project.human_count = Number(project.human_count ?? 1); project.agent_count = Number(project.agent_count ?? 0); project.message_count = Number(project.message_count ?? 0); state.projects.unshift(project); state.components.toast.success("Project created."); void switchProject(project.id); return true; }
-    catch (error) { context.setFormError(error.message); return false; }
-  }}).open();
+  const host = document.createElement("div"); host.className = "project-template-workflow";
+  const loading = document.createElement("div"); loading.className = "project-workflow-loading"; loading.textContent = "Loading project templates…"; host.append(loading);
+  const workflow = { selectedTemplateId: "", selectedTemplate: null, collapsedCategoryIds: new Set(), mobileView: "library", project: { name: "", slug: "", description: "", instructions: "" }, agents: [], createdProject: null };
+  let stack = null; const abortController = new AbortController(); let dismissed = false;
+  let modal = state.factories.createActionModal({ title: "Create project", size: "xl", className: "project-template-modal", content: host, actions: [{ id: "cancel", label: "Cancel" }], onClose() { dismissed = true; abortController.abort(); stack?.destroy(); } });
+  modal.open(); modal.setBusy(true, { message: "Loading project templates…", cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancelled" }) } });
+
+  const setPickerActions = () => modal.setActions([
+    { id: "cancel", label: "Cancel" },
+    { id: "use", label: "Next", variant: "primary", closeOnClick: false, onClick() { workflow.selectedTemplate = templateById(workflow.selectedTemplateId); if (!workflow.selectedTemplate) return false; workflow.project.description = workflow.selectedTemplate.description || ""; workflow.project.instructions = workflow.selectedTemplate.instructions || ""; workflow.agents = (workflow.selectedTemplate.agents || []).map((agent) => ({ ...agent, included: true, provider: agent.provider === "unassigned" ? "" : agent.provider })); showProjectPage(); return false; } },
+  ]);
+
+  const showPickerPage = () => {
+    modal.setTitle("Create project — choose template");
+    if (!workflow.selectedTemplateId || !templateById(workflow.selectedTemplateId)) workflow.selectedTemplateId = id(state.templates[0]?.id);
+    const page = { id: "template", title: "Choose a project template", content: renderTemplatePicker(workflow) };
+    if (!stack) stack = state.factories.createNavigationStack(host, { chrome: false, ariaLabel: "Create project", transition: "slide", initialPages: [page] }); else stack.reset([page], { animate: false });
+    setPickerActions();
+  };
+
+  const projectPageContent = () => {
+    const root = document.createElement("div"); root.className = "project-workflow-page";
+    const heading = document.createElement("div"); heading.className = "project-workflow-heading"; const h2 = document.createElement("h2"); h2.textContent = "Configure project";
+    const intro = document.createElement("p"); intro.textContent = workflow.selectedTemplate ? `Review the project context copied from “${workflow.selectedTemplate.name}”.` : "Set the project name and starting context."; heading.append(h2, intro);
+    const name = workflowField("name", "Project name", workflow.project.name, { required: true, maxlength: 160 });
+    const slug = workflowField("slug", "Slug (optional)", workflow.project.slug, { maxlength: 160, help: "Leave blank to generate a unique slug from the project name." });
+    const description = workflowField("description", "Description", workflow.project.description, { textarea: true, maxlength: 10000 });
+    const instructions = workflowField("instructions", "Project-specific operating instructions", workflow.project.instructions, { textarea: true, maxlength: 50000, help: "Optional guidance unique to this project. The shared governance baseline is applied automatically." });
+    const row = document.createElement("div"); row.className = "project-workflow-row"; row.append(name.field, slug.field); root.append(heading, row, description.field, instructions.field);
+    root.readValues = () => ({ name: name.control.value.trim(), slug: slug.control.value.trim(), description: description.control.value.trim(), instructions: instructions.control.value.trim() }); return root;
+  };
+
+  const showProjectPage = () => {
+    const content = projectPageContent(); modal.setTitle("Create project — project details"); stack.push({ id: "project", title: "Configure project", content });
+    modal.setActions([
+      { id: "back", label: "Back", closeOnClick: false, onClick() { workflow.project = content.readValues(); stack.pop(); modal.setTitle("Create project — choose template"); setPickerActions(); return false; } },
+      { id: "continue", label: workflow.agents.length ? "Continue" : "Create project", variant: "primary", closeOnClick: false, async onClick() { const values = content.readValues(); const issues = []; if (!values.name) issues.push({ name: "name", summary: "Project name — required", detail: "Enter a project name before continuing." }); if (values.name.length > 160) issues.push({ name: "name", summary: "Project name — use 160 characters or fewer", detail: "Shorten the project name to 160 characters or fewer." }); if (issues.length) { showWorkflowErrors(content, issues); return false; } workflow.project = values; if (workflow.agents.length) showAgentsPage(); else await createProject(content); return false; } },
+    ]);
+  };
+
+  const agentPageContent = () => {
+    const root = document.createElement("div"); root.className = "project-workflow-page project-agent-config";
+    const heading = document.createElement("div"); heading.className = "project-workflow-heading"; const h2 = document.createElement("h2"); h2.textContent = "Configure preset agents";
+    const intro = document.createElement("p"); intro.textContent = "Include only the identities you want now and choose each provider explicitly. New one-time claims are generated; no provider credential is copied."; heading.append(h2, intro); root.append(heading);
+    workflow.agents.forEach((agent, index) => {
+      const card = document.createElement("section"); card.className = "project-agent-config-card"; card.dataset.agentIndex = String(index);
+      const includeLabel = document.createElement("label"); includeLabel.className = "project-agent-include"; const include = document.createElement("input"); include.type = "checkbox"; include.checked = agent.included !== false; const includeText = document.createElement("strong"); includeText.textContent = agent.display_name; includeLabel.append(include, includeText); card.append(includeLabel);
+      const fields = document.createElement("div"); fields.className = "project-agent-fields";
+      const name = workflowField(`agent-${index}-name`, "Agent display name", agent.display_name, { required: true, maxlength: 120 }); const role = workflowField(`agent-${index}-role`, "Role title", agent.role_title, { required: true, maxlength: 120 });
+      const providerField = document.createElement("div"); providerField.className = "project-workflow-field"; providerField.dataset.field = `agent-${index}-provider`;
+      const providerLabel = document.createElement("label"); providerLabel.htmlFor = `project-workflow-agent-${index}-provider`; providerLabel.textContent = "Provider Required";
+      const provider = document.createElement("select"); provider.id = providerLabel.htmlFor; provider.className = "ui-select"; [["", "Choose provider"], ["codex", "Codex"], ["chatgpt", "ChatGPT"], ["gemini", "Gemini"]].forEach(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; option.selected = value === agent.provider; provider.append(option); });
+      const providerError = document.createElement("p"); providerError.className = "project-workflow-field-error"; providerError.id = `${provider.id}-error`; providerError.hidden = true; providerField.append(providerLabel, provider, providerError);
+      const summary = workflowField(`agent-${index}-summary`, "Role summary", agent.role_summary, { textarea: true, maxlength: 4000 }); const instructions = workflowField(`agent-${index}-instructions`, "Role instructions", agent.role_instructions, { textarea: true, maxlength: 20000 });
+      fields.append(name.field, role.field, providerField, summary.field, instructions.field); card.append(fields); include.addEventListener("change", () => { fields.hidden = !include.checked; }); fields.hidden = !include.checked; root.append(card);
+      agent.readValues = () => ({ template_agent_id: agent.id, included: include.checked, display_name: name.control.value.trim(), role_title: role.control.value.trim(), provider: provider.value, role_summary: summary.control.value.trim(), role_instructions: instructions.control.value.trim() });
+    }); return root;
+  };
+
+  const setProjectActions = (content) => modal.setActions([
+    { id: "back", label: "Back", closeOnClick: false, onClick() { workflow.project = content.readValues(); stack.pop(); modal.setTitle("Create project — choose template"); setPickerActions(); return false; } },
+    { id: "continue", label: "Continue", variant: "primary", closeOnClick: false, onClick() { const values = content.readValues(); if (!values.name) { showWorkflowErrors(content, [{ name: "name", summary: "Project name — required", detail: "Enter a project name before continuing." }]); return false; } workflow.project = values; showAgentsPage(); return false; } },
+  ]);
+
+  const showAgentsPage = () => {
+    const content = agentPageContent(); modal.setTitle("Create project — preset agents"); stack.push({ id: "agents", title: "Configure preset agents", content });
+    modal.setActions([
+      { id: "back", label: "Back", closeOnClick: false, onClick() { workflow.agents = workflow.agents.map((agent) => ({ ...agent, ...agent.readValues?.() })); stack.pop(); modal.setTitle("Create project — project details"); const projectContent = stack.getState().currentPage?.content; if (projectContent) setProjectActions(projectContent); return false; } },
+      { id: "create", label: "Create project", variant: "primary", closeOnClick: false, async onClick() { const values = workflow.agents.map((agent) => agent.readValues()); const included = values.filter((agent) => agent.included); const issues = []; values.forEach((agent, index) => { if (!agent.included) return; if (!agent.display_name) issues.push({ name: `agent-${index}-name`, summary: `${workflow.agents[index].display_name} — display name required`, detail: "Enter a display name for this included agent." }); if (!agent.role_title) issues.push({ name: `agent-${index}-role`, summary: `${agent.display_name || workflow.agents[index].display_name} — role title required`, detail: "Enter a role title for this included agent." }); if (!agent.provider) issues.push({ name: `agent-${index}-provider`, summary: `${agent.display_name || workflow.agents[index].display_name} — choose a provider`, detail: "Choose Codex, ChatGPT, or Gemini, or exclude this preset." }); }); if (issues.length) { showWorkflowErrors(content, issues); return false; } workflow.agents = workflow.agents.map((agent, index) => ({ ...agent, ...values[index] })); await createProject(content, included); return false; } },
+    ]);
+  };
+
+  const createProject = async (content, includedAgents = []) => {
+    clearWorkflowErrors(content); modal.setBusy(true, { message: "Creating project…" });
+    try {
+      const body = { ...workflow.project }; if (workflow.selectedTemplate) Object.assign(body, { template_id: workflow.selectedTemplate.id, template_version: workflow.selectedTemplate.version, template_agents: includedAgents.map(({ included, readValues, ...agent }) => agent) });
+      const result = unwrap(await request(API.manageProjects, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (dismissed) return;
+      const project = result.project || result; const claims = Array.isArray(project.agent_claims) ? project.agent_claims : []; delete project.agent_claims; project.id = id(project.id || project.project_id); project.collection = "My"; project.human_count = Number(project.human_count ?? 1); project.agent_count = Number(project.agent_count ?? includedAgents.length); project.message_count = Number(project.message_count ?? 0); workflow.createdProject = project; state.projects.unshift(project);
+      const success = document.createElement("div"); success.className = "project-workflow-success"; const h2 = document.createElement("h2"); h2.textContent = `${project.name} was created`; const note = document.createElement("p"); note.textContent = claims.length ? "Save these one-time claims now. They expire in 15 minutes and are not shown again." : "The project is ready to use."; success.append(h2, note);
+      if (claims.length) { const list = document.createElement("div"); list.className = "project-claim-list"; claims.forEach((claim) => { const card = document.createElement("div"); const name = document.createElement("strong"); name.textContent = claim.display_name; const code = document.createElement("code"); code.textContent = claim.claim_code; card.append(name, code); list.append(card); }); success.append(list); }
+      stack.push({ id: "complete", title: "Project created", content: success }); modal.setTitle("Project created"); modal.setActions([{ id: "close", label: "Close" }, { id: "open", label: "Open project", variant: "primary", closeOnClick: false, async onClick() { await modal.close({ reason: "open-project" }); void switchProject(project.id); return false; } }]); state.components.toast.success("Project created.");
+    } catch (error) { if (dismissed || error.name === "AbortError") return; modal.setBusy(false); const requestError = document.createElement("div"); requestError.className = "project-workflow-errors ui-alert ui-alert-danger"; requestError.setAttribute("role", "alert"); requestError.textContent = error.message; content.prepend(requestError); state.components.toast.error(error.message); return; }
+    modal.setBusy(false);
+  };
+
+  request(API.projectTemplateLibrary, { signal: abortController.signal }).then((payload) => { if (dismissed) return; const data = unwrap(payload); state.templateCategories = data.categories || []; state.templates = data.templates || []; host.replaceChildren(); modal.setBusy(false); showPickerPage(); }).catch((error) => { if (dismissed || error.name === "AbortError") return; modal.setBusy(false); const failure = document.createElement("div"); failure.className = "project-workflow-load-error"; failure.textContent = `Unable to load project templates. ${error.message}`; host.replaceChildren(failure); modal.setActions([{ id: "cancel", label: "Close" }, { id: "retry", label: "Retry", variant: "primary", closeOnClick: false, onClick() { modal.close({ reason: "retry" }); openAddProjectModal(); return false; } }]); });
+}
+
+function templateById(templateId) {
+  return state.templates.find((template) => id(template.id) === id(templateId));
+}
+
+function replaceTemplate(template) {
+  state.templates = state.templates.some((entry) => id(entry.id) === id(template.id))
+    ? state.templates.map((entry) => id(entry.id) === id(template.id) ? template : entry)
+    : [...state.templates, template];
+  state.templates.sort((left, right) => String(left.name).localeCompare(String(right.name)));
+  state.selectedTemplateId = id(template.id);
+  renderTemplatesSurface();
+}
+
+function openTemplateModal(template = null) {
+  const editing = Boolean(template);
+  const categoryOptions = state.templateCategories.map((category) => ({ value: String(category.id), label: category.name }));
+  state.factories.createFormModal({
+    title: editing ? "Edit project template" : "Create project template",
+    size: "lg", submitLabel: editing ? "Save template" : "Create template",
+    initialValues: { category_id: template?.category_id ? String(template.category_id) : "", name: template?.name || "", description: template?.description || "", instructions: template?.instructions || "" },
+    rows: [
+      [modalTextField("name", "Template name", { required: true, maxlength: 160 }), { type: "select", name: "category_id", label: "Category", required: true, options: [{ value: "", label: "Select category" }, ...categoryOptions] }],
+      [{ type: "textarea", name: "description", label: "Project description", maxlength: 10000, help: "Reusable purpose and scope for projects created from this template." }],
+      [{ type: "textarea", name: "instructions", label: "Operating instructions", maxlength: 50000, help: "Reusable authority, workflow, safety, and reporting guidance." }],
+    ],
+    async onSubmit(values, context) {
+      try {
+        const body = editing ? { template_id: template.id, version: template.version, ...values } : values;
+        const result = unwrap(await request(API.projectTemplates, { method: editing ? "PATCH" : "POST", headers: csrfHeaders(), body: JSON.stringify(body) }));
+        replaceTemplate(result.template || result);
+        state.components.toast.success(editing ? "Template updated." : "Template created. Add agent presets when ready.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+  }).open();
+}
+
+function templateSupervisorOptions(template, agent = null) {
+  return [{ value: "", label: "No supervising agent preset" }, ...(template.agents || [])
+    .filter((entry) => id(entry.id) !== id(agent?.id))
+    .map((entry) => ({ value: String(entry.id), label: `${entry.display_name} — ${entry.role_title}` }))];
+}
+
+function openTemplateAgentModal(templateId, agent = null) {
+  const template = templateById(templateId);
+  if (!template) return;
+  const editing = Boolean(agent);
+  state.factories.createFormModal({
+    title: editing ? "Edit agent preset" : "Add agent preset",
+    size: "lg", submitLabel: editing ? "Save agent preset" : "Add agent preset",
+    initialValues: {
+      display_name: agent?.display_name || "", role_title: agent?.role_title || "", role_summary: agent?.role_summary || "",
+      role_instructions: agent?.role_instructions || "", provider: agent?.provider || "unassigned",
+      supervising_agent_id: agent?.supervising_agent_id ? String(agent.supervising_agent_id) : "",
+    },
+    rows: [
+      [modalTextField("display_name", "Agent display name", { required: true, maxlength: 120 }), modalTextField("role_title", "Role title", { required: true, maxlength: 160 })],
+      [{ type: "textarea", name: "role_summary", label: "Role summary", maxlength: 10000 }, { type: "textarea", name: "role_instructions", label: "Role instructions", maxlength: 50000, help: "Project-scoped responsibilities, boundaries, and escalation guidance." }],
+      [{ type: "select", name: "provider", label: "Provider", required: true, options: [
+        { value: "unassigned", label: "Choose during project setup" }, { value: "codex", label: "Codex" }, { value: "chatgpt", label: "ChatGPT" }, { value: "gemini", label: "Gemini" },
+      ] }],
+      [{ type: "select", name: "supervising_agent_id", label: "Reports to", options: templateSupervisorOptions(template, agent) }],
+    ],
+    async onSubmit(values, context) {
+      try {
+        const body = { template_id: template.id, version: template.version, ...(editing ? { agent_id: agent.id } : {}), ...values };
+        const result = unwrap(await request(API.projectTemplates, { method: editing ? "PATCH" : "POST", headers: csrfHeaders(), body: JSON.stringify(body) }));
+        replaceTemplate(result.template || result);
+        state.components.toast.success(editing ? "Agent preset updated." : "Agent preset added.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+  }).open();
+}
+
+function confirmTemplateAction({ title, message, confirmLabel, onConfirm }) {
+  const body = document.createElement("p"); body.className = "ui-dialog-message"; body.textContent = message;
+  let modal;
+  modal = state.factories.createActionModal({
+    title, size: "sm", className: "ui-dialog ui-dialog--warning", content: body,
+    actions: [
+      { id: "cancel", label: "Cancel" },
+      { id: "confirm", label: confirmLabel, variant: "danger", closeOnClick: false, async onClick() {
+        try { modal.setBusy(true, { message: `${confirmLabel}…` }); await onConfirm(); await modal.close({ reason: "confirmed" }); }
+        catch (error) { modal.setBusy(false); state.components.toast.error(error.message); }
+        return false;
+      } },
+    ],
+  });
+  modal.open();
+}
+
+function archiveTemplate(template) {
+  confirmTemplateAction({
+    title: "Archive project template?", confirmLabel: "Archive template",
+    message: `Archive “${template.name}”? Existing projects are unchanged, and this template will no longer be offered for new projects.`,
+    async onConfirm() {
+      await request(API.projectTemplates, { method: "DELETE", headers: csrfHeaders(), body: JSON.stringify({ template_id: template.id, version: template.version }) });
+      state.templates = state.templates.filter((entry) => id(entry.id) !== id(template.id));
+      if (id(state.selectedTemplateId) === id(template.id)) state.selectedTemplateId = id(state.templates[0]?.id);
+      renderTemplatesSurface();
+      state.components.toast.success("Template archived.");
+    },
+  });
+}
+
+function deleteTemplateAgent(template, agent) {
+  confirmTemplateAction({
+    title: "Remove agent preset?", confirmLabel: "Remove agent preset",
+    message: `Remove ${agent.display_name} from “${template.name}”? Other presets that reported to this agent will become unsupervised.`,
+    async onConfirm() {
+      const result = unwrap(await request(API.projectTemplates, { method: "DELETE", headers: csrfHeaders(), body: JSON.stringify({ template_id: template.id, agent_id: agent.id, version: template.version }) }));
+      replaceTemplate(result.template || result); state.components.toast.success("Agent preset removed.");
+    },
+  });
+}
+
+function templateActionButton(label, onClick, variant = "") {
+  const button = document.createElement("button"); button.type = "button"; button.className = `ui-button ${variant}`.trim(); button.textContent = label; button.addEventListener("click", onClick); return button;
+}
+
+function templateProviderLabel(provider) {
+  return provider === "unassigned" ? "Provider selected during setup" : ({ codex: "Codex", chatgpt: "ChatGPT", gemini: "Gemini" })[provider] || provider;
+}
+
+function renderTemplateDetailPanel(template, options = {}) {
+  const panel = document.createElement("main"); panel.className = "template-main ui-panel";
+  if (!template) {
+    const empty = document.createElement("div"); empty.className = "template-detail-empty";
+    const title = document.createElement("h2"); title.textContent = "Select a template";
+    const copy = document.createElement("p"); copy.textContent = "Choose a template from the library to view its project context and preset team.";
+    empty.append(title, copy); panel.append(empty); return panel;
+  }
+
+  const header = document.createElement("header"); header.className = "template-detail-heading";
+  const headingCopy = document.createElement("div");
+  const context = document.createElement("div"); context.className = "template-detail-context";
+  const category = document.createElement("span"); category.textContent = template.category?.name || "General"; context.append(category);
+  if (template.origin === "system") { const badge = document.createElement("span"); badge.className = "ui-badge template-origin-badge"; badge.textContent = "Built-in"; context.append(badge); }
+  const title = document.createElement("h2"); title.textContent = template.name;
+  const meta = document.createElement("p"); meta.textContent = `${template.agents?.length || 0} agent preset${template.agents?.length === 1 ? "" : "s"} · Updated ${formatDate(template.updated_at)}`;
+  headingCopy.append(context, title, meta);
+  const actions = document.createElement("div"); actions.className = "template-actions template-detail-actions";
+  if (!options.readOnly && template.origin !== "system") actions.append(
+    templateActionButton("Edit template", () => openTemplateModal(template)),
+    templateActionButton("Add agent preset", () => openTemplateAgentModal(template.id), "ui-button-primary"),
+    templateActionButton("Archive", () => archiveTemplate(template), "ui-button-danger"),
+  );
+  header.append(headingCopy, actions); panel.append(header);
+
+  const detailBody = document.createElement("div"); detailBody.className = "template-detail-body";
+  const contextStack = document.createElement("div"); contextStack.className = "template-context-stack";
+  [["Project description", template.description], ["Operating instructions", template.instructions]].forEach(([label, copy]) => {
+    const section = document.createElement("section"); section.className = "template-detail-section";
+    const heading = document.createElement("h3"); heading.textContent = label;
+    const body = document.createElement("p"); body.textContent = copy || "Not provided.";
+    section.append(heading, body); contextStack.append(section);
+  });
+
+  const agentsSection = document.createElement("section"); agentsSection.className = "template-presets-section";
+  const agentsHeading = document.createElement("div"); agentsHeading.className = "template-section-heading";
+  const agentsTitle = document.createElement("h3"); agentsTitle.textContent = "Agent presets";
+  const agentsCount = document.createElement("span"); agentsCount.textContent = String(template.agents?.length || 0);
+  agentsHeading.append(agentsTitle, agentsCount); agentsSection.append(agentsHeading);
+  if (!template.agents?.length) {
+    const empty = document.createElement("p"); empty.className = "template-presets-empty"; empty.textContent = "No agent presets. Projects created from this template begin without a preset agent team."; agentsSection.append(empty);
+  } else {
+    const list = document.createElement("div"); list.className = "template-detail-agents";
+    template.agents.forEach((agent) => {
+      const card = document.createElement("article"); card.className = "template-agent-card";
+      const cardHeading = document.createElement("div"); cardHeading.className = "template-agent-card-heading";
+      const identity = document.createElement("div");
+      const name = document.createElement("strong"); name.textContent = agent.display_name;
+      const role = document.createElement("span"); role.textContent = `${agent.role_title} · ${templateProviderLabel(agent.provider)}${agent.supervising_agent_name ? ` · Reports to ${agent.supervising_agent_name}` : ""}`;
+      identity.append(name, role); cardHeading.append(identity);
+      if (!options.readOnly && template.origin !== "system") {
+        const agentActions = document.createElement("div"); agentActions.className = "template-actions";
+        agentActions.append(templateActionButton("Edit", () => openTemplateAgentModal(template.id, agent)), templateActionButton("Remove", () => deleteTemplateAgent(template, agent), "ui-button-danger"));
+        cardHeading.append(agentActions);
+      }
+      const summary = document.createElement("p"); summary.textContent = agent.role_summary || "No role summary provided.";
+      const instructions = document.createElement("div"); instructions.className = "template-agent-instructions";
+      const instructionsLabel = document.createElement("strong"); instructionsLabel.textContent = "Role instructions";
+      const instructionsCopy = document.createElement("p"); instructionsCopy.textContent = agent.role_instructions || "No role instructions provided.";
+      instructions.append(instructionsLabel, instructionsCopy); card.append(cardHeading, summary, instructions); list.append(card);
+    });
+    agentsSection.append(list);
+  }
+  detailBody.append(contextStack, agentsSection); panel.append(detailBody); return panel;
+}
+
+function renderTemplatesSurface(error = "") {
+  el.admin_list.replaceChildren();
+  const toolbar = document.createElement("div"); toolbar.className = "template-toolbar";
+  const intro = document.createElement("p"); intro.textContent = "Reusable project context and preset agent teams for consistent onboarding.";
+  toolbar.append(intro, templateActionButton("New template", () => openTemplateModal(), "ui-button-primary"));
+  el.admin_list.append(toolbar);
+  if (error) { const failure = document.createElement("p"); failure.className = "empty-state ui-panel"; failure.textContent = error; el.admin_list.append(failure); return; }
+  if (!state.templates.length) { const empty = document.createElement("p"); empty.className = "empty-state ui-panel"; empty.textContent = "No project templates have been created yet."; el.admin_list.append(empty); return; }
+  if (!templateById(state.selectedTemplateId)) state.selectedTemplateId = id(state.templates[0]?.id);
+  const selectedTemplate = templateById(state.selectedTemplateId);
+  const browser = document.createElement("div"); browser.className = "template-browser";
+  const tree = document.createElement("aside"); tree.className = "template-tree ui-panel"; tree.setAttribute("aria-label", "Template library");
+  const detailHost = document.createElement("div"); detailHost.className = "template-detail-host";
+  const treeHeading = document.createElement("div"); treeHeading.className = "template-tree-heading";
+  const treeTitle = document.createElement("h2"); treeTitle.textContent = "Template library";
+  const treeCount = document.createElement("span"); treeCount.textContent = String(state.templates.length);
+  treeHeading.append(treeTitle, treeCount); tree.append(treeHeading);
+  let mobileNavigation = null;
+  state.templateCategories.forEach((category) => {
+    const templates = state.templates.filter((template) => id(template.category_id) === id(category.id));
+    if (!templates.length) return;
+    const categoryId = id(category.id);
+    const branch = document.createElement("details"); branch.className = "template-tree-category"; branch.open = !state.collapsedTemplateCategoryIds.has(categoryId);
+    branch.addEventListener("toggle", () => {
+      if (branch.open) state.collapsedTemplateCategoryIds.delete(categoryId);
+      else state.collapsedTemplateCategoryIds.add(categoryId);
+    });
+    const summary = document.createElement("summary"); summary.title = category.description || category.name;
+    const categoryTitle = document.createElement("span"); categoryTitle.textContent = category.name;
+    const categoryCount = document.createElement("span"); categoryCount.textContent = String(templates.length);
+    summary.append(categoryTitle, categoryCount); branch.append(summary);
+    const list = document.createElement("ul");
+    templates.forEach((template) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button"); button.type = "button"; button.className = "template-tree-item";
+      const selected = id(template.id) === id(state.selectedTemplateId); button.classList.toggle("is-active", selected); button.setAttribute("aria-current", selected ? "true" : "false");
+      const name = document.createElement("span"); name.textContent = template.name; button.append(name);
+      button.addEventListener("click", () => {
+        state.selectedTemplateId = id(template.id);
+        tree.querySelectorAll(".template-tree-item").forEach((item) => {
+          const active = item === button;
+          item.classList.toggle("is-active", active);
+          item.setAttribute("aria-current", active ? "true" : "false");
+        });
+        detailHost.replaceChildren(renderTemplateDetailPanel(template));
+        if (matchMedia(TEMPLATE_MOBILE_QUERY).matches) mobileNavigation?.setView("preview", { focus: true });
+      });
+      item.append(button); list.append(item);
+    });
+    branch.append(list); tree.append(branch);
+  });
+  const detail = renderTemplateDetailPanel(selectedTemplate);
+  detailHost.append(detail);
+  mobileNavigation = mountTemplateMobileNavigation(browser, tree, detailHost, { initialView: state.templateMobileView, onChange(view) { state.templateMobileView = view; } });
+  el.admin_list.append(browser);
+}
+
+async function loadTemplatesSurface() {
+  el.admin_list.replaceChildren();
+  const loading = document.createElement("p"); loading.className = "empty-state ui-panel"; loading.textContent = "Loading project templates…"; el.admin_list.append(loading);
+  try {
+    const payload = unwrap(await request(API.projectTemplates));
+    state.templateCategories = payload.categories || [];
+    state.templates = payload.templates || [];
+    renderTemplatesSurface();
+  } catch (error) { state.templateCategories = []; state.templates = []; renderTemplatesSurface(`Unable to load project templates. ${error.message}`); }
 }
 
 function openEditProjectModal() {
   const project = state.project || {};
   state.factories.createFormModal({ title: "Edit Project", submitLabel: "Save project", initialValues: { name: project.name || "", description: project.description || "", instructions: project.instructions || "" }, rows: [
-    [modalTextField("name", "Project name", { required: true })], [{ type: "textarea", name: "description", label: "Description" }], [{ type: "textarea", name: "instructions", label: "Operating instructions" }],
+    [modalTextField("name", "Project name", { required: true })], [{ type: "textarea", name: "description", label: "Description" }], [{ type: "textarea", name: "instructions", label: "Project-specific operating instructions", help: "Optional guidance unique to this project. The shared governance baseline is applied automatically." }],
   ], async onSubmit(values, context) {
     try { const result = unwrap(await request(API.manageProjects, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), ...values }) })); state.project = { ...state.project, ...(result.project || result) }; state.projects = state.projects.map((entry) => entry.id === selectedProjectId() ? { ...entry, ...state.project } : entry); renderWorkspace(); renderProjectHeader(); state.components.toast.success("Project updated."); return true; }
     catch (error) { context.setFormError(error.message); return false; }
@@ -1571,7 +2156,35 @@ function openProjectInfoModal() {
   projectInfoMetadataRow(metadata, "Created", projectInfoDate(project.created_at));
   projectInfoMetadataRow(metadata, "Last updated", projectInfoDate(project.updated_at));
   details.append(metadata);
-  detailGrid.append(about, details);
+  const operating = projectInfoElement("article", "project-info-card project-info-operating");
+  operating.append(projectInfoSectionHeading("assets.document", "Operating instructions", "Shared governance and optional project-specific guidance."));
+  const governance = state.project?.governance;
+  if (governance?.instructions) {
+    const baseline = projectInfoElement("details", "participant-profile-instructions");
+    const baselineSummary = projectInfoElement("summary", "participant-profile-instructions-summary", `Governance baseline · version ${governance.version}`);
+    baseline.append(baselineSummary, projectInfoElement("p", "participant-profile-instructions-copy", governance.instructions));
+    operating.append(baseline);
+  }
+  const instructions = String(project.instructions || project.operating_instructions || "").trim();
+  const instructionsBox = projectInfoElement("div", `project-info-instructions${instructions ? " has-instructions" : " is-empty"}`);
+  if (instructions) {
+    instructionsBox.append(projectInfoElement("strong", "", "Project-specific instructions"),
+      projectInfoElement("p", "project-info-instructions-copy", instructions));
+  } else {
+    instructionsBox.append(projectInfoElement("strong", "", "No project-specific instructions"),
+      projectInfoElement("p", "", "The shared governance baseline still applies. Add only guidance unique to this project."));
+    if (editable) {
+      const addInstructions = projectInfoElement("button", "project-info-inline-action", "Add project-specific instructions");
+      addInstructions.type = "button";
+      addInstructions.addEventListener("click", async () => {
+        await modal.close({ reason: "add-operating-instructions" });
+        openEditProjectModal();
+      });
+      instructionsBox.append(addInstructions);
+    }
+  }
+  operating.append(instructionsBox);
+  detailGrid.append(about, details, operating);
   content.append(detailGrid);
 
   const actions = [];
@@ -1901,15 +2514,43 @@ function requireBrowserDiscussionReference(values, reference) {
   throw new Error(`A ${values.provider === "gemini" ? "Gemini" : "ChatGPT"} discussion URL is required.`);
 }
 
+function supervisingParticipantOptions(agent = null) {
+  const excludedId = id(agent?.id);
+  const options = [{ value: "", label: "No supervisor" }];
+  state.participants
+    .filter((participant) => participant.status === "active" && participant.id !== excludedId)
+    .forEach((participant) => options.push({ value: String(participant.id), label: `${participant.display_name} (${participant.kind})` }));
+  const current = agent?.supervisor;
+  if (current && !options.some((option) => option.value === String(current.participant_id))) {
+    options.push({ value: String(current.participant_id), label: `${current.display_name || "Unavailable participant"} (inactive)` });
+  }
+  return options;
+}
+
 async function openAddAgentModal() {
-  let providers;
-  try { providers = await loadDiscussionProviders(); }
-  catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
-  const provider = providers[0];
-  state.factories.createFormModal({ title: "Add Agent", size: "lg", submitLabel: "Create agent", initialValues: { avatar: null, provider: provider.code, activation_enabled: false, responses_model: "gpt-5.6-terra", webhook_enabled: false }, rows: [
+  let providers = [];
+  let provider = null;
+  const modal = state.factories.createFormModal({
+    title: "Add Agent",
+    size: "lg",
+    submitLabel: "Create agent",
+    rows: [[{ type: "text", content: "Loading agent configuration..." }]],
+    async onSubmit(_values, context) {
+      context.setFormError("Agent configuration is not available yet.");
+      return false;
+    },
+  });
+  modal.open();
+  modal.setBusy(true, { message: "Loading agent configuration..." });
+  try {
+    providers = await loadDiscussionProviders();
+    provider = providers[0];
+    const initialValues = { avatar: null, provider: provider.code, supervising_participant_id: "", activation_enabled: false, responses_model: "gpt-5.6-terra" };
+    modal.update({ initialValues, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", help: "JPEG, PNG, or WebP; up to 2 MB." }],
-    [modalTextField("display_name", "Agent display name", { required: true })],
-    [{ type: "textarea", name: "description", label: "Description" }],
+    [modalTextField("display_name", "Agent display name", { required: true }), modalTextField("role_title", "Role title", { required: true, placeholder: "Commercial Assessor" })],
+    [{ type: "textarea", name: "role_summary", label: "Role summary", required: true }, { type: "textarea", name: "role_instructions", label: "Role instructions", help: "Project-scoped responsibilities, boundaries, and escalation guidance." }],
+    [{ type: "select", name: "supervising_participant_id", label: "Reports to", options: supervisingParticipantOptions() }],
     [{ type: "divider" }], [{ type: "text", content: "Provider connection" }],
     [{ type: "select", name: "provider", label: "Provider", required: true, options: providers.map(item => ({ value: item.code, label: item.display_name })) }],
     [{ type: "checkbox", name: "activation_enabled", label: "Enable proactive agent activation" }],
@@ -1919,81 +2560,56 @@ async function openAddAgentModal() {
     [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help, visibleWhen: { provider: "codex" } })],
     [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
     [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
-    [{ type: "divider" }], [{ type: "text", content: "Optional notification webhook" }],
-    [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }], [modalTextField("webhook_url", "Webhook URL", { input: "url", placeholder: "https://agent.example/hooks/syndicatum" })],
-  ], async onSubmit(values, context) {
-    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled."); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
+    ], async onSubmit(values, context) {
+    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
     catch (error) { context.setFormError(error.message); return false; }
-  }}).open();
-}
-
-function confirmSigningSecretRotation(agentId, values, currentWebhook) {
-  const endpointUrl = String(values.webhook_url || "").trim();
-  const confirmation = state.factories.createFormModal({
-    title: "Generate new signing secret?",
-    size: "sm",
-    submitLabel: "Generate new secret",
-    submitVariant: "danger",
-    context: { badge: "Security action", summary: "The current signing secret will stop working immediately." },
-    rows: [
-      [{ type: "text", content: "Update the receiving agent with the new secret as soon as it is generated. The replacement secret will be shown only once." }],
-    ],
-    async onSubmit(_confirmationValues, context) {
-      try {
-        const result = unwrap(await request(API.projectAgentWebhook, {
-          method: "PATCH",
-          headers: csrfHeaders(),
-          body: JSON.stringify({
-            project_id: selectedProjectId(),
-            agent_id: agentId,
-            endpoint_url: endpointUrl,
-            enabled: Boolean(values.webhook_enabled),
-            replace_secret: true,
-          }),
-        })) || {};
-        Object.assign(currentWebhook, result);
-        setTimeout(() => showAgentCredentialResult(result), 0);
-        state.components.toast.success("A new webhook signing secret was generated.");
-        return true;
-      } catch (error) {
-        context.setFormError(error.message);
-        return false;
-      }
-    },
-  });
-  confirmation.open();
+    }});
+    modal.setValues(initialValues);
+    modal.setBusy(false);
+  } catch (error) {
+    modal.setBusy(false);
+    modal.setFormError(`Unable to load agent configuration. ${error.message}`);
+  }
 }
 
 async function openEditAgentModal(agent) {
   const agentId = agent.identity_id;
-  const loadingOverlay = state.factories.createBusyOverlay({
-    text: `Loading ${agent.display_name}...`,
-    visible: true,
-    fullscreen: true,
-    ariaLabel: `Loading ${agent.display_name}`,
-  });
-  try {
-  let webhook = agent.webhook || {};
   let activation = agent.activation || {};
   let credential = {};
   let providers = [];
-  try { webhook = unwrap(await request(`${API.projectAgentWebhook}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
-  catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Webhook settings unavailable" }); return; } }
+  let provider = null;
+  const editModal = state.factories.createFormModal({
+    title: `Edit ${agent.display_name}`,
+    size: "lg",
+    submitLabel: "Save agent",
+    rows: [[{ type: "text", content: `Loading ${agent.display_name}...` }]],
+    async onSubmit(_values, context) {
+      context.setFormError("Agent configuration is not available yet.");
+      return false;
+    },
+  });
+  editModal.open();
+  editModal.setBusy(true, { message: `Loading ${agent.display_name}...` });
+  try {
   try { activation = unwrap(await request(`${API.projectAgentActivation}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
-  catch (error) { if (error.status !== 404) { state.components.toast.warn(error.message, { title: "Activation settings unavailable" }); return; } }
+  catch (error) { if (error.status !== 404) throw new Error(`Activation settings unavailable. ${error.message}`); }
   try { credential = unwrap(await request(`${API.projectAgents}?${new URLSearchParams({ project_id: selectedProjectId(), agent_id: agentId })}`)) || {}; }
-  catch (error) { state.components.toast.warn(error.message, { title: "Credential status unavailable" }); return; }
+  catch (error) { throw new Error(`Credential status unavailable. ${error.message}`); }
   try { providers = await loadDiscussionProviders(); }
-  catch (error) { state.components.toast.warn(error.message, { title: "Discussion providers unavailable" }); return; }
-  const provider = providers.find(item => item.code === activation.provider) || providers[0];
-  const editModal = state.factories.createFormModal({ title: `Edit ${agent.display_name}`, size: "lg", submitLabel: "Save agent", initialValues: {
-    display_name: agent.display_name, avatar: null,
+  catch (error) { throw new Error(`Discussion providers unavailable. ${error.message}`); }
+  provider = providers.find(item => item.code === activation.provider) || providers[0];
+  const initialValues = {
+    display_name: agent.display_name, avatar: null, role_title: agent.role_title || "",
+    role_summary: agent.role_summary || "", role_instructions: agent.role_instructions || "",
+    supervising_participant_id: agent.supervisor ? String(agent.supervisor.participant_id) : "",
     provider: provider.code, activation_enabled: Boolean(activation.enabled), discussion_reference: provider.code === "codex" ? (activation.discussion_reference || "") : "", chatgpt_discussion_reference: provider.code === "chatgpt" ? (activation.discussion_reference || "") : "", gemini_discussion_reference: provider.code === "gemini" ? (activation.discussion_reference || "") : "", working_directory: activation.working_directory || "",
     responses_api_key: "", responses_model: activation.responses_model || "gpt-5.6-terra",
-    webhook_enabled: Boolean(webhook.enabled), webhook_url: webhook.endpoint_url || webhook.url || "",
-  }, rows: [
+  };
+  editModal.update({ initialValues, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", previewUrl: agent.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }],
-    [modalTextField("display_name", "Agent display name", { required: true })],
+    [modalTextField("display_name", "Agent display name", { required: true }), modalTextField("role_title", "Role title", { required: true })],
+    [{ type: "textarea", name: "role_summary", label: "Role summary", required: true }, { type: "textarea", name: "role_instructions", label: "Role instructions", help: "Project-scoped responsibilities, boundaries, and escalation guidance." }],
+    [{ type: "select", name: "supervising_participant_id", label: "Reports to", options: supervisingParticipantOptions(agent) }],
     [{ type: "divider" }], [{ type: "text", content: "Agent credentials" }],
     [{ type: "text", className: "agent-credential-status", content: agentCredentialStatusText(credential, provider.code) }],
     [{ type: "text", content: "ChatGPT uses MCP/OAuth for its project identity and device authorization for browser delivery. Claiming the separate direct API credential is optional.", visibleWhen: { provider: "chatgpt" } }],
@@ -2006,28 +2622,30 @@ async function openEditAgentModal(agent) {
     [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help, visibleWhen: { provider: "codex" } })],
     [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
     [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
-    [{ type: "divider" }], [{ type: "checkbox", name: "webhook_enabled", label: "Enable webhook notifications" }],
-    [modalTextField("webhook_url", "Webhook URL", { input: "url" })],
   ], async onSubmit(values, context) {
     try {
       normalizeAgentProviderValues(values, providers);
       const reference = agentDiscussionReference(values);
       if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled.");
       requireBrowserDiscussionReference(values, reference);
-      if (values.webhook_enabled && !String(values.webhook_url || "").trim()) throw new Error("A webhook URL is required when webhook notifications are enabled.");
       const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId(), agentId }) : agent.avatar_url;
-      await request(API.projectAgents, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name, provider: values.provider, avatar_url: avatarUrl || null }) });
+      await request(API.projectAgents, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({
+        project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name,
+        role_title: values.role_title, role_summary: values.role_summary,
+        role_instructions: values.role_instructions,
+        supervising_participant_id: values.supervising_participant_id || null,
+        provider: values.provider, avatar_url: avatarUrl || null,
+      }) });
       await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) });
-      let webhookResult = {};
-      if (values.webhook_enabled || String(values.webhook_url || "").trim() || webhook.endpoint_url) webhookResult = unwrap(await request(API.projectAgentWebhook, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, endpoint_url: values.webhook_url, enabled: Boolean(values.webhook_enabled) }) })) || {};
-      setTimeout(() => showAgentCredentialResult(webhookResult), 0);
       const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); state.components.toast.success("Agent updated."); return true;
     }
     catch (error) { context.setFormError(error.message); return false; }
   }});
-  editModal.open();
-  } finally {
-    loadingOverlay.destroy();
+  editModal.setValues(initialValues);
+  editModal.setBusy(false);
+  } catch (error) {
+    editModal.setBusy(false);
+    editModal.setFormError(`Unable to load agent configuration. ${error.message}`);
   }
 }
 
@@ -2967,20 +3585,233 @@ function openReleasePackage(status) {
 }
 
 
+function guideNode(tag, className = "", text = "") {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
+}
+
+function guideCommandBlock(command) {
+  const block = guideNode("div", "guide-command");
+  const pre = guideNode("pre", "guide-command-text");
+  const code = guideNode("code", "", command);
+  const button = guideNode("button", "ui-button ui-button-borderless guide-command-copy");
+  const label = guideNode("span", "", "Copy");
+  button.type = "button";
+  button.title = "Copy command";
+  button.setAttribute("aria-label", "Copy command");
+  button.innerHTML = helperIconHtml("actions.copy", 16);
+  button.append(label);
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+      await navigator.clipboard.writeText(command);
+      label.textContent = "Copied";
+      state.components.toast.success("Command copied.");
+      window.setTimeout(() => { label.textContent = "Copy"; }, 1600);
+    } catch (_error) {
+      state.components.toast.error("Copy failed. Select the command and copy it manually.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+  pre.append(code);
+  block.append(pre, button);
+  return block;
+}
+
+function appendGuideRichText(container, parts = []) {
+  for (const part of parts) {
+    if (typeof part === "string") {
+      container.append(document.createTextNode(part));
+      continue;
+    }
+    if (part?.type !== "article-link" || !part.articleId) continue;
+    const target = guideArticle(part.articleId, { administrator: isAdministrator() }).article;
+    if (target.id !== part.articleId) {
+      container.append(document.createTextNode(part.text || "User Guide article"));
+      continue;
+    }
+    const link = guideNode("a", "guide-article-link", part.text || target.title);
+    link.href = `${applicationPath("guide")}#${encodeURIComponent(target.id)}`;
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      selectGuideArticle(target.id);
+    });
+    container.append(link);
+  }
+}
+
+function renderGuideArticle(articleId) {
+  const { section, article } = guideArticle(articleId, { administrator: isAdministrator() });
+  state.selectedGuideArticleId = article.id;
+  const panel = guideNode("article", "guide-article ui-panel");
+  panel.id = "guide-article";
+  panel.tabIndex = -1;
+  const eyebrow = guideNode("p", "ui-eyebrow", section.title);
+  const title = guideNode("h2", "guide-article-title", article.title);
+  const summary = guideNode("p", "guide-article-summary", article.summary);
+  const header = guideNode("header", "guide-article-header");
+  header.append(eyebrow, title, summary);
+  const body = guideNode("div", "guide-article-body");
+  for (const block of article.blocks || []) {
+    if (block.type === "p") body.append(guideNode("p", "", block.text));
+    if (block.type === "note") {
+      const note = guideNode("aside", "guide-note", block.text);
+      note.setAttribute("aria-label", "Note");
+      body.append(note);
+    }
+    if (block.type === "link") {
+      const link = guideNode("a", "guide-resource-link", `${block.label} ↗`);
+      link.href = block.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", `${block.label} (opens in a new tab)`);
+      body.append(link);
+    }
+    if (["list", "steps"].includes(block.type)) {
+      const list = guideNode(block.type === "steps" ? "ol" : "ul", "guide-list");
+      for (const item of block.items || []) {
+        const listItem = guideNode("li");
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          if (item.parts?.length) {
+            const copy = guideNode("span", "guide-step-text");
+            appendGuideRichText(copy, item.parts);
+            listItem.append(copy);
+          } else if (item.text) {
+            listItem.append(guideNode("span", "guide-step-text", item.text));
+          }
+          if (item.command) listItem.append(guideCommandBlock(item.command));
+        } else {
+          listItem.textContent = item;
+        }
+        list.append(listItem);
+      }
+      body.append(list);
+    }
+    if (block.type === "terms") {
+      const terms = guideNode("dl", "guide-terms");
+      for (const [term, definition] of block.items || []) {
+        terms.append(guideNode("dt", "", term), guideNode("dd", "", definition));
+      }
+      body.append(terms);
+    }
+  }
+  panel.append(header, body);
+  return panel;
+}
+
+function selectGuideArticle(articleId, { historyMode = "push", focus = true } = {}) {
+  const browser = el.admin_list.querySelector(".guide-browser");
+  if (!browser) return;
+  const next = guideArticle(articleId, { administrator: isAdministrator() }).article;
+  state.selectedGuideArticleId = next.id;
+  browser.querySelector(".guide-article")?.replaceWith(renderGuideArticle(next.id));
+  browser.querySelectorAll(".guide-tree-item").forEach((button) => {
+    const selected = button.dataset.articleId === next.id;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-current", selected ? "page" : "false");
+  });
+  updateApplicationRoute("guide", "", historyMode);
+  if (focus) browser.querySelector(".guide-article")?.focus({ preventScroll: true });
+}
+
+function renderGuideSurface() {
+  el.admin_list.replaceChildren();
+  const intro = guideNode("p", "guide-intro", isAdministrator()
+    ? "Search plain-language guidance for projects, connections, messages, requests, tasks, templates, agents, and administration."
+    : "Search plain-language guidance for projects, connections, messages, requests, tasks, templates, and agents.");
+  const browser = guideNode("div", "guide-browser");
+  const navigation = guideNode("aside", "guide-tree ui-panel");
+  navigation.setAttribute("aria-label", "User Guide topics");
+  const searchLabel = guideNode("label", "guide-search-label", "Search the guide");
+  const search = guideNode("input", "ui-input");
+  search.type = "search";
+  search.placeholder = "Search topics";
+  search.value = state.guideQuery;
+  searchLabel.append(search);
+  const results = guideNode("nav", "guide-tree-results");
+  results.setAttribute("aria-label", "Guide sections");
+  navigation.append(searchLabel, results);
+
+  const renderNavigation = () => {
+    const sections = searchGuide(state.guideQuery, { administrator: isAdministrator() });
+    results.replaceChildren();
+    if (!sections.length) {
+      results.append(guideNode("p", "guide-no-results", `No guide topics match “${state.guideQuery}”.`));
+      return;
+    }
+    for (const section of sections) {
+      const group = guideNode("section", "guide-tree-section");
+      const heading = guideNode("h3", "guide-tree-section-title", section.title);
+      const list = guideNode("ul", "guide-tree-list");
+      for (const article of section.articles) {
+        const item = guideNode("li");
+        const button = guideNode("button", "guide-tree-item", article.title);
+        button.type = "button";
+        button.dataset.articleId = article.id;
+        const selected = article.id === state.selectedGuideArticleId;
+        button.classList.toggle("is-active", selected);
+        button.setAttribute("aria-current", selected ? "page" : "false");
+        button.addEventListener("click", () => selectGuideArticle(article.id));
+        item.append(button); list.append(item);
+      }
+      group.append(heading, list); results.append(group);
+    }
+  };
+  search.addEventListener("input", () => {
+    state.guideQuery = search.value.trim();
+    renderNavigation();
+  });
+  renderNavigation();
+  browser.append(navigation, renderGuideArticle(state.selectedGuideArticleId));
+  el.admin_list.append(intro, browser);
+}
+
+function showGuideSurface(articleId = state.selectedGuideArticleId, { historyMode = "push" } = {}) {
+  closeRealtime();
+  clearTimeout(state.pollingTimer);
+  state.selectedGuideArticleId = guideArticle(articleId, { administrator: isAdministrator() }).article.id;
+  state.adminKind = "";
+  setSurface("guide");
+  el.admin_surface.classList.remove("is-backup-restore", "is-templates");
+  el.admin_surface.classList.add("is-guide");
+  el.admin_eyebrow.textContent = "Help and reference";
+  el.admin_title.textContent = "User Guide";
+  el.admin_refresh_button.hidden = true;
+  state.components.backupGrid?.destroy?.();
+  state.components.backupGrid = null;
+  state.components.adminTabs?.destroy?.();
+  state.components.adminTabs = null;
+  renderGuideSurface();
+  updateApplicationRoute("guide", "", historyMode);
+}
+
 async function showAdminSurface(kind, { historyMode = "push" } = {}) {
-  const settingsSurface = ["delivery-health", "backup-restore"].includes(kind);
+  const settingsSurface = ["templates", "delivery-health", "backup-restore"].includes(kind);
   if (settingsSurface ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
   el.admin_surface.classList.toggle("is-backup-restore", kind === "backup-restore");
+  el.admin_surface.classList.toggle("is-templates", kind === "templates");
+  el.admin_surface.classList.remove("is-guide");
+  el.admin_eyebrow.textContent = "Global administration";
   updateApplicationRoute(kind, "", historyMode);
   state.components.backupGrid?.destroy?.();
   state.components.backupGrid = null;
   state.components.adminTabs?.destroy();
   state.components.adminTabs = null;
-  el.admin_refresh_button.hidden = kind === "backup-restore";
+  el.admin_refresh_button.hidden = ["templates", "backup-restore"].includes(kind);
   el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : (kind === "backup-restore" ? "Backup / Restore" : kind[0].toUpperCase() + kind.slice(1));
   if (kind === "backup-restore") {
     void loadBackupRestoreSurface();
+    if (!state.realtimeSocket) void connectRealtime(state.generation);
+    return;
+  }
+  if (kind === "templates") {
+    await loadTemplatesSurface();
     if (!state.realtimeSocket) void connectRealtime(state.generation);
     return;
   }
@@ -3040,6 +3871,262 @@ function renderAdminDeliveryHealth(report) {
   });
 }
 
+function visibleTasks() {
+  const terminal = new Set(["completed", "cancelled"]);
+  const current = id(state.project?.current_participant?.id);
+  if (state.taskFilter === "active") return state.tasks.filter((task) => !terminal.has(task.status));
+  if (state.taskFilter === "mine") return state.tasks.filter((task) => id(task.assignee_participant_id) === current && !terminal.has(task.status));
+  if (state.taskFilter === "all") return state.tasks;
+  return state.tasks.filter((task) => task.status === state.taskFilter);
+}
+
+function taskStatusLabel(status) {
+  return ({ open: "Open", in_progress: "In progress", in_review: "In review", blocked: "Blocked", completed: "Completed", cancelled: "Cancelled" })[status] || status;
+}
+
+function renderTasks() {
+  if (!el.task_list) return;
+  el.new_task_trigger.hidden = !state.project || !can("messages.write");
+  const tasks = visibleTasks();
+  el.task_count.textContent = String(tasks.length);
+  el.task_list.replaceChildren();
+  if (!tasks.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = state.tasks.length ? "No tasks match this filter." : "No project tasks yet.";
+    el.task_list.append(empty);
+    return;
+  }
+  tasks.forEach((task) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `ui-panel task-card is-${task.status}`;
+    const title = document.createElement("span"); title.className = "task-card-title"; title.textContent = task.title;
+    const meta = document.createElement("span"); meta.className = "task-card-meta";
+    const status = document.createElement("span"); status.className = "task-card-status"; status.textContent = taskStatusLabel(task.status);
+    const priority = document.createElement("span"); priority.className = "task-card-priority"; priority.textContent = `${task.priority} priority`;
+    const assignee = document.createElement("span"); assignee.textContent = task.assignee_display_name ? `Assigned: ${task.assignee_display_name}` : "Unassigned";
+    meta.append(status, priority, assignee);
+    if (task.due_at) { const due = document.createElement("span"); due.textContent = `Due ${formatDate(task.due_at)}`; meta.append(due); }
+    card.append(title, meta);
+    card.addEventListener("click", () => openTaskDetails(task.id));
+    el.task_list.append(card);
+  });
+}
+
+function receiveRealtimeTask(source) {
+  if (!source || !source.id || id(source.project_id) !== selectedProjectId()) return;
+  const existing = state.tasks.find((task) => id(task.id) === id(source.id));
+  if (existing && Number(existing.version || 0) >= Number(source.version || 0)) return;
+  const previousLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
+  state.tasks = existing
+    ? state.tasks.map((task) => id(task.id) === id(source.id) ? source : task)
+    : [source, ...state.tasks];
+  renderTasks();
+  const nextLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
+  if (previousLinks !== nextLinks && state.components.timeline) renderTimeline();
+  if (previousLinks !== nextLinks) state.components.responsibilityInbox?.refreshTasks();
+}
+
+async function loadTasks(projectGeneration = state.generation) {
+  if (!selectedProjectId()) return;
+  const payload = await request(`${API.tasks}?${new URLSearchParams({ project_id: selectedProjectId() })}`, { signal: state.abortController?.signal });
+  if (projectGeneration !== state.generation) return;
+  const previousLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
+  state.tasks = unwrap(payload) || [];
+  renderTasks();
+  const nextLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
+  if (previousLinks !== nextLinks && state.components.timeline) renderTimeline();
+  if (previousLinks !== nextLinks) state.components.responsibilityInbox?.refreshTasks();
+}
+
+function taskParticipantOptions(includeEmpty = true) {
+  return [
+    ...(includeEmpty ? [{ value: "", label: "Unassigned" }] : []),
+    ...state.participants.map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind}` })),
+  ];
+}
+
+function normalizeTaskForm(values) {
+  return {
+    title: String(values.title || "").trim(),
+    description: String(values.description || "").trim() || null,
+    acceptance_criteria: String(values.acceptance_criteria || "").trim() || null,
+    priority: values.priority || "normal",
+    assignee_participant_id: values.assignee_participant_id || null,
+    due_at: values.due_at || null,
+  };
+}
+
+function taskFormRows() {
+  const participants = taskParticipantOptions();
+  return [
+    [modalTextField("title", "Task title", { required: true, maxlength: 180 })],
+    [{ type: "textarea", name: "description", label: "Description" }, { type: "textarea", name: "acceptance_criteria", label: "Acceptance criteria" }],
+    [{ type: "select", name: "priority", label: "Priority", required: true, options: [
+      { value: "low", label: "Low" }, { value: "normal", label: "Normal" }, { value: "high", label: "High" }, { value: "urgent", label: "Urgent" },
+    ] }, { type: "ui.datepicker", name: "due_at", label: "Due date", showTime: true, timePrecision: "minute", valueMode: "wall-clock", closeOnSelect: false, placeholder: "Optional" }],
+    [{ type: "select", name: "assignee_participant_id", label: "Assigned participant", options: participants }],
+    [{ type: "text", content: "Every active participant in this project can see this task. The task giver is recorded automatically from the signed-in participant." }],
+  ];
+}
+
+function openCreateTaskModal(sourceMessage = null) {
+  const convertsActionRequest = Boolean(sourceMessage?.action_requested);
+  const modal = state.factories.createFormModal({
+    title: convertsActionRequest ? "Convert action request to task" : "Create task",
+    size: "lg", submitLabel: convertsActionRequest ? "Convert to task" : "Create task",
+    initialValues: {
+      title: "",
+      description: "",
+      priority: "normal", assignee_participant_id: "", due_at: "",
+    },
+    rows: taskFormRows(),
+    async onSubmit(values, context) {
+      try {
+        const created = unwrap(await request(`${API.tasks}?${new URLSearchParams({ project_id: selectedProjectId() })}`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({
+          ...normalizeTaskForm(values), source_message_id: sourceMessage?.id || null,
+          convert_action_request: convertsActionRequest,
+        }) }));
+        receiveRealtimeTask(created);
+        state.components.toast.success(convertsActionRequest ? "Action request converted to a task." : "Task created.");
+        return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+  });
+  modal.open();
+}
+
+function openEditTaskModal(task) {
+  const due = task.due_at ? String(task.due_at).replace(" ", "T").slice(0, 16) : "";
+  const modal = state.factories.createFormModal({
+    title: "Edit task", size: "lg", submitLabel: "Save task",
+    initialValues: { ...task, assignee_participant_id: id(task.assignee_participant_id), due_at: due },
+    rows: taskFormRows(),
+    async onSubmit(values, context) {
+      try {
+        const updated = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: task.id })}`, {
+          method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ version: task.version, ...normalizeTaskForm(values) }),
+        }));
+        receiveRealtimeTask(updated); state.components.toast.success("Task updated."); return true;
+      } catch (error) { context.setFormError(error.message); return false; }
+    },
+  });
+  modal.open();
+}
+
+function taskDetailContent(task) {
+  const content = document.createElement("div"); content.className = "task-detail";
+  const hero = document.createElement("section"); hero.className = "task-detail-hero";
+  const title = document.createElement("h2"); title.className = "task-detail-title"; title.textContent = task.title;
+  const chips = document.createElement("div"); chips.className = "task-detail-chips";
+  [[taskStatusLabel(task.status), `is-${task.status}`], [`${task.priority} priority`, "is-priority"]].forEach(([label, className]) => {
+    const chip = document.createElement("span"); chip.className = `task-detail-chip ${className}`; chip.textContent = label; chips.append(chip);
+  });
+  const description = document.createElement("p"); description.className = "task-detail-description"; description.textContent = task.description || "No description provided.";
+  hero.append(title, chips, description); content.append(hero);
+
+  const addDetailSection = (headingText, rows) => {
+    const section = document.createElement("section"); section.className = "task-detail-section ui-panel";
+    const heading = document.createElement("h3"); heading.textContent = headingText;
+    const details = document.createElement("dl"); details.className = "task-detail-list";
+    rows.forEach(([label, value]) => { const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd"); dd.textContent = value; details.append(dt, dd); });
+    section.append(heading, details); content.append(section);
+  };
+  addDetailSection("Responsibility", [
+    ["Assigned to", task.assignee_display_name || "Unassigned"],
+    ["Task giver", task.creator_display_name || "Unknown"],
+  ]);
+  addDetailSection("Schedule", [
+    ["Due", task.due_at ? formatDate(task.due_at) : "No due date"],
+    ["Created", formatDate(task.created_at)],
+    ["Updated", formatDate(task.updated_at)],
+  ]);
+  if (task.acceptance_criteria) {
+    const criteriaSection = document.createElement("section"); criteriaSection.className = "task-detail-section ui-panel";
+    const heading = document.createElement("h3"); heading.textContent = "Acceptance criteria";
+    const criteria = document.createElement("p"); criteria.textContent = task.acceptance_criteria;
+    criteriaSection.append(heading, criteria); content.append(criteriaSection);
+  }
+  if (task.source_message_id) {
+    const sourceSection = document.createElement("section"); sourceSection.className = "task-detail-section ui-panel";
+    const heading = document.createElement("h3"); heading.textContent = "Source";
+    const sourceDescription = document.createElement("p"); sourceDescription.textContent = `Timeline message #${task.source_message_id}`;
+    const open = document.createElement("button"); open.type = "button"; open.className = "ui-button ui-button-borderless";
+    open.textContent = "View source message";
+    open.addEventListener("click", () => void openResponsibilityMessage(task.source_message_id));
+    sourceSection.append(heading, sourceDescription, open); content.append(sourceSection);
+  }
+  if (task.blocked_reason) { const blocked = document.createElement("p"); blocked.className = "task-blocked-reason"; blocked.textContent = `Blocked: ${task.blocked_reason}`; content.append(blocked); }
+  const events = Array.isArray(task.events) ? task.events : [];
+  const activitySection = document.createElement("section"); activitySection.className = "task-detail-section ui-panel";
+  const activityHeading = document.createElement("h3"); activityHeading.textContent = "Activity";
+  const activity = document.createElement("ol"); activity.className = "task-detail-activity";
+  if (!events.length) { const empty = document.createElement("li"); empty.textContent = "No recorded activity."; activity.append(empty); }
+  events.forEach((event) => {
+    const item = document.createElement("li");
+    const eventLabel = event.event_type === "status_changed"
+      ? `${taskStatusLabel(event.from_status)} → ${taskStatusLabel(event.to_status)}`
+      : ({ created: "Task created", assigned: "Assignment updated", updated: "Task updated" })[event.event_type] || event.event_type;
+    const summary = document.createElement("strong"); summary.textContent = eventLabel;
+    const meta = document.createElement("span"); meta.textContent = `${event.actor_display_name || "Unknown participant"} · ${formatDate(event.created_at)}`;
+    item.append(summary, meta);
+    if (event.body) { const note = document.createElement("p"); note.textContent = event.body; item.append(note); }
+    activity.append(item);
+  });
+  activitySection.append(activityHeading, activity); content.append(activitySection);
+  return content;
+}
+
+function taskActions(task, modal) {
+  const actions = [{ id: "close", label: "Close" }];
+  const current = id(state.project?.current_participant?.id);
+  const manager = can("project.admin");
+  const taskGiver = id(task.created_by_participant_id) === current;
+  const assignee = id(task.assignee_participant_id) === current;
+  const supervisor = id(task.supervising_participant_id) === current;
+  const transitions = [];
+  if (task.status === "open" && (manager || assignee)) transitions.push(["in_progress", "Start"]);
+  if (task.status === "in_progress" && (manager || assignee)) transitions.push(["blocked", "Mark blocked"], ["in_review", "Submit for review"]);
+  if (task.status === "blocked" && (manager || assignee || supervisor)) transitions.push(["in_progress", "Resume"]);
+  if (task.status === "in_review" && (manager || supervisor)) transitions.push(["in_progress", "Return to progress"], ["completed", "Complete"]);
+  if (manager && ["completed", "cancelled"].includes(task.status)) transitions.push(["open", "Reopen"]);
+  if (manager && !["completed", "cancelled"].includes(task.status)) transitions.push(["cancelled", "Cancel task"]);
+  transitions.reverse().forEach(([status, label]) => actions.unshift({
+    id: `task-${status}`, label, variant: status === "cancelled" ? "danger" : "secondary", closeOnClick: false,
+    async onClick() {
+      modal.setBusy(true, { message: `${label}...` });
+      try {
+        const updated = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: task.id })}`, {
+          method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ version: task.version, status }),
+        }));
+        receiveRealtimeTask(updated);
+        state.components.toast.success(`Task status changed to ${taskStatusLabel(status)}.`); await modal.close({ reason: "updated" });
+      } catch (error) { modal.setBusy(false); state.components.toast.error(error.message, { title: "Task update failed" }); }
+    },
+  }));
+  if (taskGiver) actions.unshift({ id: "edit", label: "Edit", variant: "secondary", async onClick() { await modal.close({ reason: "edit" }); openEditTaskModal(task); } });
+  return actions;
+}
+
+async function openTaskDetails(taskId) {
+  let modal;
+  const loading = document.createElement("p"); loading.textContent = "Loading task details...";
+  modal = state.factories.createActionModal({ title: "Task details", size: "md", content: loading, actions: [{ id: "close", label: "Close" }] });
+  modal.open();
+  modal.setBusy(true, { message: "Loading task details..." });
+  try {
+    const task = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: taskId, include: "events" })}`));
+    if (!modal.getState().open) return;
+    modal.setActions(taskActions(task, modal));
+    modal.setContent(taskDetailContent(task));
+    modal.setBusy(false);
+  } catch (error) {
+    modal.setBusy(false);
+    loading.textContent = `Unable to load task details. ${error.message}`;
+  }
+}
+
 async function switchProject(projectId, { initial = false, historyMode = "push" } = {}) {
   const nextId = id(projectId);
   if (!initial && state.surface === "project" && nextId === selectedProjectId()) return;
@@ -3049,6 +4136,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   const generation = ++state.generation;
   const messageGeneration = ++state.messageGeneration;
   state.messages = [];
+  state.tasks = [];
   state.projectView = "timeline";
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
@@ -3058,21 +4146,28 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.newestCursor = "";
   state.hasOlder = false;
   dismissMessageComposerModal();
-  state.draft = { mode: "direct", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
+  state.draft = { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
   state.components.timeline?.destroy();
   state.components.timeline = null;
   el.timeline_host.replaceChildren();
   el.status_badge.textContent = "Loading";
-  const [payload, participantsPayload] = await Promise.all([
+  const [payload, participantsPayload, tasksPayload] = await Promise.all([
     request(`${API.context}?${new URLSearchParams({ project_id: nextId })}`, { signal: state.abortController.signal }),
     request(`${API.participants}?${new URLSearchParams({ project_id: nextId, status: "active" })}`, { signal: state.abortController.signal }),
+    request(`${API.tasks}?${new URLSearchParams({ project_id: nextId })}`, { signal: state.abortController.signal }),
   ]);
   if (generation !== state.generation) return;
   const context = unwrap(payload) || {};
-  state.project = { ...(state.projects.find((project) => project.id === nextId) || {}), ...(context.project || context) };
+  state.project = {
+    ...(state.projects.find((project) => project.id === nextId) || {}),
+    ...(context.project || context),
+    governance: context.governance || null,
+    effective_instructions: context.effective_instructions || "",
+  };
   state.project.id = nextId;
   state.project.capabilities = context.capabilities || state.project.capabilities || {};
   state.participants = (unwrap(participantsPayload) || context.participants || state.project.participants || []).map((participant) => participantFrom(participant, participant.kind));
+  state.tasks = unwrap(tasksPayload) || [];
   const currentParticipantId = id(context.current_participant_id || context.current_participant?.id || state.project.participant_id);
   state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
     || (context.current_participant ? participantFrom(context.current_participant, "human") : null);
@@ -3093,6 +4188,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   renderProjectHeader();
   showProjectView("timeline");
   rebuildParticipantControls();
+  renderTasks();
   renderComposerControls();
   await loadMessages("initial", generation, messageGeneration);
   el.status_badge.textContent = "Live";
@@ -3110,7 +4206,7 @@ function rebuildParticipantControls() {
   state.components.addresseeSelect?.destroy();
   const currentId = id(state.project?.current_participant?.id);
   state.components.addresseeSelect = state.factories.createSelect(el.addressee_select, items.filter((item) => item.value !== currentId), {
-    placeholder: "Choose people or agents", ariaLabel: "Expected responders", searchable: true, multiple: true, closeOnSelect: false,
+    placeholder: "Choose people or agents", ariaLabel: "Direct recipients", searchable: true, multiple: true, closeOnSelect: false,
     selected: state.draft.addressees,
     onChange(values) { state.draft.addressees = values.map(id); },
   });
@@ -3152,13 +4248,23 @@ function renderComposerControls() {
   if (!writable) return;
   state.components.addressMode?.destroy();
   state.components.addressMode = state.factories.createSelect(el.address_mode, [
-    { value: "direct", label: "Direct addressees" },
+    { value: "direct", label: "Direct message" },
     { value: "broadcast", label: "Broadcast to project" },
   ], {
     searchable: false, clearable: false, ariaLabel: "Addressing mode", selected: state.draft.mode,
     onChange(value) {
       state.draft.mode = value === "broadcast" ? "broadcast" : "direct";
       syncAddressingControls();
+    },
+  });
+  state.components.messageIntent?.destroy();
+  state.components.messageIntent = state.factories.createSelect(el.message_intent, [
+    { value: "update", label: "Update / FYI" },
+    { value: "request", label: "Action request" },
+  ], {
+    searchable: false, clearable: false, ariaLabel: "Message intent", selected: state.draft.intent,
+    onChange(value) {
+      state.draft.intent = value === "request" ? "request" : "update";
     },
   });
   state.components.composer?.destroy();
@@ -3247,8 +4353,11 @@ function enableCompactComposerAutosize() {
 function syncAddressingControls() {
   const hasAutomaticReplyRecipient = Boolean(state.draft.replyTo && state.draft.addressees.length);
   const broadcast = state.draft.mode === "broadcast";
-  el.addressing_row.hidden = hasAutomaticReplyRecipient;
-  el.addressee_select.hidden = broadcast;
+  el.addressing_row.hidden = false;
+  el.addressing_row.classList.toggle("is-reply", hasAutomaticReplyRecipient);
+  el.address_mode.hidden = hasAutomaticReplyRecipient;
+  el.message_intent.hidden = broadcast;
+  el.addressee_select.hidden = broadcast || hasAutomaticReplyRecipient;
   el.broadcast_warning.hidden = hasAutomaticReplyRecipient || !broadcast;
 }
 
@@ -3258,8 +4367,10 @@ function restoreNormalAddressing() {
   state.draft.preReplyAddressing = null;
   if (previous) {
     state.draft.mode = previous.mode;
+    state.draft.intent = previous.intent;
     state.draft.addressees = [...previous.addressees];
     state.components.addressMode?.setValue(state.draft.mode);
+    state.components.messageIntent?.setValue(state.draft.intent);
     state.components.addresseeSelect?.setValue(state.draft.addressees);
   }
   syncAddressingControls();
@@ -3269,6 +4380,7 @@ function setReply(message) {
   if (!state.draft.replyTo) {
     state.draft.preReplyAddressing = {
       mode: state.draft.mode,
+      intent: state.draft.intent,
       addressees: [...state.draft.addressees],
     };
   }
@@ -3279,8 +4391,10 @@ function setReply(message) {
     .map((entry) => id(entry.participant_id))
     .filter((participantId) => participantId && participantId !== currentParticipantId);
   state.draft.mode = "direct";
+  state.draft.intent = "update";
   state.draft.addressees = senderId && senderId !== currentParticipantId ? [senderId] : fallbackRecipients;
   state.components.addressMode?.setValue("direct");
+  state.components.messageIntent?.setValue("update");
   state.components.addresseeSelect?.setValue(state.draft.addressees);
   syncAddressingControls();
   renderReplyContext();
@@ -3308,8 +4422,8 @@ async function sendMessage({ text }) {
     return false;
   }
   if (state.draft.mode === "direct" && !state.draft.addressees.length) {
-    await state.factories.uiAlert("Select at least one expected responder, or choose Broadcast.", {
-      title: "Addressees required",
+    await state.factories.uiAlert("Select at least one recipient, or choose Broadcast.", {
+      title: "Recipients required",
       variant: "warning",
       description: "Review the message addressing before sending.",
     });
@@ -3326,6 +4440,7 @@ async function sendMessage({ text }) {
       direct_participant_ids: state.draft.mode === "broadcast" ? [] : state.draft.addressees,
       mention_participant_ids: [],
       broadcast: state.draft.mode === "broadcast",
+      action_requested: state.draft.mode === "direct" && state.draft.intent === "request",
       idempotency_key: state.draft.idempotencyKey,
     };
     const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: selectedProjectId() })}`, {
@@ -3336,11 +4451,13 @@ async function sendMessage({ text }) {
       state.messages = sortAndDedupe([message, ...state.messages]);
       renderTimeline("prepend", [message]);
     }
-    state.components.responsibilityInbox?.markStale();
+    state.components.responsibilityInbox?.refreshFromRealtime(message.id);
     state.components.composer.clear();
     enableCompactComposerAutosize();
     state.draft.idempotencyKey = "";
     restoreNormalAddressing();
+    state.draft.intent = "update";
+    state.components.messageIntent?.setValue("update");
     renderReplyContext();
     await state.components.composerModal?.close({ reason: "sent" });
     return true;
@@ -3374,7 +4491,7 @@ async function acknowledgeMessage(message) {
       };
     state.messages = state.messages.map((entry) => entry.id === message.id ? updated : entry);
     renderTimeline();
-    state.components.responsibilityInbox?.markStale();
+    state.components.responsibilityInbox?.refreshFromRealtime(message.id);
     state.components.toast.success("Message acknowledged.");
   } catch (error) {
     state.components.toast.warn(error.message, { title: "Acknowledgement failed" });
@@ -3382,7 +4499,7 @@ async function acknowledgeMessage(message) {
 }
 
 function showProjectView(view) {
-  if (state.mode !== "expanded" || state.surface !== "project") return;
+  if (state.mode !== "expanded" || !["workspace", "project"].includes(state.surface) || !selectedProjectId()) return;
   state.projectView = view === "responsibility" ? "responsibility" : "timeline";
   const inbox = state.projectView === "responsibility";
   el.show_timeline.classList.toggle("is-active", !inbox);
@@ -3394,15 +4511,17 @@ function showProjectView(view) {
   el.timeline_notice.hidden = inbox || !el.timeline_notice.textContent;
   el.timeline_scroll.hidden = inbox;
   el.responsibility_host.hidden = !inbox;
+  if (!inbox && state.components.timeline) renderTimeline();
   if (inbox && !state.components.responsibilityInbox) {
     state.components.responsibilityInbox = createResponsibilityInbox(el.responsibility_host, {
       participants: () => state.participants,
       actorId: () => state.project?.current_participant?.id,
       moderator: () => ["owner", "admin"].includes(state.project?.current_participant?.role),
       newKey: makeIdempotencyKey,
-      async fetchPage(view, before) {
+      async fetchPage(view, before, changedByMessageId = null) {
         const query = new URLSearchParams({ project_id: selectedProjectId(), view, limit: "50" });
         if (before) query.set("before", before);
+        if (changedByMessageId) query.set("changed_by_message_id", changedByMessageId);
         return request(`${API.responsibilityInbox}?${query}`);
       },
       async writeEvent(body, responsibilityEvent, key) {
@@ -3413,52 +4532,117 @@ function showProjectView(view) {
         });
       },
       async acknowledge(item) {
-        return request(`${API.acknowledge}?${new URLSearchParams({ project_id: selectedProjectId(), id: item.request_message_id })}`, {
+        const payload = await request(`${API.acknowledge}?${new URLSearchParams({ project_id: selectedProjectId(), id: item.request_message_id })}`, {
           method: "POST", headers: csrfHeaders(), body: JSON.stringify({}),
         });
+        const responseMessage = unwrap(payload);
+        if (responseMessage?.id) {
+          const updated = normalizeMessage(responseMessage);
+          state.messages = state.messages.map((entry) => entry.id === updated.id ? updated : entry);
+        }
+        state.components.toast.success("Message acknowledged.");
+        return payload;
       },
       openMessage: (messageId) => void openResponsibilityMessage(messageId),
+      linkedTasks: (messageId) => messageLinkedTasks(messageId),
+      canCreateTask: () => state.mode === "expanded" && can("messages.write"),
+      convertToTask: (item) => openCreateTaskModal({
+        id: item.request_message_id,
+        action_requested: true,
+      }),
+      openTask: (taskId) => void openTaskDetails(taskId),
+      openLinkedTasks: (messageId) => openLinkedMessageTasks({ id: messageId }),
+      openGuide: (articleId) => showGuideSurface(articleId),
     });
     void state.components.responsibilityInbox.load();
   }
 }
 
-async function openResponsibilityMessage(messageId) {
+function responsibilityMessageContent(message, parent = null) {
+  const details = evidenceDetails(message, parent);
+  const content = projectInfoElement("section", "responsibility-evidence-content");
+  const facts = projectInfoElement("dl", "responsibility-evidence-facts");
+  for (const [label, value] of [
+    ["Position", details.sequence], ["Sender", details.sender], ["Time", details.created],
+    ["Addressing", details.addressed], ["History", `${details.revision}; ${details.tombstone}`],
+    ["Thread", details.reply],
+  ]) facts.append(projectInfoElement("dt", "", label), projectInfoElement("dd", "", value));
+  content.append(facts, projectInfoElement("div", "responsibility-evidence-body", details.body));
+  return content;
+}
+
+function openResponsibilityMessage(messageId) {
+  if (state.components.responsibilityMessageModal?.getState?.().open) return;
   const projectId = selectedProjectId();
   const generation = state.generation;
-  try {
-    const payload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: messageId })}`);
-    if (generation !== state.generation || projectId !== selectedProjectId()) return;
-    const message = normalizeMessage(unwrap(payload));
-    if (!message.id) throw new Error("The canonical message was unavailable.");
-    const existing = state.messages.findIndex((entry) => entry.id === message.id);
-    if (existing >= 0) {
-      state.messages[existing] = message;
-      renderTimeline();
-      const row = el.timeline_host.querySelector(`[data-item-id="${CSS.escape(message.id)}"]`);
-      if (row) {
-        showProjectView("timeline");
-        row.setAttribute("tabindex", "-1");
-        row.scrollIntoView({ block: "center", behavior: "smooth" });
-        row.focus({ preventScroll: true });
+  let requestController = null;
+  const loading = projectInfoElement("p", "responsibility-evidence-intro", "Loading original message…");
+  const closeAction = { id: "close", label: "Back to Responsibility Inbox", variant: "primary" };
+  const modal = state.factories.createActionModal({
+    title: `Message #${messageId}`,
+    size: "lg",
+    className: "responsibility-message-modal",
+    content: loading,
+    actions: [closeAction],
+    onClose() {
+      requestController?.abort();
+      if (state.components.responsibilityMessageModal === modal) state.components.responsibilityMessageModal = null;
+    },
+  });
+  state.components.responsibilityMessageModal = modal;
+  modal.open();
+
+  const load = async () => {
+    requestController?.abort();
+    requestController = new AbortController();
+    loading.textContent = "Loading original message…";
+    modal.setContent(loading);
+    modal.setActions([closeAction]);
+    modal.setBusy(true, {
+      message: "Loading original message…",
+      cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancelled" }) },
+    });
+    try {
+      const payload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: messageId })}`, { signal: requestController.signal });
+      if (!modal.getState().open) return;
+      if (generation !== state.generation || projectId !== selectedProjectId()) {
+        await modal.close({ reason: "project-changed" });
         return;
       }
+      const message = normalizeMessage(unwrap(payload));
+      if (!message.id) throw new Error("The canonical message was unavailable.");
+      const existing = state.messages.findIndex((entry) => entry.id === message.id);
+      if (existing >= 0) state.messages[existing] = message;
+      let parent = null;
+      if (message.reply_to_message_id) {
+        try {
+          const parentPayload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: message.reply_to_message_id })}`, { signal: requestController.signal });
+          if (!modal.getState().open) return;
+          if (generation !== state.generation || projectId !== selectedProjectId()) {
+            await modal.close({ reason: "project-changed" });
+            return;
+          }
+          parent = normalizeMessage(unwrap(parentPayload));
+        } catch (error) {
+          if (requestController.signal.aborted) return;
+          /* Keep the exact child visible when optional parent context is unavailable. */
+        }
+      }
+      modal.setContent(responsibilityMessageContent(message, parent));
+      modal.setActions([closeAction]);
+      modal.setBusy(false);
+    } catch (error) {
+      if (requestController.signal.aborted || !modal.getState().open) return;
+      modal.setBusy(false);
+      loading.textContent = `Unable to load the original message. ${error.message || "Try again."}`;
+      modal.setContent(loading);
+      modal.setActions([
+        { id: "retry", label: "Retry", closeOnClick: false, onClick() { void load(); return false; } },
+        closeAction,
+      ]);
     }
-    let parent = null;
-    if (message.reply_to_message_id) {
-      try {
-        const parentPayload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: message.reply_to_message_id })}`);
-        if (generation !== state.generation || projectId !== selectedProjectId()) return;
-        parent = normalizeMessage(unwrap(parentPayload));
-      } catch (_error) { /* Keep the exact child evidence visible when parent context is unavailable. */ }
-    }
-    showCanonicalEvidence(message, { parent, onTimeline: () => {
-      showProjectView("timeline");
-      el.show_timeline.focus();
-    } });
-  } catch (error) {
-    state.components.toast.warn(error.message, { title: "Canonical message unavailable" });
-  }
+  };
+  void load();
 }
 async function jumpToMessage(messageId) {
   if (!state.messages.some((message) => id(message.id) === id(messageId))) {
@@ -3634,19 +4818,23 @@ async function loadExpanded() {
     id: id(project.id || project.project_id),
     collection: project.relationship === "shared" ? "Shared" : "My",
   })), ...shared.map((project) => ({ ...project, id: id(project.id || project.project_id), collection: "Shared" }))];
+  const requestedRoute = currentApplicationRoute();
   if (!state.projects.length) {
-    showApplication(); showWorkspaceSurface({ historyMode: "replace" });
+    showApplication();
+    if (requestedRoute.surface === "guide") showGuideSurface(requestedRoute.articleId, { historyMode: "replace" });
+    else showWorkspaceSurface({ historyMode: "replace" });
     return;
   }
-  const requestedRoute = currentApplicationRoute();
   showApplication();
   const requestedProject = requestedRoute.surface === "project"
     ? state.projects.find((project) => project.public_id === requestedRoute.projectId || project.id === requestedRoute.projectId)
     : null;
   if (requestedProject) {
     await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
-  } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
-      && (["delivery-health", "backup-restore"].includes(requestedRoute.surface)
+  } else if (requestedRoute.surface === "guide") {
+    showGuideSurface(requestedRoute.articleId, { historyMode: "replace" });
+  } else if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
+      && (["templates", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
         ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
     await showAdminSurface(requestedRoute.surface, { historyMode: "replace" });
   } else {
@@ -3762,7 +4950,9 @@ function messageMatchesFilters(message) {
 
 function receiveRealtimeMessage(source) {
   const message = normalizeMessage(source);
-  if (!message.id || state.messages.some((entry) => entry.id === message.id)) return;
+  if (!message.id) return;
+  state.components.responsibilityInbox?.refreshFromRealtime(message.id);
+  if (state.messages.some((entry) => entry.id === message.id)) return;
   const highest = state.messages.reduce((value, entry) => Math.max(value, Number(entry.sequence || 0)), 0);
   if (highest && message.sequence > highest + 1) {
     void loadMessages("newer").catch(handleLoadError);
@@ -3771,7 +4961,6 @@ function receiveRealtimeMessage(source) {
   if (!messageMatchesFilters(message)) return;
   state.messages = sortAndDedupe([...state.messages, message]);
   renderTimeline("prepend", [message]);
-  state.components.responsibilityInbox?.markStale();
   state.components.toast.info("1 new message", { title: "Timeline updated" });
 }
 
@@ -3844,7 +5033,7 @@ async function connectRealtime(projectGeneration = state.generation) {
         el.status_badge.textContent = "Realtime";
         window.dispatchEvent(new CustomEvent("syndicatum:realtime-ready", { detail: { rooms: [...joinedRooms] } }));
         if (state.project && joinedRooms.has(admission.room)) {
-          void loadMessages("newer", projectGeneration).catch(handleLoadError);
+          void Promise.all([loadMessages("newer", projectGeneration), loadTasks(projectGeneration)]).catch(handleLoadError);
         }
         return;
       }
@@ -3866,6 +5055,11 @@ async function connectRealtime(projectGeneration = state.generation) {
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.participants.changed") {
         void refreshParticipants(projectGeneration).catch(handleLoadError);
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.task.updated") {
+        if (envelope.payload?.task) receiveRealtimeTask(envelope.payload.task);
+        else void loadTasks(projectGeneration).catch(handleLoadError);
       }
     };
     client = new sdk.RealtimeSocketClient({
@@ -3913,7 +5107,7 @@ function scheduleRealtimeReconnect(projectGeneration) {
 function startPolling() {
   clearTimeout(state.pollingTimer);
   const tick = async () => {
-    try { await Promise.all([loadMessages("newer"), refreshParticipants()]); } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
+    try { await Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()]); } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
     finally { state.pollingTimer = setTimeout(tick, 15000); }
   };
   state.pollingTimer = setTimeout(tick, 15000);
@@ -3921,7 +5115,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -3957,6 +5151,7 @@ async function bootstrap() {
     createFileUploader: await uiLoader.get("ui.file.uploader", options),
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
     createSplitter: await uiLoader.get("ui.splitter", options),
+    createNavigationStack: await uiLoader.get("ui.navigation.stack", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
@@ -4015,6 +5210,9 @@ async function bootstrap() {
   el.refresh_button.addEventListener("click", () => void reloadForFilters());
   el.timeline_collapse_toggle.addEventListener("click", () => setAllMessagesCollapsed(!state.timelineDefaultCollapsed));
   el.participant_search.addEventListener("input", () => { state.participantSearch = el.participant_search.value.trim(); renderParticipants(); });
+  el.new_task_trigger.addEventListener("click", () => openCreateTaskModal());
+  el.task_guide_trigger.addEventListener("click", () => showGuideSurface("tasks-overview"));
+  el.task_status_filter.addEventListener("change", () => { state.taskFilter = el.task_status_filter.value || "active"; renderTasks(); });
   el.admin_refresh_button.addEventListener("click", () => void showAdminSurface(state.adminKind, { historyMode: "none" }));
   document.addEventListener("visibilitychange", scheduleForegroundParticipantRefresh);
   addEventListener("focus", scheduleForegroundParticipantRefresh);
@@ -4027,8 +5225,10 @@ async function bootstrap() {
       : null;
     if (routeProject) {
       void switchProject(routeProject.id, { initial: true, historyMode: "none" }).catch(handleLoadError);
-    } else if (["users", "agents", "audit", "delivery-health", "backup-restore"].includes(route.surface)
-        && (["delivery-health", "backup-restore"].includes(route.surface)
+    } else if (route.surface === "guide") {
+      showGuideSurface(route.articleId, { historyMode: "none" });
+    } else if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(route.surface)
+        && (["templates", "delivery-health", "backup-restore"].includes(route.surface)
           ? capability("admin.settings", isAdministrator()) : capability(`admin.${route.surface}`))) {
       void showAdminSurface(route.surface, { historyMode: "none" });
     } else {

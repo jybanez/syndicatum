@@ -124,7 +124,7 @@ final class LegacyUpgradePackage
         $plan->verifyFiles();
         $planMetadata = $plan->metadata();
         if (!hash_equals($baseline['baseline_id'], $planMetadata['target_baseline_id'])
-            || !hash_equals($baseline['schema_head'], $planMetadata['target_schema_head'])
+            || !hash_equals($baseline['migration_cutover'], $planMetadata['target_schema_head'])
             || !hash_equals($baseline['baseline_id'], $verifiedManifest['schema_baseline'])
             || !hash_equals($baseline['schema_head'], $verifiedManifest['schema_head'])
             || !hash_equals($baseline['baseline_id'], (string) $provenance['baseline_id'])
@@ -146,6 +146,16 @@ final class LegacyUpgradePackage
     public function baselineSchemaPath()
     {
         return $this->stage->path() . '/schema/baselines/mysql84/schema.sql';
+    }
+
+    public function baselineMetadataPath()
+    {
+        return $this->stage->path() . '/schema/baselines/mysql84/baseline.json';
+    }
+
+    public function postMigrationDirectory()
+    {
+        return $this->stage->path() . '/schema/baselines/mysql84/migrations';
     }
 
     public function forwardMigrationPath($id)

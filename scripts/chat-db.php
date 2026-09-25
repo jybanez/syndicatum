@@ -26,7 +26,7 @@ function baselineIdentityFromEnvironment()
     return [
         'application_version' => '1.0.0',
         'schema_baseline' => 'syndicatum-mysql84-1.0.0-baseline.1',
-        'schema_head' => '202609180004',
+        'schema_head' => '202609250009',
         'baseline_source_commit' => '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d',
         'release_source_commit' => $releaseSourceCommit,
         'package_sha256' => $packageSha256,
@@ -78,6 +78,13 @@ try {
             $result = baselineInstaller($pdo)->install(baselineIdentityFromEnvironment());
             $result['state'] = 'installed';
             echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            exit(0);
+        }
+        if ($state['state'] === 'post_baseline_upgrade_required') {
+            $applied = (new SchemaMigrator($pdo))->migrate();
+            $state = (new InstallationState($pdo))->inspect();
+            $state['post_baseline_migrations_applied'] = $applied;
+            echo json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
             exit(0);
         }
         if (!empty($state['ready'])) {

@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "0.1.0+codex.20260916171323",
+  "version": "0.1.0+codex.20260924181527",
   "description": "Connect existing Codex conversations to Syndicatum project timelines.",
   "author": {
     "name": "Syndicatum",
@@ -18,12 +18,13 @@
   "interface": {
     "displayName": "Syndicatum for Codex",
     "shortDescription": "Local realtime project coordination for Codex",
-    "longDescription": "Connects Codex tasks to Syndicatum projects with protected per-agent identities, authoritative timeline access, and realtime notifications delivered to the bound task.",
+    "longDescription": "Connects Codex tasks to Syndicatum projects with protected per-agent identities, authoritative project bootstrap, shared task workflows, timeline access, and realtime notifications delivered to the bound task.",
     "developerName": "Syndicatum",
     "category": "Productivity",
     "capabilities": [
       "Realtime notifications",
       "Protected agent identities",
+      "Shared project tasks",
       "Project timeline"
     ],
     "websiteURL": "https://syndicatum.wizaya.com/",
