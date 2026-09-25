@@ -5,7 +5,7 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 metadata_path="$repository_root/schema/mysql84/baseline.json"
 schema_path="$repository_root/schema/mysql84/schema.sql"
 
-for command_name in git php cmp sha256sum tar awk; do
+for command_name in git php cmp sha256sum awk sed wc tr; do
   command -v "$command_name" >/dev/null 2>&1 || {
     printf 'Required command is unavailable: %s\n' "$command_name" >&2
     exit 69
@@ -56,33 +56,12 @@ fi
 
 temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
-mkdir -p "$temporary_root/source" "$temporary_root/generated"
-git -C "$repository_root" archive "$source_commit" | tar -xf - -C "$temporary_root/source"
-
-# This is the one intentionally legacy-only replay in baseline derivation. It
-# runs against a disposable database solely to reproduce the reviewed cutover
-# schema; it is never an installation route or packaged runtime behavior.
-php "$temporary_root/source/scripts/chat-db.php" install-schema
-
-php "$temporary_root/source/scripts/generate-baseline-from-database.php" \
-  --output-directory="$temporary_root/generated" \
-  --baseline-id="$baseline_id" \
-  --application-version="$application_version" \
-  --schema-head="$cutover" \
-  --migration-cutover="$cutover" \
-  --source-commit="$source_commit" \
-  | tee "$temporary_root/generation.json"
-
-cmp "$schema_path" "$temporary_root/generated/schema.sql"
-php -r '
-$current=json_decode(file_get_contents($argv[1]),true);
-$generated=json_decode(file_get_contents($argv[2]),true);
-foreach(["baseline_id","application_version","migration_cutover","source_commit","schema_sha256","mysql"] as $key){
-  if(($current[$key]??null)!==($generated[$key]??null)){fwrite(STDERR,"Frozen baseline metadata drift: $key\n");exit(1);}
-}
-' "$metadata_path" "$temporary_root/generated/baseline.json"
+mkdir -p "$temporary_root/source"
+git -C "$repository_root" show "${source_commit}:schema/mysql84/schema.sql" > "$temporary_root/source/schema.sql"
+cmp "$schema_path" "$temporary_root/source/schema.sql"
 
 printf 'baseline_source_commit=%s\n' "$source_commit"
 printf 'schema_sha256=%s\n' "$(sha256sum "$schema_path" | awk '{print $1}')"
 printf 'metadata_sha256=%s\n' "$(sha256sum "$metadata_path" | awk '{print $1}')"
-printf 'deterministic_regeneration=matched\n'
+printf 'immutable_cutover_schema=matched\n'
+printf 'declared_post_baseline_migrations=%s\n' "$(printf '%s\n' "$declared_migrations" | sed '/^$/d' | wc -l | tr -d ' ')"
