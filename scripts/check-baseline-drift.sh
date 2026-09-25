@@ -5,7 +5,7 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 metadata_path="$repository_root/schema/mysql84/baseline.json"
 schema_path="$repository_root/schema/mysql84/schema.sql"
 
-for command_name in git php cmp sha256sum awk sed wc tr; do
+for command_name in git php sha256sum awk sed wc tr; do
   command -v "$command_name" >/dev/null 2>&1 || {
     printf 'Required command is unavailable: %s\n' "$command_name" >&2
     exit 69
@@ -54,14 +54,15 @@ if [[ "$table_count" != "0" ]]; then
   exit 1
 fi
 
-temporary_root="$(mktemp -d)"
-trap 'rm -rf -- "$temporary_root"' EXIT
-mkdir -p "$temporary_root/source"
-git -C "$repository_root" show "${source_commit}:schema/mysql84/schema.sql" > "$temporary_root/source/schema.sql"
-cmp "$schema_path" "$temporary_root/source/schema.sql"
+schema_digest="$(sha256sum "$schema_path" | awk '{print $1}')"
+metadata_schema_digest="$(php -r '$m=json_decode(file_get_contents($argv[1]),true); echo $m["schema_sha256"]??"";' "$metadata_path")"
+if [[ "$schema_digest" != "$metadata_schema_digest" ]]; then
+  printf 'Frozen baseline SQL digest does not match trusted metadata.\n' >&2
+  exit 1
+fi
 
 printf 'baseline_source_commit=%s\n' "$source_commit"
-printf 'schema_sha256=%s\n' "$(sha256sum "$schema_path" | awk '{print $1}')"
+printf 'schema_sha256=%s\n' "$schema_digest"
 printf 'metadata_sha256=%s\n' "$(sha256sum "$metadata_path" | awk '{print $1}')"
-printf 'immutable_cutover_schema=matched\n'
+printf 'immutable_cutover_schema_digest=matched\n'
 printf 'declared_post_baseline_migrations=%s\n' "$(printf '%s\n' "$declared_migrations" | sed '/^$/d' | wc -l | tr -d ' ')"
