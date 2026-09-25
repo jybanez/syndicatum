@@ -6,7 +6,7 @@
     "schema_head": "202609250009",
     "migration_cutover": "202609180004",
     "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
-    "schema_sha256": "e01a02ab077fcd279d5a9ce862848043d9d091c27e2e8ced226498ec9ac37769",
+    "schema_sha256": "018396c03b8130beb6b0115f45549fc02b142b44a5dc70cf65ad22193bf48cc8",
     "mysql": {
         "minimum": "8.4.0",
         "maximum_exclusive": "9.0.0",

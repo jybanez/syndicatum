@@ -678,6 +678,7 @@ CREATE TABLE `projects` (
   `source_template_public_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `source_template_name` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `source_template_version` bigint unsigned DEFAULT NULL,
+  `context_version` bigint unsigned NOT NULL DEFAULT '1',
   `status` enum('active','archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,

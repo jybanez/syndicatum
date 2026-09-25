@@ -61,6 +61,8 @@ assertExactFiles('Legacy installSchema', $installSchemaCallers, [
     'tests/google-sso.php',
     'tests/migrations.php',
     'tests/project-api.php',
+    'tests/project-tasks.php',
+    'tests/project-templates.php',
     'tests/registration.php',
     'tests/responses-api-activation.php',
     'tests/responsibility-events.php',
