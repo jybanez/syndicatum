@@ -72,10 +72,15 @@ function legacyStateAssert($condition, $message)
 $baseline = json_decode(file_get_contents(dirname(__DIR__) . '/schema/mysql84/baseline.json'), true);
 $tables = array_column($baseline['tables'], 'name');
 $plan = new LegacyMigrationPlan();
-$ledger = [];
+$legacyLedger = [];
 foreach (array_merge($plan->historicalMigrations(), $plan->forwardMigrations()) as $migration) {
-    $ledger[] = ['version' => $migration['id'], 'checksum' => $migration['sha256']];
+    $legacyLedger[] = ['version' => $migration['id'], 'checksum' => $migration['sha256']];
 }
+$postBaselineLedger = [];
+foreach ($baseline['post_baseline_migrations'] as $migration) {
+    $postBaselineLedger[] = ['version' => $migration['id'], 'checksum' => $migration['sha256']];
+}
+$ledger = array_merge($legacyLedger, $postBaselineLedger);
 $identity = [
     'application_version' => $baseline['application_version'],
     'schema_baseline' => $baseline['baseline_id'],
@@ -96,7 +101,13 @@ $state = new InstallationState($pdo);
 $status = $state->inspect();
 legacyStateAssert($status['state'] === 'legacy_upgraded_ready' && $status['ready'] === true, 'Exact upgraded lineage was not ready.');
 
-$pdo->ledger = array_slice($ledger, 0, -1);
+$pdo->identity['schema_head'] = $baseline['migration_cutover'];
+$pdo->ledger = $legacyLedger;
+legacyStateAssert($state->inspect()['state'] === 'post_baseline_upgrade_required', 'Protected cutover was not classified for suffix migration.');
+$pdo->identity = $identity;
+$pdo->ledger = $ledger;
+
+$pdo->ledger = array_merge(array_slice($legacyLedger, 0, -1), $postBaselineLedger);
 legacyStateAssert($state->inspect()['state'] === 'legacy_upgrade_incomplete', 'Missing forward row was accepted.');
 $pdo->ledger = $ledger;
 $pdo->ledger[0]['checksum'] = str_repeat('0', 64);
@@ -115,7 +126,7 @@ $pdo->identity['last_upgrade_id'] = null;
 $pdo->identity['last_upgrade_from_version'] = null;
 $pdo->identity['last_upgrade_to_version'] = null;
 $pdo->identity['last_upgraded_at'] = null;
-$pdo->ledger = [];
+$pdo->ledger = $postBaselineLedger;
 legacyStateAssert($state->inspect()['state'] === 'ready', 'Fresh baseline readiness regressed.');
 $pdo->tables = array_values(array_diff($tables, ['syndicatum_installation_identity']));
 $pdo->ledger = array_slice($ledger, 0, 26);

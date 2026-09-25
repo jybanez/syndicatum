@@ -291,7 +291,8 @@ try {
         $suite->true(strpos($connection, 'new sdk.RealtimeSocketClient') !== false, 'The timeline must use the supported PBB Realtime SDK client.');
         $suite->true(strpos($connection, 'error.realtimeConfiguration = true') !== false, 'Mixed-content WebSocket configuration must be treated as permanent rather than retried.');
         $suite->true(strpos($connection, 'new WebSocket(') === false, 'The timeline must not maintain a second hand-written WebSocket protocol client.');
-        $suite->true(strpos($connection, 'loadMessages("newer", projectGeneration)') !== false, 'A successful rejoin must perform one gap-recovery synchronization.');
+        $suite->true(strpos($connection, 'Promise.all([loadMessages("newer", projectGeneration), loadTasks(projectGeneration)])') !== false,
+            'A successful rejoin must perform one message-and-task gap-recovery synchronization.');
         $suite->true(strpos($source, 'const delay = Math.min(60000, 5000 * (2 ** Math.min(state.realtimeRetryCount, 4)));') !== false, 'Realtime reconnects must use bounded exponential backoff.');
         $suite->true(is_file($root . '/vendor/pbb-realtime/js/sdk/index.js'), 'The same-origin PBB Realtime SDK is missing.');
     });
@@ -300,7 +301,26 @@ try {
         $source = file_get_contents($root . '/assets/app.mjs');
         $suite->true(strpos($source, 'envelope.type === "syndicatum.participants.changed"') !== false, 'Realtime participant changes must be handled.');
         $suite->true(strpos($source, 'async function refreshParticipants(') !== false, 'The participant reload helper is missing.');
-        $suite->true(strpos($source, 'Promise.all([loadMessages("newer"), refreshParticipants()])') !== false, 'Polling fallback must refresh participants.');
+        $suite->true(strpos($source, 'Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()])') !== false, 'Polling fallback must refresh participants and tasks.');
+        $suite->true(strpos($source, 'function receiveRealtimeTask(source)') !== false
+            && strpos($source, 'receiveRealtimeTask(envelope.payload.task)') !== false,
+            'Realtime task snapshots must update the task rail without a list request.');
+        $suite->true(strpos($source, 'receiveRealtimeTask(created)') !== false
+            && strpos($source, 'receiveRealtimeTask(updated)') !== false,
+            'HTTP task results must share the version-aware upsert path with Realtime events.');
+        $suite->true(strpos($source, 'state.components.responsibilityInbox?.refreshFromRealtime(message.id);') !== false
+            && strpos($source, 'query.set("changed_by_message_id", changedByMessageId);') !== false,
+            'Realtime messages must request an exact responsibility projection refresh.');
+        $inbox = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $suite->true(strpos($inbox, 'async function flushRealtimeRefresh()') !== false
+            && strpos($inbox, 'renderPreservingViewport();') !== false
+            && strpos($inbox, 'Updated automatically.') !== false,
+            'Realtime responsibility updates must be coalesced and rendered without resetting the viewport.');
+        $suite->true(strpos($source, 'responsibilityInbox?.markStale()') === false
+            && strpos($inbox, 'markStale()') === false,
+            'Realtime inbox updates must not fall back to a manual refresh notice.');
+        $suite->true(strpos($source, 'startTaskPolling') === false && strpos($source, 'taskPollingTimer') === false,
+            'Tasks must not retain a dedicated poller while project Realtime is active.');
     });
 
     $suite->test('Broadcast messages render as broadcasts instead of mass tags', function () use ($suite, $root) {
@@ -318,6 +338,7 @@ try {
 
     $suite->test('Message composer precedes filters and the newest-first timeline', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
+        $styles = file_get_contents($root . '/assets/app.css');
         $messagesColumn = strpos($index, 'class="surface-column project-messages-column"');
         $overview = strpos($index, 'class="project-overview timeline-project-overview"');
         $composer = strpos($index, 'id="composer-shell"');
@@ -326,6 +347,10 @@ try {
         $suite->true($messagesColumn !== false && $overview !== false && $composer !== false && $filters !== false && $timeline !== false, 'Project message controls are missing.');
         $suite->true($messagesColumn < $overview && $overview < $composer && $composer < $filters && $filters < $timeline, 'The project overview must replace the timeline header above the composer, filters, and timeline.');
         $suite->same(1, substr_count($index, 'class="project-overview timeline-project-overview"'), 'The project overview must render only in the message column.');
+        $suite->true(strpos($styles, '#timeline-host .ui-timeline-group-label:not(.ui-timeline-floating-date)') !== false,
+            'Application date styling must exclude the Helper-owned floating date label.');
+        $suite->true(strpos($styles, '#timeline-host .ui-timeline-group-label { position: sticky;') === false,
+            'Legacy sticky positioning must not override the Helper timeline floating-date implementation.');
     });
 
     $suite->test('Timeline search stays visible while structured filters use the Helper popover', function () use ($suite, $root) {
@@ -342,7 +367,182 @@ try {
         $suite->true(strpos($source, 'state.components.filterPopover = state.factories.createPopover') !== false, 'Timeline filters must mount through the Helper popover.');
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
         $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
-        $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.185";') !== false, 'The integrated Helper bundle must retain the current live revision.');
+        $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.205";') !== false, 'The integrated Helper bundle must retain the current live revision.');
+    });
+
+    $suite->test('Navigation uses the Syndicatum brand as the single workspace route', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
+        $suite->true(strpos($source, 'id: "mobile-projects"') === false,
+            'The redundant mobile Projects navigation item must not be rendered.');
+        $suite->true(strpos($source, 'item?.id === "mobile-projects"') === false,
+            'The retired mobile Projects navigation handler must be removed.');
+        $suite->true(strpos($source, 'id: "workspace", label: "Home"') === false
+            && strpos($source, 'desktop-workspace-nav') === false,
+            'The redundant desktop Home navigation item must not be rendered.');
+        $suite->true(strpos($source, 'if (item?.id === "brand") showWorkspaceSurface();') !== false,
+            'The Syndicatum brand must continue to route users back to the workspace.');
+        $suite->true(strpos($source, '!["workspace", "project"].includes(state.surface) || !selectedProjectId()') !== false
+            && strpos($source, 'state.surface !== "project") return;') === false,
+            'The selected project view switch must remain interactive after brand navigation changes the route to the workspace.');
+        $suite->true(strpos($guide, 'Select the Syndicatum logo to return to the workspace.') !== false
+            && strpos($guide, 'logo and Home') === false,
+            'The User Guide must describe the brand as the single workspace route.');
+    });
+
+    $suite->test('Signed-in users have a searchable contextual User Guide', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $content = file_get_contents($root . '/assets/user-guide-content.mjs');
+        $inbox = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $index = file_get_contents($root . '/index.php');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $rewrites = file_get_contents($root . '/.htaccess');
+        $suite->true(strpos($source, '{ id: "guide", label: "User Guide"') !== false
+            && strpos($source, 'else if (item?.id === "guide") showGuideSurface();') !== false,
+            'The account menu must expose the User Guide to signed-in users outside administrator capability checks.');
+        $suite->true(strpos($source, 'function showGuideSurface(') !== false
+            && strpos($source, 'function renderGuideSurface()') !== false
+            && strpos($source, 'searchGuide(state.guideQuery, { administrator: isAdministrator() })') !== false,
+            'The guide must provide a dedicated searchable application surface.');
+        foreach (['Getting started', 'Connections and setup', 'Communication and work', 'Responsibility Inbox', 'Tasks', 'Templates', 'Agents', 'Administration', 'Glossary and troubleshooting'] as $section) {
+            $suite->true(strpos($content, 'title: "' . $section . '"') !== false, 'Missing guide section: ' . $section);
+        }
+        foreach (['setup-companion', 'setup-codex', 'setup-chatgpt', 'setup-gemini'] as $articleId) {
+            $suite->true(strpos($content, 'id: "' . $articleId . '"') !== false, 'Missing provider setup article: ' . $articleId);
+        }
+        $suite->true(strpos($content, 'Never enter an agent claim code or agent token in the Companion.') !== false
+            && strpos($content, 'Claim codes expire after 15 minutes, are single-use, and are shown only once.') !== false
+            && strpos($content, 'Discussion Binding: Successful') !== false
+            && strpos($content, 'It is not a Gemini-native MCP or command-line integration.') !== false,
+            'Provider setup must preserve credential, binding, and integration boundaries.');
+        $suite->true(strpos($content, 'https://github.com/jybanez/syndicatum/releases/latest') !== false
+            && strpos($source, 'link.rel = "noopener noreferrer";') !== false
+            && strpos($styles, '.guide-resource-link') !== false,
+            'The Companion guide must expose the canonical latest-release download through a safely rendered resource link.');
+        foreach (['codex plugin marketplace add jybanez/syndicatum --ref main', 'codex plugin add codex@syndicatum', 'syndicatum bind <project name> <agent identity>'] as $command) {
+            $suite->true(strpos($content, 'command: "' . $command . '"') !== false, 'Missing copyable Codex setup command: ' . $command);
+        }
+        $suite->true(strpos($source, 'function guideCommandBlock(command)') !== false
+            && strpos($source, 'navigator.clipboard.writeText(command)') !== false
+            && strpos($source, 'helperIconHtml("actions.copy", 16)') !== false
+            && strpos($source, 'Copy failed. Select the command and copy it manually.') !== false
+            && strpos($styles, '.guide-command') !== false,
+            'Structured guide commands must render as selectable blocks with accessible shared-icon copy actions and visible clipboard feedback.');
+        $suite->true(substr_count($content, 'type: "article-link", articleId: "setup-companion"') === 2
+            && strpos($source, 'function appendGuideRichText(container, parts = [])') !== false
+            && strpos($source, 'selectGuideArticle(target.id);') !== false
+            && strpos($source, 'link.href = `${applicationPath("guide")}#${encodeURIComponent(target.id)}`;') !== false
+            && strpos($styles, '.guide-article-link') !== false,
+            'References to another User Guide article must render as deep links and use the existing article-selection flow for immediate in-guide navigation.');
+        $suite->true(strpos($content, 'audience: "administrator"') !== false
+            && strpos($content, 'visibleGuideSections(options)') !== false
+            && strpos($source, 'guideArticle(articleId, { administrator: isAdministrator() })') !== false,
+            'Administration guidance must be excluded from regular-user navigation, search, and direct article selection.');
+        $suite->true(strpos($inbox, 'Guide to these views') !== false
+            && strpos($source, 'openGuide: (articleId) => showGuideSurface(articleId)') !== false
+            && strpos($index, 'id="task-guide-trigger"') !== false
+            && strpos($source, 'showGuideSurface("tasks-overview")') !== false,
+            'Responsibility Inbox and Tasks must link directly to their contextual guide topics.');
+        $suite->true(strpos($styles, '.guide-browser') !== false
+            && strpos($styles, '.guide-tree') !== false
+            && strpos($styles, '.guide-article') !== false,
+            'The User Guide must use the responsive master-detail layout.');
+        $suite->true(strpos($styles, '.guide-article { display: block;') !== false
+            && strpos($styles, '.guide-article-body { display: grid; align-content: start; grid-auto-rows: max-content;') !== false,
+            'Guide article content must retain natural top-aligned spacing instead of stretching to fill the pane.');
+        $suite->true(strpos($styles, '.guide-tree { display: block;') !== false,
+            'Guide navigation must override the shared panel grid so search and filtered results retain natural height.');
+        $suite->true(strpos($rewrites, 'guide|users|agents|audit|templates') !== false,
+            'Direct User Guide navigation must resolve through the application route.');
+    });
+
+    $suite->test('Templates navigation sits between Audit and Settings with a guarded route', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $rewrites = file_get_contents($root . '/.htaccess');
+        $audit = strpos($source, 'id: "audit", label: "Audit"');
+        $templates = strpos($source, 'id: "templates", label: "Templates"');
+        $settings = strpos($source, 'id: "settings", label: "Settings"');
+        $suite->true($audit !== false && $templates !== false && $settings !== false
+            && $audit < $templates && $templates < $settings,
+            'Templates must appear between Audit and Settings in the administrator menu.');
+        $suite->true(strpos($source, '["templates", "delivery-health", "backup-restore"].includes(kind)') !== false,
+            'Templates must use the administrator settings authorization boundary.');
+        $suite->true(strpos($source, 'async function loadTemplatesSurface()') !== false
+            && strpos($source, 'projectTemplates: "api/v1/admin/project-templates.php"') !== false
+            && strpos($source, 'openTemplateAgentModal') !== false
+            && strpos($source, 'label: "Category", required: true') !== false
+            && strpos($source, 'className = "template-browser"') !== false
+            && strpos($source, 'className = "template-tree ui-panel"') !== false
+            && strpos($source, 'renderTemplateDetailPanel(selectedTemplate)') !== false
+            && strpos($source, 'className = "template-detail-body"') !== false
+            && strpos($source, 'className = "template-context-stack"') !== false
+            && strpos($source, 'collapsedTemplateCategoryIds: new Set()') !== false
+            && strpos($source, 'detailHost.replaceChildren(renderTemplateDetailPanel(template))') !== false
+            && strpos($source, 'classList.toggle("is-templates", kind === "templates")') !== false,
+            'The Templates route must open a real foundation surface rather than a dead navigation item.');
+        $suite->true(strpos($source, 'function mountTemplateMobileNavigation(') !== false
+            && strpos($source, 'const TEMPLATE_MOBILE_QUERY = "(max-width: 680px)";') !== false
+            && strpos($source, 'mobileNavigation?.setView("preview", { focus: true })') !== false,
+            'Selecting a template on mobile must open its preview through the shared responsive view switcher.');
+        $suite->true(strpos($rewrites, 'audit|templates|delivery-health') !== false,
+            'Direct Templates navigation must resolve through the application route.');
+    });
+
+    $suite->test('project creation uses the canonical template workflow stack', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $css = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, '"ui.navigation.stack"') !== false
+            && strpos($source, 'createNavigationStack: await uiLoader.get("ui.navigation.stack", options)') !== false
+            && strpos($source, 'state.factories.createNavigationStack(host, { chrome: false') !== false,
+            'Project creation must use the complete Helper navigation stack inside its modal.');
+        $suite->true(strpos($source, 'modal.open(); modal.setBusy(true, { message: "Loading project templates…"') !== false
+            && strpos($source, 'request(API.projectTemplateLibrary, { signal: abortController.signal })') !== false,
+            'The modal must open before template loading and cancel or ignore late initialization.');
+        $suite->true(strpos($source, 'Please address the following issues before continuing:') !== false
+            && strpos($source, 'Choose Codex, ChatGPT, or Gemini, or exclude this preset.') !== false,
+            'Project and agent steps must validate before creating the project.');
+        $suite->true(strpos($source, 'Continue without template') === false
+            && strpos($source, 'label: "Next", variant: "primary"') !== false
+            && strpos($source, 'no provider credential is copied') !== false
+            && strpos($source, 'template_version: workflow.selectedTemplate.version') !== false,
+            'The workflow must use explicit template application and provider-safe preset creation.');
+        $suite->same(1, substr_count($source, 'badge.textContent = "Built-in"'),
+            'Built-in metadata must remain in template details but not appear in either template navigation tree.');
+        $suite->true(strpos($css, '.project-template-picker') !== false && strpos($css, '.project-agent-config-card') !== false,
+            'Template selection and agent configuration need dedicated responsive modal layout contracts.');
+        $suite->true(strpos($source, 'className: "project-template-modal"') !== false
+            && strpos($css, '.template-mobile-navigation') !== false
+            && strpos($css, '.template-browser[data-mobile-view="library"]') !== false
+            && strpos($css, '.project-template-modal .ui-modal { width: 100vw;') !== false,
+            'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
+    });
+
+    $suite->test('Helper 0.21.205 date and time controls retain native theme integration', function () use ($suite, $root) {
+        $app = file_get_contents($root . '/assets/app.mjs');
+        $setup = file_get_contents($root . '/assets/setup.mjs');
+        $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
+        $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
+        $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
+        foreach ([$app, $setup, $connector] as $source) {
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.205') !== false,
+                'Every Helper entry point must use the canonical 0.21.205 bundle revision.');
+        }
+        foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
+            $surfaceSource = file_get_contents($root . '/' . $surface);
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.205') !== false,
+                $surface . ' must use the matching canonical 0.21.205 stylesheet revision.');
+        }
+        $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
+            'The Helper bundle must theme native date and time controls in dark themes.');
+        $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: light') !== false,
+            'The Helper bundle must theme native date and time controls in light themes.');
+        $suite->true(strpos($bundleCss, 'color-scheme:var(--ui-datepicker-color-scheme, dark)') !== false,
+            'The Helper bundle must apply the datepicker color scheme to native time inputs.');
+        $suite->true(strpos($bundleJs, 'onContextMenuAction') !== false
+            && strpos($bundleJs, 'ui-timeline-menu-trigger') !== false,
+            'The Helper bundle must expose the native timeline context-menu implementation.');
+        $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
+            'The matching Helper stylesheet must include native timeline menu presentation.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -415,7 +615,11 @@ try {
         $index = file_get_contents($root . '/index.php');
         $suite->true(strpos($index, 'class="addressing-row" id="addressing-row"') !== false, 'The addressing controls need a stable visibility target.');
         $suite->true(strpos($source, 'state.draft.addressees = senderId && senderId !== currentParticipantId ? [senderId] : fallbackRecipients;') !== false, 'Reply must automatically select the original sender.');
-        $suite->true(strpos($source, 'el.addressing_row.hidden = hasAutomaticReplyRecipient;') !== false, 'Automatic reply addressing must hide the redundant controls.');
+        $suite->true(strpos($source, 'el.address_mode.hidden = hasAutomaticReplyRecipient;') !== false
+            && strpos($source, 'el.addressee_select.hidden = broadcast || hasAutomaticReplyRecipient;') !== false,
+            'Automatic reply addressing must hide the redundant mode and recipient controls.');
+        $suite->true(strpos($source, 'el.addressing_row.hidden = false;') !== false,
+            'Replies must retain the intent control so an action request remains explicit.');
         $suite->true(strpos($source, 'function restoreNormalAddressing()') !== false, 'Cancelling or sending a reply must restore the previous addressing state.');
     });
 
@@ -427,6 +631,12 @@ try {
         $suite->true(strpos($index, 'class="ui-badge" id="status-badge"') === false, 'Realtime state must not render as a visible pill.');
         $suite->true(strpos($source, 'state.components.projectActions = state.factories.createDropdown') !== false, 'Project management actions must use the supported Helper dropdown.');
         $suite->true(strpos($source, 'helperIconHtml("actions.more-horizontal", 18)') !== false, 'The project menu must use the shared Helper icon.');
+        $suite->true(strpos($index, 'id="project-instructions"') === false && strpos($source, 'el.project_instructions') === false,
+            'Operating instructions must not render in the timeline workspace.');
+        $suite->true(strpos($source, '"Operating instructions", "Shared governance and optional project-specific guidance."') !== false
+            && strpos($source, 'Governance baseline · version ${governance.version}') !== false
+            && strpos($source, 'project-info-instructions-copy') !== false,
+            'Project Info must distinguish the shared governance baseline from project-specific instructions.');
     });
 
     $suite->test('Project routes use public UUIDs while API state retains internal IDs', function () use ($suite, $root) {
@@ -449,10 +659,10 @@ try {
         $source = file_get_contents($root . '/assets/app.mjs');
         $suite->true(strpos($source, '"ui.dialog.alert"') !== false, 'The Helper alert dialog must be loaded.');
         $suite->true(strpos($source, 'uiAlert: await uiLoader.get("ui.dialog.alert", options)') !== false, 'The Helper alert factory must be resolved through the loader.');
-        $suite->true(strpos($source, 'await state.factories.uiAlert("Select at least one expected responder, or choose Broadcast."') !== false, 'Missing addressees must open an alert dialog.');
+        $suite->true(strpos($source, 'await state.factories.uiAlert("Select at least one recipient, or choose Broadcast."') !== false, 'Missing recipients must open an alert dialog.');
         $suite->true(strpos($source, 'if (error.status === 422)') !== false, 'API validation failures must be handled separately from operational failures.');
         $suite->true(strpos($source, 'title: "Message needs attention"') !== false, 'API validation alerts need a clear title.');
-        $suite->true(strpos($source, 'toast.warn("Select at least one expected responder') === false, 'Composer validation must not fall back to the low-visibility toast.');
+        $suite->true(strpos($source, 'toast.warn("Select at least one recipient') === false, 'Composer validation must not fall back to the low-visibility toast.');
     });
 
     $suite->test('Real avatars replace the colored initials fallback', function () use ($suite, $root) {
@@ -480,18 +690,182 @@ try {
         $suite->true(strpos(file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'), 'people.agent') !== false, 'The vendored Helper bundle must expose people.agent.');
     });
 
-    $suite->test('Agent editing shows immediate Helper busy feedback while details load', function () use ($suite, $root) {
+    $suite->test('Project search reserves a separate navigation action column', function () use ($suite, $root) {
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($styles, '.project-filter-row { grid-template-columns: minmax(0, 1fr) 40px; }') !== false,
+            'Project search and its actions trigger must occupy separate grid columns.');
+        $suite->true(strpos($styles, '.project-search .ui-input { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }') !== false,
+            'The project search input must shrink within its assigned grid column.');
+    });
+
+    $suite->test('Responsibility acknowledgement updates one card without reloading the list', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $suite->true(strpos($source, 'applyAcknowledgement(row, item, scrollTop);') !== false,
+            'Responsibility acknowledgement must apply a targeted card update.');
+        $suite->true(strpos($source, "await options.acknowledge(item);\n          await load();") === false,
+            'The normal acknowledgement path must not reload and rebuild the entire responsibility list.');
+        $suite->true(strpos($source, 'const scrollTop = host.scrollTop;') !== false
+            && substr_count($source, 'host.scrollTop = scrollTop;') >= 2
+            && strpos($source, 'focus({ preventScroll: true })') !== false,
+            'The targeted acknowledgement update must preserve scroll position and focus without scrolling.');
+        $suite->true(strpos($source, 'const scrollTop = host.scrollTop;')
+            < strpos($source, 'await options.acknowledge(item);'),
+            'The inbox scroll position must be captured before the acknowledgement request begins.');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($styles, '.responsibility-scroll { min-height: 0; overflow: auto; overflow-anchor: none;') !== false,
+            'The responsibility scroll container must not let browser anchoring override the preserved position.');
+    });
+
+    $suite->test('Responsibility inbox automatically pages near the scroll boundary', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $suite->true(strpos($source, 'new IntersectionObserver') !== false
+            && strpos($source, 'root: host, rootMargin: "0px 0px 240px 0px"') !== false,
+            'Responsibility paging must observe a sentinel within the inbox scroll container.');
+        $suite->true(strpos($source, 'host.addEventListener("scroll", scheduleAutomaticPaging, { passive: true });') !== false
+            && strpos($source, 'host.scrollHeight - host.scrollTop - host.clientHeight') !== false
+            && strpos($source, 'if (remaining <= 240) requestAutomaticPage();') !== false,
+            'Responsibility paging must also respond directly to the actual inbox scroll boundary.');
+        $suite->true(strpos($source, 'let autoPageArmed = true;') !== false
+            && strpos($source, 'if (destroyed || loading || autoLoadFailed || !hasMore || !autoPageArmed) return;') !== false
+            && strpos($source, 'autoPageArmed = false;') !== false
+            && strpos($source, 'if (remaining > 360)') !== false,
+            'Automatic paging must issue only one request per bottom-boundary arrival.');
+        $suite->true(strpos($source, 'if (append) updatePagingControls();') !== false
+            && strpos($source, 'for (const item of incoming) list.append(renderItem(item));') !== false,
+            'Appending a page must preserve existing cards instead of rebuilding the list.');
+        $suite->true(strpos($source, 'No matches in this page. Load older work to continue.') === false
+            && strpos($source, 'No results for “${label}” yet.') !== false
+            && stripos($source, 'checking older work') === false
+            && strpos($source, 'No results for “${label}” in the loaded items. Retry loading older work.') !== false,
+            'Empty states must name the selected view without exposing automatic pagination, while retaining a retry after failure.');
+    });
+
+    $suite->test('Responsibility original messages open in a loading modal without leaving the inbox', function () use ($suite, $root) {
+        $source = str_replace("\r\n", "\n", file_get_contents($root . '/assets/app.mjs'));
+        $start = strpos($source, 'function openResponsibilityMessage(messageId)');
+        $end = strpos($source, "\nasync function jumpToMessage", $start);
+        $suite->true($start !== false && $end !== false, 'The responsibility message modal workflow is missing.');
+        $workflow = substr($source, $start, $end - $start);
+        $open = strpos($workflow, 'modal.open();');
+        $busy = strpos($workflow, 'modal.setBusy(true');
+        $request = strpos($workflow, 'await request(`${API.message}');
+        $suite->true($open !== false && $busy !== false && $request !== false && $open < $busy && $busy < $request,
+            'The canonical modal must open and enter its loading state before requesting message data.');
+        $suite->true(strpos($workflow, 'new AbortController()') !== false
+            && strpos($workflow, 'cancelBusy: { label: "Cancel"') !== false,
+            'Loading the original message must be cancellable and abort its request when dismissed.');
+        $suite->true(strpos($workflow, 'label: "Retry"') !== false
+            && strpos($workflow, 'Unable to load the original message.') !== false,
+            'A failed message request must keep the modal open with an actionable retry.');
+        $suite->true(strpos($workflow, 'showProjectView("timeline")') === false
+            && strpos($workflow, 'scrollToItem') === false,
+            'Viewing an original message must not navigate away from the Responsibility Inbox.');
+        $suite->true(strpos($source, 'Exact project message. Viewing it here does not change the Responsibility Inbox or its scroll position.') === false,
+            'The message modal must not repeat implementation-detail guidance above the evidence.');
+        $suite->true(strpos($source, 'import { evidenceDetails } from "./responsibility-evidence.mjs?v=') !== false
+            && strpos($source, 'showCanonicalEvidence(') === false,
+            'The application must render canonical evidence inside the Helper action modal and cache-bust formatter updates.');
+    });
+
+    $suite->test('Shared tasks occupy the workspace between timeline and team', function () use ($suite, $root) {
+        $index = file_get_contents($root . '/index.php');
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $timeline = strpos($index, 'id="project-messages-column"');
+        $tasks = strpos($index, 'id="project-tasks-column"');
+        $team = strpos($index, 'id="project-participants-column"');
+        $suite->true($timeline !== false && $tasks !== false && $team !== false && $timeline < $tasks && $tasks < $team,
+            'The task rail must render between the timeline and team columns.');
+        $suite->true(strpos($styles, '.task-card-title { font-size: 14px;') !== false,
+            'Task-card titles must use compact rail typography without changing task detail headings.');
+        $suite->true(strpos($source, 'Every active participant in this project can see this task.') !== false,
+            'Task creation must explain project-wide visibility.');
+        $suite->true(strpos($source, 'source_message_id: sourceMessage?.id || null') !== false,
+            'Timeline messages must support traceable task creation.');
+        $suite->true(strpos($source, 'convert_action_request: convertsActionRequest') !== false
+            && strpos($source, 'Convert action request to task') !== false,
+            'Action-request conversion must be explicit in the task write and modal.');
+        $suite->true(strpos($source, 'title: sourceMessage ?') === false
+            && strpos($source, 'description: sourceMessage ? `Created from timeline message') === false,
+            'Message-linked task creation must leave the editable title and description blank.');
+        $suite->true(strpos($source, 'contextMenu: messageContextMenu(message)') !== false
+            && strpos($source, 'async onContextMenuAction(action, item)') !== false
+            && strpos($source, 'id: "create-task", label: message.action_requested ? "Convert to task" : "Create task"') !== false,
+            'Message secondary actions must use the native Helper timeline context-menu contract.');
+        $suite->true(strpos($source, 'attachActionMenuTrigger') === false
+            && strpos($source, 'message-action-menu-trigger') === false,
+            'The retired application-owned timeline trigger workaround must not remain after native adoption.');
+        $suite->true(strpos($source, 'actionButton("Create task"') === false,
+            'Create task must remain in the native context menu rather than the expanding footer.');
+        $suite->true(strpos($source, 'function canAcknowledgeMessage(message)') !== false
+            && strpos($source, 'actionButton("Acknowledge"') !== false
+            && strpos($source, 'actions.appendChild(acknowledge);') !== false,
+            'Eligible messages must restore Acknowledge directly beside Reply.');
+        $suite->true(strpos($source, 'View linked tasks (') !== false
+            && strpos($source, 'function openLinkedMessageTasks(message)') !== false,
+            'Messages must expose tasks linked through source_message_id.');
+        $inbox = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $suite->true(strpos($inbox, '"Convert to task"') !== false
+            && strpos($inbox, '"View linked task"') !== false
+            && strpos($inbox, 'refreshTasks()') !== false,
+            'Responsibility requests must expose conversion or their existing linked task without a reload.');
+        $suite->true(strpos($source, 'View source message') !== false
+            && strpos($source, 'openResponsibilityMessage(task.source_message_id)') !== false,
+            'Task details must link back to their originating timeline message.');
+        $suite->true(strpos($source, '`${API.tasks}?${new URLSearchParams({ project_id: selectedProjectId() })}`') !== false,
+            'Task creation must bind authorization to the selected project in the request URL.');
+        $suite->true(strpos($source, 'type: "ui.datepicker", name: "due_at"') !== false
+            && strpos($source, 'showTime: true, timePrecision: "minute", valueMode: "wall-clock"') !== false,
+            'Optional task due dates must use the native Helper date-and-time field.');
+        $suite->true(strpos($source, 'label: "Supervising participant"') === false,
+            'The authenticated task giver must not be exposed as an editable supervisor field.');
+        $suite->true(strpos($source, 'el.new_task_trigger.addEventListener("click", () => openCreateTaskModal());') !== false,
+            'The New task trigger must not leak its click event into source-message attribution.');
+        $suite->true(strpos($source, 'modal.setBusy(true, { message: "Loading task details..." })') !== false,
+            'Task detail modals must open before loading and expose a busy state.');
+        $suite->true(strpos($source, 'modal.setActions(taskActions(task, modal));') !== false
+            && strpos($source, 'modal.setContent(taskDetailContent(task));') !== false
+            && strpos($source, 'loading.replaceWith(taskDetailContent(task));') === false,
+            'Task details must update through the canonical modal API after actions rerender the modal.');
+        $suite->true(strpos($source, 'const taskGiver = id(task.created_by_participant_id) === current;') !== false
+            && strpos($source, 'if (taskGiver) actions.unshift({ id: "edit"') !== false,
+            'Only the authenticated task giver may see the task-definition edit action.');
+        $suite->true(strpos($source, 'addDetailSection("Responsibility"') !== false
+            && strpos($source, 'addDetailSection("Schedule"') !== false
+            && strpos($source, 'activityHeading.textContent = "Activity"') !== false,
+            'Task details must organize responsibility, schedule, criteria, and activity into clear sections.');
+    });
+
+    $suite->test('Agent profiles foreground project assignment and responsibilities', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $start = strpos($source, 'function openParticipantInfoModal(participant)');
+        $end = strpos($source, "\nfunction participantMembershipStatusLabel(", $start);
+        $suite->true($start !== false && $end !== false, 'Participant profile implementation is missing.');
+        $profile = substr($source, $start, $end - $start);
+        $suite->true(strpos($profile, '"participant-profile-role-title"') !== false, 'The agent role title must appear with the identity.');
+        $suite->true(strpos($profile, '"participant-profile-role-summary"') !== false, 'The role summary must appear with the identity.');
+        $suite->true(strpos($profile, '"Reports to"') !== false && strpos($profile, '"No supervisor assigned"') !== false, 'The project assignment must state the supervisor relationship explicitly.');
+        $suite->true(strpos($profile, '"Responsibilities"') !== false && strpos($profile, 'participantProfileInstructionBlock("Role instructions"') !== false, 'Role responsibilities must have a dedicated section.');
+        $suite->true(strpos($profile, 'participantProfileInstructionBlock("Project instructions"') !== false, 'Project instructions must be available beside role instructions.');
+        $suite->true(strpos($profile, '"Connection"') !== false, 'Provider information must use the Connection section.');
+        $suite->true(strpos($profile, '"Role version"') !== false && strpos($profile, '"Project context version"') !== false, 'Version metadata must remain in administrator technical details.');
+        $suite->true(strpos($styles, '.participant-profile-supervisor-link') !== false, 'Clickable supervisors need profile-link styling.');
+    });
+
+    $suite->test('Agent editing opens the canonical Helper modal before loading details', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $start = strpos($source, 'async function openEditAgentModal(agent)');
         $end = strpos($source, "\nfunction adminRows(", $start);
         $suite->true($start !== false && $end !== false, 'Agent editor implementation is missing.');
         $editor = substr($source, $start, $end - $start);
-        $overlay = strpos($editor, 'state.factories.createBusyOverlay({');
+        $modal = strpos($editor, 'state.factories.createFormModal({');
+        $open = strpos($editor, 'editModal.open();');
+        $busy = strpos($editor, 'editModal.setBusy(true');
         $firstRequest = strpos($editor, 'await request(');
-        $suite->true($overlay !== false && $firstRequest !== false && $overlay < $firstRequest, 'The busy overlay must appear before the first agent-detail request.');
-        $suite->true(strpos($editor, 'finally {') !== false && strpos($editor, 'loadingOverlay.destroy();') !== false, 'The busy overlay must always be removed.');
-        $suite->true(strpos($source, '"ui.busy.overlay"') !== false, 'The Helper busy overlay must be loaded through ui.loader.');
-        $suite->true(strpos($source, 'createBusyOverlay: await uiLoader.get("ui.busy.overlay", options)') !== false, 'The app must use the Helper busy-overlay factory.');
+        $suite->true($modal !== false && $open !== false && $busy !== false && $firstRequest !== false, 'The agent editor must use the canonical form modal loading state.');
+        $suite->true($modal < $open && $open < $busy && $busy < $firstRequest, 'The form modal must open and enter busy state before the first agent-detail request.');
+        $suite->true(strpos($editor, 'editModal.setFormError(`Unable to load agent configuration.') !== false, 'Loading failures must remain visible in the form modal.');
     });
 
     $suite->test('Agent forms expose Gemini browser companion configuration', function () use ($suite, $root) {

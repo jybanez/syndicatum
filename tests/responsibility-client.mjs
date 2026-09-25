@@ -79,6 +79,10 @@ test("canonical evidence fallback preserves identity, reply context, revisions, 
   const visible = evidenceDetails(message, parent);
   assert.equal(visible.identity, "Canonical message #109");
   assert.equal(visible.sequence, "Project sequence 19");
+  assert.equal(visible.sender, "Responder");
+  assert.match(visible.created, /^[A-Z][a-z]{2} \d{2}, \d{4} \d{2}:\d{2} (AM|PM)$/);
+  assert.doesNotMatch(visible.created, /T|Z|\d{2}:\d{2}:\d{2}/);
+  assert.equal(visible.addressed, "Requester");
   assert.match(visible.reply, /#100, project sequence 10, from Requester/);
   assert.equal(visible.revision, "2 revisions");
   assert.equal(visible.body, "Original evidence");

@@ -13,6 +13,7 @@
     "oauth",
     "plugins/codex",
     "release/package-runtime",
+    "resources",
     "schema/mysql84",
     "scripts",
     "skills",
@@ -85,6 +86,7 @@
     "privacy.php",
     "README.md",
     "release",
+    "resources",
     "schema",
     "scripts",
     "setup.php",
@@ -130,7 +132,7 @@
     "metadata_source": "schema/mysql84/baseline.json",
     "schema_source": "schema/mysql84/schema.sql",
     "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
-    "schema_head": "202609180004",
+    "schema_head": "202609250009",
     "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
     "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e"
   },
@@ -719,6 +721,13 @@
       "source": "api/v1/project-agents.php",
       "action": "ship",
       "path": "app/api/v1/project-agents.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-bootstrap.php",
+      "action": "ship",
+      "path": "app/api/v1/project-bootstrap.php",
       "role": "application",
       "mode": 420
     },
@@ -1794,6 +1803,41 @@
       "mode": 420
     },
     {
+      "source": "api/v1/project-task.php",
+      "action": "ship",
+      "path": "app/api/v1/project-task.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-tasks.php",
+      "action": "ship",
+      "path": "app/api/v1/project-tasks.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "resources/recovery/kickstart.php",
+      "action": "ship",
+      "path": "app/resources/recovery/kickstart.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609240001.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609240001.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609240002.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609240002.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
       "source": "schema/mysql84/backup-policy-v1.json",
       "action": "ship",
       "path": "schema/baselines/mysql84/backup-policy-v1.json",
@@ -2305,6 +2349,20 @@
       "mode": 420
     },
     {
+      "source": "src/ProjectTaskService.php",
+      "action": "ship",
+      "path": "app/src/ProjectTaskService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PostBaselineMigrator.php",
+      "action": "ship",
+      "path": "app/src/PostBaselineMigrator.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/RateLimiter.php",
       "action": "ship",
       "path": "app/src/RateLimiter.php",
@@ -2560,6 +2618,279 @@
       "source": "vendor/pbb-realtime/js/sdk/presence/realtime-presence.js",
       "action": "ship",
       "path": "app/vendor/pbb-realtime/js/sdk/presence/realtime-presence.js",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/backup-recovery-key.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/backup-recovery-key.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/kickstart-download.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/kickstart-download.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/restores.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/restores.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/current-backup-ui.mjs",
+      "action": "ship",
+      "path": "app/assets/current-backup-ui.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/current-restore-ui.mjs",
+      "action": "ship",
+      "path": "app/assets/current-restore-ui.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/process-current-backup-jobs.php",
+      "action": "ship",
+      "path": "app/scripts/process-current-backup-jobs.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "scripts/process-current-restore-jobs.php",
+      "action": "ship",
+      "path": "app/scripts/process-current-restore-jobs.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupArchive.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupArchive.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupEnvelope.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupEnvelope.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupJobStore.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupJobStore.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupManifest.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupManifest.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupProducer.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupProducer.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupStorage.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupStorage.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupWorker.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupWorker.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBackupWorkerLauncher.php",
+      "action": "ship",
+      "path": "app/src/CurrentBackupWorkerLauncher.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentBaselineSql.php",
+      "action": "ship",
+      "path": "app/src/CurrentBaselineSql.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentRestoreJobStore.php",
+      "action": "ship",
+      "path": "app/src/CurrentRestoreJobStore.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentRestoreWorker.php",
+      "action": "ship",
+      "path": "app/src/CurrentRestoreWorker.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/CurrentRestoreWorkerLauncher.php",
+      "action": "ship",
+      "path": "app/src/CurrentRestoreWorkerLauncher.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/InAppRestorePolicy.php",
+      "action": "ship",
+      "path": "app/src/InAppRestorePolicy.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PortableBackupArchive.php",
+      "action": "ship",
+      "path": "app/src/PortableBackupArchive.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PortableBackupConfiguration.php",
+      "action": "ship",
+      "path": "app/src/PortableBackupConfiguration.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PortableBackupManifest.php",
+      "action": "ship",
+      "path": "app/src/PortableBackupManifest.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PortableBackupRuntime.php",
+      "action": "ship",
+      "path": "app/src/PortableBackupRuntime.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/PrivateStorage.php",
+      "action": "ship",
+      "path": "app/src/PrivateStorage.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/admin/project-templates.php",
+      "action": "ship",
+      "path": "app/api/v1/admin/project-templates.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-templates.php",
+      "action": "ship",
+      "path": "app/api/v1/project-templates.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "assets/user-guide-content.mjs",
+      "action": "ship",
+      "path": "app/assets/user-guide-content.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250001.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250001.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250002.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250002.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250003.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250003.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250004.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250004.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250005.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250005.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250006.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250006.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250007.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250007.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250008.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250008.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "migrations/202609250009.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609250009.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
+      "source": "src/ProjectGovernancePolicy.php",
+      "action": "ship",
+      "path": "app/src/ProjectGovernancePolicy.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ProjectTemplateService.php",
+      "action": "ship",
+      "path": "app/src/ProjectTemplateService.php",
       "role": "application",
       "mode": 420
     },

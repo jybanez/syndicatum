@@ -7,6 +7,7 @@ class MessageOutbox
 {
     const EVENT_MESSAGE_CREATED = 'syndicatum.message.created';
     const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
+    const EVENT_TASK_UPDATED = 'syndicatum.task.updated';
     const DEFAULT_MAX_ATTEMPTS = 8;
 
     private $pdo;
@@ -84,6 +85,45 @@ class MessageOutbox
             $eventUuid,
             (int) $projectId,
             self::EVENT_PARTICIPANTS_CHANGED,
+            $payloadJson,
+            $now,
+            $now,
+        ]);
+
+        return $this->findById((int) $this->pdo->lastInsertId());
+    }
+
+    /**
+     * Publish the authoritative task snapshot after a create or update. Call
+     * this inside the same transaction as the task mutation.
+     */
+    public function enqueueTaskUpdated($projectId, $taskId, array $task, $change)
+    {
+        $eventUuid = self::uuidV4();
+        $payload = [
+            'event_id' => $eventUuid,
+            'type' => self::EVENT_TASK_UPDATED,
+            'project_id' => (int) $projectId,
+            'task_id' => (int) $taskId,
+            'change' => trim((string) $change),
+            'task' => $task,
+        ];
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payloadJson === false) {
+            throw new RuntimeException('Unable to encode the task outbox event.');
+        }
+
+        $statement = $this->pdo->prepare(
+            'INSERT INTO message_events_outbox
+             (event_uuid, project_id, message_id, event_type, project_sequence, payload_json,
+              attempt_count, available_at, created_at)
+             VALUES (?, ?, NULL, ?, NULL, ?, 0, ?, ?)'
+        );
+        $now = Db::now();
+        $statement->execute([
+            $eventUuid,
+            (int) $projectId,
+            self::EVENT_TASK_UPDATED,
             $payloadJson,
             $now,
             $now,

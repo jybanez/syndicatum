@@ -50,7 +50,6 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                         </button>
                                     </div>
                                 </div>
-                                <div class="project-instructions" id="project-instructions" hidden></div>
                                 <span class="app-visually-hidden" id="status-badge" aria-live="polite">Loading</span>
                                 <span class="app-visually-hidden" id="timeline-count" aria-live="polite">0 messages</span>
                                 <span class="app-visually-hidden" id="connection-label">HTTP</span>
@@ -62,7 +61,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                             <section class="composer-shell" id="composer-shell" hidden aria-label="Compose message">
                                 <div class="reply-context" id="reply-context" hidden></div>
                                 <div class="addressing-row" id="addressing-row">
-                                    <div id="address-mode"></div><div id="addressee-select" class="addressee-select"></div>
+                                    <div id="address-mode"></div><div id="message-intent"></div><div id="addressee-select" class="addressee-select"></div>
                                     <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be notified.</p>
                                 </div>
                                 <div id="composer-host"></div>
@@ -107,6 +106,26 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                             <div class="responsibility-scroll" id="responsibility-host" hidden></div>
                         </section>
 
+                        <div class="workspace-work-splitter-host" id="workspace-work-splitter-host">
+                        <aside class="surface-column project-tasks-column" id="project-tasks-column" data-panel="tasks">
+                            <div class="column-filter-row task-filter-row">
+                                <div><strong>Tasks</strong> <span class="task-count" id="task-count" aria-live="polite">0</span></div>
+                                <div class="task-heading-actions">
+                                    <button type="button" class="ui-button ui-button-borderless task-guide-trigger" id="task-guide-trigger">Guide</button>
+                                    <button type="button" class="ui-button ui-button-primary column-action-trigger" id="new-task-trigger" aria-label="New task" title="New task" hidden>+</button>
+                                </div>
+                            </div>
+                            <select class="ui-input task-status-filter" id="task-status-filter" aria-label="Filter tasks by status">
+                                <option value="active">Active tasks</option>
+                                <option value="all">All tasks</option>
+                                <option value="mine">Assigned to me</option>
+                                <option value="blocked">Blocked</option>
+                                <option value="in_review">In review</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                            <section class="task-list column-scroll-region" id="task-list"></section>
+                        </aside>
+
                         <aside class="surface-column project-participants-column" id="project-participants-column" data-panel="team">
                             <div class="column-filter-row team-filter-row">
                                 <input class="ui-input" id="participant-search" type="search" placeholder="Search team" aria-label="Search team participants">
@@ -118,12 +137,13 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <div class="participant-list" id="participant-list"></div>
                             </section>
                         </aside>
+                        </div>
                     </div>
                 </div>
             </section>
 
             <section class="admin-surface" id="admin-surface" hidden>
-                <header class="surface-heading"><div><p class="ui-eyebrow">Global administration</p><h1 id="admin-title">Administration</h1></div><button class="ui-button ui-button-ghost" id="admin-refresh-button" type="button">Refresh</button></header>
+                <header class="surface-heading"><div><p class="ui-eyebrow" id="admin-eyebrow">Global administration</p><h1 id="admin-title">Administration</h1></div><button class="ui-button ui-button-ghost" id="admin-refresh-button" type="button">Refresh</button></header>
                 <div class="admin-list" id="admin-list"></div>
             </section>
         </main>

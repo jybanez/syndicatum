@@ -4,6 +4,7 @@ require_once __DIR__ . '/LegacyUpgradePackage.php';
 require_once __DIR__ . '/LegacyClaimColumnOrder.php';
 require_once __DIR__ . '/LegacySchemaFingerprint.php';
 require_once __DIR__ . '/InstallationIdentity.php';
+require_once __DIR__ . '/PostBaselineMigrator.php';
 
 /** Executes only the five authenticated forward definitions on a verified legacy clone. */
 final class LegacyForwardUpgrader
@@ -55,6 +56,13 @@ final class LegacyForwardUpgrader
             if ($pending) {
                 throw new RuntimeException('Installation identity exists before forward completion.');
             }
+            $postStatus = (new PostBaselineMigrator($this->pdo, $this->package->baselineMetadataPath(),
+                $this->package->postMigrationDirectory()))->status();
+            foreach ($postStatus as $migration) {
+                if (!$migration['applied']) {
+                    return ['complete' => false, 'pending' => [], 'prefix' => 5, 'post_pending' => true];
+                }
+            }
             $this->assertComplete();
             return ['complete' => true, 'pending' => [], 'prefix' => 5];
         }
@@ -85,6 +93,12 @@ final class LegacyForwardUpgrader
             $state = $this->preflight();
             if ($state['complete']) {
                 return ['executed' => [], 'changed' => false];
+            }
+            if (!empty($state['post_pending'])) {
+                $executed = (new PostBaselineMigrator($this->pdo, $this->package->baselineMetadataPath(),
+                    $this->package->postMigrationDirectory()))->migrate(true);
+                $this->assertComplete();
+                return ['executed' => $executed, 'changed' => !empty($executed)];
             }
             $executed = [];
             $prefix = $state['prefix'];
@@ -133,6 +147,11 @@ final class LegacyForwardUpgrader
             $bridge->apply($this->pdo, ['agents', 'chat_agents']);
             $this->addParticipantCheck();
             $this->createIdentity();
+            if (!hash_equals(self::TARGET_SCHEMA_SHA256, LegacySchemaFingerprint::sha256($this->pdo))) {
+                throw new RuntimeException('Upgraded schema is not the exact protected V1 baseline before its migration suffix.');
+            }
+            (new PostBaselineMigrator($this->pdo, $this->package->baselineMetadataPath(),
+                $this->package->postMigrationDirectory()))->migrate(true);
             $this->assertComplete();
             return ['executed' => $executed, 'changed' => true];
         } finally {
@@ -206,7 +225,7 @@ final class LegacyForwardUpgrader
         $values = [
             'application_version' => $metadata['application_version'],
             'schema_baseline' => $metadata['baseline_id'],
-            'schema_head' => $metadata['schema_head'],
+            'schema_head' => $metadata['migration_cutover'],
             'baseline_source_commit' => $metadata['source_commit'],
             'release_source_commit' => $this->package->sourceCommit(),
             'package_sha256' => $this->package->archiveSha256(),
@@ -235,10 +254,18 @@ final class LegacyForwardUpgrader
 
     private function assertComplete()
     {
-        if (!hash_equals(self::TARGET_SCHEMA_SHA256, LegacySchemaFingerprint::sha256($this->pdo))) {
-            throw new RuntimeException('Upgraded schema is not the exact protected V1 baseline.');
+        $ledger = $this->pdo->query('SELECT version, checksum FROM syndicatum_schema_migrations ORDER BY version')->fetchAll(PDO::FETCH_ASSOC);
+        $postIds = array_column($this->package->baseline()['post_baseline_migrations'], 'id');
+        $legacyLedger = array_values(array_filter($ledger, function ($row) use ($postIds) {
+            return !in_array($row['version'], $postIds, true);
+        }));
+        $this->package->plan()->verifyLedgerRows($legacyLedger, 'target');
+        foreach ((new PostBaselineMigrator($this->pdo, $this->package->baselineMetadataPath(),
+            $this->package->postMigrationDirectory()))->status() as $migration) {
+            if (!$migration['applied'] || !$migration['checksum_valid']) {
+                throw new RuntimeException('Upgraded installation is missing a declared post-baseline migration.');
+            }
         }
-        $this->package->plan()->verifyDatabaseLedger($this->pdo, 'target');
         $rows = $this->pdo->query('SELECT * FROM syndicatum_installation_identity')->fetchAll(PDO::FETCH_ASSOC);
         if (count($rows) !== 1 || (int) $rows[0]['singleton_id'] !== 1) {
             throw new RuntimeException('Upgraded installation identity is not a singleton.');

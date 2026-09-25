@@ -6,6 +6,7 @@ require_once __DIR__ . '/AvatarService.php';
 require_once __DIR__ . '/AgentWebhookService.php';
 require_once __DIR__ . '/SettingsService.php';
 require_once __DIR__ . '/MessageOutbox.php';
+require_once __DIR__ . '/ProjectTemplateService.php';
 
 class ProjectManagementService
 {
@@ -26,6 +27,19 @@ class ProjectManagementService
     {
         $name = trim(isset($input['name']) ? (string) $input['name'] : '');
         if ($name === '' || strlen($name) > 160) { throw new InvalidArgumentException('Project name must contain 1 to 160 characters.'); }
+        $description = trim(isset($input['description']) ? (string) $input['description'] : '');
+        $instructions = trim(isset($input['instructions']) ? (string) $input['instructions'] : '');
+        if (strlen($description) > 10000) { throw new InvalidArgumentException('Project description must not exceed 10,000 characters.'); }
+        if (strlen($instructions) > 50000) { throw new InvalidArgumentException('Operating instructions must not exceed 50,000 characters.'); }
+        $template = null;
+        $templateAgents = [];
+        $templateId = isset($input['template_id']) ? (int) $input['template_id'] : 0;
+        $templateVersion = isset($input['template_version']) ? (int) $input['template_version'] : 0;
+        if ($templateId > 0) {
+            if ($templateVersion < 1) { throw new InvalidArgumentException('The current project template version is required.'); }
+        } elseif (isset($input['template_agents']) && !empty($input['template_agents'])) {
+            throw new InvalidArgumentException('A project template is required when agent presets are supplied.');
+        }
         $workspace = $this->pdo->prepare('SELECT id FROM workspaces WHERE owner_user_id = ?');
         $workspace->execute([(int) $userId]);
         $workspaceId = $workspace->fetchColumn();
@@ -34,23 +48,104 @@ class ProjectManagementService
         $now = Db::now();
         $this->pdo->beginTransaction();
         try {
+            if ($templateId > 0) {
+                $lock = $this->pdo->prepare("SELECT id FROM project_templates WHERE id = ? AND version = ? AND status = 'active' FOR UPDATE");
+                $lock->execute([$templateId, $templateVersion]);
+                if ($lock->fetchColumn() === false) {
+                    $exists = $this->pdo->prepare("SELECT id FROM project_templates WHERE id = ? AND status = 'active'");
+                    $exists->execute([$templateId]);
+                    if ($exists->fetchColumn() === false) { throw new RuntimeException('TEMPLATE_NOT_FOUND'); }
+                    throw new RuntimeException('TEMPLATE_VERSION_CONFLICT');
+                }
+                $template = (new ProjectTemplateService($this->pdo))->activeTemplate($templateId, $templateVersion);
+                $templateAgents = $this->validatedTemplateAgents($template, isset($input['template_agents']) ? $input['template_agents'] : []);
+            }
             $insert = $this->pdo->prepare(
-            "INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, description, instructions, status, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+            "INSERT INTO projects (public_id, workspace_id, owner_user_id, name, slug, description, instructions,
+                    source_template_public_id, source_template_name, source_template_version, status, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
             );
             $insert->execute([Db::uuidV4(), (int) $workspaceId, (int) $userId, $name, $slug,
-                isset($input['description']) ? trim((string) $input['description']) : null,
-                isset($input['instructions']) ? trim((string) $input['instructions']) : null, $now, $now]);
+                $description === '' ? null : $description, $instructions === '' ? null : $instructions,
+                $template ? $template['public_id'] : null, $template ? $template['name'] : null,
+                $template ? (int) $template['version'] : null, $now, $now]);
             $projectId = (int) $this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO project_members (project_id, user_id, role, status, created_at, updated_at) VALUES (?, ?, 'owner', 'active', ?, ?)")
                 ->execute([$projectId, (int) $userId, $now, $now]);
             $this->pdo->prepare("INSERT INTO project_participants (project_id, kind, user_id, status, created_at, updated_at) VALUES (?, 'human', ?, 'active', ?, ?)")
                 ->execute([$projectId, (int) $userId, $now, $now]);
             $this->pdo->prepare('INSERT INTO project_message_sequences (project_id, next_sequence) VALUES (?, 1)')->execute([$projectId]);
-            $this->auth->audit((int) $userId, 'project.created', 'project', (string) $projectId);
+            $agentResults = [];
+            $agentIdsByPreset = [];
+            foreach ($templateAgents as $preset) {
+                $result = $this->createAgent($projectId, $userId, $preset);
+                $agentResults[] = $result;
+                $agentIdsByPreset[(int) $preset['template_agent_id']] = (int) $result['agent_id'];
+            }
+            foreach ($templateAgents as $preset) {
+                $supervisorPresetId = isset($preset['supervising_agent_id']) ? (int) $preset['supervising_agent_id'] : 0;
+                if ($supervisorPresetId < 1 || !isset($agentIdsByPreset[$supervisorPresetId])) { continue; }
+                $participant = $this->pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ? LIMIT 1');
+                $participant->execute([$projectId, $agentIdsByPreset[$supervisorPresetId]]);
+                $supervisorParticipantId = (int) $participant->fetchColumn();
+                $this->pdo->prepare('UPDATE project_agents SET supervising_participant_id = ? WHERE project_id = ? AND agent_id = ?')
+                    ->execute([$supervisorParticipantId, $projectId, $agentIdsByPreset[(int) $preset['template_agent_id']]]);
+            }
+            $this->auth->audit((int) $userId, 'project.created', 'project', (string) $projectId,
+                $template ? ['template_public_id' => $template['public_id'], 'template_version' => (int) $template['version'], 'agent_preset_count' => count($agentResults)] : []);
             $this->pdo->commit();
-            return $this->project($projectId);
+            $project = $this->project($projectId);
+            $project['agent_claims'] = $agentResults;
+            return $project;
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
+    }
+
+    private function validatedTemplateAgents(array $template, $requested)
+    {
+        if (!is_array($requested)) { throw new InvalidArgumentException('Template agent presets must be a list.'); }
+        $available = [];
+        foreach (isset($template['agents']) && is_array($template['agents']) ? $template['agents'] : [] as $preset) {
+            $available[(int) $preset['id']] = $preset;
+        }
+        $result = [];
+        $seen = [];
+        foreach ($requested as $entry) {
+            if (!is_array($entry)) { throw new InvalidArgumentException('Each template agent preset must be an object.'); }
+            $presetId = isset($entry['template_agent_id']) ? (int) $entry['template_agent_id'] : 0;
+            if ($presetId < 1 || !isset($available[$presetId]) || isset($seen[$presetId])) {
+                throw new InvalidArgumentException('Select each agent preset from the current project template only once.');
+            }
+            $seen[$presetId] = true;
+            $preset = $available[$presetId];
+            $provider = strtolower(trim(isset($entry['provider']) ? (string) $entry['provider'] : ''));
+            if (!in_array($provider, ['codex', 'chatgpt', 'gemini'], true)) {
+                throw new InvalidArgumentException('Choose Codex, ChatGPT, or Gemini for every included agent preset.');
+            }
+            $values = [
+                'template_agent_id' => $presetId,
+                'display_name' => trim(isset($entry['display_name']) ? (string) $entry['display_name'] : (string) $preset['display_name']),
+                'provider' => $provider,
+                'role_title' => trim(isset($entry['role_title']) ? (string) $entry['role_title'] : (string) $preset['role_title']),
+                'role_summary' => trim(isset($entry['role_summary']) ? (string) $entry['role_summary'] : (string) $preset['role_summary']),
+                'role_instructions' => trim(isset($entry['role_instructions']) ? (string) $entry['role_instructions'] : (string) $preset['role_instructions']),
+                'supervising_agent_id' => isset($preset['supervising_agent_id']) ? (int) $preset['supervising_agent_id'] : null,
+            ];
+            if ($values['display_name'] === '' || strlen($values['display_name']) > 120) {
+                throw new InvalidArgumentException('Every included agent display name must contain 1 to 120 characters.');
+            }
+            if ($values['role_title'] === '' || strlen($values['role_title']) > 120) {
+                throw new InvalidArgumentException('Every included agent role title must contain 1 to 120 characters.');
+            }
+            $result[] = $values;
+        }
+        $included = array_fill_keys(array_keys($seen), true);
+        foreach ($result as &$values) {
+            if ($values['supervising_agent_id'] !== null && !isset($included[(int) $values['supervising_agent_id']])) {
+                $values['supervising_agent_id'] = null;
+            }
+        }
+        unset($values);
+        return $result;
     }
 
     public function updateWorkspace($userId, array $input)
@@ -80,11 +175,15 @@ class ProjectManagementService
         if ($name === '' || strlen($name) > 160) { throw new InvalidArgumentException('Invalid project name.'); }
         $description = array_key_exists('description', $input) ? trim((string) $input['description']) : $access['description'];
         $instructions = array_key_exists('instructions', $input) ? trim((string) $input['instructions']) : $access['instructions'];
+        $contextChanged = $description !== (string) $access['description']
+            || $instructions !== (string) $access['instructions'];
         $now = Db::now();
         $this->pdo->beginTransaction();
         try {
-            $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?, status = ?, archived_at = ?, updated_at = ? WHERE id = ?');
-            $statement->execute([$name, $description, $instructions, $status, $status === 'archived' ? $now : null, $now, (int) $projectId]);
+            $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?,
+                context_version = context_version + ?, status = ?, archived_at = ?, updated_at = ? WHERE id = ?');
+            $statement->execute([$name, $description, $instructions, $contextChanged ? 1 : 0,
+                $status, $status === 'archived' ? $now : null, $now, (int) $projectId]);
             $this->auth->audit((int) $userId, 'project.updated', 'project', (string) ((int) $projectId), ['status' => $status]);
             $this->pdo->commit();
             return $this->project($projectId);
@@ -199,6 +298,7 @@ class ProjectManagementService
         $scopes = array_values(array_unique(array_intersect($scopes, ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write'])));
         if (empty($scopes)) { throw new InvalidArgumentException('At least one valid agent scope is required.'); }
         $claimExpiresAt = date('Y-m-d H:i:s', time() + 900);
+        $role = $this->agentRoleValues($input);
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
@@ -206,18 +306,26 @@ class ProjectManagementService
                 "INSERT INTO chat_agents (project_name, description, claim_prefix, claim_hash, claim_secret_version, claim_expires_at, role, is_active, created_at, updated_at)
                  VALUES (?, ?, ?, ?, 'primary', ?, 'agent', 1, ?, ?)"
             );
-            $agent->execute([$projectKey, isset($input['description']) ? trim((string) $input['description']) : null,
+            $agent->execute([$projectKey, $role['role_summary'],
                 substr($claimCode, 0, 24), Db::hashToken($claimCode), $claimExpiresAt, $now, $now]);
             $agentId = (int) $this->pdo->lastInsertId();
             $this->pdo->prepare(
-                "INSERT INTO project_agents (project_id, agent_id, display_name, avatar_url, provider, runtime_name, status, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+                "INSERT INTO project_agents (project_id, agent_id, display_name, role_title, role_summary,
+                    role_instructions, avatar_url, provider, runtime_name, status, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
             )->execute([(int) $projectId, $agentId, $displayName,
+                $role['role_title'], $role['role_summary'], $role['role_instructions'],
                 $this->avatarUrl(isset($input['avatar_url']) ? $input['avatar_url'] : null),
                 isset($input['provider']) ? trim((string) $input['provider']) : null,
                 isset($input['runtime_name']) ? trim((string) $input['runtime_name']) : null, $now, $now]);
             $this->pdo->prepare("INSERT INTO project_participants (project_id, kind, agent_id, status, created_at, updated_at) VALUES (?, 'agent', ?, 'active', ?, ?)")
                 ->execute([(int) $projectId, $agentId, $now, $now]);
+            $supervisorId = $this->validatedSupervisorId($projectId, $agentId,
+                isset($input['supervising_participant_id']) ? $input['supervising_participant_id'] : null);
+            if ($supervisorId !== null) {
+                $this->pdo->prepare('UPDATE project_agents SET supervising_participant_id = ? WHERE project_id = ? AND agent_id = ?')
+                    ->execute([$supervisorId, (int) $projectId, $agentId]);
+            }
             $scopeInsert = $this->pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope, created_at) VALUES (?, ?, ?)');
             foreach ($scopes as $scope) { $scopeInsert->execute([$agentId, $scope, $now]); }
             $webhook = null;
@@ -229,11 +337,16 @@ class ProjectManagementService
                 if (array_key_exists('webhook_enabled', $input)) { $webhookInput['enabled'] = $input['webhook_enabled']; }
                 $webhook = (new AgentWebhookService($this->pdo))->configure($projectId, $agentId, $actorUserId, $webhookInput);
             }
-            $this->auth->audit((int) $actorUserId, 'project.agent_created', 'agent', (string) $agentId, ['project_id' => (int) $projectId, 'scopes' => $scopes]);
+            $this->auth->audit((int) $actorUserId, 'project.agent_created', 'agent', (string) $agentId,
+                ['project_id' => (int) $projectId, 'scopes' => $scopes,
+                    'role_version' => 1, 'supervising_participant_id' => $supervisorId]);
             $this->enqueueParticipantsChanged((int) $projectId, 'agent_created');
             if ($ownsTransaction) { $this->pdo->commit(); }
             $result = ['agent_id' => $agentId, 'project_id' => (int) $projectId, 'project_name' => $this->project($projectId)['name'], 'display_name' => $displayName,
                 'avatar_url' => $this->avatarUrl(isset($input['avatar_url']) ? $input['avatar_url'] : null),
+                'role_title' => $role['role_title'], 'role_summary' => $role['role_summary'],
+                'role_instructions' => $role['role_instructions'], 'role_version' => 1,
+                'supervising_participant_id' => $supervisorId,
                 'scopes' => $scopes, 'claim_code' => $claimCode, 'claim_expires_at' => $claimExpiresAt];
             if ($webhook && isset($webhook['signing_secret'])) { $result['webhook_signing_secret'] = $webhook['signing_secret']; }
             return $result;
@@ -271,18 +384,40 @@ class ProjectManagementService
         $runtimeName = array_key_exists('runtime_name', $input) ? trim((string) $input['runtime_name']) : (string) $agent['runtime_name'];
         if (strlen($provider) > 120 || strlen($runtimeName) > 160) { throw new InvalidArgumentException('Agent provider or runtime name is too long.'); }
         $avatarUrl = array_key_exists('avatar_url', $input) ? $this->avatarUrl($input['avatar_url']) : $agent['avatar_url'];
+        $role = $this->agentRoleValues($input, $agent);
+        $supervisorId = array_key_exists('supervising_participant_id', $input)
+            ? $this->validatedSupervisorId($projectId, $agentId, $input['supervising_participant_id'])
+            : ($agent['supervising_participant_id'] === null ? null : (int) $agent['supervising_participant_id']);
+        $roleChanged = $role['role_title'] !== $agent['role_title']
+            || $role['role_summary'] !== $agent['role_summary']
+            || $role['role_instructions'] !== $agent['role_instructions']
+            || $supervisorId !== ($agent['supervising_participant_id'] === null ? null : (int) $agent['supervising_participant_id']);
         $this->pdo->beginTransaction();
         try {
-            $this->pdo->prepare('UPDATE project_agents SET display_name = ?, provider = ?, runtime_name = ?, avatar_url = ?, updated_at = ? WHERE project_id = ? AND agent_id = ?')
-                ->execute([$displayName, $provider === '' ? null : $provider, $runtimeName === '' ? null : $runtimeName,
-                    $avatarUrl, Db::now(), (int) $projectId, (int) $agentId]);
-            $this->auth->audit((int) $actorUserId, 'project.agent_updated', 'agent', (string) ((int) $agentId), ['project_id' => (int) $projectId]);
+            $this->pdo->prepare('UPDATE project_agents SET display_name = ?, role_title = ?, role_summary = ?,
+                role_instructions = ?, supervising_participant_id = ?, role_version = role_version + ?,
+                provider = ?, runtime_name = ?, avatar_url = ?, updated_at = ? WHERE project_id = ? AND agent_id = ?')
+                ->execute([$displayName, $role['role_title'], $role['role_summary'], $role['role_instructions'],
+                    $supervisorId, $roleChanged ? 1 : 0, $provider === '' ? null : $provider,
+                    $runtimeName === '' ? null : $runtimeName, $avatarUrl, Db::now(),
+                    (int) $projectId, (int) $agentId]);
+            if ($role['role_summary'] !== $agent['role_summary']) {
+                $this->pdo->prepare('UPDATE chat_agents SET description = ?, updated_at = ? WHERE id = ?')
+                    ->execute([$role['role_summary'], Db::now(), (int) $agentId]);
+            }
+            $this->auth->audit((int) $actorUserId, 'project.agent_updated', 'agent', (string) ((int) $agentId),
+                ['project_id' => (int) $projectId, 'role_changed' => $roleChanged,
+                    'supervising_participant_id' => $supervisorId]);
             $this->pdo->commit();
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
         if ($avatarUrl !== $agent['avatar_url']) { (new AvatarService())->deleteIfLocal($agent['avatar_url']); }
         return ['project_id' => (int) $projectId, 'agent_id' => (int) $agentId, 'display_name' => $displayName,
             'provider' => $provider === '' ? null : $provider, 'runtime_name' => $runtimeName === '' ? null : $runtimeName,
-            'avatar_url' => $avatarUrl, 'status' => $agent['status']];
+            'avatar_url' => $avatarUrl, 'status' => $agent['status'],
+            'role_title' => $role['role_title'], 'role_summary' => $role['role_summary'],
+            'role_instructions' => $role['role_instructions'],
+            'role_version' => (int) $agent['role_version'] + ($roleChanged ? 1 : 0),
+            'supervising_participant_id' => $supervisorId];
     }
 
     public function issueAgentClaim($projectId, $actorUserId, $agentId)
@@ -474,13 +609,82 @@ class ProjectManagementService
     private function requireProjectAgent($projectId, $agentId)
     {
         $statement = $this->pdo->prepare(
-            'SELECT a.*, pa.status, pa.display_name AS project_display_name, pa.avatar_url, pa.provider, pa.runtime_name
+            'SELECT a.*, pa.status, pa.display_name AS project_display_name, pa.avatar_url, pa.provider, pa.runtime_name,
+                    pa.role_title, pa.role_summary, pa.role_instructions, pa.role_version, pa.supervising_participant_id
              FROM project_agents pa JOIN chat_agents a ON a.id = pa.agent_id WHERE pa.project_id = ? AND pa.agent_id = ? LIMIT 1'
         );
         $statement->execute([(int) $projectId, (int) $agentId]);
         $row = $statement->fetch();
         if (!$row) { throw new RuntimeException('AGENT_NOT_FOUND'); }
         return $row;
+    }
+
+    private function agentRoleValues(array $input, array $existing = null)
+    {
+        $roleTitle = array_key_exists('role_title', $input) ? trim((string) $input['role_title'])
+            : ($existing ? (string) $existing['role_title'] : '');
+        $roleSummary = array_key_exists('role_summary', $input) ? trim((string) $input['role_summary'])
+            : (array_key_exists('description', $input) ? trim((string) $input['description'])
+            : ($existing ? (string) $existing['role_summary'] : ''));
+        $roleInstructions = array_key_exists('role_instructions', $input) ? trim((string) $input['role_instructions'])
+            : ($existing ? (string) $existing['role_instructions'] : '');
+        if (strlen($roleTitle) > 120) { throw new InvalidArgumentException('Role title cannot exceed 120 characters.'); }
+        if (strlen($roleSummary) > 4000) { throw new InvalidArgumentException('Role summary cannot exceed 4000 characters.'); }
+        if (strlen($roleInstructions) > 20000) { throw new InvalidArgumentException('Role instructions cannot exceed 20000 characters.'); }
+        return [
+            'role_title' => $roleTitle === '' ? null : $roleTitle,
+            'role_summary' => $roleSummary === '' ? null : $roleSummary,
+            'role_instructions' => $roleInstructions === '' ? null : $roleInstructions,
+        ];
+    }
+
+    private function validatedSupervisorId($projectId, $agentId, $value)
+    {
+        if ($value === null || $value === '' || (int) $value === 0) { return null; }
+        if (!is_numeric($value) || (int) $value < 1 || (string) (int) $value !== trim((string) $value)) {
+            throw new InvalidArgumentException('Supervising participant must be an active participant in this project.');
+        }
+        $supervisorId = (int) $value;
+        $statement = $this->pdo->prepare(
+            "SELECT pp.id, pp.kind, pp.agent_id, pp.status,
+                    pm.status AS member_status, pa.status AS agent_status, ca.is_active AS agent_active
+             FROM project_participants pp
+             LEFT JOIN project_members pm ON pm.project_id = pp.project_id AND pm.user_id = pp.user_id
+             LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN chat_agents ca ON ca.id = pp.agent_id
+             WHERE pp.project_id = ? AND pp.id = ? LIMIT 1"
+        );
+        $statement->execute([(int) $projectId, $supervisorId]);
+        $supervisor = $statement->fetch(PDO::FETCH_ASSOC);
+        $active = $supervisor && $supervisor['status'] === 'active'
+            && (($supervisor['kind'] === 'human' && $supervisor['member_status'] === 'active')
+                || ($supervisor['kind'] === 'agent' && $supervisor['agent_status'] === 'active'
+                    && (int) $supervisor['agent_active'] === 1));
+        if (!$active) {
+            throw new InvalidArgumentException('Supervising participant must be an active participant in this project.');
+        }
+        $subordinate = $this->pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ? LIMIT 1');
+        $subordinate->execute([(int) $projectId, (int) $agentId]);
+        $subordinateId = (int) $subordinate->fetchColumn();
+        $visited = [];
+        $current = $supervisorId;
+        while ($current > 0) {
+            if ($current === $subordinateId || isset($visited[$current])) {
+                throw new InvalidArgumentException('Supervising participant would create a reporting cycle.');
+            }
+            $visited[$current] = true;
+            $next = $this->pdo->prepare(
+                'SELECT pp.kind, pa.supervising_participant_id
+                 FROM project_participants pp
+                 LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+                 WHERE pp.project_id = ? AND pp.id = ? LIMIT 1'
+            );
+            $next->execute([(int) $projectId, $current]);
+            $row = $next->fetch(PDO::FETCH_ASSOC);
+            if (!$row || $row['kind'] !== 'agent' || $row['supervising_participant_id'] === null) { break; }
+            $current = (int) $row['supervising_participant_id'];
+        }
+        return $supervisorId;
     }
 
     private function project($projectId)

@@ -7,6 +7,7 @@ require_once __DIR__ . '/AgentWebhookService.php';
 require_once __DIR__ . '/WorkspaceAgentTriggerService.php';
 require_once __DIR__ . '/ResponsesApiActivationService.php';
 require_once __DIR__ . '/ResponsibilityEventService.php';
+require_once __DIR__ . '/ProjectGovernancePolicy.php';
 
 class ProjectRepository
 {
@@ -25,7 +26,8 @@ class ProjectRepository
     {
         $projectId = (int) $access['project_id'];
         $project = $this->pdo->prepare(
-            'SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.instructions, p.status,
+            'SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.instructions,
+                    p.context_version, p.status,
                     p.created_at, p.updated_at, u.display_name AS owner_display_name
              FROM projects p JOIN users u ON u.id = p.owner_user_id WHERE p.id = ?'
         );
@@ -35,6 +37,7 @@ class ProjectRepository
         $sequence->execute([$projectId]);
         $next = $sequence->fetchColumn();
 
+        $governance = ProjectGovernancePolicy::current();
         return [
             'project' => [
                 'id' => (int) $row['id'],
@@ -46,12 +49,15 @@ class ProjectRepository
                 'slug' => $row['slug'],
                 'description' => $row['description'],
                 'instructions' => $row['instructions'],
+                'context_version' => (int) $row['context_version'],
                 'status' => $row['status'],
                 'created_at' => $row['created_at'],
                 'updated_at' => $row['updated_at'],
             ],
             'current_participant_id' => (int) $access['participant_id'],
             'current_role' => $access['role'],
+            'governance' => $governance,
+            'effective_instructions' => ProjectGovernancePolicy::effectiveInstructions($row['instructions']),
             'permissions' => $this->projectPermissions($access),
             'latest_sequence' => $next === false ? 0 : max(0, (int) $next - 1),
             'capabilities' => [
@@ -61,6 +67,63 @@ class ProjectRepository
                     'sdk_module_url' => 'vendor/pbb-realtime/js/sdk/index.js',
                 ],
             ],
+        ];
+    }
+
+    public function bootstrapContext(array $access)
+    {
+        $context = $this->projectContext($access);
+        $governance = $context['governance'];
+        $assignment = null;
+        foreach ($this->participants($access) as $participant) {
+            if ((int) $participant['id'] === (int) $access['participant_id']) {
+                $assignment = $participant;
+                break;
+            }
+        }
+        if ($assignment === null) {
+            throw new RuntimeException('PROJECT_NOT_FOUND');
+        }
+        $unacknowledged = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM message_addressees ma
+             JOIN messages m ON m.id = ma.message_id
+             WHERE m.project_id = ? AND ma.participant_id = ? AND ma.acknowledged_at IS NULL
+               AND m.deleted_at IS NULL'
+        );
+        $unacknowledged->execute([(int) $access['project_id'], (int) $access['participant_id']]);
+        return [
+            'project' => $context['project'],
+            'governance' => $governance,
+            'effective_instructions' => ProjectGovernancePolicy::effectiveInstructions($context['project']['instructions']),
+            'assignment' => $assignment,
+            'permissions' => $context['permissions'],
+            'work' => $this->taskBootstrapSummary($access),
+            'timeline' => [
+                'latest_sequence' => (int) $context['latest_sequence'],
+                'unacknowledged_count' => (int) $unacknowledged->fetchColumn(),
+            ],
+        ];
+    }
+
+    private function taskBootstrapSummary(array $access)
+    {
+        if (!Db::tableExists($this->pdo, 'project_tasks')) {
+            return ['tasks_available' => false, 'assigned_open_task_count' => null, 'requires_attention_count' => null];
+        }
+        $statement = $this->pdo->prepare(
+            "SELECT
+                SUM(CASE WHEN assignee_participant_id = ? AND status NOT IN ('completed','cancelled') THEN 1 ELSE 0 END) AS assigned_open,
+                SUM(CASE WHEN (assignee_participant_id = ? OR supervising_participant_id = ?)
+                    AND status IN ('blocked','in_review') THEN 1 ELSE 0 END) AS requires_attention
+             FROM project_tasks WHERE project_id = ?"
+        );
+        $participantId = (int) $access['participant_id'];
+        $statement->execute([$participantId, $participantId, $participantId, (int) $access['project_id']]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        return [
+            'tasks_available' => true,
+            'assigned_open_task_count' => (int) $row['assigned_open'],
+            'requires_attention_count' => (int) $row['requires_attention'],
         ];
     }
 
@@ -138,12 +201,20 @@ class ProjectRepository
                     END AS authentication_source,
                     pm.role AS human_role,
                     a.id AS agent_id, pa.display_name AS agent_display_name, pa.avatar_url AS agent_avatar_url,
-                    pa.provider, pa.runtime_name, pa.capabilities_json
+                    pa.provider, pa.runtime_name, pa.capabilities_json, pa.role_title, pa.role_summary,
+                    pa.role_instructions, pa.role_version, pa.supervising_participant_id,
+                    supervisor.kind AS supervisor_kind, supervisor.status AS supervisor_status,
+                    COALESCE(supervisor_user.display_name, supervisor_agent.display_name) AS supervisor_display_name
              FROM project_participants pp
              LEFT JOIN users u ON u.id = pp.user_id
              LEFT JOIN project_members pm ON pm.project_id = pp.project_id AND pm.user_id = pp.user_id
              LEFT JOIN chat_agents a ON a.id = pp.agent_id
              LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN project_participants supervisor ON supervisor.project_id = pp.project_id
+                AND supervisor.id = pa.supervising_participant_id
+             LEFT JOIN users supervisor_user ON supervisor_user.id = supervisor.user_id
+             LEFT JOIN project_agents supervisor_agent ON supervisor_agent.project_id = supervisor.project_id
+                AND supervisor_agent.agent_id = supervisor.agent_id
              WHERE " . implode(' AND ', $where) . "
              ORDER BY COALESCE(u.display_name, pa.display_name), pp.id"
         );
@@ -301,7 +372,16 @@ class ProjectRepository
         if (strlen($idempotencyKey) > 160) {
             throw new InvalidArgumentException('idempotency_key exceeds 160 characters.');
         }
-        $requestFingerprint = $idempotencyKey === '' ? null : $this->messageRequestFingerprint($senderId, $body, $input);
+        if (array_key_exists('action_requested', $input)
+            && !is_bool($input['action_requested'])) {
+            throw new InvalidArgumentException('action_requested must be a boolean.');
+        }
+        $actionRequested = !isset($input['responsibility_event'])
+            && !empty($input['action_requested']);
+        $requestFingerprint = $idempotencyKey === '' ? null
+            : $this->messageRequestFingerprint($senderId, $body, $input);
+        $legacyRequestFingerprint = $idempotencyKey === '' ? null
+            : $this->messageRequestFingerprint($senderId, $body, $input, false);
 
         if ($idempotencyKey !== '') {
             $existing = $this->pdo->prepare(
@@ -310,7 +390,8 @@ class ProjectRepository
             $existing->execute([$projectId, $senderId, $idempotencyKey]);
             $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
             if ($existingRow !== false) {
-                $this->assertMatchingMessageRequest($existingRow, $requestFingerprint);
+                $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
+                    $legacyRequestFingerprint);
                 return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
             }
         }
@@ -330,6 +411,12 @@ class ProjectRepository
                 throw new InvalidArgumentException('Maximum reply depth exceeded.');
             }
         }
+        $addressees = $this->resolveAddressees($projectId, $senderId, $input);
+        if ($actionRequested
+            && !in_array('direct', array_values($addressees), true)) {
+            throw new InvalidArgumentException(
+                'Action requests require at least one direct addressee.');
+        }
 
         $this->pdo->beginTransaction();
         try {
@@ -339,18 +426,18 @@ class ProjectRepository
             $insert = $this->pdo->prepare(
                 'INSERT INTO messages
                  (message_uuid, project_id, project_sequence, sender_participant_id, reply_to_message_id, body,
-                  client_idempotency_key, request_fingerprint, correlation_id, reply_depth, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                   client_idempotency_key, request_fingerprint, correlation_id, reply_depth,
+                   action_requested, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
                 $uuid, $projectId, $sequence, $senderId, $replyTo, $body,
                 $idempotencyKey === '' ? null : $idempotencyKey,
                 $requestFingerprint,
-                empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
-                $replyDepth, $now, $now,
-            ]);
-            $messageId = (int) $this->pdo->lastInsertId();
-            $addressees = $this->resolveAddressees($projectId, $senderId, $input);
+                 empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
+                 $replyDepth, $actionRequested ? 1 : 0, $now, $now,
+             ]);
+             $messageId = (int) $this->pdo->lastInsertId();
             $add = $this->pdo->prepare(
                 'INSERT INTO message_addressees
                  (message_id, participant_id, reason, responsibility_status_generation, created_at)
@@ -391,7 +478,8 @@ class ProjectRepository
                 $existing->execute([$projectId, $senderId, $idempotencyKey]);
                 $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
                 if ($existingRow !== false) {
-                    $this->assertMatchingMessageRequest($existingRow, $requestFingerprint);
+                    $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
+                        $legacyRequestFingerprint);
                     return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
                 }
             }
@@ -404,17 +492,21 @@ class ProjectRepository
         }
     }
 
-    private function assertMatchingMessageRequest(array $existing, $requestFingerprint)
+    private function assertMatchingMessageRequest(array $existing, $requestFingerprint,
+        $legacyRequestFingerprint = null)
     {
         // Pre-migration messages have no original request fingerprint. Preserve
         // their historical replay behavior rather than comparing edited content.
         if ($existing['request_fingerprint'] !== null
-            && !hash_equals($existing['request_fingerprint'], $requestFingerprint)) {
+            && !hash_equals($existing['request_fingerprint'], $requestFingerprint)
+            && ($legacyRequestFingerprint === null
+                || !hash_equals($existing['request_fingerprint'], $legacyRequestFingerprint))) {
             throw new RuntimeException('IDEMPOTENCY_KEY_CONFLICT');
         }
     }
 
-    private function messageRequestFingerprint($senderId, $body, array $input)
+    private function messageRequestFingerprint($senderId, $body, array $input,
+        $includeActionRequested = true)
     {
         $broadcast = !empty($input['broadcast']);
         $direct = [];
@@ -442,6 +534,10 @@ class ProjectRepository
             'direct_participant_ids' => $broadcast ? [] : array_values($direct),
             'mention_participant_ids' => $broadcast ? [] : array_values($mention),
         ];
+        if ($includeActionRequested) {
+            $fingerprintInput['action_requested'] = !isset($input['responsibility_event'])
+                && !empty($input['action_requested']);
+        }
         if (isset($input['responsibility_event'])) {
             if (!is_array($input['responsibility_event'])) {
                 throw new InvalidArgumentException('responsibility_event must be an object.');
@@ -562,7 +658,8 @@ class ProjectRepository
                 'body' => $row['deleted_at'] === null ? $row['body'] : null,
                 'addressees' => isset($addressees[$id]) ? $addressees[$id] : [],
                 'correlation_id' => $row['correlation_id'],
-                'reply_depth' => (int) $row['reply_depth'],
+                 'reply_depth' => (int) $row['reply_depth'],
+                'action_requested' => (bool) $row['action_requested'],
                 'created_at' => $row['created_at'],
                 'updated_at' => $row['updated_at'],
                 'deleted_at' => $row['deleted_at'],
@@ -628,6 +725,16 @@ class ProjectRepository
             'provider' => $isHuman ? null : $row['provider'],
             'runtime' => $isHuman ? null : $row['runtime_name'],
             'capabilities' => is_array($capabilities) ? $capabilities : [],
+            'role_title' => $isHuman ? null : $row['role_title'],
+            'role_summary' => $isHuman ? null : $row['role_summary'],
+            'role_instructions' => $isHuman ? null : $row['role_instructions'],
+            'role_version' => $isHuman ? null : (int) $row['role_version'],
+            'supervisor' => $isHuman || $row['supervising_participant_id'] === null ? null : [
+                'participant_id' => (int) $row['supervising_participant_id'],
+                'kind' => $row['supervisor_kind'],
+                'display_name' => $row['supervisor_display_name'],
+                'active' => $row['supervisor_status'] === 'active',
+            ],
         ];
     }
 

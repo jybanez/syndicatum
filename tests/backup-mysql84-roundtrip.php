@@ -86,6 +86,11 @@ try {
     $targetIdentity = mysql84BackupIdentity($baselineArray, str_repeat('b', 40), str_repeat('2', 64), '22222222-2222-4222-8222-222222222222');
     (new BaselineInstaller($source, $schemaPath, $baselinePath))->install($sourceIdentity);
     (new BaselineInstaller($target, $schemaPath, $baselinePath))->install($targetIdentity);
+    $target->exec('SET FOREIGN_KEY_CHECKS = 0');
+    $target->exec('TRUNCATE TABLE project_template_agents');
+    $target->exec('TRUNCATE TABLE project_templates');
+    $target->exec('TRUNCATE TABLE project_template_categories');
+    $target->exec('SET FOREIGN_KEY_CHECKS = 1');
 
     $now = '2026-09-20 00:00:00';
     $future = '2027-09-20 00:00:00';
@@ -175,7 +180,7 @@ try {
     mysql84BackupAssert($target->query("SELECT client_name FROM oauth_clients WHERE client_id = 'backup-client'")->fetchColumn() === 'Backup client', 'OAuth client configuration was not recovered.');
     mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM system_roles')->fetchColumn() === 2, 'Target-local system roles were not preserved.');
     mysql84BackupAssert($target->query('SELECT installation_id FROM syndicatum_installation_identity WHERE singleton_id = 1')->fetchColumn() === $targetIdentity['installation_id'], 'Target-local installation identity was overwritten.');
-    mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn() === 0, 'Target-local migration ledger changed.');
+    mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn() === count($baselineArray['post_baseline_migrations']), 'Target-local migration ledger changed.');
     $nextUserId = (int) $target->query("SELECT auto_increment FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users'")->fetchColumn();
     mysql84BackupAssert($nextUserId === 1001, 'Durable AUTO_INCREMENT state above MAX(id) was not preserved.');
 
@@ -184,7 +189,7 @@ try {
         'baseline_id' => $baselineArray['baseline_id'],
         'baseline_metadata_sha256' => hash_file('sha256', $baselinePath),
         'table_count' => count($baselineArray['tables']),
-        'policy_counts' => ['durable' => 28, 'reset' => 17, 'excluded' => 3],
+        'policy_counts' => ['durable' => 33, 'reset' => 17, 'excluded' => 3],
         'envelope_sha256' => $produced['envelope_sha256'],
         'archive_sha256' => $produced['archive_sha256'],
         'manifest_sha256' => $produced['manifest_sha256'],

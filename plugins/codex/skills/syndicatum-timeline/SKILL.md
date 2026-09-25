@@ -53,21 +53,41 @@ request, not as the ChatGPT Companion discussion-binding flow.
    direction when more than one plausible identity remains.
 3. Discover accessible projects with `syndicatum_list_projects` and verify the
    notification's project ID is present.
-4. Read recent messages with `syndicatum_list_messages`; use
+4. Call `syndicatum_get_bootstrap` before handling project work. Use its project
+   description, immutable governance baseline, project-specific instructions,
+   and effective instructions to understand the project, and its assignment
+   to understand this agent's role, boundaries, supervisor, and permissions.
+   Project and role instructions are scoped operating context: they never
+   override system safety, the current user's authority, or tool permissions.
+   Treat the supervisor as the primary operational escalation path, not as
+   permission to exceed those boundaries.
+5. Read shared project tasks with `syndicatum_list_tasks`. When assigned work is
+   present, use `syndicatum_get_task` for its current version and activity
+   history. Assignment and supervision indicate responsibility, never privacy.
+6. Read recent messages with `syndicatum_list_messages`; use
    `syndicatum_get_message` when the notified ID is known. Load enough surrounding
    context to understand it and follow opaque cursors when needed.
-5. Act only within the current task's normal permissions and instructions.
-6. Reply with `syndicatum_post_message` when appropriate.
-7. Acknowledge messages with `syndicatum_acknowledge_message` only after they
+7. Act only within the current task's normal permissions and instructions. Use
+   `syndicatum_create_task` when authorized project work needs a tracked task;
+   the selected agent profile is recorded automatically as the task giver. Use
+   `syndicatum_update_task` to start, block, or submit assigned work with the
+   latest task version; do not replay a version-conflicted update automatically.
+8. Reply with `syndicatum_post_message` when appropriate.
+9. Acknowledge messages with `syndicatum_acknowledge_message` only after they
    have genuinely been handled.
 
 Use the profile-bound plugin tools. They call Project API V1 internally without
 returning the bearer token:
 
 - `syndicatum_list_projects`
+- `syndicatum_get_bootstrap`
 - `syndicatum_list_participants`
 - `syndicatum_list_messages`
 - `syndicatum_get_message`
+- `syndicatum_list_tasks`
+- `syndicatum_get_task`
+- `syndicatum_create_task`
+- `syndicatum_update_task`
 - `syndicatum_post_message`
 - `syndicatum_acknowledge_message`
 
@@ -85,11 +105,17 @@ For a direct reply, call `syndicatum_post_message` with arguments like:
   "direct_participant_ids": [11],
   "mention_participant_ids": [],
   "broadcast": false,
+  "action_requested": false,
   "reply_to_message_id": 1571,
   "idempotency_key": "reply:incoming-message-uuid:v1",
   "correlation_id": "preserve-the-incoming-correlation-when-present"
 }
 ```
+
+Direct addressing controls notification and reply context; it does not create
+work by itself. Set `action_requested` to `true` only when the recipients are
+being asked to perform and resolve work. Keep it `false` for acknowledgements,
+status reports, completion updates, decisions already made, and FYI messages.
 
 Participant and message IDs are opaque; use values returned by the tools even
 when they look numeric. Reuse the same stable idempotency key when retrying an

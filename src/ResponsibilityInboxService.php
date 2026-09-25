@@ -28,10 +28,24 @@ class ResponsibilityInboxService
         }
         $before = empty($filters['before']) ? null
             : $this->decodeCursor($filters['before'], $projectId);
-        $where = ['m.project_id = ?', "ma.reason = 'direct'",
+        $changedByMessageId = isset($filters['changed_by_message_id'])
+            ? (int) $filters['changed_by_message_id'] : 0;
+        if ($changedByMessageId < 0) {
+            throw new InvalidArgumentException('Changed message ID must be positive.');
+        }
+        $changedRequestId = null;
+        if ($changedByMessageId > 0) {
+            $changedRequestId = $this->requestChangedByMessage(
+                $projectId, $changedByMessageId);
+        }
+        $where = ['m.project_id = ?', 'm.action_requested = 1', "ma.reason = 'direct'",
             'NOT EXISTS (SELECT 1 FROM responsibility_events source_event
                 WHERE source_event.event_message_id = m.id)'];
         $parameters = [$projectId];
+        if ($changedRequestId !== null) {
+            $where[] = 'm.id = ?';
+            $parameters[] = $changedRequestId;
+        }
         if ($before !== null) {
             $where[] = '(m.project_sequence < ? OR
                 (m.project_sequence = ? AND ma.participant_id < ?))';
@@ -58,7 +72,7 @@ class ResponsibilityInboxService
         $statement = $this->pdo->prepare($sql);
         $statement->execute($parameters);
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
-        $hasMore = count($rows) > $limit;
+        $hasMore = $changedRequestId === null && count($rows) > $limit;
         if ($hasMore) {
             array_pop($rows);
         }
@@ -156,10 +170,22 @@ class ResponsibilityInboxService
             'limit' => $limit,
             'scanned' => count($rows),
             'has_more' => $hasMore,
+            'changed_request_message_id' => $changedRequestId,
             'older_cursor' => $last === null ? null
                 : $this->encodeCursor($projectId, $last['request_sequence'],
                     $last['initial_responder_id']),
         ]];
+    }
+
+    private function requestChangedByMessage($projectId, $messageId)
+    {
+        $event = $this->pdo->prepare(
+            'SELECT request_message_id FROM responsibility_events
+             WHERE project_id = ? AND event_message_id = ? LIMIT 1'
+        );
+        $event->execute([(int) $projectId, (int) $messageId]);
+        $requestId = $event->fetchColumn();
+        return $requestId === false ? (int) $messageId : (int) $requestId;
     }
 
     private function eventsForRows($projectId, array $rows)

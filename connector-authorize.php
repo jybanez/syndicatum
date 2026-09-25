@@ -30,7 +30,7 @@ if ($user && $code !== '') {
 function connectorEscape($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 ?>
 <!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Authorize Syndicatum connector</title><link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.203"><link rel="stylesheet" href="assets/app.css"></head>
+<title>Authorize Syndicatum connector</title><link rel="stylesheet" href="vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.205"><link rel="stylesheet" href="assets/app.css"></head>
 <body>
 <?php if (!$user): ?>
 <main class="login-shell"><noscript><section class="login-card ui-panel"><h1>Sign in required</h1><p>JavaScript is required to authorize this Codex device.</p></section></noscript></main>

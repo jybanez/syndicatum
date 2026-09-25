@@ -199,6 +199,7 @@ try {
         ], [
             'body' => 'New explicit current responsibility request',
             'direct_participant_ids' => [$recipientParticipantId],
+            'action_requested' => true,
         ]);
         $newId = $newRequest['message']['id'];
         $anchor = $pdo->prepare('SELECT responsibility_status_generation
@@ -309,6 +310,66 @@ try {
         });
         $suite->throws('valid agent scope', function () use ($management, $project, $administrator) {
             $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Scope-less Agent', 'scopes' => []]);
+        });
+    });
+
+    $suite->test('agent bootstrap exposes versioned project role and validated supervisor context', function () use ($suite, $pdo, $administrator, $management) {
+        $project = $management->createProject($administrator['id'], [
+            'name' => 'Bootstrap Project', 'description' => 'Initial purpose',
+            'instructions' => 'Record important decisions.',
+        ]);
+        $ownerParticipant = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND user_id = ?');
+        $ownerParticipant->execute([$project['id'], $administrator['id']]);
+        $ownerParticipantId = (int) $ownerParticipant->fetchColumn();
+        $created = $management->createAgent($project['id'], $administrator['id'], [
+            'display_name' => 'Commercial Assessor',
+            'role_title' => 'Commercial Assessor',
+            'role_summary' => 'Assess commercial feasibility.',
+            'role_instructions' => 'Escalate pricing decisions to the project owner.',
+            'supervising_participant_id' => $ownerParticipantId,
+        ]);
+        $agentParticipant = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ?');
+        $agentParticipant->execute([$project['id'], $created['agent_id']]);
+        $agentParticipantId = (int) $agentParticipant->fetchColumn();
+        $access = [
+            'project_id' => $project['id'], 'participant_id' => $agentParticipantId,
+            'role' => 'agent', 'project_status' => 'active',
+            'identity' => ['kind' => 'agent', 'agent' => ['id' => $created['agent_id']]],
+        ];
+        $bootstrap = (new ProjectRepository($pdo))->bootstrapContext($access);
+        $suite->same(1, $bootstrap['project']['context_version']);
+        $suite->same(1, $bootstrap['governance']['version']);
+        $suite->same(true, $bootstrap['governance']['immutable']);
+        $suite->same('Record important decisions.', $bootstrap['project']['instructions']);
+        $suite->truthy(strpos($bootstrap['effective_instructions'], $bootstrap['governance']['instructions']) !== false);
+        $suite->truthy(strpos($bootstrap['effective_instructions'], "Project-specific operating instructions\n\nRecord important decisions.") !== false);
+        $suite->same('Commercial Assessor', $bootstrap['assignment']['role_title']);
+        $suite->same('Assess commercial feasibility.', $bootstrap['assignment']['role_summary']);
+        $suite->same($ownerParticipantId, $bootstrap['assignment']['supervisor']['participant_id']);
+        $suite->same(true, $bootstrap['assignment']['supervisor']['active']);
+        $suite->same(1, $bootstrap['assignment']['role_version']);
+        $suite->same(true, $bootstrap['work']['tasks_available']);
+        $suite->same(0, $bootstrap['work']['assigned_open_task_count']);
+
+        $management->updateProject($project['id'], $administrator['id'], ['description' => 'Refined purpose']);
+        $updatedProject = $management->updateProject($project['id'], $administrator['id'], ['name' => 'Renamed Bootstrap Project']);
+        $suite->same(2, (int) $updatedProject['context_version']);
+        $updatedAgent = $management->updateAgentProfile($project['id'], $administrator['id'], $created['agent_id'], [
+            'role_summary' => 'Assess viability and commercialization risk.',
+        ]);
+        $suite->same(2, $updatedAgent['role_version']);
+
+        $subordinate = $management->createAgent($project['id'], $administrator['id'], [
+            'display_name' => 'Research Agent', 'role_title' => 'Researcher',
+            'role_summary' => 'Collect evidence.', 'supervising_participant_id' => $agentParticipantId,
+        ]);
+        $subordinateParticipant = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ?');
+        $subordinateParticipant->execute([$project['id'], $subordinate['agent_id']]);
+        $subordinateParticipantId = (int) $subordinateParticipant->fetchColumn();
+        $suite->throws('reporting cycle', function () use ($management, $project, $administrator, $created, $subordinateParticipantId) {
+            $management->updateAgentProfile($project['id'], $administrator['id'], $created['agent_id'], [
+                'supervising_participant_id' => $subordinateParticipantId,
+            ]);
         });
     });
 

@@ -121,7 +121,8 @@ try {
     $repository = new ProjectRepository($pdo);
 
     $request = $repository->createMessage($owner,
-        ['body' => 'Please investigate', 'direct_participant_ids' => [$responderParticipant]]);
+        ['body' => 'Please investigate', 'direct_participant_ids' => [$responderParticipant],
+            'action_requested' => true]);
     $requestId = $request['message']['id'];
     $foreignRequest = $repository->createMessage($foreign,
         ['body' => 'Foreign request', 'direct_participant_ids' => []]);
@@ -238,6 +239,7 @@ try {
     $raceRequest = $repository->createMessage($owner, [
         'body' => 'Competing writer request',
         'direct_participant_ids' => [$responderParticipant],
+        'action_requested' => true,
     ]);
     $raceRequestId = $raceRequest['message']['id'];
     $messageCountBeforeRace = (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn();
@@ -354,6 +356,15 @@ try {
         && $targetItems[0]['state'] === 'open'
         && $targetItems[0]['latest_evidence_message_id'] === $addressedEvent['message']['id'],
         'Inbox did not rebuild transferred responsibility from canonical evidence.');
+    $targetedUpdate = $inbox->page($target, [
+        'view' => 'mine',
+        'changed_by_message_id' => $addressedEvent['message']['id'],
+    ]);
+    responsibilityAssert(
+        $targetedUpdate['page']['changed_request_message_id'] === $requestId
+        && count($targetedUpdate['data']) === 1
+        && $targetedUpdate['data'][0]['request_message_id'] === $requestId,
+        'A responsibility event did not resolve to its original request for realtime refresh.');
 
     $management->updateMember($projectId, $ownerId, $targetId, 'member', true);
     $management->updateMember($projectId, $ownerId, $targetId, 'member', false);
@@ -406,6 +417,7 @@ try {
     $recoveryRequest = $repository->createMessage($owner, [
         'body' => 'Orphan recovery to a different active responder',
         'direct_participant_ids' => [$targetParticipant],
+        'action_requested' => true,
     ]);
     $recoveryRequestId = $recoveryRequest['message']['id'];
     $management->updateMember($projectId, $ownerId, $targetId, 'member', true);
@@ -430,13 +442,29 @@ try {
         'Accepted orphan handoff stayed unassigned when responder generations differed.');
     $management->updateMember($projectId, $ownerId, $targetId, 'member', false);
 
+    $informational = $repository->createMessage($owner, [
+        'body' => 'Completion update for your awareness',
+        'direct_participant_ids' => [$responderParticipant],
+    ]);
+    responsibilityAssert($informational['message']['action_requested'] === false,
+        'An informational direct message was marked as an action request.');
+    $informationalItems = array_values(array_filter(
+        $inbox->page($responder, ['view' => 'all'])['data'],
+        function ($item) use ($informational) {
+            return $item['request_message_id'] === $informational['message']['id'];
+        }));
+    responsibilityAssert($informationalItems === [],
+        'An informational direct message appeared in the Responsibility Inbox.');
+
     $dual = $repository->createMessage($owner, [
         'body' => 'Two independent direct responsibilities',
         'direct_participant_ids' => [$responderParticipant, $targetParticipant],
+        'action_requested' => true,
     ]);
     $resolutionRequest = $repository->createMessage($owner, [
         'body' => 'Proposed resolution needs a requester decision',
         'direct_participant_ids' => [$responderParticipant],
+        'action_requested' => true,
     ]);
     $resolutionRequestId = $resolutionRequest['message']['id'];
     $proposal = responsibilityWrite($repository, $responder, $resolutionRequestId,
@@ -462,6 +490,7 @@ try {
     $old = $repository->createMessage($owner, [
         'body' => 'Historical request without verified membership generation',
         'direct_participant_ids' => [$responderParticipant],
+        'action_requested' => true,
     ]);
     $pdo->prepare('UPDATE message_addressees
         SET responsibility_status_generation = NULL
@@ -529,6 +558,7 @@ try {
             $newerDuringPaging = $repository->createMessage($owner, [
                 'body' => 'New direct request while older inbox pages are read',
                 'direct_participant_ids' => [$responderParticipant],
+                'action_requested' => true,
             ]);
         }
     } while ($page['page']['has_more']);

@@ -380,12 +380,15 @@ try {
         foreach ($response['body']['result']['tools'] as $tool) {
             $tools[$tool['name']] = $tool['inputSchema'];
         }
-        foreach (['list_projects', 'get_project', 'list_participants', 'list_messages', 'get_message', 'post_message', 'acknowledge_message'] as $name) {
+        foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
+            'list_tasks', 'get_task', 'create_task', 'update_task', 'post_message', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
             $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
         }
         $suite->same(50, $tools['list_messages']['properties']['limit']['default']);
         $suite->same(200, $tools['list_messages']['properties']['limit']['maximum']);
+        $suite->same(['title'], $tools['create_task']['required']);
+        $suite->same(['task_id', 'version'], $tools['update_task']['required']);
         $suite->same(['body', 'idempotency_key'], $tools['post_message']['required']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
@@ -441,7 +444,8 @@ try {
         $request = projectApiRequest($baseUrl, 'POST',
             '/api/v1/project-messages.php?project_id=' . $projectTwo,
             $agentTwoHeaders, ['body' => 'Please decide',
-                'direct_participant_ids' => [$ownerParticipant]]);
+                'direct_participant_ids' => [$ownerParticipant],
+                'action_requested' => true]);
         $suite->same(201, $request['status'], $request['raw']);
         $requestId = $request['body']['data']['id'];
         $started = [
@@ -489,7 +493,8 @@ try {
         $request = projectApiRequest($baseUrl, 'POST',
             '/api/v1/project-messages.php?project_id=' . $projectTwo,
             $agentTwoHeaders, ['body' => 'Authorization matrix request',
-                'direct_participant_ids' => [$responderId]]);
+                'direct_participant_ids' => [$responderId],
+                'action_requested' => true]);
         $suite->same(201, $request['status'], $request['raw']);
         $requestId = $request['body']['data']['id'];
         $other = projectApiRequest($baseUrl, 'POST',
@@ -848,12 +853,18 @@ try {
             ]);
         };
         $projectMessageCount = (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn();
+        $projectTaskCount = (int) $pdo->query('SELECT COUNT(*) FROM project_tasks')->fetchColumn();
         $protectedTools = [
             'list_projects' => [],
             'get_project' => [],
+            'get_bootstrap' => [],
             'list_participants' => [],
             'list_messages' => [],
             'get_message' => ['message_id' => 1],
+            'list_tasks' => [],
+            'get_task' => ['task_id' => 1],
+            'create_task' => ['title' => 'Unbound task must not be created'],
+            'update_task' => ['task_id' => 1, 'version' => 1, 'status' => 'in_progress'],
             'post_message' => ['body' => 'Unbound call must not post', 'broadcast' => true],
             'acknowledge_message' => ['message_id' => 1],
         ];
@@ -864,13 +875,17 @@ try {
                 $suite->same(true, $response['body']['result']['isError'], $name);
                 $suite->same('DISCUSSION_BINDING_REQUIRED',
                     $response['body']['result']['content'][0]['text'], $name);
-                $suite->same(null, $response['body']['result']['structuredContent'] ?? null,
+                $suite->same(null, isset($response['body']['result']['structuredContent'])
+                    ? $response['body']['result']['structuredContent'] : null,
                     $name . ' exposed structured data before binding');
             }
         }
         $suite->same($projectMessageCount,
             (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn(),
             'Unbound MCP writes must not create messages');
+        $suite->same($projectTaskCount,
+            (int) $pdo->query('SELECT COUNT(*) FROM project_tasks')->fetchColumn(),
+            'Unbound MCP writes must not create tasks');
         $diagnosis = $call('diagnose_connection');
         $suite->same(false, $diagnosis['body']['result']['structuredContent']['result']['checks']['project_access_valid']);
         $suite->same('Required', $diagnosis['body']['result']['structuredContent']['result']['discussion_binding']);
@@ -897,7 +912,8 @@ try {
         $path = '/api/v1/project-messages.php?project_id=' . $project;
         $request = projectApiRequest($baseUrl, 'POST', $path, $humanHeaders,
             ['body' => 'Please complete this work',
-                'direct_participant_ids' => [$responder['participant_id']]]);
+                'direct_participant_ids' => [$responder['participant_id']],
+                'action_requested' => true]);
         $suite->same(201, $request['status'], $request['raw']);
         $requestId = $request['body']['data']['id'];
         $post = function ($key, $kind, $expected, array $headers, array $extra = []) use ($baseUrl, $path, $requestId, $responder) {
@@ -989,6 +1005,12 @@ try {
         $suite->same($corrected,
             $resolvedPage['body']['data'][0]['latest_evidence_message_id']);
         $suite->same('resolved', $resolvedPage['body']['data'][0]['state']);
+        $targetedPage = projectApiRequest($baseUrl, 'GET', $inboxPath
+            . '&view=resolved&changed_by_message_id=' . $corrected, $adminHeaders);
+        $suite->same(200, $targetedPage['status'], $targetedPage['raw']);
+        $suite->same($requestId,
+            $targetedPage['body']['page']['changed_request_message_id']);
+        $suite->same(1, count($targetedPage['body']['data']));
         $mine = projectApiRequest($baseUrl, 'GET', $inboxPath
             . '&view=mine', $memberHeaders);
         $suite->same(200, $mine['status'], $mine['raw']);
@@ -1034,7 +1056,8 @@ try {
         $request = projectApiRequest($baseUrl, 'POST', $path, $humanHeaders,
             ['body' => 'Direct work; observer merely mentioned',
                 'direct_participant_ids' => [$responder['participant_id']],
-                'mention_participant_ids' => [$observerId]]);
+                'mention_participant_ids' => [$observerId],
+                'action_requested' => true]);
         $suite->same(201, $request['status'], $request['raw']);
         $requestId = $request['body']['data']['id'];
         $reply = projectApiRequest($baseUrl, 'POST', $path, $sessions['observer'],

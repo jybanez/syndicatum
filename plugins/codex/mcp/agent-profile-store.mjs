@@ -144,7 +144,7 @@ export async function migrateLegacyProjectCredential(projectRoot, env = process.
 }
 
 export function publicAgentProfile(profile) {
-  return Object.fromEntries(Object.entries(profile).filter(([key]) => key !== "token"));
+  return Object.fromEntries(Object.entries(profile).filter(([key]) => !["token", "token_prefix"].includes(key)));
 }
 
 function profileDirectory(profileId, env) {

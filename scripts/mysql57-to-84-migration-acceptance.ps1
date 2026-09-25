@@ -62,6 +62,7 @@ $masterKey = New-HexSecret 32
 $environmentPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.env"
 $backupKeyPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.backup-key"
 $dumpPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.sql"
+$legacySourcePath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName-legacy-source"
 $applicationImage = "${projectName}-app:acceptance"
 $databaseImage57 = "${projectName}-db57:acceptance"
 $databaseImage84 = "${projectName}-db84:acceptance"
@@ -118,9 +119,11 @@ function Read-DatabaseVersion {
     return (Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $probe) -Capture).Trim()
 }
 
-function Verify-Migrations {
-    Invoke-Compose -Arguments @('exec', '-T', 'app', 'php', 'scripts/chat-db.php', 'migrate') -Capture | Out-Null
-    $status = Invoke-Compose -Arguments @('exec', '-T', 'app', 'php', 'scripts/chat-db.php', 'migration-status') -Capture
+function Install-And-Verify-Legacy-Migrations {
+    $legacyMigrationsPath = Join-Path $legacySourcePath 'schema/legacy-upgrade/migrations'
+    $legacyMount = "${legacyMigrationsPath}:/var/www/html/migrations:ro"
+    Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', $legacyMount, '--entrypoint', 'php', 'app', 'scripts/chat-db.php', 'install-schema') -Capture | Out-Null
+    $status = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', $legacyMount, '--entrypoint', 'php', 'app', 'scripts/chat-db.php', 'migration-status') -Capture
     $rows = @($status | ConvertFrom-Json)
     $incomplete = @($rows | Where-Object { -not $_.applied -or -not $_.checksum_valid })
     if ($rows.Count -eq 0 -or $incomplete.Count -gt 0) {
@@ -150,6 +153,27 @@ function Read-LedgerSnapshot {
     $digest = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
     Write-Host "Verified exact 30-row legacy ledger; sha256=$digest"
     return $digest
+}
+
+function Read-CurrentLedgerSnapshot {
+    $query = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --raw --batch --skip-column-names -uroot "$MYSQL_DATABASE" -e "SELECT version, checksum FROM syndicatum_schema_migrations ORDER BY version"'
+    $output = Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $query) -Capture
+    $lines = @($output -split "`r?`n" | Where-Object { $_ -ne '' })
+    $plan = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\schema\mysql84\legacy-upgrade-plan.json') -Raw | ConvertFrom-Json
+    $baseline = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\schema\mysql84\baseline.json') -Raw | ConvertFrom-Json
+    $expected = @($plan.historical_migrations) + @($plan.forward_migrations) + @($baseline.post_baseline_migrations)
+    $expected = @($expected | Sort-Object -Property id)
+    if ($lines.Count -ne $expected.Count) {
+        throw "Expected $($expected.Count) current ledger rows; actual=$($lines.Count)."
+    }
+    for ($index = 0; $index -lt $expected.Count; $index++) {
+        $fields = @($lines[$index] -split "`t")
+        if ($fields.Count -ne 2 -or $fields[0] -cne $expected[$index].id -or $fields[1] -cne $expected[$index].sha256) {
+            throw "Current ledger differs from the declared legacy and post-baseline plans at row $index."
+        }
+    }
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes(($lines -join "`n") + "`n")
+    return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
 }
 
 function Read-IdentityCount {
@@ -229,12 +253,23 @@ function Assert-ClaimColumns([object[]]$Before, [object[]]$After, [switch]$Legac
 
 try {
     Write-Step 'Starting pinned MySQL 5.7 source and applying the complete schema'
+    if (Test-Path -LiteralPath $legacySourcePath) {
+        throw "Refusing to overwrite unexpected legacy source directory: $legacySourcePath"
+    }
+    [System.IO.Compression.ZipFile]::ExtractToDirectory(
+        (Join-Path $candidatePackagePath 'syndicatum-v1.0.0.zip'),
+        $legacySourcePath
+    )
+    if (-not (Test-Path -LiteralPath (Join-Path $legacySourcePath 'schema/legacy-upgrade/migrations/202609180004_delivery_terminal_timestamps.php'))) {
+        throw 'Pinned legacy candidate did not extract the expected migration source.'
+    }
     Write-AcceptanceEnvironment -MySqlImage $SourceImage -DatabaseImage $databaseImage57 -SqlMode $sourceSqlMode
     Invoke-Compose -Arguments @('config', '--quiet')
-    Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), 'db', 'app')
+    Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), 'db')
+    Invoke-Compose -Arguments @('build', 'app')
     $sourceVersion = Read-DatabaseVersion
     if ($sourceVersion -notmatch '^5\.7\.44(?:$|[.-])') { throw "Expected MySQL 5.7.44 source; observed $sourceVersion." }
-    Verify-Migrations
+    Install-And-Verify-Legacy-Migrations
     $sourceLedger = Read-LedgerSnapshot
     if ((Read-IdentityCount) -ne 0) { throw 'The 5.7 legacy fixture unexpectedly has an installation identity.' }
 
@@ -335,8 +370,8 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
     if ((Read-ClaimRowDigest) -ne $claimRowsBefore) { throw 'Authenticated claim-column bridge changed rows or values.' }
     if ((Read-IdentityCount) -ne 1) { throw 'Authenticated bridge did not create exactly one installation identity table.' }
     $postState = Read-InstallationState
-    if ($postState.state -ne 'legacy_upgraded_ready' -or -not $postState.ready) {
-        throw "Authenticated bridge did not reach legacy_upgraded_ready; observed $($postState.state)."
+    if ($postState.state -ne 'post_baseline_upgrade_required' -or $postState.ready) {
+        throw "Authenticated bridge did not stop at the protected baseline before the current suffix; observed $($postState.state)."
     }
     $checkQuery = 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --raw --batch --skip-column-names -uroot "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name=''project_participants'' AND constraint_name=''chk_project_participants_identity'' AND constraint_type=''CHECK''"'
     if ([int](Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $checkQuery) -Capture).Trim() -ne 1) {
@@ -346,10 +381,15 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
 
     Write-Step 'Starting the adopted application and worker under their unchanged healthchecks'
     Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), 'app', 'worker')
-    if ((Read-LedgerSnapshot) -ne $restoredLedger) { throw 'App/worker startup changed the 30-row migration ledger.' }
+    $currentLedger = Read-CurrentLedgerSnapshot
+    Write-Host "Verified legacy ledger plus declared post-baseline suffix; sha256=$currentLedger"
     if ((Read-DeliveryCounts) -ne $preDelivery) { throw 'App/worker startup replayed stale delivery work.' }
     $targetState = (Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $stateSql) -Capture).Trim()
     if ($targetState -ne $expectedState) { throw "Restored 8.4 fixture state differs: $targetState" }
+    $readyState = Read-InstallationState
+    if ($readyState.state -ne 'legacy_upgraded_ready' -or -not $readyState.ready) {
+        throw "Adopted application did not reach legacy_upgraded_ready after its declared suffix; observed $($readyState.state)."
+    }
     $health = Invoke-RestMethod -Uri "http://127.0.0.1:$HttpPort/api/v1/health.php" -TimeoutSec 15
     if ($health.data.core.status -ne 'ok' -or -not $health.data.core.database -or -not $health.data.core.expanded_schema) {
         throw 'Application health failed after restoring the 5.7 export into MySQL 8.4.'
@@ -373,4 +413,5 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
     if (Test-Path -LiteralPath $environmentPath) { Remove-Item -LiteralPath $environmentPath -Force }
     if (Test-Path -LiteralPath $dumpPath) { Remove-Item -LiteralPath $dumpPath -Force }
     if (Test-Path -LiteralPath $backupKeyPath) { Remove-Item -LiteralPath $backupKeyPath -Force }
+    if (Test-Path -LiteralPath $legacySourcePath) { Remove-Item -LiteralPath $legacySourcePath -Recurse -Force }
 }

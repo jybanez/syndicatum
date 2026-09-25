@@ -17,6 +17,16 @@ const ACTIONS = {
   corrected: "Correct evidence note",
 };
 
+const STATE_LABELS = {
+  open: "Awaiting work",
+  resolution_pending: "Awaiting approval",
+  transfer_pending: "Handoff pending",
+  disputed: "Changes requested",
+  orphaned: "Unassigned",
+  resolved: "Resolved",
+  unknown: "Historical",
+};
+
 export function responsibilityActions(item, actorId, moderator, activeParticipantIds = []) {
   if (!item || item.state === "unknown") return [];
   const actor = Number(actorId);
@@ -119,6 +129,12 @@ export function createResponsibilityInbox(host, options) {
   let destroyed = false;
   let generation = 0;
   let conflictNotice = false;
+  let autoLoadFailed = false;
+  let scrollFrame = null;
+  let autoPageArmed = true;
+  let realtimeRefreshTimer = null;
+  let realtimeRefreshing = false;
+  const realtimeMessageIds = new Set();
   const participants = () => options.participants();
   const participantName = (participantId) => participants()
     .find((entry) => Number(entry.id) === Number(participantId))?.display_name
@@ -140,38 +156,192 @@ export function createResponsibilityInbox(host, options) {
   viewLabel.append(select);
   const refresh = button("Refresh", () => void load());
   toolbar.append(viewLabel, refresh);
+  if (typeof options.openGuide === "function") {
+    toolbar.append(button("Guide to these views", () => options.openGuide("responsibility-views"), "ui-button ui-button-borderless"));
+  }
   const status = element("p", "responsibility-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const list = element("ol", "responsibility-list");
-  const more = button("Load older work", () => void load(true));
+  const sentinel = element("div", "responsibility-page-sentinel");
+  sentinel.setAttribute("aria-hidden", "true");
+  const supportsIntersectionPaging = typeof IntersectionObserver === "function";
+  const more = button("Load older work", () => {
+    autoLoadFailed = false;
+    void load(true);
+  });
   more.classList.add("responsibility-more");
   more.hidden = true;
-  shell.append(toolbar, status, list, more);
+  shell.append(toolbar, status, list, sentinel, more);
   host.append(shell);
+
+  const pageObserver = supportsIntersectionPaging ? new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) requestAutomaticPage();
+  }, { root: host, rootMargin: "0px 0px 240px 0px" }) : null;
+  pageObserver?.observe(sentinel);
+
+  function requestAutomaticPage() {
+    if (destroyed || loading || autoLoadFailed || !hasMore || !autoPageArmed) return;
+    autoPageArmed = false;
+    void load(true);
+  }
+
+  function scheduleAutomaticPaging() {
+    if (destroyed || autoLoadFailed || !hasMore || scrollFrame !== null) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = null;
+      if (destroyed || autoLoadFailed || !hasMore) return;
+      const remaining = host.scrollHeight - host.scrollTop - host.clientHeight;
+      if (remaining > 360) {
+        autoPageArmed = true;
+        return;
+      }
+      if (remaining <= 240) requestAutomaticPage();
+    });
+  }
+
+  host.addEventListener("scroll", scheduleAutomaticPaging, { passive: true });
+
+  function updatePagingControls() {
+    sentinel.hidden = !hasMore || loading;
+    more.hidden = !hasMore || !autoLoadFailed;
+    more.disabled = loading;
+    refresh.disabled = loading;
+  }
+
+  function emptyStateMessage() {
+    const label = VIEWS.find(([value]) => value === view)?.[1] || "this view";
+    if (!hasMore) return `No results for “${label}”.`;
+    if (autoLoadFailed) return `No results for “${label}” in the loaded items. Retry loading older work.`;
+    return `No results for “${label}” yet.`;
+  }
 
   function render() {
     list.replaceChildren();
     for (const item of rows) list.append(renderItem(item));
-    more.hidden = !hasMore;
-    more.disabled = loading;
-    refresh.disabled = loading;
+    updatePagingControls();
     select.disabled = false;
     if (!loading && !rows.length) {
-      const empty = element("li", "responsibility-empty",
-        hasMore ? "No matches in this page. Load older work to continue."
-          : "No work matches this view.");
+      const empty = element("li", "responsibility-empty", emptyStateMessage());
       list.append(empty);
     }
+    scheduleAutomaticPaging();
+  }
+
+  function renderPreservingViewport() {
+    const wasAtTop = host.scrollTop <= 4;
+    const hostTop = host.getBoundingClientRect().top;
+    const anchor = Array.from(list.querySelectorAll(".responsibility-row"))
+      .find((row) => row.getBoundingClientRect().bottom > hostTop);
+    const anchorId = anchor?.dataset.requestMessageId || "";
+    const anchorOffset = anchor ? anchor.getBoundingClientRect().top - hostTop : 0;
+    render();
+    if (wasAtTop) {
+      host.scrollTop = 0;
+      return;
+    }
+    const replacement = anchorId
+      ? list.querySelector(`[data-request-message-id="${CSS.escape(anchorId)}"]`)
+      : null;
+    if (replacement) {
+      host.scrollTop += replacement.getBoundingClientRect().top - hostTop - anchorOffset;
+    }
+  }
+
+  function armRealtimeRefresh() {
+    if (destroyed || loading || realtimeRefreshing || realtimeRefreshTimer !== null
+        || !realtimeMessageIds.size) return;
+    realtimeRefreshTimer = setTimeout(() => {
+      realtimeRefreshTimer = null;
+      void flushRealtimeRefresh();
+    }, 60);
+  }
+
+  async function flushRealtimeRefresh() {
+    if (destroyed || loading || realtimeRefreshing || !realtimeMessageIds.size) {
+      armRealtimeRefresh();
+      return;
+    }
+    const requestedView = view;
+    const requestedGeneration = generation;
+    const messageIds = [...realtimeMessageIds];
+    realtimeMessageIds.clear();
+    realtimeRefreshing = true;
+    try {
+      const pages = await Promise.all(messageIds.map((messageId) =>
+        options.fetchPage(requestedView, null, messageId)));
+      if (destroyed || loading || requestedView !== view
+          || requestedGeneration !== generation) return;
+      const changedRequestIds = new Set();
+      const incoming = [];
+      for (const page of pages) {
+        const changedRequestId = Number(page.page?.changed_request_message_id || 0);
+        if (changedRequestId) changedRequestIds.add(changedRequestId);
+        incoming.push(...(page.data || []));
+      }
+      if (!changedRequestIds.size) return;
+      const incomingKeys = new Set();
+      rows = [
+        ...rows.filter((item) => !changedRequestIds.has(Number(item.request_message_id))),
+        ...incoming.filter((item) => {
+          const key = `${item.request_message_id}:${item.initial_responder_participant_id}`;
+          if (incomingKeys.has(key)) return false;
+          incomingKeys.add(key);
+          return true;
+        }),
+      ].sort((left, right) => Number(right.request_sequence || 0) - Number(left.request_sequence || 0)
+        || Number(right.initial_responder_participant_id || 0) - Number(left.initial_responder_participant_id || 0));
+      renderPreservingViewport();
+      status.textContent = `${rows.length} item${rows.length === 1 ? "" : "s"} shown${hasMore ? " · more available" : ""}. Updated automatically.`;
+    } catch (error) {
+      if (!destroyed) {
+        status.textContent = `A live inbox update could not be loaded: ${error.message || "Unknown error"}. Use Refresh to retry.`;
+      }
+    } finally {
+      realtimeRefreshing = false;
+      armRealtimeRefresh();
+    }
+  }
+
+  function renderEmptyState() {
+    if (rows.length) return;
+    const existing = list.querySelector(".responsibility-empty");
+    if (existing) {
+      existing.textContent = emptyStateMessage();
+      return;
+    }
+    list.append(element("li", "responsibility-empty", emptyStateMessage()));
+  }
+
+  function applyAcknowledgement(row, item, scrollTop) {
+    const acknowledged = { ...item, acknowledged: true };
+    if (view === "unacknowledged") {
+      rows = rows.filter((entry) => Number(entry.request_message_id) !== Number(item.request_message_id));
+      row.remove();
+      renderEmptyState();
+    } else {
+      rows = rows.map((entry) => Number(entry.request_message_id) === Number(item.request_message_id)
+        ? acknowledged : entry);
+      const replacement = renderItem(acknowledged);
+      replacement.tabIndex = -1;
+      row.replaceWith(replacement);
+      replacement.focus({ preventScroll: true });
+    }
+    host.scrollTop = scrollTop;
+    requestAnimationFrame(() => {
+      if (!destroyed) host.scrollTop = scrollTop;
+    });
+    status.textContent = `Request #${item.request_message_id} acknowledged. ${rows.length} item${rows.length === 1 ? "" : "s"} shown${hasMore ? " · more available" : ""}.`;
   }
 
   function renderItem(item) {
     const row = element("li", "responsibility-row");
+    row.dataset.requestMessageId = String(item.request_message_id);
     const card = element("article", "responsibility-card");
     const heading = element("div", "responsibility-card-heading");
-    const title = element("h3", "", `Request #${item.request_message_id}`);
+    const title = element("h3", "", `Action request #${item.request_message_id}`);
     const state = element("span", `responsibility-state is-${item.state}`,
-      item.state.replaceAll("_", " "));
+      STATE_LABELS[item.state] || item.state.replaceAll("_", " "));
     heading.append(title, state);
     const meta = element("p", "responsibility-meta");
     const requester = participantName(item.requester_participant_id);
@@ -179,7 +349,7 @@ export function createResponsibilityInbox(host, options) {
       ? participantName(item.current_responder_participant_id)
       : item.state === "orphaned" || item.state === "transfer_pending"
         ? "No active owner" : "Not verified";
-    meta.textContent = `From ${requester} · ${responder} · ${item.request_created_at}`;
+    meta.textContent = `Requested by ${requester} · Assigned to ${responder} · ${item.request_created_at}`;
     const flags = element("p", "responsibility-flags");
     const labels = responsibilityLabels(item, participantName);
     flags.textContent = labels.join(" · ");
@@ -187,6 +357,25 @@ export function createResponsibilityInbox(host, options) {
     const actions = element("div", "responsibility-actions");
     actions.append(button("View original message", () => options.openMessage(item.request_message_id),
       "ui-button ui-button-borderless"));
+    const linkedTasks = typeof options.linkedTasks === "function"
+      ? options.linkedTasks(item.request_message_id) : [];
+    if (linkedTasks.length) {
+      const label = linkedTasks.length === 1 ? "View linked task" : `View linked tasks (${linkedTasks.length})`;
+      actions.append(button(label, () => linkedTasks.length === 1
+        ? options.openTask(linkedTasks[0].id)
+        : options.openLinkedTasks(item.request_message_id),
+        "ui-button ui-button-borderless"));
+    } else {
+      const actor = Number(options.actorId());
+      const mayConvert = options.canCreateTask?.()
+        && (options.moderator()
+          || actor === Number(item.requester_participant_id)
+          || actor === Number(item.initial_responder_participant_id));
+      if (mayConvert && !["resolved", "unknown"].includes(item.state)) {
+        actions.append(button("Convert to task", () => options.convertToTask(item),
+          "ui-button ui-button-borderless"));
+      }
+    }
     if (item.latest_evidence_message_id
         && Number(item.latest_evidence_message_id) !== Number(item.request_message_id)) {
       actions.append(button("View latest evidence", () => options.openMessage(item.latest_evidence_message_id),
@@ -201,14 +390,28 @@ export function createResponsibilityInbox(host, options) {
     }
     if (!item.acknowledged
         && Number(item.initial_responder_participant_id) === Number(options.actorId())) {
-      actions.append(button("Acknowledge", async () => {
+      let acknowledgementPending = false;
+      const acknowledge = button("Acknowledge", async () => {
+        if (acknowledgementPending) return;
+        acknowledgementPending = true;
+        const scrollTop = host.scrollTop;
+        acknowledge.setAttribute("aria-disabled", "true");
+        const requestedView = view;
         try {
           await options.acknowledge(item);
-          await load();
+          host.scrollTop = scrollTop;
+          if (!row.isConnected || view !== requestedView) {
+            await load();
+            return;
+          }
+          applyAcknowledgement(row, item, scrollTop);
         } catch (error) {
           status.textContent = error.message || "Acknowledgement failed.";
+          acknowledgementPending = false;
+          if (acknowledge.isConnected) acknowledge.removeAttribute("aria-disabled");
         }
-      }, "ui-button ui-button-borderless"));
+      }, "ui-button ui-button-borderless");
+      actions.append(acknowledge);
     }
     const activeIds = participants().filter((entry) => entry.status === "active")
       .map((entry) => Number(entry.id));
@@ -216,7 +419,7 @@ export function createResponsibilityInbox(host, options) {
       options.moderator(), activeIds);
     if (available.length) {
       const menu = element("details", "responsibility-action-menu");
-      const summary = element("summary", "", "Change responsibility");
+      const summary = element("summary", "", "Update work");
       const choices = element("div", "responsibility-action-choices");
       for (const kind of available) {
         choices.append(button(ACTIONS[kind], () => {
@@ -227,7 +430,31 @@ export function createResponsibilityInbox(host, options) {
       menu.append(summary, choices);
       actions.append(menu);
     }
-    card.append(heading, meta, flags, actions);
+    const guidance = element("p", "responsibility-guidance");
+    const actor = Number(options.actorId());
+    const isResponder = actor === Number(item.current_responder_participant_id);
+    const isRequester = actor === Number(item.requester_participant_id);
+    if (!item.acknowledged && actor === Number(item.initial_responder_participant_id)) {
+      guidance.textContent = "Next: acknowledge this request to confirm you received it.";
+    } else if (item.state === "open" && isResponder && !item.work_started) {
+      guidance.textContent = "Next: start work, or mark the request blocked if you cannot proceed.";
+    } else if (["open", "disputed"].includes(item.state) && isResponder && item.blocked) {
+      guidance.textContent = "This request is blocked. Unblock it when work can continue.";
+    } else if (["open", "disputed"].includes(item.state) && isResponder) {
+      guidance.textContent = "Next: propose a resolution when the requested work is complete.";
+    } else if (item.state === "resolution_pending" && (isRequester || options.moderator())) {
+      guidance.textContent = "Next: accept the proposed resolution or request changes.";
+    } else if (item.state === "transfer_pending"
+        && actor === Number(item.pending_target_participant_id)) {
+      guidance.textContent = "Next: accept or decline this handoff.";
+    } else if (item.state === "orphaned") {
+      guidance.textContent = "This request needs an active assignee before work can continue.";
+    } else if (item.state === "resolved") {
+      guidance.textContent = "No action is required; this request is resolved.";
+    } else {
+      guidance.textContent = "No action is currently required from you.";
+    }
+    card.append(heading, meta, flags, guidance, actions);
     row.append(card);
     return row;
   }
@@ -300,37 +527,72 @@ export function createResponsibilityInbox(host, options) {
     conflictNotice = false;
     const requestedView = view;
     const requestedCursor = append ? cursor : null;
-    if (!append) { rows = []; cursor = null; hasMore = false; }
+    if (!append) { rows = []; cursor = null; hasMore = false; autoPageArmed = true; }
     loading = true;
     const current = ++generation;
     status.textContent = append ? "Loading older work…" : "Loading responsibility…";
-    render();
+    if (append) updatePagingControls();
+    else render();
     try {
       const page = await options.fetchPage(requestedView, requestedCursor);
       if (destroyed || current !== generation) return false;
-      rows = append ? [...rows, ...(page.data || [])] : (page.data || []);
-      cursor = page.page?.older_cursor || null;
-      hasMore = Boolean(page.page?.has_more);
-      status.textContent = `${rows.length} item${rows.length === 1 ? "" : "s"} shown${hasMore ? " · more available" : ""}. This is a live view; refresh after project changes.`;
+      const incoming = page.data || [];
+      rows = append ? [...rows, ...incoming] : incoming;
+      if (append) {
+        list.querySelector(".responsibility-empty")?.remove();
+        for (const item of incoming) list.append(renderItem(item));
+      }
+      const nextCursor = page.page?.older_cursor || null;
+      hasMore = Boolean(page.page?.has_more && nextCursor && (!append || nextCursor !== requestedCursor));
+      cursor = nextCursor;
+      autoLoadFailed = false;
+      status.textContent = !rows.length && hasMore
+        ? "No matching items shown. This is a live view; refresh after project changes."
+        : `${rows.length} item${rows.length === 1 ? "" : "s"} shown${hasMore ? " · more available" : ""}. This is a live view; refresh after project changes.`;
       return true;
     } catch (error) {
       if (destroyed || current !== generation) return false;
-      status.textContent = `Responsibility could not be loaded: ${error.message || "Unknown error"}. Retry Refresh.`;
+      status.textContent = append
+        ? `Older work could not be loaded: ${error.message || "Unknown error"}. Choose Load older work to retry.`
+        : `Responsibility could not be loaded: ${error.message || "Unknown error"}. Retry Refresh.`;
+      if (append) autoLoadFailed = true;
       if (!append) { rows = []; cursor = null; hasMore = false; }
       return false;
     } finally {
-      if (!destroyed && current === generation) { loading = false; render(); }
+      if (!destroyed && current === generation) {
+        loading = false;
+        if (append) {
+          updatePagingControls();
+          renderEmptyState();
+          scheduleAutomaticPaging();
+        } else render();
+        armRealtimeRefresh();
+      }
     }
   }
 
   select.addEventListener("change", () => { view = select.value; void load(); });
   return {
     load,
-    markStale() {
-      if (!destroyed && !conflictNotice) {
-        status.textContent = "Project activity may have changed this live view. Refresh before acting or paging.";
+    refreshTasks() {
+      if (!destroyed) renderPreservingViewport();
+    },
+    refreshFromRealtime(messageId) {
+      const normalized = Number(messageId);
+      if (!destroyed && Number.isInteger(normalized) && normalized > 0) {
+        realtimeMessageIds.add(normalized);
+        armRealtimeRefresh();
       }
     },
-    destroy() { destroyed = true; generation++; host.replaceChildren(); },
+    destroy() {
+      destroyed = true;
+      generation++;
+      pageObserver?.disconnect();
+      host.removeEventListener("scroll", scheduleAutomaticPaging);
+      if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+      if (realtimeRefreshTimer !== null) clearTimeout(realtimeRefreshTimer);
+      realtimeMessageIds.clear();
+      host.replaceChildren();
+    },
   };
 }

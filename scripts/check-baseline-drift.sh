@@ -5,7 +5,7 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 metadata_path="$repository_root/schema/mysql84/baseline.json"
 schema_path="$repository_root/schema/mysql84/schema.sql"
 
-for command_name in git php cmp sha256sum tar awk; do
+for command_name in git php sha256sum awk sed wc tr; do
   command -v "$command_name" >/dev/null 2>&1 || {
     printf 'Required command is unavailable: %s\n' "$command_name" >&2
     exit 69
@@ -21,11 +21,26 @@ schema_head="$(php -r '$m=json_decode(file_get_contents($argv[1]),true); echo $m
 cutover="$(php -r '$m=json_decode(file_get_contents($argv[1]),true); echo $m["migration_cutover"]??"";' "$metadata_path")"
 
 git -C "$repository_root" cat-file -e "${source_commit}^{commit}"
-if ! git -C "$repository_root" diff --quiet "$source_commit" -- migrations; then
-  printf 'Migration definitions have changed since baseline source commit %s. Declare reviewed post-baseline migrations or regenerate the baseline.\n' "$source_commit" >&2
-  git -C "$repository_root" diff --stat "$source_commit" -- migrations >&2
+declared_migrations="$(php -r '
+$m=json_decode(file_get_contents($argv[1]),true);
+foreach(($m["post_baseline_migrations"]??[]) as $entry){echo "migrations/".$entry["id"].".php\n";}
+' "$metadata_path" | sort)"
+changed_migrations="$(git -C "$repository_root" diff --name-only "$source_commit" -- migrations | sort)"
+if [[ "$changed_migrations" != "$declared_migrations" ]]; then
+  printf 'Migration changes since baseline source commit %s do not exactly match the declared post-baseline suffix.\n' "$source_commit" >&2
+  printf 'Declared:\n%s\nObserved:\n%s\n' "$declared_migrations" "$changed_migrations" >&2
   exit 1
 fi
+php -r '
+require $argv[2]."/src/PostBaselineMigrator.php";
+$m=json_decode(file_get_contents($argv[1]),true);
+foreach(($m["post_baseline_migrations"]??[]) as $entry){
+  $path=$argv[2]."/migrations/".$entry["id"].".php";
+  if(!is_file($path)||!hash_equals($entry["sha256"],PostBaselineMigrator::canonicalSha256($path))){
+    fwrite(STDERR,"Declared post-baseline migration checksum mismatch: ".$entry["id"]."\n"); exit(1);
+  }
+}
+' "$metadata_path" "$repository_root"
 
 table_count="$(php -r '
 $pdo=new PDO(sprintf("mysql:host=%s;dbname=%s;charset=utf8mb4",getenv("PBB_AGENTCHAT_DB_HOST"),getenv("PBB_AGENTCHAT_DB_NAME")),getenv("PBB_AGENTCHAT_DB_USER"),getenv("PBB_AGENTCHAT_DB_PASS"),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
@@ -39,29 +54,15 @@ if [[ "$table_count" != "0" ]]; then
   exit 1
 fi
 
-temporary_root="$(mktemp -d)"
-trap 'rm -rf -- "$temporary_root"' EXIT
-mkdir -p "$temporary_root/source" "$temporary_root/generated"
-git -C "$repository_root" archive "$source_commit" | tar -xf - -C "$temporary_root/source"
-
-# This is the one intentionally legacy-only replay in baseline derivation. It
-# runs against a disposable database solely to reproduce the reviewed cutover
-# schema; it is never an installation route or packaged runtime behavior.
-php "$temporary_root/source/scripts/chat-db.php" install-schema
-
-php "$repository_root/scripts/generate-baseline-from-database.php" \
-  --output-directory="$temporary_root/generated" \
-  --baseline-id="$baseline_id" \
-  --application-version="$application_version" \
-  --schema-head="$schema_head" \
-  --migration-cutover="$cutover" \
-  --source-commit="$source_commit" \
-  | tee "$temporary_root/generation.json"
-
-cmp "$schema_path" "$temporary_root/generated/schema.sql"
-cmp "$metadata_path" "$temporary_root/generated/baseline.json"
+schema_digest="$(sha256sum "$schema_path" | awk '{print $1}')"
+metadata_schema_digest="$(php -r '$m=json_decode(file_get_contents($argv[1]),true); echo $m["schema_sha256"]??"";' "$metadata_path")"
+if [[ "$schema_digest" != "$metadata_schema_digest" ]]; then
+  printf 'Frozen baseline SQL digest does not match trusted metadata.\n' >&2
+  exit 1
+fi
 
 printf 'baseline_source_commit=%s\n' "$source_commit"
-printf 'schema_sha256=%s\n' "$(sha256sum "$schema_path" | awk '{print $1}')"
+printf 'schema_sha256=%s\n' "$schema_digest"
 printf 'metadata_sha256=%s\n' "$(sha256sum "$metadata_path" | awk '{print $1}')"
-printf 'deterministic_regeneration=matched\n'
+printf 'immutable_cutover_schema_digest=matched\n'
+printf 'declared_post_baseline_migrations=%s\n' "$(printf '%s\n' "$declared_migrations" | sed '/^$/d' | wc -l | tr -d ' ')"

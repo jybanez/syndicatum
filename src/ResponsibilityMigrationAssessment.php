@@ -29,7 +29,7 @@ class ResponsibilityMigrationAssessment
                     THEN 1 ELSE 0 END), 0) AS legacy_unverified_baselines
              FROM messages m
              JOIN message_addressees ma ON ma.message_id = m.id
-             WHERE m.project_id = ? AND ma.reason = 'direct'
+             WHERE m.project_id = ? AND m.action_requested = 1 AND ma.reason = 'direct'
                AND NOT EXISTS (SELECT 1 FROM responsibility_events source_event
                    WHERE source_event.event_message_id = m.id)"
         );
@@ -65,7 +65,7 @@ class ResponsibilityMigrationAssessment
              LEFT JOIN project_agents pa ON pa.project_id = pp.project_id
                  AND pa.agent_id = pp.agent_id AND pp.kind = 'agent'
              LEFT JOIN chat_agents ca ON ca.id = pp.agent_id
-             WHERE m.project_id = ? AND ma.reason = 'direct'
+             WHERE m.project_id = ? AND m.action_requested = 1 AND ma.reason = 'direct'
                  AND ma.responsibility_status_generation IS NULL
                  AND NOT EXISTS (SELECT 1 FROM responsibility_events source_event
                      WHERE source_event.event_message_id = m.id)"
@@ -108,7 +108,7 @@ class ResponsibilityMigrationAssessment
                     THEN 1 ELSE 0 END), 0) AS legacy_unverified_direct_items
              FROM messages m
              JOIN message_addressees ma ON ma.message_id = m.id
-             WHERE ma.reason = 'direct'
+             WHERE m.action_requested = 1 AND ma.reason = 'direct'
                  AND ma.responsibility_status_generation IS NULL
                  AND NOT EXISTS (SELECT 1 FROM responsibility_events source_event
                      WHERE source_event.event_message_id = m.id)"

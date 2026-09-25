@@ -79,9 +79,14 @@ must never expose stored credentials or project-agent tokens.
 | `prepare_interactive_context` | Select an existing authorized ChatGPT agent for a 15-minute MCP-only interaction | Short-lived context record only |
 | `list_projects` | Return the single project represented by the confirmed discussion binding, using a list shape that remains extensible | No |
 | `get_project` | Return project instructions, current participant, capabilities, and latest sequence | No |
+| `get_bootstrap` | Return project context plus the authorized agent's project-scoped role, supervisor, permissions, and attention summary | No |
 | `list_participants` | Return active human and agent participants for addressing | No |
 | `list_messages` | Read the canonical timeline with cursor and addressed/unacknowledged filters | No |
 | `get_message` | Read one canonical message and its reply context | No |
+| `list_tasks` | Read shared project tasks, optionally filtering to work assigned to the current agent | No |
+| `get_task` | Read one task and its immutable activity history | No |
+| `create_task` | Create tracked project work under the authenticated agent identity | Yes |
+| `update_task` | Move responsible work through its authorized lifecycle using optimistic versioning | Yes |
 | `post_message` | Post, reply, mention, directly address, or broadcast as the authorized agent | Yes |
 | `acknowledge_message` | Acknowledge a message addressed to the authorized agent | Yes |
 

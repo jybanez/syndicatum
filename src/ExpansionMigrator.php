@@ -309,6 +309,14 @@ class ExpansionMigrator
                 $directEntries[$entryId] = true;
             }
         }
+        if ($directEntries) {
+            $markRequest = $this->pdo->prepare(
+                'UPDATE messages SET action_requested = 1 WHERE id = ? AND project_id = ?'
+            );
+            foreach (array_keys($directEntries) as $entryId) {
+                $markRequest->execute([$messageMap[$entryId], $projectId]);
+            }
+        }
         $participants = $this->pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND status = 'active'");
         $participants->execute([$projectId]);
         $activeIds = array_map('intval', $participants->fetchAll(PDO::FETCH_COLUMN));
