@@ -51,7 +51,6 @@ class InstallationState
             }
             $metadataArray = $this->metadata();
             $metadata = BaselineMetadata::fromArray($metadataArray);
-            $metadata->assertBaselineTables($tables);
             $identity = $identityRows[0];
             foreach ([
                 'application_version' => 'application_version',
@@ -68,6 +67,12 @@ class InstallationState
                 return ['state' => 'identity_mismatch', 'ready' => false, 'table_count' => count($tables)];
             }
             $postBaselineUpgradeRequired = !hash_equals((string) $metadataArray['schema_head'], (string) $identity['schema_head']);
+            if ($postBaselineUpgradeRequired) {
+                $metadata->assertKnownTables($tables);
+                $this->assertCutoverTablesPresent($tables);
+            } else {
+                $metadata->assertBaselineTables($tables);
+            }
             $ledger = $this->pdo->query(
                 'SELECT version, checksum FROM syndicatum_schema_migrations ORDER BY version'
             )->fetchAll(PDO::FETCH_ASSOC);
@@ -171,6 +176,21 @@ class InstallationState
             if (isset($expected[$row['version']])) { $actual[$row['version']] = strtolower($row['checksum']); }
         }
         return $actual === $expected;
+    }
+
+    private function assertCutoverTablesPresent(array $tableNames)
+    {
+        $schemaPath = dirname($this->metadataPath) . '/schema.sql';
+        $sql = @file_get_contents($schemaPath);
+        if (!is_string($sql) || !preg_match_all('/^CREATE TABLE `([a-z][a-z0-9_]*)` \(/m', $sql, $matches)) {
+            throw new RuntimeException('Trusted cutover schema inventory is unavailable.');
+        }
+        $required = array_values(array_unique($matches[1]));
+        $missing = array_values(array_diff($required, $tableNames));
+        if ($missing) {
+            sort($missing, SORT_STRING);
+            throw new RuntimeException('Cutover schema tables are missing: ' . implode(', ', $missing));
+        }
     }
 
     private function tableNames()

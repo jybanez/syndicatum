@@ -101,6 +101,12 @@ $state = new InstallationState($pdo);
 $status = $state->inspect();
 legacyStateAssert($status['state'] === 'legacy_upgraded_ready' && $status['ready'] === true, 'Exact upgraded lineage was not ready.');
 
+$pdo->identity['schema_head'] = $baseline['migration_cutover'];
+$pdo->ledger = $legacyLedger;
+legacyStateAssert($state->inspect()['state'] === 'post_baseline_upgrade_required', 'Protected cutover was not classified for suffix migration.');
+$pdo->identity = $identity;
+$pdo->ledger = $ledger;
+
 $pdo->ledger = array_merge(array_slice($legacyLedger, 0, -1), $postBaselineLedger);
 legacyStateAssert($state->inspect()['state'] === 'legacy_upgrade_incomplete', 'Missing forward row was accepted.');
 $pdo->ledger = $ledger;
