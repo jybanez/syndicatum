@@ -62,6 +62,7 @@ $masterKey = New-HexSecret 32
 $environmentPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.env"
 $backupKeyPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.backup-key"
 $dumpPath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName.sql"
+$legacySourcePath = Join-Path ([System.IO.Path]::GetTempPath()) "$projectName-legacy-source"
 $applicationImage = "${projectName}-app:acceptance"
 $databaseImage57 = "${projectName}-db57:acceptance"
 $databaseImage84 = "${projectName}-db84:acceptance"
@@ -118,9 +119,10 @@ function Read-DatabaseVersion {
     return (Invoke-Compose -Arguments @('exec', '-T', 'db', 'sh', '-lc', $probe) -Capture).Trim()
 }
 
-function Verify-Migrations {
-    Invoke-Compose -Arguments @('exec', '-T', 'app', 'php', 'scripts/chat-db.php', 'migrate') -Capture | Out-Null
-    $status = Invoke-Compose -Arguments @('exec', '-T', 'app', 'php', 'scripts/chat-db.php', 'migration-status') -Capture
+function Install-And-Verify-Legacy-Migrations {
+    $legacyMount = "${legacySourcePath}:/var/www/html:ro"
+    Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', $legacyMount, '--entrypoint', 'php', 'app', 'scripts/chat-db.php', 'install-schema') -Capture | Out-Null
+    $status = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '-v', $legacyMount, '--entrypoint', 'php', 'app', 'scripts/chat-db.php', 'migration-status') -Capture
     $rows = @($status | ConvertFrom-Json)
     $incomplete = @($rows | Where-Object { -not $_.applied -or -not $_.checksum_valid })
     if ($rows.Count -eq 0 -or $incomplete.Count -gt 0) {
@@ -229,12 +231,24 @@ function Assert-ClaimColumns([object[]]$Before, [object[]]$After, [switch]$Legac
 
 try {
     Write-Step 'Starting pinned MySQL 5.7 source and applying the complete schema'
+    if (Test-Path -LiteralPath $legacySourcePath) {
+        throw "Refusing to overwrite unexpected legacy source directory: $legacySourcePath"
+    }
+    [System.IO.Compression.ZipFile]::ExtractToDirectory(
+        (Join-Path $candidatePackagePath 'syndicatum-v1.0.0.zip'),
+        $legacySourcePath
+    )
+    if (-not (Test-Path -LiteralPath (Join-Path $legacySourcePath 'scripts/chat-db.php')) -or
+        -not (Test-Path -LiteralPath (Join-Path $legacySourcePath 'migrations/202609180004_delivery_terminal_timestamps.php'))) {
+        throw 'Pinned legacy candidate did not extract the expected migration source.'
+    }
     Write-AcceptanceEnvironment -MySqlImage $SourceImage -DatabaseImage $databaseImage57 -SqlMode $sourceSqlMode
     Invoke-Compose -Arguments @('config', '--quiet')
-    Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), 'db', 'app')
+    Invoke-Compose -Arguments @('up', '--build', '--detach', '--wait', '--wait-timeout', $StartupTimeoutSeconds.ToString(), 'db')
+    Invoke-Compose -Arguments @('build', 'app')
     $sourceVersion = Read-DatabaseVersion
     if ($sourceVersion -notmatch '^5\.7\.44(?:$|[.-])') { throw "Expected MySQL 5.7.44 source; observed $sourceVersion." }
-    Verify-Migrations
+    Install-And-Verify-Legacy-Migrations
     $sourceLedger = Read-LedgerSnapshot
     if ((Read-IdentityCount) -ne 0) { throw 'The 5.7 legacy fixture unexpectedly has an installation identity.' }
 
@@ -373,4 +387,5 @@ echo json_encode(["preflight" => $preflight, "result" => $result], JSON_THROW_ON
     if (Test-Path -LiteralPath $environmentPath) { Remove-Item -LiteralPath $environmentPath -Force }
     if (Test-Path -LiteralPath $dumpPath) { Remove-Item -LiteralPath $dumpPath -Force }
     if (Test-Path -LiteralPath $backupKeyPath) { Remove-Item -LiteralPath $backupKeyPath -Force }
+    if (Test-Path -LiteralPath $legacySourcePath) { Remove-Item -LiteralPath $legacySourcePath -Recurse -Force }
 }
