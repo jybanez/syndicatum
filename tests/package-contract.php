@@ -616,9 +616,19 @@ if (hash_equals($baselineMetadataArray['schema_sha256'], hash('sha256', $canonic
 preg_match_all('/^CREATE TABLE `([a-z0-9_]+)`/m', $baselineSchema, $baselineTableMatches);
 $baselineTableNames = $baselineTableMatches[1];
 sort($baselineTableNames, SORT_STRING);
-$committedBaseline->assertBaselineTables($baselineTableNames);
-if (count($baselineTableNames) !== 53 || substr_count($baselineSchema, 'CREATE TRIGGER') !== 3) {
-    packageContractFail('Committed baseline must contain the reviewed 53 tables and three triggers.');
+$finalBaselineTableNames = array_column($baselineMetadataArray['tables'], 'name');
+sort($finalBaselineTableNames, SORT_STRING);
+$committedBaseline->assertBaselineTables($finalBaselineTableNames);
+$postBaselineTables = array_values(array_diff($finalBaselineTableNames, $baselineTableNames));
+sort($postBaselineTables, SORT_STRING);
+if (count($baselineTableNames) !== 48
+    || count($finalBaselineTableNames) !== 53
+    || $postBaselineTables !== [
+        'project_task_events', 'project_tasks', 'project_template_agents',
+        'project_template_categories', 'project_templates',
+    ]
+    || substr_count($baselineSchema, 'CREATE TRIGGER') !== 3) {
+    packageContractFail('Committed cutover baseline and declared post-baseline table inventory are inconsistent.');
 }
 if (stripos($baselineSchema, 'DROP TABLE') !== false
     || preg_match('/INSERT\s+INTO\s+`?syndicatum_schema_migrations`?/i', $baselineSchema)

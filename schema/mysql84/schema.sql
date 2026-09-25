@@ -675,10 +675,6 @@ CREATE TABLE `projects` (
   `slug` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci,
   `instructions` mediumtext COLLATE utf8mb4_unicode_ci,
-  `source_template_public_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `source_template_name` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `source_template_version` bigint unsigned DEFAULT NULL,
-  `context_version` bigint unsigned NOT NULL DEFAULT '1',
   `status` enum('active','archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
@@ -687,7 +683,6 @@ CREATE TABLE `projects` (
   UNIQUE KEY `uq_projects_workspace_slug` (`workspace_id`,`slug`),
   UNIQUE KEY `uq_projects_public_id` (`public_id`),
   KEY `idx_projects_owner_status` (`owner_user_id`,`status`),
-  KEY `idx_projects_source_template` (`source_template_public_id`),
   KEY `fk_projects_workspace_owner` (`workspace_id`,`owner_user_id`),
   CONSTRAINT `fk_projects_owner` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_projects_workspace_owner` FOREIGN KEY (`workspace_id`, `owner_user_id`) REFERENCES `workspaces` (`id`, `owner_user_id`)
@@ -881,123 +876,6 @@ CREATE TABLE `workspaces` (
   UNIQUE KEY `uq_workspaces_owner` (`owner_user_id`),
   UNIQUE KEY `uq_workspaces_id_owner` (`id`,`owner_user_id`),
   CONSTRAINT `fk_workspaces_owner` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `project_tasks` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `public_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `project_id` bigint unsigned NOT NULL,
-  `title` varchar(180) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
-  `acceptance_criteria` mediumtext COLLATE utf8mb4_unicode_ci,
-  `status` enum('open','in_progress','in_review','blocked','completed','cancelled') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
-  `priority` enum('low','normal','high','urgent') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'normal',
-  `assignee_participant_id` bigint unsigned DEFAULT NULL,
-  `supervising_participant_id` bigint unsigned DEFAULT NULL,
-  `created_by_participant_id` bigint unsigned NOT NULL,
-  `source_message_id` bigint unsigned DEFAULT NULL,
-  `due_at` datetime DEFAULT NULL,
-  `blocked_reason` text COLLATE utf8mb4_unicode_ci,
-  `completion_summary` text COLLATE utf8mb4_unicode_ci,
-  `version` bigint unsigned NOT NULL DEFAULT '1',
-  `started_at` datetime DEFAULT NULL,
-  `submitted_at` datetime DEFAULT NULL,
-  `completed_at` datetime DEFAULT NULL,
-  `cancelled_at` datetime DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_project_tasks_public_id` (`public_id`),
-  KEY `idx_project_tasks_project_status` (`project_id`,`status`,`updated_at`),
-  KEY `idx_project_tasks_assignee` (`project_id`,`assignee_participant_id`,`status`),
-  KEY `idx_project_tasks_supervisor` (`project_id`,`supervising_participant_id`,`status`),
-  KEY `idx_project_tasks_due` (`project_id`,`due_at`),
-  KEY `idx_project_tasks_source` (`source_message_id`),
-  CONSTRAINT `fk_project_tasks_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_project_tasks_assignee` FOREIGN KEY (`assignee_participant_id`) REFERENCES `project_participants` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_project_tasks_supervisor` FOREIGN KEY (`supervising_participant_id`) REFERENCES `project_participants` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_project_tasks_creator` FOREIGN KEY (`created_by_participant_id`) REFERENCES `project_participants` (`id`),
-  CONSTRAINT `fk_project_tasks_source` FOREIGN KEY (`source_message_id`) REFERENCES `messages` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `project_task_events` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `task_id` bigint unsigned NOT NULL,
-  `project_id` bigint unsigned NOT NULL,
-  `actor_participant_id` bigint unsigned NOT NULL,
-  `event_type` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `from_status` varchar(24) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `to_status` varchar(24) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `body` text COLLATE utf8mb4_unicode_ci,
-  `metadata_json` json DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_project_task_events_task` (`task_id`,`id`),
-  KEY `idx_project_task_events_project` (`project_id`,`created_at`,`id`),
-  KEY `idx_project_task_events_actor` (`actor_participant_id`,`created_at`),
-  CONSTRAINT `fk_project_task_events_task` FOREIGN KEY (`task_id`) REFERENCES `project_tasks` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_project_task_events_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_project_task_events_actor` FOREIGN KEY (`actor_participant_id`) REFERENCES `project_participants` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `project_template_categories` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `slug` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `sort_order` int unsigned NOT NULL DEFAULT '0',
-  `status` enum('active','archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
-  `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_project_template_categories_slug` (`slug`),
-  KEY `idx_project_template_categories_status_sort` (`status`,`sort_order`,`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `project_templates` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `public_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `category_id` bigint unsigned NOT NULL,
-  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
-  `instructions` mediumtext COLLATE utf8mb4_unicode_ci,
-  `origin` enum('system','custom') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'custom',
-  `status` enum('active','archived') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
-  `version` bigint unsigned NOT NULL DEFAULT '1',
-  `created_by_user_id` bigint unsigned DEFAULT NULL,
-  `updated_by_user_id` bigint unsigned DEFAULT NULL,
-  `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  `archived_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_project_templates_public_id` (`public_id`),
-  KEY `idx_project_templates_status_name` (`status`,`name`),
-  KEY `idx_project_templates_category_status_name` (`category_id`,`status`,`name`),
-  KEY `idx_project_templates_created_by` (`created_by_user_id`),
-  CONSTRAINT `fk_project_templates_category` FOREIGN KEY (`category_id`) REFERENCES `project_template_categories` (`id`),
-  CONSTRAINT `fk_project_templates_created_by` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`),
-  CONSTRAINT `fk_project_templates_updated_by` FOREIGN KEY (`updated_by_user_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `project_template_agents` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `template_id` bigint unsigned NOT NULL,
-  `preset_key` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `display_name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `role_title` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `role_summary` text COLLATE utf8mb4_unicode_ci,
-  `role_instructions` mediumtext COLLATE utf8mb4_unicode_ci,
-  `supervising_agent_id` bigint unsigned DEFAULT NULL,
-  `sort_order` int unsigned NOT NULL DEFAULT '0',
-  `created_at` datetime NOT NULL,
-  `updated_at` datetime NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_project_template_agents_key` (`template_id`,`preset_key`),
-  KEY `idx_project_template_agents_template` (`template_id`,`sort_order`,`id`),
-  KEY `idx_project_template_agents_supervisor` (`supervising_agent_id`),
-  CONSTRAINT `fk_project_template_agents_template` FOREIGN KEY (`template_id`) REFERENCES `project_templates` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_project_template_agents_supervisor` FOREIGN KEY (`supervising_agent_id`) REFERENCES `project_template_agents` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `syndicatum_installation_identity` (
