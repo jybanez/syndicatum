@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.2");
+  assert.equal(manifest.version, "0.10.3");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -111,6 +111,22 @@ test("recovery and delivery are isolated so one participant cannot block the oth
   assert.match(source, /deliveryShard\(candidate\) === shard/);
   assert.match(source, /Promise\.allSettled\(deliveries\)/);
   assert.doesNotMatch(source, /let drainRunning = null/);
+});
+
+test("uncertain browser submissions pause their shard until explicit operator review", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
+  const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.match(background, /quarantineLegacyUncertainDeliveries/);
+  assert.match(background, /deliveryState === DELIVERY_REVIEW_STATE/);
+  assert.match(background, /if \(requiresReview\)[\s\S]*?return;[\s\S]*?chrome\.alarms\.create\(RETRY_ALARM/);
+  assert.match(background, /operator_confirmed_exact_user_turn/);
+  assert.match(background, /operatorRetryAuthorizedAt/);
+  assert.match(html, /id="delivery-review"/);
+  assert.match(html, /Copy safe review metadata/);
+  assert.match(popup, /syndicatum\.resolve-delivery-review/);
+  assert.match(popup, /Confirm visible/);
+  assert.match(popup, /Retry once/);
 });
 
 test("popup separates connection health and exposes timestamp diagnostics", async () => {

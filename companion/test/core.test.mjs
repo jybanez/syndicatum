@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, deliveryKey, discussionIdentity, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, deliveryKey, deliveryReviewItems, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -82,7 +82,25 @@ test("reports independent server, account, realtime, binding, and delivery healt
     bindings: [{ project_id: 2 }, { project_id: 2 }, { project_id: 3 }],
     queue: { pending: {} },
   }, { realtimeProjectCount: 2 });
-  assert.deepEqual(health, { overall: "connected", server: "reachable", account: "authorized", realtime: "connected", bindings: "active", delivery: "pending", bindingCount: 3, projectCount: 2, queuedCount: 1, realtimeProjectCount: 2, error: null });
+  assert.deepEqual(health, { overall: "connected", server: "reachable", account: "authorized", realtime: "connected", bindings: "active", delivery: "pending", bindingCount: 3, projectCount: 2, queuedCount: 1, reviewCount: 0, realtimeProjectCount: 2, error: null });
+});
+test("classifies uncertain submissions and exposes only allowlisted review metadata", () => {
+  assert.equal(isUncertainDeliveryFailure({ code: "submission_unconfirmed" }), true);
+  assert.equal(isUncertainDeliveryFailure(new Error("network unavailable")), false);
+  const queue = {
+    "chatgpt:2:41:4451": {
+      provider: "chatgpt", project_id: 2, agent_id: 41, conversation_id: "https://chatgpt.com/c/secret",
+      accessToken: "must-not-appear", message: { id: 4451, body: "must-not-appear" }, attempts: 3,
+      queuedAt: "2026-09-26T12:00:00Z", deliveryState: "requires_review", lastError: "submission_unconfirmed",
+    },
+  };
+  const reviews = deliveryReviewItems(queue);
+  assert.deepEqual(reviews, [{ key: "chatgpt:2:41:4451", provider: "chatgpt", projectId: "2", agentId: "41", messageId: "4451", attempts: 3, queuedAt: "2026-09-26T12:00:00Z", reviewRequestedAt: null, lastError: "submission_unconfirmed", confirmation: null }]);
+  assert.doesNotMatch(JSON.stringify(reviews), /must-not-appear|chatgpt\.com/);
+  const health = companionHealth({ accessToken: "protected", queue });
+  assert.equal(health.delivery, "review");
+  assert.equal(health.reviewCount, 1);
+  assert.equal(health.overall, "attention");
 });
 test("does not present a server failure as healthy overall", () => {
   const health = companionHealth({ baseUrl: "https://syndicatum.example", accessToken: "protected", serverHealth: "unreachable", lastServerError: "Failed to fetch" });

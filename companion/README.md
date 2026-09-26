@@ -62,6 +62,14 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+Version 0.10.3 treats an unconfirmed browser submission as an uncertain outcome,
+pauses only that discussion's delivery shard, and preserves the item for explicit
+operator review instead of scheduling an automatic replay. On upgrade it also
+quarantines existing queue entries whose last error was `submission_unconfirmed`
+before recovery drains begin. The popup exposes only allowlisted review metadata;
+an operator may confirm an exact already-visible ChatGPT user turn or authorize
+one retry. A second uncertain outcome pauses again.
+
 Version 0.10.2 fetches recovery work for all configured providers before
 delivery starts and drains each participant binding independently. A stalled
 browser delivery can therefore remain safely pending without blocking alerts

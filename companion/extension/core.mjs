@@ -3,6 +3,29 @@ export const PROVIDERS = Object.freeze({
   gemini: Object.freeze({ host: "gemini.google.com", label: "Gemini" }),
 });
 
+export const DELIVERY_REVIEW_STATE = "requires_review";
+
+export function isUncertainDeliveryFailure(value) {
+  return String(value?.code || value?.message || value || "") === "submission_unconfirmed";
+}
+
+export function deliveryReviewItems(queue = {}) {
+  return Object.entries(queue || {})
+    .filter(([, item]) => item?.deliveryState === DELIVERY_REVIEW_STATE)
+    .map(([key, item]) => ({
+      key,
+      provider: String(item.provider || ""),
+      projectId: String(item.project_id ?? ""),
+      agentId: String(item.agent_id ?? ""),
+      messageId: String(item.message?.id ?? ""),
+      attempts: Number(item.attempts || 0),
+      queuedAt: item.queuedAt || null,
+      reviewRequestedAt: item.reviewRequestedAt || null,
+      lastError: String(item.lastError || "submission_unconfirmed"),
+      confirmation: item.browserDelivery?.confirmation || null,
+    }));
+}
+
 export function serverFailureKind(error) {
   const httpStatus = Number(error?.httpStatus);
   if (Number.isInteger(httpStatus) && httpStatus > 0) return [401, 403].includes(httpStatus) ? "account" : "error";
@@ -14,6 +37,7 @@ export function companionHealth(current = {}, runtime = {}) {
   const bindingCount = bindings.length;
   const projectCount = new Set(bindings.map(binding => String(binding.project_id))).size;
   const queuedCount = Object.keys(current.queue || {}).length;
+  const reviewCount = deliveryReviewItems(current.queue).length;
   const realtimeProjectCount = Number(runtime.realtimeProjectCount || 0);
   const account = current.pending?.deviceCode ? "authorizing" : current.accessToken ? (current.accountHealth || "authorized") : "disconnected";
   const server = !current.baseUrl ? "not_configured" : current.serverHealth || (current.lastSyncAt ? "reachable" : "checking");
@@ -23,12 +47,12 @@ export function companionHealth(current = {}, runtime = {}) {
         : realtimeProjectCount > 0 ? "partial"
           : ["reconnecting", "unavailable"].includes(current.realtimeHealth) ? current.realtimeHealth : "connecting";
   const bindingsState = account !== "authorized" ? "inactive" : current.lastSyncAt ? (bindingCount ? "active" : "none") : "checking";
-  const delivery = account !== "authorized" ? "inactive" : queuedCount ? "pending" : current.lastDeliveryError ? "attention" : current.lastDeliveryAt ? "healthy" : "ready";
+  const delivery = account !== "authorized" ? "inactive" : reviewCount ? "review" : queuedCount ? "pending" : current.lastDeliveryError ? "attention" : current.lastDeliveryAt ? "healthy" : "ready";
   const error = current.lastServerError || current.lastAccountError || current.lastRealtimeError || current.lastDeliveryError || current.lastError || null;
   const overall = account === "disconnected" ? "disconnected"
     : account === "authorizing" ? "authorizing"
-      : error || [server, account, realtime, delivery].some(value => ["unreachable", "error", "unavailable", "partial", "attention"].includes(value)) ? "attention" : "connected";
-  return { overall, server, account, realtime, bindings: bindingsState, delivery, bindingCount, projectCount, queuedCount, realtimeProjectCount, error };
+      : error || [server, account, realtime, delivery].some(value => ["unreachable", "error", "unavailable", "partial", "attention", "review"].includes(value)) ? "attention" : "connected";
+  return { overall, server, account, realtime, bindings: bindingsState, delivery, bindingCount, projectCount, queuedCount, reviewCount, realtimeProjectCount, error };
 }
 
 export function companionDiagnostics(data = {}, extension = {}) {
@@ -44,7 +68,7 @@ export function companionDiagnostics(data = {}, extension = {}) {
     `Account: ${value(health.account)}`,
     `Realtime: ${value(health.realtime)} (${Number(health.realtimeProjectCount || 0)}/${Number(health.projectCount || 0)})`,
     `Bindings: ${value(health.bindings)} (${Number(health.bindingCount ?? data.bindingCount ?? 0)})`,
-    `Delivery: ${value(health.delivery)}; queued=${Number(health.queuedCount ?? data.queuedCount ?? 0)}`,
+    `Delivery: ${value(health.delivery)}; queued=${Number(health.queuedCount ?? data.queuedCount ?? 0)}; review=${Number(health.reviewCount ?? data.reviewCount ?? 0)}`,
     `Last server check: ${value(data.lastServerCheckAt)}`,
     `Last binding sync: ${value(data.lastSyncAt)}`,
     `Last Realtime join: ${value(data.lastRealtimeAt)}`,
