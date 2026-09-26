@@ -29,6 +29,12 @@ conservative table layout and inline essential styles, with the packaged
 128 px color mark displayed at 48 px. The plain-text alternative carries the
 same invitation, fallback, expiry, and security information.
 
+Invitation expiry is rendered as a human-friendly date and time with its
+timezone. The renderer retains an absolute brand URL for SMTP/web transport
+compatibility. Development captures are self-contained: the `.eml` includes
+the packaged PNG as an inline CID attachment, while the standalone `.html`
+embeds the same PNG as a base64 data URI for offline design inspection.
+
 ## 1. Purpose
 
 Add dependable email awareness for human users without turning email into a second project record or duplicating every Realtime event. Syndicatum remains the authoritative place to read, acknowledge, assign, and resolve work.

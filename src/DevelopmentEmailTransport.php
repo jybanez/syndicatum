@@ -20,7 +20,16 @@ final class DevelopmentEmailTransport
     {
         $this->ensureDirectory();
         $captureId = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(8));
-        $boundary = 'syndicatum-' . bin2hex(random_bytes(12));
+        $alternativeBoundary = 'syndicatum-alternative-' . bin2hex(random_bytes(12));
+        $relatedBoundary = 'syndicatum-related-' . bin2hex(random_bytes(12));
+        $brandContentId = 'syndicatum-brand-' . bin2hex(random_bytes(6)) . '@local';
+        $brandBase64 = $this->brandImageBase64();
+        $brandLogoUrl = isset($message['brand_logo_url']) ? (string) $message['brand_logo_url'] : '';
+        if ($brandLogoUrl === '' || strpos($message['html'], $brandLogoUrl) === false) {
+            throw new RuntimeException('Development email brand image reference is missing.');
+        }
+        $emailHtml = str_replace($brandLogoUrl, 'cid:' . $brandContentId, $message['html']);
+        $previewHtml = str_replace($brandLogoUrl, 'data:image/png;base64,' . $brandBase64, $message['html']);
         $headers = [
             'Date: ' . gmdate(DATE_RFC2822),
             'Message-ID: <' . $captureId . '@syndicatum.local>',
@@ -32,17 +41,21 @@ final class DevelopmentEmailTransport
         $headers[] = 'X-Syndicatum-Transport: development-capture';
         $headers[] = 'X-Syndicatum-Template: ' . $this->cleanHeader($message['template']) . '; version=' . (int) $message['template_version'];
         $headers[] = 'MIME-Version: 1.0';
-        $headers[] = 'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
-        $body = '--' . $boundary . "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
-            . str_replace("\n", "\r\n", $message['text']) . "\r\n--" . $boundary
-            . "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
-            . str_replace("\n", "\r\n", $message['html']) . "\r\n--" . $boundary . "--\r\n";
+        $headers[] = 'Content-Type: multipart/alternative; boundary="' . $alternativeBoundary . '"';
+        $body = '--' . $alternativeBoundary . "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+            . str_replace("\n", "\r\n", $message['text']) . "\r\n--" . $alternativeBoundary
+            . "\r\nContent-Type: multipart/related; boundary=\"" . $relatedBoundary . "\"\r\n\r\n"
+            . '--' . $relatedBoundary . "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+            . str_replace("\n", "\r\n", $emailHtml) . "\r\n--" . $relatedBoundary
+            . "\r\nContent-Type: image/png; name=\"syndicatum-128.png\"\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <" . $brandContentId . ">\r\nContent-Disposition: inline; filename=\"syndicatum-128.png\"\r\n\r\n"
+            . chunk_split($brandBase64, 76, "\r\n")
+            . '--' . $relatedBoundary . "--\r\n--" . $alternativeBoundary . "--\r\n";
         $contents = implode("\r\n", $headers) . "\r\n\r\n" . $body;
         $destination = $this->directory . DIRECTORY_SEPARATOR . $captureId . '.eml';
         $preview = $this->directory . DIRECTORY_SEPARATOR . $captureId . '.html';
         $this->writeAtomic($destination, $contents, 'Development email capture');
         try {
-            $this->writeAtomic($preview, $message['html'], 'Development email HTML preview');
+            $this->writeAtomic($preview, $previewHtml, 'Development email HTML preview');
         } catch (Exception $exception) {
             @unlink($destination);
             throw $exception;
@@ -94,6 +107,17 @@ final class DevelopmentEmailTransport
     private function cleanHeader($value)
     {
         return trim(str_replace(["\r", "\n"], '', (string) $value));
+    }
+
+    private function brandImageBase64()
+    {
+        $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'brand'
+            . DIRECTORY_SEPARATOR . 'png' . DIRECTORY_SEPARATOR . 'color' . DIRECTORY_SEPARATOR . 'syndicatum-128.png';
+        $contents = is_file($path) && is_readable($path) ? file_get_contents($path) : false;
+        if ($contents === false || $contents === '') {
+            throw new RuntimeException('Development email brand image could not be read.');
+        }
+        return base64_encode($contents);
     }
 
     private function writeAtomic($destination, $contents, $label)
