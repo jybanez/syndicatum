@@ -32,6 +32,12 @@ export function deliveryReviewItems(queue = {}, bindings = []) {
     }));
 }
 
+export function prioritizeDeliveryReview(queue = {}, key, resolvedItem) {
+  const remaining = { ...(queue || {}) };
+  delete remaining[key];
+  return { [key]: resolvedItem, ...remaining };
+}
+
 export function serverFailureKind(error) {
   const httpStatus = Number(error?.httpStatus);
   if (Number.isInteger(httpStatus) && httpStatus > 0) return [401, 403].includes(httpStatus) ? "account" : "error";

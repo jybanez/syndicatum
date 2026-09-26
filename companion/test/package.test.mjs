@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.4");
+  assert.equal(manifest.version, "0.10.5");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -124,6 +124,7 @@ test("uncertain browser submissions pause their shard until explicit operator re
   assert.match(background, /if \(requiresReview\)[\s\S]*?return;[\s\S]*?chrome\.alarms\.create\(RETRY_ALARM/);
   assert.match(background, /operator_confirmed_exact_user_turn/);
   assert.match(background, /operatorRetryAuthorizedAt/);
+  assert.match(background, /queue: prioritizeDeliveryReview\(queue, key, resolved\)/);
   assert.match(html, /id="delivery-review"/);
   assert.match(html, /Copy safe review metadata/);
   assert.match(popup, /syndicatum\.resolve-delivery-review/);
