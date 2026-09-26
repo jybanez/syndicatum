@@ -2,15 +2,21 @@
 
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/MessageOutbox.php';
+require_once __DIR__ . '/SystemMessageService.php';
 
 class ProjectTaskService
 {
     private $pdo;
     private $outbox;
+    private $systemMessages;
     private $statuses = ['open', 'in_progress', 'in_review', 'blocked', 'completed', 'cancelled'];
     private $priorities = ['low', 'normal', 'high', 'urgent'];
 
-    public function __construct(PDO $pdo) { $this->pdo = $pdo; $this->outbox = new MessageOutbox($pdo); }
+    public function __construct(PDO $pdo) {
+        $this->pdo = $pdo;
+        $this->outbox = new MessageOutbox($pdo);
+        $this->systemMessages = new SystemMessageService($pdo);
+    }
 
     public function listTasks(array $access, array $filters = [])
     {
@@ -97,6 +103,7 @@ class ProjectTaskService
                 ['assignee_participant_id' => $assignee, 'supervising_participant_id' => $supervisor]);
             $task = $this->task($access, $id, true);
             $this->outbox->enqueueTaskUpdated($projectId, $id, $task, 'created');
+            $this->systemMessages->taskCreated($access, $task);
             $this->pdo->commit();
             return $task;
         } catch (Exception $exception) {
@@ -161,6 +168,13 @@ class ProjectTaskService
                 $fromStatus, $toStatus, isset($input['note']) ? trim((string) $input['note']) : null, null);
             $task = $this->task($access, $taskId, true);
             $this->outbox->enqueueTaskUpdated((int) $access['project_id'], (int) $taskId, $task, $eventType);
+            if ($fromStatus !== $toStatus) {
+                $this->systemMessages->taskStatusChanged($access, $task, $fromStatus, $toStatus);
+            }
+            if (($current['assignee_participant_id'] === null ? null : (int) $current['assignee_participant_id'])
+                !== ($task['assignee_participant_id'] === null ? null : (int) $task['assignee_participant_id'])) {
+                $this->systemMessages->taskAssigned($access, $task, $current['assignee_participant_id']);
+            }
             $this->pdo->commit();
             return $task;
         } catch (Exception $exception) {
@@ -256,7 +270,8 @@ class ProjectTaskService
     private function optionalParticipant($projectId, $value) {
         if ($value === null || $value === '') { return null; }
         if (!preg_match('/^[1-9][0-9]*$/', (string) $value)) { throw new InvalidArgumentException('Select a valid active project participant.'); }
-        $statement = $this->pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND id = ? AND status = 'active'");
+        $statement = $this->pdo->prepare("SELECT id FROM project_participants
+            WHERE project_id = ? AND id = ? AND status = 'active' AND kind IN ('human', 'agent')");
         $statement->execute([$projectId, (int) $value]); if (!$statement->fetchColumn()) { throw new InvalidArgumentException('Select an active participant in this project.'); }
         return (int) $value;
     }

@@ -59,6 +59,7 @@ assertExactFiles('Legacy installSchema', $installSchemaCallers, [
     'tests/chatgpt-oauth.php',
     'tests/expansion.php',
     'tests/google-sso.php',
+    'tests/integration-connections.php',
     'tests/migrations.php',
     'tests/project-api.php',
     'tests/project-tasks.php',

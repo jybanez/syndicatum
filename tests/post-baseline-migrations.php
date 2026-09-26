@@ -48,7 +48,7 @@ try {
         throw new RuntimeException('Fresh baseline installation did not apply the declared migration suffix.');
     }
     $state = (new InstallationState($pdo))->inspect();
-    if (empty($state['ready']) || $state['identity']['schema_head'] !== '202609250009') {
+    if (empty($state['ready']) || $state['identity']['schema_head'] !== '202609260005') {
         throw new RuntimeException('Post-baseline installation identity is not ready.');
     }
     echo "PASS  fresh baseline applies the declared migration suffix\n";

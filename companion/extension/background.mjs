@@ -8,7 +8,7 @@ const sockets = new Map();
 const heartbeatTimers = new Map();
 let running = null;
 let queueWrites = Promise.resolve();
-let drainRunning = null;
+const drainRunning = new Map();
 let authorizationPoll = null;
 let authorizationTimer = null;
 let nextAuthorizationPollAt = 0;
@@ -42,9 +42,10 @@ function startHeartbeat(projectId, socket) {
 }
 
 async function recordDeliveryDiagnostic(diagnostic) {
-  const current = await state();
-  const history = [...(current.deliveryHistory || []), diagnostic].slice(-25);
-  await save({ deliveryHistory: history, lastDeliveryDiagnostic: diagnostic });
+  await updateDeliveryState(current => ({
+    deliveryHistory: [...(current.deliveryHistory || []), diagnostic].slice(-25),
+    lastDeliveryDiagnostic: diagnostic,
+  }));
 }
 
 async function api(path, options = {}) {
@@ -334,16 +335,30 @@ async function resolveBindingIntent(request, sender) {
 
 async function recover(bindings) {
   const byBinding = new Map(bindings.map(binding => [`${binding.project_id}:${binding.agent_id}`, binding]));
-  for (const provider of Object.keys(PROVIDERS)) {
+  const recovered = await Promise.all(Object.keys(PROVIDERS).map(async provider => {
     const items = await api(`/api/v1/connector-pending-notifications.php?provider=${encodeURIComponent(provider)}&limit=200`);
-    for (const item of Array.isArray(items) ? items : []) {
+    return (Array.isArray(items) ? items : []).map(item => ({ provider, item }));
+  }));
+  const shards = new Set();
+  for (const batch of recovered) {
+    for (const { provider, item } of batch) {
       const binding = byBinding.get(`${item.project_id}:${item.agent_id}`);
-      if (binding && binding.provider === provider) await enqueue(recoveryItem(binding, item.message));
+      if (binding && binding.provider === provider) {
+        const queued = recoveryItem(binding, item.message);
+        await stage(queued);
+        shards.add(deliveryShard(queued));
+      }
     }
   }
+  await Promise.all([...shards].map(shard => drain(shard)));
 }
 
 async function enqueue(item) {
+  await stage(item);
+  return drain(deliveryShard(item));
+}
+
+async function stage(item) {
   queueWrites = queueWrites.then(async () => {
     const current = await state();
     const key = deliveryKey(item);
@@ -352,17 +367,37 @@ async function enqueue(item) {
     await save({ queue });
   });
   await queueWrites;
-  return drain();
 }
 
-async function drain() {
-  if (drainRunning) return drainRunning;
-  drainRunning = (async () => {
+function deliveryShard(item) {
+  return `${item.provider}:${item.project_id}:${item.agent_id}`;
+}
+
+async function updateDeliveryState(transform) {
+  let updated;
+  queueWrites = queueWrites.then(async () => {
+    const current = await state();
+    updated = await save(transform(current));
+  });
+  await queueWrites;
+  return updated;
+}
+
+async function drain(shard = null) {
+  if (shard === null) {
+    const current = await state();
+    const shards = [...new Set(Object.values(current.queue || {}).map(deliveryShard))];
+    await Promise.all(shards.map(value => drain(value)));
+    return;
+  }
+  if (drainRunning.has(shard)) return drainRunning.get(shard);
+  const running = (async () => {
     while (true) {
       const current = await state();
-      const entry = Object.entries(current.queue || {})[0];
+      const entry = Object.entries(current.queue || {}).find(([, candidate]) => deliveryShard(candidate) === shard);
       if (!entry) return;
-      const [key, item] = entry;
+      const [key, queuedItem] = entry;
+      let item = queuedItem;
       const startedAt = new Date().toISOString();
       try {
         let result = null;
@@ -378,19 +413,24 @@ async function drain() {
         } else if (!item.browserDeliveredAt) {
           const result = await deliver(item);
           if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { retryable: result?.retryable !== false });
-          const afterBrowserDelivery = await state();
-          const stagedQueue = { ...(afterBrowserDelivery.queue || {}) };
-          stagedQueue[key] = { ...stagedQueue[key], browserDeliveredAt: new Date().toISOString(), browserDelivery: result };
-          await save({ queue: stagedQueue });
+          const browserDeliveredAt = new Date().toISOString();
+          item = { ...item, browserDeliveredAt, browserDelivery: result };
+          await updateDeliveryState(current => {
+            const queue = { ...(current.queue || {}) };
+            if (queue[key]) queue[key] = { ...queue[key], browserDeliveredAt, browserDelivery: result };
+            return { queue };
+          });
         }
         if (item.provider !== "gemini") {
           await api("/api/v1/connector-notification-deliveries.php", { method: "POST", body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id }) });
         }
-        const latest = await state();
-        const queue = { ...(latest.queue || {}) }; delete queue[key];
-        const delivered = { ...(latest.delivered || {}), [key]: new Date().toISOString() };
-        const entries = Object.entries(delivered).slice(-1000);
-        await save({ queue, delivered: Object.fromEntries(entries), lastDeliveryAt: delivered[key], lastDeliveryError: null, lastError: null });
+        const completedAt = new Date().toISOString();
+        await updateDeliveryState(current => {
+          const queue = { ...(current.queue || {}) }; delete queue[key];
+          const delivered = { ...(current.delivered || {}), [key]: completedAt };
+          const entries = Object.entries(delivered).slice(-1000);
+          return { queue, delivered: Object.fromEntries(entries), lastDeliveryAt: completedAt, lastDeliveryError: null, lastError: null };
+        });
         await recordDeliveryDiagnostic({
           key,
           provider: item.provider,
@@ -399,23 +439,25 @@ async function drain() {
           messageId: item.message.id,
           queuedAt: item.queuedAt || null,
           startedAt,
-          completedAt: delivered[key],
+          completedAt,
           attempts: Number(item.attempts || 0) + 1,
           outcome: item.provider === "gemini" ? "replied" : "delivered",
-          ...deliveryMetadata(result || latest.queue?.[key]?.browserDelivery || {}),
+          ...deliveryMetadata(result || item.browserDelivery || {}),
         });
       } catch (error) {
-        const latest = await state();
-        const queue = { ...(latest.queue || {}) };
-        if (queue[key]) queue[key] = { ...queue[key], attempts: Number(queue[key].attempts || 0) + 1, lastError: String(error?.message || error) };
         const deliveryError = `Delivery pending: ${String(error?.message || error)}`;
-        await save({ queue, lastDeliveryError: deliveryError, lastError: deliveryError });
+        await updateDeliveryState(current => {
+          const queue = { ...(current.queue || {}) };
+          if (queue[key]) queue[key] = { ...queue[key], attempts: Number(queue[key].attempts || 0) + 1, lastError: String(error?.message || error) };
+          return { queue, lastDeliveryError: deliveryError, lastError: deliveryError };
+        });
         await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 1 });
         return;
       }
     }
-  })().finally(() => { drainRunning = null; });
-  return drainRunning;
+  })().finally(() => { drainRunning.delete(shard); });
+  drainRunning.set(shard, running);
+  return running;
 }
 
 async function deliver(item) {
@@ -496,9 +538,11 @@ async function connectProject(projectId) {
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) {
         const current = await state();
+        const deliveries = [];
         for (const binding of (current.bindings || []).filter(entry => String(entry.project_id) === projectId)) {
-          if (bindingAcceptsMessage(binding, envelope.payload.message)) await enqueue(recoveryItem(binding, envelope.payload.message));
+          if (bindingAcceptsMessage(binding, envelope.payload.message)) deliveries.push(enqueue(recoveryItem(binding, envelope.payload.message)));
         }
+        await Promise.allSettled(deliveries);
       }
     };
     socket.onclose = () => {

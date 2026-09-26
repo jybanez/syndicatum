@@ -37,6 +37,28 @@ test("addressed messages are delivered once", async () => {
   assert.equal(activations, 1);
 });
 
+test("post-join recovery can close the snapshot-to-listener gap without duplicating messages", async () => {
+  const processed = new Set(), activations = [];
+  const recovered = { ...message, id: 1562, project_sequence: 1562 };
+  const state = {
+    has: id => processed.has(String(id)), activeWake: () => null,
+    markPending: async () => {},
+    markProcessed: async item => { processed.add(String(item.id)); },
+    markWakeQueued: async item => { processed.add(String(item.id)); },
+    observeSequence: async () => {},
+  };
+  const connector = new ActivationConnector({
+    config: { participantId: "8", coalescingEnabled: false, activationRetryLimit: 2, activationRetryBaseMs: 1000, activationRetryMaxMs: 1000 },
+    syndicatum: { isAcknowledged: async () => false, addressedUnacknowledged: async () => [recovered] },
+    driver: { activate: async item => { activations.push(String(item.id)); } },
+    state,
+    log: { info() {}, error() {} },
+  });
+  assert.deepEqual(await connector.recoverAddressed("post-join-recovery"), { status: "recovered", count: 1 });
+  assert.deepEqual(await connector.recoverAddressed("post-join-recovery"), { status: "recovered", count: 1 });
+  assert.deepEqual(activations, ["1562"]);
+});
+
 test("new activity is coalesced behind one wake and only unresolved activity gets one follow-up", async () => {
   const processed = new Set(), acknowledged = new Set(), activations = [];
   let wake = null;
@@ -176,6 +198,45 @@ test("an unclaimed legacy binding cannot abort the device listener", async () =>
     assert.equal(connector.processors.get("1")[0].config.coalescingEnabled, false);
     assert.match(logs[0], /local claimed profile could not be used/);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("device startup loads protected binding profiles concurrently", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-parallel-profiles-"));
+  let profileReads = 0, releaseProfiles, profilesStartedResolve;
+  const gate = new Promise(resolve => { releaseProfiles = resolve; });
+  const profilesStarted = new Promise(resolve => { profilesStartedResolve = resolve; });
+  try {
+    const connector = new DeviceConnector({
+      config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://syndicatum.wizaya.com" },
+      syndicatum: {},
+      bindings: [
+        { project_id: 2, participant_id: 33, agent_id: 33, conversation_id: "discussion-developer", working_directory: null },
+        { project_id: 2, participant_id: 34, agent_id: 34, conversation_id: "discussion-helper", working_directory: null },
+      ],
+      loadProfile: async profileId => {
+        profileReads += 1;
+        if (profileReads === 2) profilesStartedResolve();
+        await gate;
+        const agentId = Number(profileId.split(".").at(-1));
+        return { syndicatum_url: "https://syndicatum.wizaya.com", project_id: 2, participant_id: agentId, token: `protected-${agentId}` };
+      },
+      identityClientFactory: () => ({ isAcknowledged: async () => false, addressedUnacknowledged: async () => [] }),
+      driverFactory: () => ({ activate: async () => {} }),
+      log: { info() {}, error() {} },
+    });
+    connector.stopped = true;
+    const starting = connector.start();
+    await Promise.race([
+      profilesStarted,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Protected profile reads did not start concurrently.")), 1000)),
+    ]);
+    assert.equal(profileReads, 2);
+    releaseProfiles();
+    await starting;
+  } finally {
+    releaseProfiles?.();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("claimed bindings recover missed messages into one coalesced startup wake", async () => {

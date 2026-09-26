@@ -189,7 +189,7 @@ try {
         'baseline_id' => $baselineArray['baseline_id'],
         'baseline_metadata_sha256' => hash_file('sha256', $baselinePath),
         'table_count' => count($baselineArray['tables']),
-        'policy_counts' => ['durable' => 33, 'reset' => 17, 'excluded' => 3],
+        'policy_counts' => ['durable' => 37, 'reset' => 17, 'excluded' => 3],
         'envelope_sha256' => $produced['envelope_sha256'],
         'archive_sha256' => $produced['archive_sha256'],
         'manifest_sha256' => $produced['manifest_sha256'],

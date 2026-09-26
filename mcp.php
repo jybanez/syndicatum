@@ -176,7 +176,8 @@ try {
         $input = ['body' => trim((string) ($args['body'] ?? '')), 'broadcast' => !empty($args['broadcast']),
             'direct_participant_ids' => $args['direct_participant_ids'] ?? [], 'mention_participant_ids' => $args['mention_participant_ids'] ?? [],
             'reply_to_message_id' => isset($args['reply_to_message_id']) ? (int) $args['reply_to_message_id'] : null,
-            'idempotency_key' => trim((string) ($args['idempotency_key'] ?? ''))];
+            'idempotency_key' => trim((string) ($args['idempotency_key'] ?? '')),
+            'severity' => trim((string) ($args['severity'] ?? 'neutral'))];
         $created = $repository->createMessage($access, $input);
         $value = ['message' => mcpMessage($created['message']), 'created' => (bool) $created['created']];
     } else {
@@ -216,7 +217,7 @@ function mcpTools()
         $tool('list_projects', 'List authorized projects', 'List the Syndicatum project available to this discussion binding.', $binding, [], $read),
         $tool('get_project', 'Get project context', 'Read project instructions, permissions, current participant, and latest sequence.', $binding, [], $read),
         $tool('get_bootstrap', 'Get agent bootstrap context', 'Read the project context, this agent\'s project-scoped role and supervisor, permissions, work availability, and timeline attention summary in one call.', $binding, [], $read),
-        $tool('list_participants', 'List project participants', 'List active participants so messages can use stable participant IDs.', $binding + ['kind' => ['type' => 'string', 'enum' => ['human', 'agent']]], [], $read),
+        $tool('list_participants', 'List project participants', 'List active humans, agents, and non-addressable external integrations. Only humans and agents can be message addressees.', $binding + ['kind' => ['type' => 'string', 'enum' => ['human', 'agent', 'integration']]], [], $read),
         $tool('list_messages', 'Read project timeline', 'Read canonical project messages, optionally limited to messages addressed to this agent or still unacknowledged.',
             $binding + ['limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 50], 'before' => ['type' => 'string'], 'after' => ['type' => 'string'],
                 'query' => ['type' => 'string'], 'addressed_to_me' => ['type' => 'boolean'], 'unacknowledged_only' => ['type' => 'boolean']], [], $read),
@@ -241,7 +242,9 @@ function mcpTools()
         $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent. Addressees indicate expected responders, not visibility.',
             $binding + ['body' => ['type' => 'string', 'minLength' => 1], 'direct_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'mention_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]], 'broadcast' => ['type' => 'boolean'],
-                'reply_to_message_id' => ['type' => 'integer', 'minimum' => 1], 'idempotency_key' => ['type' => 'string', 'maxLength' => 160]], ['body', 'idempotency_key'], $write),
+                'reply_to_message_id' => ['type' => 'integer', 'minimum' => 1],
+                'severity' => ['type' => 'string', 'enum' => ['neutral','info','success','warning','error','critical'], 'default' => 'neutral'],
+                'idempotency_key' => ['type' => 'string', 'maxLength' => 160]], ['body', 'idempotency_key'], $write),
         $tool('acknowledge_message', 'Acknowledge a message', 'Acknowledge a message that was addressed to the authorized agent.', $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1]], ['message_id'], $write),
     ];
 }
@@ -300,11 +303,14 @@ function mcpMessage(array $message) {
     }, $message['addressees']);
     return [
         'id' => (int) $message['id'], 'project_sequence' => (int) $message['project_sequence'],
+        'message_kind' => $message['message_kind'], 'severity' => $message['severity'],
+        'system_event' => $message['system_event'],
         'sender' => ['participant_id' => (int) $message['sender']['participant_id'],
             'kind' => $message['sender']['kind'], 'display_name' => $message['sender']['display_name']],
         'reply_to_message_id' => $message['reply_to_message_id'], 'body' => $message['body'],
         'addressees' => $addressees, 'created_at' => $message['created_at'],
         'updated_at' => $message['updated_at'], 'deleted_at' => $message['deleted_at'],
+        'action_requested' => (bool) $message['action_requested'],
         'edited' => (bool) $message['edited'], 'revision_count' => (int) $message['revision_count'],
     ];
 }

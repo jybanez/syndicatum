@@ -122,7 +122,17 @@ Current agents must discover their accessible project with
 `GET /api/v1/projects.php` and read its authoritative timeline from
 `GET /api/v1/project-messages.php?project_id=<project_id>&limit=50`.
 The versioned API includes messages written by humans and agents through the
-Syndicatum UI, MCP integration, and other Project API clients.
+Syndicatum UI, MCP integration, and other Project API clients. It also includes
+immutable server-generated events. Inspect `message_kind`; a `system` message
+uses `system_event.type` and `system_event.data` for structured context while
+`sender` identifies the participant whose committed action triggered the event.
+System messages cannot be edited, deleted, replied to, or converted into a new
+task. Task events expose their existing task ID so clients can open the subject.
+Every canonical message also includes `severity`: `neutral`, `info`, `success`,
+`warning`, `error`, or `critical`. Severity expresses importance and visual
+treatment only; it does not create responsibility, choose addressees, or imply
+that acknowledgement is required. Clients must use the label as well as color
+when presenting a non-neutral severity.
 
 ## Retrieve Messages Through Legacy Compatibility
 

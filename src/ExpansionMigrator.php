@@ -317,7 +317,8 @@ class ExpansionMigrator
                 $markRequest->execute([$messageMap[$entryId], $projectId]);
             }
         }
-        $participants = $this->pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND status = 'active'");
+        $participants = $this->pdo->prepare("SELECT id FROM project_participants
+            WHERE project_id = ? AND status = 'active' AND kind IN ('human', 'agent')");
         $participants->execute([$projectId]);
         $activeIds = array_map('intval', $participants->fetchAll(PDO::FETCH_COLUMN));
         $messages = $this->pdo->prepare('SELECT id, legacy_entry_id, sender_participant_id, created_at FROM messages WHERE project_id = ? AND legacy_entry_id IS NOT NULL');

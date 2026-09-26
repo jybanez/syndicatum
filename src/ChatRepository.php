@@ -1303,7 +1303,8 @@ class ChatRepository
                 }
             }
         } else {
-            $all = $this->pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND status = 'active' AND id <> ?");
+            $all = $this->pdo->prepare("SELECT id FROM project_participants
+                WHERE project_id = ? AND status = 'active' AND kind IN ('human', 'agent') AND id <> ?");
             $all->execute([$projectId, (int) $senderParticipantId]);
             foreach ($all->fetchAll(PDO::FETCH_COLUMN) as $targetParticipantId) {
                 $add->execute([$messageId, (int) $targetParticipantId, 'broadcast', $now]);

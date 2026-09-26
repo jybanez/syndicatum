@@ -17,6 +17,43 @@ try {
         $section = isset($_GET['section']) && trim((string) $_GET['section']) !== '' ? trim((string) $_GET['section']) : null;
         Api::json(['data' => ['settings' => $settings->publicSettings($section)]]);
     }
+    if ($method === 'POST') {
+        $auth->validateCsrf($user, Api::csrfToken());
+        $body = Api::body();
+        if (($body['operation'] ?? null) !== 'read_secrets' || count($body) !== 1) {
+            throw new InvalidArgumentException('A valid settings operation is required.');
+        }
+        $secretKeys = [
+            'realtime.signing_secret',
+            'realtime.backend_ingress_secret',
+            'account.client_secret',
+            'google.client_secret',
+        ];
+        $secrets = [];
+        foreach ($secretKeys as $key) {
+            $value = $settings->get($key);
+            $secrets[$key] = $value === null ? '' : (string) $value;
+        }
+        $audit = $pdo->prepare(
+            'INSERT INTO administrative_audit_events
+             (actor_user_id, action, subject_type, subject_id, metadata_json, ip_address, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $audit->execute([
+            (int) $user['id'],
+            'settings.secrets_viewed',
+            'system_settings',
+            null,
+            json_encode(['keys' => $secretKeys]),
+            isset($_SERVER['REMOTE_ADDR']) ? substr((string) $_SERVER['REMOTE_ADDR'], 0, 80) : null,
+            Db::now(),
+        ]);
+        Api::json(
+            ['data' => ['secrets' => $secrets]],
+            200,
+            ['Cache-Control' => 'no-store, private', 'Pragma' => 'no-cache']
+        );
+    }
     if ($method === 'PATCH') {
         $auth->validateCsrf($user, Api::csrfToken());
         $body = Api::body();
@@ -35,7 +72,7 @@ try {
         $data = $settings->update($changes, $user['id']);
         Api::json(['data' => ['settings' => $data]]);
     }
-    Api::json(['error' => true, 'code' => 'method_not_allowed', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET, PATCH']);
+    Api::json(['error' => true, 'code' => 'method_not_allowed', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET, POST, PATCH']);
 } catch (InvalidArgumentException $exception) {
     Api::json(['error' => true, 'code' => 'validation_failed', 'message' => $exception->getMessage()], 422);
 } catch (RuntimeException $exception) {

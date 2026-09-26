@@ -6,7 +6,8 @@ final class InAppRestorePolicy
     private static $restore = [
         'agents', 'agent_activation_bindings', 'agent_credential_scopes', 'agent_notification_webhooks',
         'chat_agents', 'chat_entries', 'chat_entry_recipients', 'chat_entry_revisions', 'chat_topics', 'chat_write_audit',
-        'connector_devices',
+          'connector_devices', 'integration_connections', 'integration_credentials', 'integration_event_receipts',
+        'integration_notification_recipients',
         'messages', 'message_addressees', 'message_revisions', 'pinned_messages',
         'projects', 'project_agents', 'project_invitations', 'project_members', 'project_message_sequences', 'project_participants',
         'users', 'user_system_roles', 'workspaces',

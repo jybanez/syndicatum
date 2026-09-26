@@ -7,6 +7,8 @@ require_once __DIR__ . '/AgentWebhookService.php';
 require_once __DIR__ . '/SettingsService.php';
 require_once __DIR__ . '/MessageOutbox.php';
 require_once __DIR__ . '/ProjectTemplateService.php';
+require_once __DIR__ . '/EmailNotificationService.php';
+require_once __DIR__ . '/SystemMessageService.php';
 
 class ProjectManagementService
 {
@@ -14,6 +16,7 @@ class ProjectManagementService
     private $auth;
     private $settings;
     private $outbox;
+    private $systemMessages;
 
     public function __construct(PDO $pdo)
     {
@@ -21,6 +24,7 @@ class ProjectManagementService
         $this->auth = new AuthService($pdo);
         $this->settings = new SettingsService($pdo);
         $this->outbox = new MessageOutbox($pdo);
+        $this->systemMessages = new SystemMessageService($pdo);
     }
 
     public function createProject($userId, array $input)
@@ -237,8 +241,53 @@ class ProjectManagementService
             $id = (int) $this->pdo->lastInsertId();
             $this->auth->audit((int) $actorUserId, 'project.invitation_created', 'project_invitation', (string) $id, ['project_id' => (int) $projectId, 'role' => $role]);
             $this->pdo->commit();
-            return ['id' => $id, 'project_id' => (int) $projectId, 'email' => $email, 'role' => $role, 'expires_at' => $expires, 'invitation_token' => $token];
+            $result = ['id' => $id, 'project_id' => (int) $projectId, 'email' => $email, 'role' => $role, 'expires_at' => $expires, 'invitation_token' => $token];
+            $result['email_notification'] = $this->captureInvitationEmail($projectId, $actorUserId, $email, $role, $token, $expires);
+            return $result;
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
+    }
+
+    private function captureInvitationEmail($projectId, $actorUserId, $email, $role, $token, $expires)
+    {
+        if (!$this->settings->get('mail.enabled')) {
+            return ['status' => 'disabled', 'transport' => 'development'];
+        }
+        $senderAddress = trim((string) $this->settings->get('mail.sender_address'));
+        if (!filter_var($senderAddress, FILTER_VALIDATE_EMAIL)) {
+            return ['status' => 'configuration_required', 'transport' => 'development'];
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT p.name AS project_name, u.display_name AS inviter_name
+             FROM projects p JOIN users u ON u.id = ? WHERE p.id = ? LIMIT 1'
+        );
+        $statement->execute([(int) $actorUserId, (int) $projectId]);
+        $context = $statement->fetch();
+        if (!$context) { return ['status' => 'configuration_required', 'transport' => 'development']; }
+        $origin = rtrim((string) $this->settings->get('general.public_origin'), '/');
+        if ($origin === '') { return ['status' => 'configuration_required', 'transport' => 'development']; }
+        $roleLabels = ['admin' => 'Administrator', 'viewer' => 'Viewer', 'member' => 'Member'];
+        try {
+            $delivery = (new EmailNotificationService())->sendProjectInvitation([
+                'to_name' => $email,
+                'to_email' => $email,
+                'from_name' => (string) $this->settings->get('mail.sender_name'),
+                'from_email' => $senderAddress,
+                'reply_to' => (string) $this->settings->get('mail.reply_to_address'),
+            ], [
+                'installation_name' => (string) $this->settings->get('general.installation_name'),
+                'project_name' => (string) $context['project_name'],
+                'inviter_name' => (string) $context['inviter_name'],
+                'role_label' => $roleLabels[$role],
+                'expires_at' => $expires . ' UTC',
+                'invitation_url' => $origin . '/#invitation=' . rawurlencode($token),
+                'invitation_token' => $token,
+            ]);
+            $this->auth->audit((int) $actorUserId, 'project.invitation_email_captured', 'project_invitation', null,
+                ['project_id' => (int) $projectId, 'capture_id' => $delivery['capture_id']]);
+            return $delivery;
+        } catch (Exception $exception) {
+            return ['status' => 'capture_failed', 'transport' => 'development'];
+        }
     }
 
     public function acceptInvitation($userId, $token)
@@ -289,6 +338,13 @@ class ProjectManagementService
     public function createAgent($projectId, $actorUserId, array $input)
     {
         $this->requireProjectAdmin($projectId, $actorUserId);
+        $actorParticipant = $this->pdo->prepare(
+            "SELECT id FROM project_participants
+             WHERE project_id = ? AND user_id = ? AND kind = 'human' AND status = 'active' LIMIT 1"
+        );
+        $actorParticipant->execute([(int) $projectId, (int) $actorUserId]);
+        $actorParticipantId = $actorParticipant->fetchColumn();
+        if ($actorParticipantId === false) { throw new RuntimeException('PARTICIPANT_NOT_FOUND'); }
         $displayName = trim(isset($input['display_name']) ? (string) $input['display_name'] : '');
         if ($displayName === '' || strlen($displayName) > 120) { throw new InvalidArgumentException('Agent display name must contain 1 to 120 characters.'); }
         $claimCode = AuthService::randomToken(24);
@@ -320,6 +376,7 @@ class ProjectManagementService
                 isset($input['runtime_name']) ? trim((string) $input['runtime_name']) : null, $now, $now]);
             $this->pdo->prepare("INSERT INTO project_participants (project_id, kind, agent_id, status, created_at, updated_at) VALUES (?, 'agent', ?, 'active', ?, ?)")
                 ->execute([(int) $projectId, $agentId, $now, $now]);
+            $agentParticipantId = (int) $this->pdo->lastInsertId();
             $supervisorId = $this->validatedSupervisorId($projectId, $agentId,
                 isset($input['supervising_participant_id']) ? $input['supervising_participant_id'] : null);
             if ($supervisorId !== null) {
@@ -340,6 +397,15 @@ class ProjectManagementService
             $this->auth->audit((int) $actorUserId, 'project.agent_created', 'agent', (string) $agentId,
                 ['project_id' => (int) $projectId, 'scopes' => $scopes,
                     'role_version' => 1, 'supervising_participant_id' => $supervisorId]);
+            $this->systemMessages->agentAdded([
+                'project_id' => (int) $projectId,
+                'participant_id' => (int) $actorParticipantId,
+            ], [
+                'agent_id' => $agentId,
+                'participant_id' => $agentParticipantId,
+                'display_name' => $displayName,
+                'provider' => isset($input['provider']) ? $input['provider'] : null,
+            ]);
             $this->enqueueParticipantsChanged((int) $projectId, 'agent_created');
             if ($ownsTransaction) { $this->pdo->commit(); }
             $result = ['agent_id' => $agentId, 'project_id' => (int) $projectId, 'project_name' => $this->project($projectId)['name'], 'display_name' => $displayName,

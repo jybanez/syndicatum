@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.1");
+  assert.equal(manifest.version, "0.10.2");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -101,6 +101,16 @@ test("background keeps realtime alive and stores only metadata in delivery diagn
   assert.match(source, /setInterval\(sendHealth, 20000\)/);
   assert.match(source, /deliveryHistory/);
   assert.doesNotMatch(source, /deliveryHistory[^;]*message\.body/s);
+});
+
+test("recovery and delivery are isolated so one participant cannot block the others", async () => {
+  const source = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.match(source, /const drainRunning = new Map\(\)/);
+  assert.match(source, /Promise\.all\(Object\.keys\(PROVIDERS\)\.map/);
+  assert.match(source, /Promise\.all\(\[\.\.\.shards\]\.map\(shard => drain\(shard\)\)\)/);
+  assert.match(source, /deliveryShard\(candidate\) === shard/);
+  assert.match(source, /Promise\.allSettled\(deliveries\)/);
+  assert.doesNotMatch(source, /let drainRunning = null/);
 });
 
 test("popup separates connection health and exposes timestamp diagnostics", async () => {

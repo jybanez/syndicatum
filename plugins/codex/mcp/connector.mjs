@@ -30,6 +30,13 @@ export class ActivationConnector {
     });
     return this.queue;
   }
+  async recoverAddressed(source = "recovery", { waitForQueue = true } = {}) {
+    if (typeof this.syndicatum.addressedUnacknowledged !== "function") return { status: "unavailable", count: 0 };
+    const messages = [...await this.syndicatum.addressedUnacknowledged()].reverse();
+    for (const message of messages) this.enqueue(message, source);
+    if (waitForQueue) await this.queue;
+    return { status: "recovered", count: messages.length };
+  }
   async handleMessage(message, source) {
     if (!isAddressedTo(message, this.config.participantId)) { await this.state.observeSequence(message); return { status: "ignored", reason: "not-addressed" }; }
     if (isSentBy(message, this.config.participantId)) return { status: "ignored", reason: "self-authored" };

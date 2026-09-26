@@ -42,6 +42,7 @@ function projectApiError(Exception $exception)
         'TASK_ALREADY_LINKED' => [409, 'This action request already has a linked task.'],
         'PROJECT_WRITE_FORBIDDEN' => [403, 'This project role cannot post messages.'],
         'MESSAGE_WRITE_FORBIDDEN' => [403, 'Only the sender or a project administrator may change this message.'],
+        'SYSTEM_MESSAGE_IMMUTABLE' => [403, 'System messages cannot be changed or removed.'],
         'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT' => [409, 'This participant is not an addressee of the message.'],
         'IDEMPOTENCY_KEY_CONFLICT' => [409, 'This idempotency key was already used for a different message request.'],
         'RESPONSIBILITY_CONFLICT' => [409, 'Responsibility state changed; reload the latest event and retry explicitly.'],
