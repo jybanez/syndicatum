@@ -401,13 +401,15 @@ The administration surface will provide a single tabbed **System Settings** moda
 ```text
 System Settings
 ├─ General
-├─ Projects and messaging
-├─ Integrations
-│  ├─ PBB Realtime
+│  ├─ Installation identity
+│  └─ Messaging limits
+├─ Realtime
+├─ Authentication
 │  ├─ PBB Account
-│  └─ Google sign-in
-├─ Security
-└─ Operations
+│  ├─ Google sign-in
+│  └─ Native login and self-registration
+└─ Recovery
+   └─ Backup storage
 ```
 
 Settings must be defined by a backend registry with explicit types, validation, defaults, secret handling, and authorization. Arbitrary keys are not accepted.

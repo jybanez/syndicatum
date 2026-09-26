@@ -762,6 +762,13 @@ button, input, textarea { font: inherit; }
 .backup-restore-tabs .ui-tabs { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .backup-restore-tabs .ui-tablist { flex: 0 0 auto; }
 .backup-restore-tabs .ui-tabpanel { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 16px 0 0; border: 0; border-radius: 0; background: transparent; }
+
+.system-settings-tabs { min-width: 0; }
+.system-settings-tabs .ui-tablist { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; padding-bottom: 2px; }
+.system-settings-tabs .ui-tab { flex: 0 0 auto; }
+.system-settings-tabs .ui-tabpanel { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.system-settings-error-list { margin: 8px 0 0; padding-left: 20px; }
+.system-settings-error-list li + li { margin-top: 4px; }
 .backup-restore-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .backup-restore-operation { display: grid; align-content: start; gap: 16px; padding: 18px; }
 .backup-restore-operation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
