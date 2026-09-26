@@ -4,7 +4,18 @@
     || document.querySelector("main form textarea")
     || document.querySelector("main form [contenteditable='true']");
   const normalizeText = value => String(value || "").replace(/\s+/g, " ").trim();
-  const userTurns = () => [...document.querySelectorAll("[data-message-author-role='user']")];
+  const isVisibleTurn = turn => {
+    if (!turn?.isConnected || turn.closest?.("[hidden], [aria-hidden='true'], [inert]")) return false;
+    if (typeof turn.checkVisibility === "function") {
+      return turn.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+    }
+    for (let node = turn; node instanceof HTMLElement; node = node.parentElement) {
+      const style = window.getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+    }
+    return turn.getClientRects().length > 0;
+  };
+  const userTurns = () => [...document.querySelectorAll("[data-message-author-role='user']")].filter(isVisibleTurn);
   const matchingUserTurnCount = text => {
     const expected = normalizeText(text);
     return userTurns().filter(turn => normalizeText(turn.innerText || turn.textContent).includes(expected)).length;
