@@ -48,6 +48,14 @@ function renderDeliveryReviews(reviews = []) {
     retry.textContent = "Retry once";
     retry.addEventListener("click", () => resolveReview(review, "retry_once"));
     actions.append(retry);
+    if (review.reviewReason === "upgrade_reconciliation_required") {
+      const discard = document.createElement("button");
+      discard.type = "button";
+      discard.className = "danger";
+      discard.textContent = "Remove stale";
+      discard.addEventListener("click", () => resolveReview(review, "discard_stale"));
+      actions.append(discard);
+    }
     item.append(title, metadata, actions);
     elements["delivery-review-list"].append(item);
   }
@@ -56,6 +64,8 @@ function renderDeliveryReviews(reviews = []) {
 async function resolveReview(review, resolution) {
   const prompt = resolution === "confirm_visible"
     ? `Confirm only if the exact Syndicatum notice for message ${review.messageId} is already visible as a user turn. Mark it delivered without submitting again?`
+    : resolution === "discard_stale"
+      ? `Remove only this local queue item for message ${review.messageId}? Continue only after verifying that it is absent from the canonical pending set. This does not submit or mark anything on the server.`
     : `Authorize exactly one new browser submission attempt for message ${review.messageId}? If confirmation is uncertain again, it will pause for review.`;
   if (!window.confirm(prompt)) return;
   await action({ type: "syndicatum.resolve-delivery-review", key: review.key, resolution });

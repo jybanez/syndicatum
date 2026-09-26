@@ -64,11 +64,12 @@ reloaded. It never downloads or executes remote code.
 
 Version 0.10.3 treats an unconfirmed browser submission as an uncertain outcome,
 pauses only that discussion's delivery shard, and preserves the item for explicit
-operator review instead of scheduling an automatic replay. On upgrade it also
-quarantines existing queue entries whose last error was `submission_unconfirmed`
-before recovery drains begin. The popup exposes only allowlisted review metadata;
-an operator may confirm an exact already-visible ChatGPT user turn or authorize
-one retry. A second uncertain outcome pauses again.
+operator review instead of scheduling an automatic replay. On upgrade it
+quarantines every queue entry inherited from the older queue schema before
+recovery drains begin. The popup exposes only allowlisted review metadata; an
+operator may confirm an exact already-visible ChatGPT user turn, authorize one
+retry, or remove an inherited local item only after verifying that it is absent
+from the canonical pending set. A second uncertain outcome pauses again.
 
 Version 0.10.2 fetches recovery work for all configured providers before
 delivery starts and drains each participant binding independently. A stalled

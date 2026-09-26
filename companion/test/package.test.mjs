@@ -117,7 +117,9 @@ test("uncertain browser submissions pause their shard until explicit operator re
   const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
   const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
   const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
-  assert.match(background, /quarantineLegacyUncertainDeliveries/);
+  assert.match(background, /quarantineLegacyDeliveryQueue/);
+  assert.match(background, /deliveryQueueVersion: 2/);
+  assert.match(background, /upgrade_reconciliation_required/);
   assert.match(background, /deliveryState === DELIVERY_REVIEW_STATE/);
   assert.match(background, /if \(requiresReview\)[\s\S]*?return;[\s\S]*?chrome\.alarms\.create\(RETRY_ALARM/);
   assert.match(background, /operator_confirmed_exact_user_turn/);
@@ -127,6 +129,8 @@ test("uncertain browser submissions pause their shard until explicit operator re
   assert.match(popup, /syndicatum\.resolve-delivery-review/);
   assert.match(popup, /Confirm visible/);
   assert.match(popup, /Retry once/);
+  assert.match(popup, /Remove stale/);
+  assert.match(popup, /discard_stale/);
 });
 
 test("popup separates connection health and exposes timestamp diagnostics", async () => {

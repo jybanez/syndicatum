@@ -38,3 +38,4 @@ dt { color: #8396b4; } dd { margin: 0; text-align: right; }
 .review-item p { margin: 3px 0 7px; color: #c9b3a6; font-size: 11px; overflow-wrap: anywhere; }
 .review-actions { display: flex; gap: 7px; }
 .review-actions button { flex: 1; padding: 7px 8px; font-size: 12px; }
+.review-actions .danger { border-color: #8d4551; background: #4a2028; color: #ffd2d9; }

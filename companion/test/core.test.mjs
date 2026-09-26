@@ -95,7 +95,7 @@ test("classifies uncertain submissions and exposes only allowlisted review metad
     },
   };
   const reviews = deliveryReviewItems(queue);
-  assert.deepEqual(reviews, [{ key: "chatgpt:2:41:4451", provider: "chatgpt", projectId: "2", agentId: "41", messageId: "4451", attempts: 3, queuedAt: "2026-09-26T12:00:00Z", reviewRequestedAt: null, lastError: "submission_unconfirmed", confirmation: null }]);
+  assert.deepEqual(reviews, [{ key: "chatgpt:2:41:4451", provider: "chatgpt", projectId: "2", agentId: "41", messageId: "4451", attempts: 3, queuedAt: "2026-09-26T12:00:00Z", reviewRequestedAt: null, reviewReason: null, lastError: "submission_unconfirmed", confirmation: null }]);
   assert.doesNotMatch(JSON.stringify(reviews), /must-not-appear|chatgpt\.com/);
   const health = companionHealth({ accessToken: "protected", queue });
   assert.equal(health.delivery, "review");

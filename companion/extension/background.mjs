@@ -370,17 +370,20 @@ async function stage(item) {
   await queueWrites;
 }
 
-async function quarantineLegacyUncertainDeliveries() {
+async function quarantineLegacyDeliveryQueue() {
   return updateDeliveryState(current => {
+    if (Number(current.deliveryQueueVersion || 0) >= 2) return {};
     const queue = { ...(current.queue || {}) };
-    let changed = false;
     const reviewRequestedAt = new Date().toISOString();
     for (const [key, item] of Object.entries(queue)) {
-      if (item?.deliveryState === DELIVERY_REVIEW_STATE || !isUncertainDeliveryFailure(item?.lastError)) continue;
-      queue[key] = { ...item, deliveryState: DELIVERY_REVIEW_STATE, reviewRequestedAt: item.reviewRequestedAt || reviewRequestedAt };
-      changed = true;
+      queue[key] = {
+        ...item,
+        deliveryState: DELIVERY_REVIEW_STATE,
+        reviewReason: item.reviewReason || "upgrade_reconciliation_required",
+        reviewRequestedAt: item.reviewRequestedAt || reviewRequestedAt,
+      };
     }
-    return changed ? { queue } : {};
+    return { queue, deliveryQueueVersion: 2 };
   });
 }
 
@@ -501,14 +504,18 @@ async function drain(shard = null) {
 }
 
 async function resolveDeliveryReview(key, resolution) {
-  if (!["confirm_visible", "retry_once"].includes(resolution)) throw new Error("Choose a supported delivery review action.");
+  if (!["confirm_visible", "retry_once", "discard_stale"].includes(resolution)) throw new Error("Choose a supported delivery review action.");
   let shard = null;
   await updateDeliveryState(current => {
     const queue = { ...(current.queue || {}) };
     const item = queue[key];
     if (!item || item.deliveryState !== DELIVERY_REVIEW_STATE) throw new Error("This delivery no longer requires review. Refresh Companion status.");
-    if (resolution === "confirm_visible" && item.provider !== "chatgpt") throw new Error("Only a ChatGPT metadata notification can be confirmed from an existing visible turn.");
     shard = deliveryShard(item);
+    if (resolution === "discard_stale") {
+      delete queue[key];
+      return { queue, lastDeliveryError: null, lastError: null };
+    }
+    if (resolution === "confirm_visible" && item.provider !== "chatgpt") throw new Error("Only a ChatGPT metadata notification can be confirmed from an existing visible turn.");
     const resolvedAt = new Date().toISOString();
     queue[key] = {
       ...item,
@@ -635,7 +642,7 @@ async function start(forceAuthorization = false) {
   running = (async () => {
     const current = await state();
     if (!current.accessToken) { if (current.pending) await pollAuthorization({ force: forceAuthorization }); return; }
-    await quarantineLegacyUncertainDeliveries();
+    await quarantineLegacyDeliveryQueue();
     const bindings = await refreshBindings();
     await recover(bindings);
     await drain();
