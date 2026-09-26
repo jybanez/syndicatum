@@ -25,9 +25,42 @@ try {
 
     $test('project invitation template produces plain text and escaped HTML', function () use ($assert, $data) {
         $message = (new EmailTemplateRenderer())->render('project_invitation', $data);
+        $assert($message['template_version'] === 2, 'Project invitation template version was not advanced.');
         $assert(strpos($message['text'], '<Pilot & Review>') !== false, 'Plain-text project name is missing.');
         $assert(strpos($message['html'], '&lt;Pilot &amp; Review&gt;') !== false, 'HTML template data was not escaped.');
+        $assert(strpos($message['html'], 'PROJECT INVITATION') !== false, 'Project-brief heading is missing.');
+        $assert(strpos($message['html'], 'Invited by') !== false && strpos($message['html'], 'Installation') !== false && strpos($message['html'], 'Your role') !== false, 'Project-brief details are incomplete.');
+        $assert(strpos($message['html'], '>View invitation</a>') !== false, 'Primary invitation action is missing.');
+        $assert(substr_count($message['html'], 'href="https://syndicatum.example/#invitation=test-token"') === 2, 'Invitation URL was changed or is not used by both actions.');
+        $assert(strpos($message['html'], 'src="https://syndicatum.example/assets/brand/png/color/syndicatum-128.png"') !== false, 'Official raster brand asset is missing.');
+        $assert(strpos($message['html'], 'width="48" height="48" alt=""') !== false, 'Brand asset dimensions or text fallback are missing.');
+        $assert(strpos($message['text'], "View invitation:\nhttps://syndicatum.example/#invitation=test-token") !== false, 'Plain-text invitation action is incomplete.');
+        $assert(strpos($message['text'], 'Keep the invitation link and token private.') !== false, 'Plain-text privacy guidance is missing.');
         $assert(strpos($message['html'], '{{') === false && strpos($message['text'], '{{') === false, 'Template placeholders remain unresolved.');
+    });
+
+    $test('project invitation template rejects an invalid invitation URL', function () use ($assert, $data) {
+        $invalid = $data;
+        $invalid['invitation_url'] = 'not-an-absolute-url';
+        try {
+            (new EmailTemplateRenderer())->render('project_invitation', $invalid);
+        } catch (InvalidArgumentException $error) {
+            $assert(strpos($error->getMessage(), 'invitation URL is invalid') !== false, 'Unexpected invitation URL validation error.');
+            return;
+        }
+        throw new RuntimeException('Invalid invitation URL was accepted.');
+    });
+
+    $test('project invitation template rejects a non-web invitation URL', function () use ($assert, $data) {
+        $invalid = $data;
+        $invalid['invitation_url'] = 'ftp://syndicatum.example/#invitation=test-token';
+        try {
+            (new EmailTemplateRenderer())->render('project_invitation', $invalid);
+        } catch (InvalidArgumentException $error) {
+            $assert(strpos($error->getMessage(), 'invitation URL is invalid') !== false, 'Unexpected invitation URL scheme error.');
+            return;
+        }
+        throw new RuntimeException('Non-web invitation URL was accepted.');
     });
 
     $test('development transport writes one private inspectable email capture', function () use ($assert, $data, $captureRoot) {
@@ -45,6 +78,7 @@ try {
         $contents = file_get_contents($captures[0]);
         $preview = file_get_contents($previews[0]);
         $assert(strpos($contents, 'X-Syndicatum-Transport: development-capture') !== false, 'Transport metadata is missing.');
+        $assert(strpos($contents, 'X-Syndicatum-Template: project_invitation; version=2') !== false, 'Template version metadata is missing.');
         $assert(strpos($contents, 'Content-Type: multipart/alternative') !== false, 'Email capture is not multipart.');
         $assert(strpos($contents, 'test-token') !== false, 'Invitation token is missing from the private capture.');
         $assert(strpos($preview, '<!doctype html>') === 0, 'HTML preview contains non-HTML capture metadata.');

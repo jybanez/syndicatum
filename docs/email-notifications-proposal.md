@@ -21,6 +21,14 @@ health, user preferences, and general project-event notifications are not part
 of this initial slice. Captured files contain live invitation tokens and must
 remain outside the repository and public web root with restricted access.
 
+The invitation template uses the approved **Project brief** design: a compact
+Syndicatum brand row, the project name as the primary heading, labeled
+inviter/installation/role details, one **View invitation** action, explicit
+expiry and privacy guidance, and direct-link/token fallbacks. The HTML uses a
+conservative table layout and inline essential styles, with the packaged
+128 px color mark displayed at 48 px. The plain-text alternative carries the
+same invitation, fallback, expiry, and security information.
+
 ## 1. Purpose
 
 Add dependable email awareness for human users without turning email into a second project record or duplicating every Realtime event. Syndicatum remains the authoritative place to read, acknowledge, assign, and resolve work.
@@ -36,7 +44,7 @@ Email is not an AI-agent activation channel. Codex, ChatGPT, Gemini, and webhook
 
 - Send for attention, not for every change.
 - Keep the Timeline and Responsibility Inbox authoritative.
-- Prefer one clear call to action: **Open in Syndicatum**.
+- Prefer one clear call to action: **View invitation**.
 - Do not support reply-by-email in the initial release.
 - Do not acknowledge, start, resolve, or otherwise mutate work merely because an email was delivered or opened.
 - Avoid sensitive message content in email by default.
