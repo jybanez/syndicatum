@@ -1,6 +1,6 @@
 import { companionDiagnostics } from "./core.mjs";
 
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","delivery-review","delivery-review-list","copy-review","copy-review-result","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
 const extension = { id: chrome.runtime.id, version: chrome.runtime.getManifest().version };
 let latestStatus = null;
@@ -9,7 +9,7 @@ const labels = {
   connected: "Connected", disconnected: "Disconnected", authorizing: "Authorization required", attention: "Needs attention",
   reachable: "Reachable", unreachable: "Unreachable", checking: "Checking", not_configured: "Not configured",
   authorized: "Authorized", error: "Error", inactive: "Inactive", idle: "Idle", connecting: "Connecting", reconnecting: "Reconnecting", unavailable: "Unavailable", partial: "Partially connected",
-  active: "Active", none: "None", pending: "Pending", healthy: "Healthy", ready: "Ready",
+  active: "Active", none: "None", pending: "Pending", review: "Review required", healthy: "Healthy", ready: "Ready",
 };
 
 function showHealth(element, value, suffix = "") {
@@ -21,6 +21,44 @@ function timestamp(value) {
   if (!value) return "Never";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "Unavailable" : parsed.toLocaleString();
+}
+
+function renderDeliveryReviews(reviews = []) {
+  elements["delivery-review"].hidden = !reviews.length;
+  elements["delivery-review-list"].replaceChildren();
+  for (const review of reviews) {
+    const item = document.createElement("article");
+    item.className = "review-item";
+    const title = document.createElement("strong");
+    title.textContent = `${review.provider || "Provider"} · project ${review.projectId} · agent ${review.agentId}`;
+    const metadata = document.createElement("p");
+    metadata.textContent = `Message ${review.messageId} · attempts ${review.attempts} · queued ${timestamp(review.queuedAt)}`;
+    const actions = document.createElement("div");
+    actions.className = "review-actions";
+    if (review.provider === "chatgpt") {
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "secondary";
+      confirm.textContent = "Confirm visible";
+      confirm.addEventListener("click", () => resolveReview(review, "confirm_visible"));
+      actions.append(confirm);
+    }
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Retry once";
+    retry.addEventListener("click", () => resolveReview(review, "retry_once"));
+    actions.append(retry);
+    item.append(title, metadata, actions);
+    elements["delivery-review-list"].append(item);
+  }
+}
+
+async function resolveReview(review, resolution) {
+  const prompt = resolution === "confirm_visible"
+    ? `Confirm only if the exact Syndicatum notice for message ${review.messageId} is already visible as a user turn. Mark it delivered without submitting again?`
+    : `Authorize exactly one new browser submission attempt for message ${review.messageId}? If confirmation is uncertain again, it will pause for review.`;
+  if (!window.confirm(prompt)) return;
+  await action({ type: "syndicatum.resolve-delivery-review", key: review.key, resolution });
 }
 
 function serverPermission(value) {
@@ -52,11 +90,13 @@ function render(data) {
   elements["binding-result"].textContent = data.lastBindingMessage || "";
   elements.error.hidden = !health.error;
   elements.error.textContent = health.error || "";
+  renderDeliveryReviews(data.deliveryReviews || []);
   elements["last-server-check"].textContent = timestamp(data.lastServerCheckAt);
   elements["last-sync"].textContent = timestamp(data.lastSyncAt);
   elements["last-realtime"].textContent = timestamp(data.lastRealtimeAt);
   elements["last-delivery"].textContent = timestamp(data.lastDeliveryAt);
   elements["copy-result"].textContent = "";
+  elements["copy-review-result"].textContent = "";
   if (data.baseUrl) elements["base-url"].value = data.baseUrl;
 }
 
@@ -99,6 +139,15 @@ elements["copy-diagnostics"].addEventListener("click", async () => {
     elements["copy-result"].textContent = "Copied";
   } catch (_error) {
     elements["copy-result"].textContent = "Copy failed";
+  }
+});
+elements["copy-review"].addEventListener("click", async () => {
+  if (!latestStatus) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(latestStatus.deliveryReviews || [], null, 2));
+    elements["copy-review-result"].textContent = "Copied";
+  } catch (_error) {
+    elements["copy-review-result"].textContent = "Copy failed";
   }
 });
 elements["edit-server"].addEventListener("click", () => {

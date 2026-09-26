@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, deliveryKey, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, DELIVERY_REVIEW_STATE, deliveryKey, deliveryReviewItems, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -363,10 +363,25 @@ async function stage(item) {
     const current = await state();
     const key = deliveryKey(item);
     if (current.delivered?.[key]) return;
-    const queue = { ...(current.queue || {}), [key]: { ...item, attempts: current.queue?.[key]?.attempts || 0, queuedAt: current.queue?.[key]?.queuedAt || new Date().toISOString() } };
+    const existing = current.queue?.[key] || {};
+    const queue = { ...(current.queue || {}), [key]: { ...existing, ...item, attempts: existing.attempts || 0, queuedAt: existing.queuedAt || new Date().toISOString() } };
     await save({ queue });
   });
   await queueWrites;
+}
+
+async function quarantineLegacyUncertainDeliveries() {
+  return updateDeliveryState(current => {
+    const queue = { ...(current.queue || {}) };
+    let changed = false;
+    const reviewRequestedAt = new Date().toISOString();
+    for (const [key, item] of Object.entries(queue)) {
+      if (item?.deliveryState === DELIVERY_REVIEW_STATE || !isUncertainDeliveryFailure(item?.lastError)) continue;
+      queue[key] = { ...item, deliveryState: DELIVERY_REVIEW_STATE, reviewRequestedAt: item.reviewRequestedAt || reviewRequestedAt };
+      changed = true;
+    }
+    return changed ? { queue } : {};
+  });
 }
 
 function deliveryShard(item) {
@@ -397,13 +412,14 @@ async function drain(shard = null) {
       const entry = Object.entries(current.queue || {}).find(([, candidate]) => deliveryShard(candidate) === shard);
       if (!entry) return;
       const [key, queuedItem] = entry;
+      if (queuedItem.deliveryState === DELIVERY_REVIEW_STATE) return;
       let item = queuedItem;
       const startedAt = new Date().toISOString();
       try {
         let result = null;
         if (item.provider === "gemini") {
           result = await deliver(item);
-          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { retryable: result?.retryable !== false });
+          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { code: result?.code || null, retryable: result?.retryable !== false });
           const response = String(result.responseText || "").trim();
           if (!response) throw new Error("Gemini completed without a capturable response.");
           await api("/api/v1/connector-agent-replies.php", {
@@ -412,7 +428,7 @@ async function drain(shard = null) {
           });
         } else if (!item.browserDeliveredAt) {
           const result = await deliver(item);
-          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { retryable: result?.retryable !== false });
+          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { code: result?.code || null, retryable: result?.retryable !== false });
           const browserDeliveredAt = new Date().toISOString();
           item = { ...item, browserDeliveredAt, browserDelivery: result };
           await updateDeliveryState(current => {
@@ -446,11 +462,35 @@ async function drain(shard = null) {
         });
       } catch (error) {
         const deliveryError = `Delivery pending: ${String(error?.message || error)}`;
+        const requiresReview = isUncertainDeliveryFailure(error);
+        const failedAt = new Date().toISOString();
         await updateDeliveryState(current => {
           const queue = { ...(current.queue || {}) };
-          if (queue[key]) queue[key] = { ...queue[key], attempts: Number(queue[key].attempts || 0) + 1, lastError: String(error?.message || error) };
+          if (queue[key]) queue[key] = {
+            ...queue[key],
+            attempts: Number(queue[key].attempts || 0) + 1,
+            lastAttemptAt: failedAt,
+            lastError: String(error?.message || error),
+            ...(requiresReview ? { deliveryState: DELIVERY_REVIEW_STATE, reviewRequestedAt: failedAt } : {}),
+          };
           return { queue, lastDeliveryError: deliveryError, lastError: deliveryError };
         });
+        if (requiresReview) {
+          await recordDeliveryDiagnostic({
+            key,
+            provider: item.provider,
+            projectId: item.project_id,
+            agentId: item.agent_id,
+            messageId: item.message.id,
+            queuedAt: item.queuedAt || null,
+            startedAt,
+            completedAt: failedAt,
+            attempts: Number(item.attempts || 0) + 1,
+            outcome: DELIVERY_REVIEW_STATE,
+            confirmation: "submission_unconfirmed",
+          });
+          return;
+        }
         await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 1 });
         return;
       }
@@ -458,6 +498,33 @@ async function drain(shard = null) {
   })().finally(() => { drainRunning.delete(shard); });
   drainRunning.set(shard, running);
   return running;
+}
+
+async function resolveDeliveryReview(key, resolution) {
+  if (!["confirm_visible", "retry_once"].includes(resolution)) throw new Error("Choose a supported delivery review action.");
+  let shard = null;
+  await updateDeliveryState(current => {
+    const queue = { ...(current.queue || {}) };
+    const item = queue[key];
+    if (!item || item.deliveryState !== DELIVERY_REVIEW_STATE) throw new Error("This delivery no longer requires review. Refresh Companion status.");
+    if (resolution === "confirm_visible" && item.provider !== "chatgpt") throw new Error("Only a ChatGPT metadata notification can be confirmed from an existing visible turn.");
+    shard = deliveryShard(item);
+    const resolvedAt = new Date().toISOString();
+    queue[key] = {
+      ...item,
+      deliveryState: "pending",
+      reviewResolvedAt: resolvedAt,
+      reviewResolution: resolution,
+      lastError: null,
+      ...(resolution === "confirm_visible" ? {
+        browserDeliveredAt: resolvedAt,
+        browserDelivery: { ok: true, confirmation: "operator_confirmed_exact_user_turn" },
+      } : { operatorRetryAuthorizedAt: resolvedAt, browserDeliveredAt: null, browserDelivery: null }),
+    };
+    return { queue, lastDeliveryError: null, lastError: null };
+  });
+  await drain(shard);
+  return publicStatus();
 }
 
 async function deliver(item) {
@@ -568,6 +635,7 @@ async function start(forceAuthorization = false) {
   running = (async () => {
     const current = await state();
     if (!current.accessToken) { if (current.pending) await pollAuthorization({ force: forceAuthorization }); return; }
+    await quarantineLegacyUncertainDeliveries();
     const bindings = await refreshBindings();
     await recover(bindings);
     await drain();
@@ -590,7 +658,7 @@ async function disconnect() {
 async function publicStatus() {
   const current = await state();
   const health = companionHealth(current, { realtimeProjectCount: heartbeatTimers.size });
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, reviewCount: health.reviewCount, deliveryReviews: deliveryReviewItems(current.queue), realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -602,6 +670,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     : action === "syndicatum.resume-server-migration" ? resumeServerMigration()
     : action === "syndicatum.cancel-server-migration" ? cancelServerMigration()
     : action === "syndicatum.refresh" ? start(true).then(publicStatus)
+    : action === "syndicatum.resolve-delivery-review" ? resolveDeliveryReview(request.key, request.resolution)
     : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)
     : action === "syndicatum.status" ? publicStatus()
     : null;

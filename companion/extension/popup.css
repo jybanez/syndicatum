@@ -12,6 +12,7 @@ input { width: 100%; margin-bottom: 10px; } button { cursor: pointer; background
 .health-value::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #8290a6; vertical-align: 1px; }
 .health-value[data-state="connected"]::before,.health-value[data-state="reachable"]::before,.health-value[data-state="authorized"]::before,.health-value[data-state="active"]::before,.health-value[data-state="healthy"]::before,.health-value[data-state="ready"]::before { background: #43d98b; }
 .health-value[data-state="attention"]::before,.health-value[data-state="authorizing"]::before,.health-value[data-state="checking"]::before,.health-value[data-state="connecting"]::before,.health-value[data-state="reconnecting"]::before,.health-value[data-state="partial"]::before,.health-value[data-state="pending"]::before { background: #f3b64c; }
+.health-value[data-state="review"]::before { background: #ff8a5b; }
 .health-value[data-state="unreachable"]::before,.health-value[data-state="error"]::before,.health-value[data-state="unavailable"]::before { background: #ff647c; }
 .server-value { display: flex; align-items: center; justify-content: flex-end; gap: 7px; max-width: 245px; }
 .icon-button { display: inline-grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 5px; background: transparent; border-color: #405477; }
@@ -30,3 +31,10 @@ dl div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 
 dt { color: #8396b4; } dd { margin: 0; text-align: right; }
 .diagnostics-button { width: auto; margin-top: 9px; padding: 7px 10px; }
 .copy-result { margin-left: 8px; color: #8fe2b7; font-size: 12px; }
+.review-panel { margin-top: 12px; padding: 11px; border: 1px solid #805239; border-radius: 9px; background: #281d19; }
+.review-panel h2 { margin: 0 0 5px; font-size: 14px; }
+.review-panel > p { margin: 0 0 9px; color: #e9c6b3; font-size: 12px; }
+.review-item { padding: 9px 0; border-top: 1px solid #604333; }
+.review-item p { margin: 3px 0 7px; color: #c9b3a6; font-size: 11px; overflow-wrap: anywhere; }
+.review-actions { display: flex; gap: 7px; }
+.review-actions button { flex: 1; padding: 7px 8px; font-size: 12px; }
