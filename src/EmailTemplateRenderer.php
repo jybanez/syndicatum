@@ -17,6 +17,7 @@ final class EmailTemplateRenderer
 
         $templateData = $data;
         $templateData['brand_logo_url'] = $this->brandLogoUrl($data['invitation_url']);
+        $templateData['expires_at'] = $this->humanDateTime($data['expires_at']);
 
         $text = <<<'TEXT'
 {{inviter_name}} invited you to join {{project_name}} in {{installation_name}} as {{role_label}}.
@@ -112,10 +113,11 @@ HTML;
 
         return [
             'template' => $template,
-            'template_version' => 2,
+            'template_version' => 3,
             'subject' => 'Invitation to ' . (string) $data['project_name'],
             'text' => $this->replace($text, $templateData, false),
             'html' => $this->replace($html, $templateData, true),
+            'brand_logo_url' => $templateData['brand_logo_url'],
         ];
     }
 
@@ -128,7 +130,18 @@ HTML;
         }
         $origin = $parts['scheme'] . '://' . $parts['host'];
         if (isset($parts['port'])) { $origin .= ':' . (int) $parts['port']; }
-        return $origin . '/assets/brand/png/color/syndicatum-128.png';
+        $applicationPath = isset($parts['path']) ? rtrim((string) $parts['path'], '/') : '';
+        return $origin . $applicationPath . '/assets/brand/png/color/syndicatum-128.png';
+    }
+
+    private function humanDateTime($value)
+    {
+        try {
+            $dateTime = new DateTimeImmutable((string) $value);
+        } catch (Exception $exception) {
+            throw new InvalidArgumentException('Email template expiry date is invalid.');
+        }
+        return $dateTime->format('F j, Y \\a\\t g:i A T');
     }
 
     private function replace($template, array $data, $escape)
@@ -139,6 +152,7 @@ HTML;
             $replacements['{{' . $key . '}}'] = $escape ? htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : $text;
         }
         $result = strtr($template, $replacements);
+        $result = str_replace(["\r\n", "\r"], "\n", $result);
         if (preg_match('/\{\{[a-z0-9_]+\}\}/i', $result)) {
             throw new InvalidArgumentException('Email template contains an unresolved placeholder.');
         }
