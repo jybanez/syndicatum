@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.3");
+  assert.equal(manifest.version, "0.10.4");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -32,7 +32,7 @@ test("connected users can migrate servers without clearing device or binding sta
   assert.match(background, /Server change rolled back/);
   assert.ok(background.indexOf("await validateServer(baseUrl)") < background.indexOf("lastServerMigration:"));
   assert.ok(background.indexOf("fetchBindingSnapshot(baseUrl, current.accessToken)") < background.indexOf("lastServerMigration:"));
-  assert.doesNotMatch(background.match(/async function migrateServer[\s\S]*?\n}\n/)?.[0] || "", /chrome\.storage\.local\.remove\(STATE_KEY\)/);
+  assert.doesNotMatch(background.match(/async function migrateServer[\s\S]*?\r?\n}\r?\n/)?.[0] || "", /chrome\.storage\.local\.remove\(STATE_KEY\)/);
 });
 
 test("operator chooses and validates a Syndicatum server before authorization", async () => {
@@ -131,6 +131,8 @@ test("uncertain browser submissions pause their shard until explicit operator re
   assert.match(popup, /Retry once/);
   assert.match(popup, /Remove stale/);
   assert.match(popup, /discard_stale/);
+  assert.match(popup, /review\.agentName/);
+  assert.match(popup, /\$\{review\.agentName\} \(agent \$\{review\.agentId\}\)/);
 });
 
 test("popup separates connection health and exposes timestamp diagnostics", async () => {

@@ -94,13 +94,18 @@ test("classifies uncertain submissions and exposes only allowlisted review metad
       queuedAt: "2026-09-26T12:00:00Z", deliveryState: "requires_review", lastError: "submission_unconfirmed",
     },
   };
-  const reviews = deliveryReviewItems(queue);
-  assert.deepEqual(reviews, [{ key: "chatgpt:2:41:4451", provider: "chatgpt", projectId: "2", agentId: "41", messageId: "4451", attempts: 3, queuedAt: "2026-09-26T12:00:00Z", reviewRequestedAt: null, reviewReason: null, lastError: "submission_unconfirmed", confirmation: null }]);
+  const reviews = deliveryReviewItems(queue, [{ provider: "chatgpt", project_id: 2, agent_id: 41, agent_name: "Commercial Assessor" }]);
+  assert.deepEqual(reviews, [{ key: "chatgpt:2:41:4451", provider: "chatgpt", projectId: "2", agentId: "41", agentName: "Commercial Assessor", messageId: "4451", attempts: 3, queuedAt: "2026-09-26T12:00:00Z", reviewRequestedAt: null, reviewReason: null, lastError: "submission_unconfirmed", confirmation: null }]);
   assert.doesNotMatch(JSON.stringify(reviews), /must-not-appear|chatgpt\.com/);
   const health = companionHealth({ accessToken: "protected", queue });
   assert.equal(health.delivery, "review");
   assert.equal(health.reviewCount, 1);
   assert.equal(health.overall, "attention");
+});
+test("prefers the queued agent name and falls back safely when no name is available", () => {
+  const base = { provider: "chatgpt", project_id: 2, agent_id: 39, message: { id: 4473 }, deliveryState: "requires_review" };
+  assert.equal(deliveryReviewItems({ queued: { ...base, agent_name: "Test ChatGPT Agent" } }, [{ ...base, agent_name: "Old name" }])[0].agentName, "Test ChatGPT Agent");
+  assert.equal(deliveryReviewItems({ queued: base })[0].agentName, null);
 });
 test("does not present a server failure as healthy overall", () => {
   const health = companionHealth({ baseUrl: "https://syndicatum.example", accessToken: "protected", serverHealth: "unreachable", lastServerError: "Failed to fetch" });

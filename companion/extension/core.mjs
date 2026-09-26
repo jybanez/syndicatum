@@ -9,7 +9,11 @@ export function isUncertainDeliveryFailure(value) {
   return String(value?.code || value?.message || value || "") === "submission_unconfirmed";
 }
 
-export function deliveryReviewItems(queue = {}) {
+export function deliveryReviewItems(queue = {}, bindings = []) {
+  const bindingNames = new Map((Array.isArray(bindings) ? bindings : []).map(binding => [
+    `${String(binding.provider || binding.runtime_type || "")}:${String(binding.project_id ?? "")}:${String(binding.agent_id ?? "")}`,
+    String(binding.agent_name || "").trim(),
+  ]));
   return Object.entries(queue || {})
     .filter(([, item]) => item?.deliveryState === DELIVERY_REVIEW_STATE)
     .map(([key, item]) => ({
@@ -17,6 +21,7 @@ export function deliveryReviewItems(queue = {}) {
       provider: String(item.provider || ""),
       projectId: String(item.project_id ?? ""),
       agentId: String(item.agent_id ?? ""),
+      agentName: String(item.agent_name || bindingNames.get(`${String(item.provider || "")}:${String(item.project_id ?? "")}:${String(item.agent_id ?? "")}`) || "").trim() || null,
       messageId: String(item.message?.id ?? ""),
       attempts: Number(item.attempts || 0),
       queuedAt: item.queuedAt || null,
