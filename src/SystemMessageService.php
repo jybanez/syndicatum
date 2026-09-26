@@ -61,6 +61,19 @@ class SystemMessageService
             $eventData, $notificationParticipantIds);
     }
 
+    public function agentAdded(array $access, array $agent)
+    {
+        return $this->record($access, 'participant.agent_added', 'neutral',
+            'Agent added: ' . trim((string) $agent['display_name']), [
+                'subject_type' => 'agent',
+                'agent_id' => (int) $agent['agent_id'],
+                'participant_id' => (int) $agent['participant_id'],
+                'display_name' => trim((string) $agent['display_name']),
+                'provider' => isset($agent['provider']) && trim((string) $agent['provider']) !== ''
+                    ? strtolower(trim((string) $agent['provider'])) : null,
+            ]);
+    }
+
     private function record(array $access, $eventType, $severity, $body, array $eventData, array $notificationParticipantIds = [])
     {
         if (!$this->pdo->inTransaction()) {

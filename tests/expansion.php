@@ -45,6 +45,8 @@ putenv('PBB_AGENTCHAT_DB_USER=root');
 putenv('PBB_AGENTCHAT_DB_PASS=');
 putenv('PBB_AGENTCHAT_SECRET=' . bin2hex(random_bytes(32)));
 putenv('SYNDICATUM_MASTER_KEY=' . bin2hex(random_bytes(32)));
+$mailCaptureRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-expansion-mail-' . bin2hex(random_bytes(6));
+putenv('SYNDICATUM_MAIL_CAPTURE_DIR=' . $mailCaptureRoot);
 
 try {
     $pdo = Db::pdo();
@@ -71,6 +73,9 @@ try {
         $settings->update([
             'general.public_origin' => 'https://syndicatum.example.test/',
             'messaging.max_message_bytes' => 24000,
+            'mail.enabled' => true,
+            'mail.sender_name' => 'Syndicatum Test',
+            'mail.sender_address' => 'notifications@example.test',
             'realtime.enabled' => true,
             'realtime.signing_secret' => ['operation' => 'replace', 'value' => 'test-signing-secret'],
         ], $administrator['id']);
@@ -257,9 +262,13 @@ try {
     ], $administrator['id']);
     $management = new ProjectManagementService($pdo);
 
-    $suite->test('project invitations create a unified human participant', function () use ($suite, $pdo, $administrator, $member, $management) {
+    $suite->test('project invitations capture email and create a unified human participant', function () use ($suite, $pdo, $administrator, $member, $management, $mailCaptureRoot) {
         $project = $management->createProject($administrator['id'], ['name' => 'Shared Product']);
         $invitation = $management->invite($project['id'], $administrator['id'], ['email' => 'member@example.test', 'role' => 'member']);
+        $suite->same('captured', $invitation['email_notification']['status']);
+        $captures = glob($mailCaptureRoot . DIRECTORY_SEPARATOR . '*.eml') ?: [];
+        $suite->same(1, count($captures));
+        $suite->truthy(strpos(file_get_contents($captures[0]), '#invitation=') !== false, 'Captured invitation link is missing.');
         $accepted = $management->acceptInvitation($member['id'], $invitation['invitation_token']);
         $suite->same($project['id'], $accepted['id']);
         $statement = $pdo->prepare("SELECT COUNT(*) FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human' AND status = 'active'");
@@ -270,6 +279,14 @@ try {
     $suite->test('project agent claim is single use and project scoped', function () use ($suite, $pdo, $administrator, $management) {
         $project = $management->createProject($administrator['id'], ['name' => 'Agent Product']);
         $created = $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Review Agent']);
+        $agentAdded = $pdo->query("SELECT message_kind, event_type, event_data_json, body
+            FROM messages WHERE event_type = 'participant.agent_added' ORDER BY id DESC LIMIT 1")->fetch();
+        $suite->same('system', $agentAdded['message_kind']);
+        $suite->same('participant.agent_added', $agentAdded['event_type']);
+        $suite->same('Agent added: Review Agent', $agentAdded['body']);
+        $agentAddedData = json_decode($agentAdded['event_data_json'], true);
+        $suite->same($created['agent_id'], (int) $agentAddedData['agent_id']);
+        $suite->same('Review Agent', $agentAddedData['display_name']);
         $pendingStatus = $management->agentCredentialStatus($project['id'], $administrator['id'], $created['agent_id']);
         $suite->same(false, $pendingStatus['has_active_token']);
         $suite->same('pending', $pendingStatus['claim_status']);
@@ -424,6 +441,11 @@ try {
         $suite->same((int) $statement->fetchColumn(), $transferred['workspace_id']);
     });
 } finally {
+    if (isset($mailCaptureRoot) && is_dir($mailCaptureRoot)) {
+        foreach (glob($mailCaptureRoot . DIRECTORY_SEPARATOR . '*') ?: [] as $path) { if (is_file($path)) { @unlink($path); } }
+        @rmdir($mailCaptureRoot);
+    }
+    putenv('SYNDICATUM_MAIL_CAPTURE_DIR');
     if (isset($adminPdo) && $adminPdo instanceof PDO) {
         if (!preg_match('/^syndicatum_expansion_test_[a-f0-9]{12}$/', $database)) { throw new RuntimeException('Refusing unsafe drop.'); }
         $adminPdo->exec('DROP DATABASE `' . $database . '`');

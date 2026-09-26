@@ -62,6 +62,11 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+Version 0.10.2 fetches recovery work for all configured providers before
+delivery starts and drains each participant binding independently. A stalled
+browser delivery can therefore remain safely pending without blocking alerts
+for every other participant.
+
 Version 0.10.1 makes device-authorization polling single-flight and prevents
 manual Refresh or retry alarms from bypassing an HTTP 429 cooldown. Pending
 approvals are checked at a bounded interval, and an expired code prompts a new

@@ -657,6 +657,9 @@ function showLogin(message = "") {
   el.app_shell.hidden = true;
   el.public_policy_links.hidden = false;
   const returnPath = requestedReturnPath();
+  const invitationToken = pendingInvitationToken();
+  const authenticationReturnPath = returnPath || (invitationToken
+    ? `${applicationPath()}#invitation=${encodeURIComponent(invitationToken)}` : "");
   const accountEnabled = Boolean(state.session?.capabilities?.account_sso || state.session?.capabilities?.pbb_account);
   const googleEnabled = Boolean(state.session?.capabilities?.google_sso);
   const extraActions = [];
@@ -669,7 +672,7 @@ function showLogin(message = "") {
     variant: "ghost",
     closeOnClick: false,
     onClick(_values, context) {
-      const url = returnPath ? `auth/google.php?return=${encodeURIComponent(returnPath)}` : "auth/google.php";
+      const url = authenticationReturnPath ? `auth/google.php?return=${encodeURIComponent(authenticationReturnPath)}` : "auth/google.php";
       return redirectWithBusy(context, url);
     },
   });
@@ -679,7 +682,7 @@ function showLogin(message = "") {
     variant: "ghost",
     closeOnClick: false,
     onClick() {
-      location.assign(returnPath ? `auth/account.php?return=${encodeURIComponent(returnPath)}` : "auth/account.php");
+      location.assign(authenticationReturnPath ? `auth/account.php?return=${encodeURIComponent(authenticationReturnPath)}` : "auth/account.php");
       return false;
     },
   });
@@ -718,6 +721,9 @@ function showLogin(message = "") {
 function openRegistrationModal() {
   const googleEnabled = Boolean(state.session?.capabilities?.google_sso);
   const returnPath = requestedReturnPath();
+  const invitationToken = pendingInvitationToken();
+  const authenticationReturnPath = returnPath || (invitationToken
+    ? `${applicationPath()}#invitation=${encodeURIComponent(invitationToken)}` : "");
   const extraActions = googleEnabled ? [{
     id: "google",
     label: "Continue with Google",
@@ -727,7 +733,7 @@ function openRegistrationModal() {
     variant: "ghost",
     closeOnClick: false,
     onClick(_values, context) {
-      const url = returnPath ? `auth/google.php?return=${encodeURIComponent(returnPath)}` : "auth/google.php";
+      const url = authenticationReturnPath ? `auth/google.php?return=${encodeURIComponent(authenticationReturnPath)}` : "auth/google.php";
       return redirectWithBusy(context, url);
     },
   }] : [];
@@ -757,7 +763,7 @@ function openRegistrationModal() {
         const refreshed = await request(API.session);
         state.session = { ...(unwrap(refreshed) || {}), capabilities: refreshed?.capabilities || unwrap(refreshed)?.capabilities || {} };
         state.mode = "expanded";
-        await loadExpanded();
+        await loadExpandedWithPendingInvitation();
         return true;
       } catch (error) {
         context.setFormError(error.message);
@@ -1128,6 +1134,39 @@ function participantProfileSection(icon, title) {
   heading.append(iconWrap, projectInfoElement("h3", "", title));
   section.append(heading);
   return section;
+}
+
+function pendingInvitationToken() {
+  const match = String(location.hash || "").match(/^#invitation=([^&]+)$/);
+  if (!match) return "";
+  try { return decodeURIComponent(match[1]); } catch (_error) { return ""; }
+}
+
+async function loadExpandedWithPendingInvitation() {
+  const token = pendingInvitationToken();
+  let acceptedProject = null;
+  let invitationError = null;
+  if (token) {
+    try {
+      acceptedProject = unwrap(await request(API.projectInvitations, {
+        method: "POST",
+        headers: csrfHeaders(),
+        body: JSON.stringify({ invitation_token: token }),
+      }));
+      history.replaceState(history.state, "", `${location.pathname}${location.search}`);
+    } catch (error) {
+      invitationError = error;
+    }
+  }
+  await loadExpanded();
+  if (acceptedProject) {
+    const project = state.projects.find((entry) => id(entry.id) === id(acceptedProject.id)
+      || id(entry.public_id) === id(acceptedProject.public_id));
+    if (project && id(project.id) !== selectedProjectId()) await switchProject(project.id, { historyMode: "replace" });
+    state.components.toast.success(`You joined ${acceptedProject.name || "the project"}.`, { title: "Invitation accepted" });
+  } else if (invitationError) {
+    state.components.toast.error(invitationError.message, { title: "Invitation could not be accepted" });
+  }
 }
 
 function participantProfileInstructionBlock(label, value) {
@@ -2580,6 +2619,27 @@ function confirmAgentClaimGeneration(agentId, credential, onGenerated = null, pr
   confirmation.open();
 }
 
+function showInvitationResult(result) {
+  const delivery = result.email_notification || {};
+  const summaries = {
+    captured: `Invitation email captured for development inspection${delivery.capture_id ? ` (${delivery.capture_id})` : ""}.`,
+    disabled: "Invitation email capture is disabled. Share the token through a trusted channel.",
+    configuration_required: "Invitation created, but Mail settings require a public URL and valid sender address.",
+    capture_failed: "Invitation created, but the development email capture could not be written.",
+  };
+  state.factories.createFormModal({
+    title: "Invitation created",
+    submitLabel: "Done",
+    context: { badge: delivery.status === "captured" ? "Email captured" : "Shown once", summary: summaries[delivery.status] || "Copy the invitation token now." },
+    rows: [
+      [{ type: "text", content: `Email address: ${result.email}` }],
+      [{ type: "text", content: `Invitation token: ${result.invitation_token}` }],
+      [{ type: "text", content: result.expires_at ? `Expires ${formatDate(result.expires_at)}` : "" }],
+    ],
+    async onSubmit() { return true; },
+  }).open();
+}
+
 function showFormValidationSummary(result, context, fieldLabels = {}) {
   const entries = Object.entries(result?.errors || {});
   if (entries.length < 2) return;
@@ -2892,7 +2952,7 @@ function openInviteMemberModal() {
     [modalTextField("email", "Email address", { input: "email", required: true })],
     [{ type: "select", name: "role", label: "Project role", required: true, options: [{ value: "member", label: "Member" }, { value: "viewer", label: "Viewer" }, { value: "admin", label: "Administrator" }] }],
   ], async onSubmit(values, context) {
-    try { const result = unwrap(await request(API.projectInvitations, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), email: values.email, role: values.role }) })); setTimeout(() => showCredentialResult("Invitation created", "Invitation token", result.invitation_token, result.expires_at), 0); return true; }
+    try { const result = unwrap(await request(API.projectInvitations, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), email: values.email, role: values.role }) })); setTimeout(() => showInvitationResult(result), 0); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
 }
@@ -5438,6 +5498,26 @@ async function openSettings() {
       ],
     },
     {
+      id: "mail",
+      label: "Mail",
+      rows: [
+        [{ type: "text", content: "SMTP email notifications" }],
+        [{ type: "text", content: "Development delivery captures invitation emails in private server storage. SMTP connection fields are reserved for the production transport and remain inactive." }],
+        [{ type: "checkbox", name: "mail_enabled", label: "Enable invitation email capture", disabled: locked("mail.enabled") }],
+        [{ type: "input", name: "mail_smtp_host", label: "SMTP host", placeholder: "smtp.example.com", disabled: true }, { type: "input", input: "number", name: "mail_smtp_port", label: "SMTP port", min: 1, max: 65535, disabled: true }],
+        [{ type: "select", name: "mail_encryption", label: "Encryption", disabled: true, options: [
+          { value: "starttls", label: "STARTTLS (recommended)" },
+          { value: "tls", label: "TLS / SSL" },
+          { value: "none", label: "None" },
+        ] }],
+        [{ type: "input", name: "mail_username", label: "SMTP username", autocomplete: "off", disabled: true }, { type: "input", input: "password", name: "mail_password", label: "SMTP password", autocomplete: "new-password", placeholder: "Not configured", disabled: true }],
+        [{ type: "divider" }],
+        [{ type: "text", content: "Sender identity" }],
+        [{ type: "input", name: "mail_sender_name", label: "Sender name", placeholder: "Syndicatum", disabled: locked("mail.sender_name") }, { type: "input", input: "email", name: "mail_sender_address", label: "Sender email address", placeholder: "notifications@example.com", disabled: locked("mail.sender_address") }],
+        [{ type: "input", input: "email", name: "mail_reply_to_address", label: "Reply-to address", placeholder: "Optional", disabled: locked("mail.reply_to_address") }, { type: "input", input: "number", name: "mail_timeout_seconds", label: "Connection timeout (seconds)", min: 1, max: 60, disabled: true }],
+      ],
+    },
+    {
       id: "recovery",
       label: "Recovery",
       rows: [
@@ -5458,11 +5538,16 @@ async function openSettings() {
     account_profile_url: "authentication", account_client_secret: "authentication",
     google_enabled: "authentication", google_client_id: "authentication",
     google_callback_url: "authentication", google_client_secret: "authentication",
-    self_registration_enabled: "authentication", backup_base_location: "recovery",
+    self_registration_enabled: "authentication",
+    mail_enabled: "mail", mail_smtp_host: "mail", mail_smtp_port: "mail",
+    mail_encryption: "mail", mail_username: "mail", mail_password: "mail",
+    mail_sender_name: "mail", mail_sender_address: "mail", mail_reply_to_address: "mail",
+    mail_timeout_seconds: "mail", backup_base_location: "recovery",
   };
   const fieldLabels = {
     site_name: "Installation name", public_origin: "Public Syndicatum URL",
-    message_max_length: "Maximum message length", backup_base_location: "Base location for generated backups",
+    message_max_length: "Maximum message length", mail_sender_address: "Sender email address",
+    backup_base_location: "Base location for generated backups",
   };
   const initialValues = () => ({
     site_name: value("general.installation_name", "Syndicatum"),
@@ -5489,6 +5574,16 @@ async function openSettings() {
     google_client_id: value("google.client_id"),
     google_callback_url: value("google.callback_url") || new URL("auth/google-callback.php", document.baseURI).href,
     google_client_secret: secretValue("google.client_secret"),
+    mail_enabled: Boolean(value("mail.enabled", false)),
+    mail_smtp_host: "",
+    mail_smtp_port: 587,
+    mail_encryption: "starttls",
+    mail_username: "",
+    mail_password: "",
+    mail_sender_name: value("mail.sender_name", value("general.installation_name", "Syndicatum")),
+    mail_sender_address: value("mail.sender_address"),
+    mail_reply_to_address: value("mail.reply_to_address"),
+    mail_timeout_seconds: 10,
   });
   const syncRealtimeTestButton = (values = {}) => {
     if (realtimeTestButton) realtimeTestButton.disabled = !settingsLoaded || !Boolean(values.realtime_enabled);
@@ -5600,10 +5695,24 @@ async function openSettings() {
         context.setFormError("Base location for generated backups must be an absolute server filesystem path.");
         return false;
       }
+      if (values.mail_enabled) {
+        const senderAddress = String(values.mail_sender_address || "").trim();
+        if (!senderAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderAddress)) {
+          settingsTabs?.setActive("mail", false);
+          activeTabId = "mail";
+          context.setErrors({ mail_sender_address: "Enter a valid sender email address before enabling invitation email capture." });
+          context.setFormError("Sender email address is required when invitation email capture is enabled.");
+          return false;
+        }
+      }
       const updates = {
         "general.installation_name": values.site_name,
         "general.public_origin": values.public_origin,
         "messaging.max_message_bytes": Number(values.message_max_length),
+        "mail.enabled": Boolean(values.mail_enabled),
+        "mail.sender_name": values.mail_sender_name,
+        "mail.sender_address": values.mail_sender_address,
+        "mail.reply_to_address": values.mail_reply_to_address,
         "recovery.backup_base_path": backupPath,
         "realtime.enabled": Boolean(values.realtime_enabled),
         "realtime.base_url": values.realtime_base_url,
@@ -5766,7 +5875,7 @@ async function checkSession() {
     const returnPath = requestedReturnPath();
     if (returnPath) { location.replace(returnPath); return; }
     state.mode = "expanded";
-    await loadExpanded();
+    await loadExpandedWithPendingInvitation();
     if (googleLinked) state.components.toast.success("Your Google account is linked and its profile photo is synchronized.");
     else if (googleLinkError) state.components.toast.error(
       googleLinkError.includes("already_linked") ? "That Google account is already linked." : "Google linking expired. Please try again."
@@ -5791,7 +5900,7 @@ async function submitLogin(values, context) {
     const returnPath = requestedReturnPath();
     if (returnPath) { location.replace(returnPath); return true; }
     state.mode = "expanded";
-    await loadExpanded();
+    await loadExpandedWithPendingInvitation();
     return true;
   } catch (error) {
     context.setFormError(error.message);

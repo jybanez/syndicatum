@@ -19,6 +19,10 @@ class SettingsService
             'general.support_url' => ['section' => 'general', 'type' => 'url', 'default' => ''],
             'messaging.max_message_bytes' => ['section' => 'messaging', 'type' => 'integer', 'default' => 24000, 'min' => 1024, 'max' => 1048576],
             'messaging.max_reply_depth' => ['section' => 'messaging', 'type' => 'integer', 'default' => 12, 'min' => 1, 'max' => 100],
+            'mail.enabled' => ['section' => 'mail', 'type' => 'boolean', 'default' => false],
+            'mail.sender_name' => ['section' => 'mail', 'type' => 'string', 'default' => 'Syndicatum', 'max' => 160],
+            'mail.sender_address' => ['section' => 'mail', 'type' => 'email', 'default' => ''],
+            'mail.reply_to_address' => ['section' => 'mail', 'type' => 'email', 'default' => ''],
             'recovery.backup_base_path' => ['section' => 'recovery', 'type' => 'path', 'default' => '', 'max' => 2048],
             'realtime.enabled' => ['section' => 'integrations', 'type' => 'boolean', 'default' => false],
             'realtime.base_url' => ['section' => 'integrations', 'type' => 'url', 'default' => ''],
@@ -256,6 +260,9 @@ class SettingsService
             }
             $displayHost = strpos($host, ':') !== false ? '[' . $host . ']' : $host;
             return $scheme . '://' . $displayHost . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+        }
+        if ($definition['type'] === 'email' && $value !== '' && (!filter_var($value, FILTER_VALIDATE_EMAIL) || strlen($value) > 191)) {
+            throw new InvalidArgumentException($key . ' must be a valid email address.');
         }
         $scheme = $value === '' ? '' : strtolower((string) parse_url($value, PHP_URL_SCHEME));
         $allowedSchemes = isset($definition['schemes']) ? $definition['schemes'] : ['http', 'https'];

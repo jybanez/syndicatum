@@ -1,8 +1,25 @@
 # Email Notifications Proposal
 
-Status: Deferred proposal  
+Status: Phase 1 development capture started
 Created: September 26, 2026  
 Audience: Product, engineering, operations, security, and support
+
+## Current implementation boundary
+
+The first development slice supports Team human invitations through the shared
+template renderer and a private development transport. When invitation capture
+is enabled in System Settings, the normal invitation mutation renders matching
+plain-text and HTML bodies and atomically writes an inspectable `.eml` file plus
+a matching HTML-only `.html` preview for template styling
+under private installation storage (or `SYNDICATUM_MAIL_CAPTURE_DIR`). The
+administrator still receives the one-time invitation token as a fallback, and
+the email link uses a URL fragment so the token is not sent in ordinary HTTP
+request paths or access logs.
+
+Actual SMTP delivery, a durable recipient-specific outbox, retries, delivery
+health, user preferences, and general project-event notifications are not part
+of this initial slice. Captured files contain live invitation tokens and must
+remain outside the repository and public web root with restricted access.
 
 ## 1. Purpose
 
@@ -245,4 +262,3 @@ Required acceptance coverage includes:
 ## 13. Recommended first implementation slice
 
 Implement SMTP configuration, test email, a durable recipient-specific outbox, the worker, and project invitation delivery as one vertical slice. This exercises secret storage, templates, deep links, retries, health reporting, backup policy, and deployment configuration before project-work notifications increase volume and policy complexity.
-

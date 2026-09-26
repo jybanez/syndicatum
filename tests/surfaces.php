@@ -315,9 +315,20 @@ try {
             && strpos($settingsEndpoint, "'settings.secrets_viewed'") !== false
             && strpos($settingsEndpoint, "'Cache-Control' => 'no-store, private'") !== false,
             'Plaintext secret reads must use an administrator-only, CSRF-protected, audited, non-cacheable request.');
-        foreach (['General', 'Realtime', 'Authentication', 'Recovery'] as $label) {
+        foreach (['General', 'Realtime', 'Authentication', 'Mail', 'Recovery'] as $label) {
             $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing System Settings tab: ' . $label);
         }
+        foreach (['SMTP host', 'SMTP port', 'Encryption', 'SMTP username', 'SMTP password', 'Sender name', 'Sender email address', 'Reply-to address', 'Connection timeout (seconds)'] as $label) {
+            $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing SMTP preview field: ' . $label);
+        }
+        $suite->true(strpos($settings, 'Development delivery captures invitation emails in private server storage.') !== false,
+            'The Mail tab must explain the active development capture transport.');
+        $suite->true(strpos($settings, '"mail.enabled": Boolean(values.mail_enabled)') !== false
+            && strpos($settings, '"mail.smtp_host"') === false,
+            'The Mail tab must persist capture settings without submitting inactive SMTP settings.');
+        $suite->true(strpos($source, 'loadExpandedWithPendingInvitation()') !== false
+            && strpos($source, 'body: JSON.stringify({ invitation_token: token })') !== false,
+            'Signed-in recipients must be able to accept an emailed invitation link.');
         $suite->true(strpos($settings, 'settingsTabs?.setActive(tabId, false);') !== false,
             'Validation must reveal the tab containing the first invalid field.');
         $suite->true(strpos($settings, 'Please address the following issues before continuing:') !== false,
