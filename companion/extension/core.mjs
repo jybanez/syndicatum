@@ -21,6 +21,7 @@ export function deliveryReviewItems(queue = {}) {
       attempts: Number(item.attempts || 0),
       queuedAt: item.queuedAt || null,
       reviewRequestedAt: item.reviewRequestedAt || null,
+      reviewReason: item.reviewReason || null,
       lastError: String(item.lastError || "submission_unconfirmed"),
       confirmation: item.browserDelivery?.confirmation || null,
     }));
