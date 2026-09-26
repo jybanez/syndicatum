@@ -4659,16 +4659,143 @@ async function jumpToMessage(messageId) {
 
 async function openSettings() {
   if (!capability("admin.settings", isAdministrator())) return;
-  let settings;
-  try { settings = unwrap(await request(API.settings))?.settings || {}; }
-  catch (error) { state.components.toast.warn(error.message, { title: "Settings unavailable" }); return; }
+  if (state.components.settingsModal?.getState?.().open) return;
+  const requestController = new AbortController();
+  let settings = {};
+  let settingsTabs = null;
+  let activeTabId = "general";
+  let settingsLoaded = false;
   const value = (key, fallback = "") => settings[key]?.value ?? settings[key] ?? fallback;
   const configured = (key) => Boolean(settings[key]?.configured);
   const locked = (key) => Boolean(settings[key]?.locked);
-  const backupBaseLocation = String(value("recovery.backup_base_path") || "").trim();
+  const sections = () => [
+    {
+      id: "general",
+      label: "General",
+      rows: [
+        [{ type: "text", content: "Installation and messaging" }],
+        [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
+        [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
+      ],
+    },
+    {
+      id: "realtime",
+      label: "Realtime",
+      rows: [
+        [{ type: "text", content: "Optional PBB Realtime integration" }],
+        [{ type: "checkbox", name: "realtime_enabled", label: "Enable Realtime", disabled: locked("realtime.enabled") }],
+        [{ type: "input", input: "url", name: "realtime_base_url", label: "Realtime URL", placeholder: "https://realtime.pbb.ph", disabled: locked("realtime.base_url") }],
+        [{ type: "input", name: "realtime_client_code", label: "Realtime client code", disabled: locked("realtime.client_code") }, { type: "input", name: "realtime_project_code", label: "Project scope code", disabled: locked("realtime.project_code") }],
+        [{ type: "input", name: "realtime_connector_authorization_project_code", label: "Connector authorization project code", disabled: locked("realtime.connector_authorization_project_code") }],
+        [{ type: "input", input: "password", name: "realtime_signing_secret", label: "Replace token-signing secret", disabled: locked("realtime.signing_secret"), placeholder: configured("realtime.signing_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "input", input: "password", name: "realtime_backend_ingress_secret", label: "Replace backend-ingress secret", disabled: locked("realtime.backend_ingress_secret"), placeholder: configured("realtime.backend_ingress_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "text", content: "Advanced token identity" }],
+        [{ type: "input", name: "realtime_issuer", label: "Issuer", disabled: locked("realtime.issuer") }, { type: "input", name: "realtime_audience", label: "Audience", disabled: locked("realtime.audience") }],
+      ],
+    },
+    {
+      id: "authentication",
+      label: "Authentication",
+      rows: [
+        [{ type: "text", content: "Optional PBB Account integration" }],
+        [{ type: "checkbox", name: "account_enabled", label: "Enable PBB Account", disabled: locked("account.enabled") }, { type: "checkbox", name: "native_login_enabled", label: "Keep native login available", disabled: locked("account.native_login_enabled") }],
+        [{ type: "input", input: "url", name: "account_base_url", label: "PBB Account base URL", disabled: locked("account.base_url") }, { type: "input", name: "account_client_id", label: "OAuth client ID", disabled: locked("account.client_id") }],
+        [{ type: "input", input: "url", name: "account_profile_url", label: "Account management URL", disabled: locked("account.profile_url") }],
+        [{ type: "input", input: "password", name: "account_client_secret", label: "Replace OAuth client secret", disabled: locked("account.client_secret"), placeholder: configured("account.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "divider" }],
+        [{ type: "text", content: "Optional Google sign-in" }],
+        [{ type: "checkbox", name: "google_enabled", label: "Enable Google sign-in", disabled: locked("google.enabled") }],
+        [{ type: "input", name: "google_client_id", label: "Google OAuth client ID", disabled: locked("google.client_id") }],
+        [{ type: "input", input: "url", name: "google_callback_url", label: "Authorized redirect URI", disabled: locked("google.callback_url") }],
+        [{ type: "input", input: "password", name: "google_client_secret", label: "Replace Google client secret", disabled: locked("google.client_secret"), placeholder: configured("google.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "divider" }],
+        [{ type: "text", content: "Human account registration" }],
+        [{ type: "checkbox", name: "self_registration_enabled", label: "Allow people to register from the login form", disabled: locked("security.self_registration_enabled") }],
+      ],
+    },
+    {
+      id: "recovery",
+      label: "Recovery",
+      rows: [
+        [{ type: "text", content: "Backup storage" }],
+        [{ type: "input", name: "backup_base_location", label: "Base location for generated backups", placeholder: "C:\\private\\syndicatum-backups", required: true, disabled: locked("recovery.backup_base_path") }],
+        [{ type: "text", content: "Absolute directory on the Syndicatum server, outside the public web root. This is not a browser download folder." }],
+      ],
+    },
+  ];
+  const fieldTabs = {
+    site_name: "general", public_origin: "general", message_max_length: "general",
+    realtime_enabled: "realtime", realtime_base_url: "realtime", realtime_client_code: "realtime",
+    realtime_project_code: "realtime", realtime_connector_authorization_project_code: "realtime",
+    realtime_signing_secret: "realtime", realtime_backend_ingress_secret: "realtime",
+    realtime_issuer: "realtime", realtime_audience: "realtime",
+    account_enabled: "authentication", native_login_enabled: "authentication",
+    account_base_url: "authentication", account_client_id: "authentication",
+    account_profile_url: "authentication", account_client_secret: "authentication",
+    google_enabled: "authentication", google_client_id: "authentication",
+    google_callback_url: "authentication", google_client_secret: "authentication",
+    self_registration_enabled: "authentication", backup_base_location: "recovery",
+  };
+  const fieldLabels = {
+    site_name: "Installation name", public_origin: "Public Syndicatum URL",
+    message_max_length: "Maximum message length", backup_base_location: "Base location for generated backups",
+  };
+  const initialValues = () => ({
+    site_name: value("general.installation_name", "Syndicatum"),
+    public_origin: value("general.public_origin"),
+    message_max_length: value("messaging.max_message_bytes", 24000),
+    backup_base_location: String(value("recovery.backup_base_path") || "").trim(),
+    realtime_enabled: Boolean(value("realtime.enabled", false)),
+    realtime_base_url: value("realtime.base_url"),
+    realtime_client_code: value("realtime.client_code"),
+    realtime_project_code: value("realtime.project_code"),
+    realtime_connector_authorization_project_code: value("realtime.connector_authorization_project_code"),
+    realtime_issuer: value("realtime.issuer", "syndicatum@pbb.ph"),
+    realtime_audience: value("realtime.audience", "pbb-realtime"),
+    realtime_signing_secret: "",
+    realtime_backend_ingress_secret: "",
+    account_enabled: Boolean(value("account.enabled", false)),
+    account_base_url: value("account.base_url"),
+    account_client_id: value("account.client_id", "pbb-syndicatum"),
+    account_profile_url: value("account.profile_url"),
+    account_client_secret: "",
+    native_login_enabled: Boolean(value("account.native_login_enabled", true)),
+    self_registration_enabled: Boolean(value("security.self_registration_enabled", true)),
+    google_enabled: Boolean(value("google.enabled", false)),
+    google_client_id: value("google.client_id"),
+    google_callback_url: value("google.callback_url") || new URL("auth/google-callback.php", document.baseURI).href,
+    google_client_secret: "",
+  });
+  const mountTabs = (modal, groups) => {
+    settingsTabs?.destroy?.();
+    const rowNodes = Array.from(modal.refs.rows.children);
+    const tabHost = document.createElement("div");
+    tabHost.className = "system-settings-tabs";
+    let offset = 0;
+    const tabs = groups.map((group) => {
+      const fragment = document.createDocumentFragment();
+      rowNodes.slice(offset, offset + group.rows.length).forEach((row) => fragment.appendChild(row));
+      offset += group.rows.length;
+      return { id: group.id, label: group.label, content: fragment };
+    });
+    modal.refs.rows.replaceChildren(tabHost);
+    settingsTabs = state.factories.createTabs(tabHost, {
+      ariaLabel: "System settings sections",
+      activeId: activeTabId,
+      tabs,
+      onChange(_tab, tabId) { activeTabId = tabId; },
+    });
+  };
+  const setSettingsActionsDisabled = (modal, disabled) => {
+    const buttons = Array.from(modal.refs.footer.querySelectorAll("button"));
+    buttons.forEach((button) => {
+      if (button.textContent.trim() !== "Cancel") button.disabled = Boolean(disabled);
+    });
+  };
   const modal = state.factories.createFormModal({
     title: "System Settings",
     size: "lg",
+    className: "system-settings-modal",
     submitLabel: "Save settings",
     busyMessage: "Saving settings…",
     manageBusyOnSubmit: false,
@@ -4679,6 +4806,8 @@ async function openSettings() {
       label: "Test Realtime connection",
       variant: "default",
       async onClick(values, context) {
+        settingsTabs?.setActive("realtime", false);
+        activeTabId = "realtime";
         try {
           const result = unwrap(await request(API.integrationTest, {
             method: "POST",
@@ -4695,72 +4824,39 @@ async function openSettings() {
         return false;
       },
     }],
-    initialValues: {
-      site_name: value("general.installation_name", "Syndicatum"),
-      public_origin: value("general.public_origin"),
-      message_max_length: value("messaging.max_message_bytes", 24000),
-      backup_base_location: backupBaseLocation,
-      realtime_enabled: Boolean(value("realtime.enabled", false)),
-      realtime_base_url: value("realtime.base_url"),
-      realtime_client_code: value("realtime.client_code"),
-      realtime_project_code: value("realtime.project_code"),
-      realtime_connector_authorization_project_code: value("realtime.connector_authorization_project_code"),
-      realtime_issuer: value("realtime.issuer", "syndicatum@pbb.ph"),
-      realtime_audience: value("realtime.audience", "pbb-realtime"),
-      realtime_signing_secret: "",
-      realtime_backend_ingress_secret: "",
-      account_enabled: Boolean(value("account.enabled", false)),
-      account_base_url: value("account.base_url"),
-      account_client_id: value("account.client_id", "pbb-syndicatum"),
-      account_profile_url: value("account.profile_url"),
-      account_client_secret: "",
-      native_login_enabled: Boolean(value("account.native_login_enabled", true)),
-      self_registration_enabled: Boolean(value("security.self_registration_enabled", true)),
-      google_enabled: Boolean(value("google.enabled", false)),
-      google_client_id: value("google.client_id"),
-      google_callback_url: value("google.callback_url") || new URL("auth/google-callback.php", document.baseURI).href,
-      google_client_secret: "",
+    rows: [[{ type: "text", content: "Loading system settings…" }]],
+    async onInvalid(result, context) {
+      const tabId = fieldTabs[result.firstInvalidField] || "general";
+      settingsTabs?.setActive(tabId, false);
+      activeTabId = tabId;
+      const entries = Object.entries(result.errors || {});
+      if (entries.length > 1) {
+        const summary = context.modal.refs.formError;
+        summary.replaceChildren(document.createTextNode("Please address the following issues before continuing:"));
+        const list = document.createElement("ul");
+        list.className = "system-settings-error-list";
+        entries.forEach(([name, message]) => {
+          const item = document.createElement("li");
+          const label = fieldLabels[name] || context.modal.refs.fields.get(name)?.config?.label || name;
+          item.textContent = String(message).toLowerCase().includes("required") ? `${label} — required` : String(message).replace(`${label}: `, "");
+          list.appendChild(item);
+        });
+        summary.appendChild(list);
+        summary.hidden = false;
+      }
     },
-    rows: [
-      [{ type: "text", content: "General and messaging" }],
-      [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
-      [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
-      [{ type: "divider" }],
-      [{ type: "text", content: "Backup storage" }],
-      [{ type: "input", name: "backup_base_location", label: "Base location for generated backups", placeholder: "C:\\private\\syndicatum-backups", required: true, disabled: locked("recovery.backup_base_path") }],
-      [{ type: "text", content: "Absolute directory on the Syndicatum server, outside the public web root. This is not a browser download folder." }],
-      [{ type: "divider" }],
-      [{ type: "text", content: "Optional PBB Realtime integration" }],
-      [{ type: "checkbox", name: "realtime_enabled", label: "Enable Realtime", disabled: locked("realtime.enabled") }],
-      [{ type: "input", input: "url", name: "realtime_base_url", label: "Realtime URL", placeholder: "https://realtime.pbb.ph", disabled: locked("realtime.base_url") }],
-      [{ type: "input", name: "realtime_client_code", label: "Realtime client code", disabled: locked("realtime.client_code") }, { type: "input", name: "realtime_project_code", label: "Project scope code", disabled: locked("realtime.project_code") }],
-      [{ type: "input", name: "realtime_connector_authorization_project_code", label: "Connector authorization project code", disabled: locked("realtime.connector_authorization_project_code") }],
-      [{ type: "input", input: "password", name: "realtime_signing_secret", label: "Replace token-signing secret", disabled: locked("realtime.signing_secret"), placeholder: configured("realtime.signing_secret") ? "Configured — leave blank to keep" : "Not configured" }],
-      [{ type: "input", input: "password", name: "realtime_backend_ingress_secret", label: "Replace backend-ingress secret", disabled: locked("realtime.backend_ingress_secret"), placeholder: configured("realtime.backend_ingress_secret") ? "Configured — leave blank to keep" : "Not configured" }],
-      [{ type: "text", content: "Advanced token identity" }],
-      [{ type: "input", name: "realtime_issuer", label: "Issuer", disabled: locked("realtime.issuer") }, { type: "input", name: "realtime_audience", label: "Audience", disabled: locked("realtime.audience") }],
-      [{ type: "divider" }],
-      [{ type: "text", content: "Optional PBB Account integration" }],
-      [{ type: "checkbox", name: "account_enabled", label: "Enable PBB Account", disabled: locked("account.enabled") }, { type: "checkbox", name: "native_login_enabled", label: "Keep native login available", disabled: locked("account.native_login_enabled") }],
-      [{ type: "input", input: "url", name: "account_base_url", label: "PBB Account base URL", disabled: locked("account.base_url") }, { type: "input", name: "account_client_id", label: "OAuth client ID", disabled: locked("account.client_id") }],
-      [{ type: "input", input: "url", name: "account_profile_url", label: "Account management URL", disabled: locked("account.profile_url") }],
-      [{ type: "input", input: "password", name: "account_client_secret", label: "Replace OAuth client secret", disabled: locked("account.client_secret"), placeholder: configured("account.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
-      [{ type: "divider" }],
-      [{ type: "text", content: "Optional Google sign-in" }],
-      [{ type: "checkbox", name: "google_enabled", label: "Enable Google sign-in", disabled: locked("google.enabled") }],
-      [{ type: "input", name: "google_client_id", label: "Google OAuth client ID", disabled: locked("google.client_id") }],
-      [{ type: "input", input: "url", name: "google_callback_url", label: "Authorized redirect URI", disabled: locked("google.callback_url") }],
-      [{ type: "input", input: "password", name: "google_client_secret", label: "Replace Google client secret", disabled: locked("google.client_secret"), placeholder: configured("google.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
-      [{ type: "divider" }],
-      [{ type: "text", content: "Human account registration" }],
-      [{ type: "checkbox", name: "self_registration_enabled", label: "Allow people to register from the login form", disabled: locked("security.self_registration_enabled") }],
-    ],
     async onSubmit(values, context) {
+      if (!settingsLoaded) {
+        context.setFormError("System settings are not available. Close this dialog and try again.");
+        return false;
+      }
       const backupPath = String(values.backup_base_location || "").trim();
       const absoluteBackupPath = /^[A-Za-z]:[\\/]/.test(backupPath)
         || /^\\\\[^\\/]+[\\/][^\\/]+/.test(backupPath)
         || backupPath.startsWith("/");
       if (!absoluteBackupPath) {
+        settingsTabs?.setActive("recovery", false);
+        activeTabId = "recovery";
         context.setErrors({ backup_base_location: "Enter an absolute server path, such as C:\\private\\syndicatum-backups or /srv/syndicatum/backups." });
         context.setFormError("Base location for generated backups must be an absolute server filesystem path.");
         return false;
@@ -4804,8 +4900,41 @@ async function openSettings() {
         if (context.modal.getState().open) context.setBusy(false);
       }
     },
+    onClose() {
+      requestController.abort();
+      settingsTabs?.destroy?.();
+      settingsTabs = null;
+      if (state.components.settingsModal === modal) state.components.settingsModal = null;
+    },
   });
+  state.components.settingsModal = modal;
   modal.open();
+  modal.setBusy(true, {
+    message: "Loading system settings…",
+    cancelBusy: {
+      label: "Cancel",
+      onCancel() {
+        requestController.abort();
+        modal.setBusy(false);
+        void modal.close({ reason: "cancel-loading" });
+      },
+    },
+  });
+  try {
+    settings = unwrap(await request(API.settings, { signal: requestController.signal }))?.settings || {};
+    if (!modal.getState().open) return;
+    const groups = sections();
+    modal.update({ rows: groups.flatMap((group) => group.rows), initialValues: initialValues() });
+    settingsLoaded = true;
+    modal.setBusy(false);
+    mountTabs(modal, groups);
+    setSettingsActionsDisabled(modal, false);
+  } catch (error) {
+    if (requestController.signal.aborted || !modal.getState().open) return;
+    modal.setBusy(false);
+    setSettingsActionsDisabled(modal, true);
+    modal.setFormError(`Unable to load system settings. ${error.message || "Try again."}`);
+  }
 }
 
 async function loadExpanded() {

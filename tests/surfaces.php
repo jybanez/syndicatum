@@ -280,6 +280,38 @@ try {
         $suite->true(strpos($rewrites, '^privacy/?$ privacy.php') !== false && strpos($rewrites, '^terms/?$ terms.php') !== false, 'Clean public legal routes are missing.');
     });
 
+    $suite->test('System Settings uses Helper tabs and opens before loading its data', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $proposal = file_get_contents($root . '/docs/email-notifications-proposal.md');
+        $start = strpos($source, 'async function openSettings()');
+        $end = strpos($source, "\nasync function loadExpanded()", $start);
+        $suite->true($start !== false && $end !== false, 'System Settings implementation was not found.');
+        $settings = substr($source, $start, $end - $start);
+        $modal = strpos($settings, 'state.factories.createFormModal({');
+        $open = strpos($settings, 'modal.open();');
+        $busy = strpos($settings, 'modal.setBusy(true');
+        $request = strpos($settings, 'settings = unwrap(await request(API.settings');
+        $suite->true($modal !== false && $open !== false && $busy !== false && $request !== false,
+            'System Settings must use the canonical loading modal sequence.');
+        $suite->true($modal < $open && $open < $busy && $busy < $request,
+            'System Settings must open and enter busy state before requesting settings.');
+        $suite->true(strpos($settings, 'state.factories.createTabs(tabHost') !== false,
+            'System Settings must use the native Helper tabs component.');
+        foreach (['General', 'Realtime', 'Authentication', 'Recovery'] as $label) {
+            $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing System Settings tab: ' . $label);
+        }
+        $suite->true(strpos($settings, 'settingsTabs?.setActive(tabId, false);') !== false,
+            'Validation must reveal the tab containing the first invalid field.');
+        $suite->true(strpos($settings, 'Please address the following issues before continuing:') !== false,
+            'Multi-field validation must use the required structured summary.');
+        $suite->true(strpos($styles, '.system-settings-tabs .ui-tabpanel') !== false,
+            'System Settings tabs need application layout integration.');
+        $suite->true(strpos($proposal, 'Separate recipient-specific outbox') !== false
+            && strpos($proposal, 'Recommended first implementation slice') !== false,
+            'The deferred email notification proposal is incomplete.');
+    });
+
     $suite->test('Realtime-enabled timeline reconnects without periodic polling', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $start = strpos($source, 'async function connectRealtime(');

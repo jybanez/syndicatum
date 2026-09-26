@@ -170,7 +170,7 @@ Administration uses the same fixed shell. Navbar items are omitted unless their 
 - **Users:** account state, system roles, profile, recovery, and suspension.
 - **Agents:** installation-wide emergency suspension and credential revocation.
 - **Audit:** security and administrative events without secret or message leakage.
-- **System Settings:** an administrator-only modal for General, Projects and messaging, Integrations, Security, and Operations settings. General includes the canonical **Public Syndicatum URL** used as the MCP/OAuth issuer and resource origin; production values require HTTPS and never derive from request Host headers.
+- **System Settings:** an administrator-only, tabbed modal for General, Realtime, Authentication, and Recovery settings. General includes installation and messaging controls plus the canonical **Public Syndicatum URL** used as the MCP/OAuth issuer and resource origin; production values require HTTPS and never derive from request Host headers. Authentication groups PBB Account, Google sign-in, native-login availability, and self-registration. Recovery owns the server-side backup base location.
 
 Project ownership and ordinary project management remain project-scoped even when accessed by a global administrator.
 
