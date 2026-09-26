@@ -1,10 +1,13 @@
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
     [string] $TargetDirectory,
-    [string] $SourceDirectory = (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'extension')
+    [string] $SourceDirectory
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($SourceDirectory)) {
+    $SourceDirectory = Join-Path $PSScriptRoot 'extension'
+}
 
 if (-not ('SyndicatumCompanionDirectoryIdentity' -as [type])) {
     Add-Type -TypeDefinition @'

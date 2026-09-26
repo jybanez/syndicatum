@@ -175,6 +175,8 @@ test("release archives are deterministic and updates are recoverable", async () 
   assert.match(updater, /Get-ChildItem[^\n]+-Force/);
   assert.match(updater, /Name -notmatch '\\\.backup-'/);
   assert.match(updater, /ReloadRequired = \$true/);
+  assert.match(updater, /Join-Path \$PSScriptRoot 'extension'/);
+  assert.doesNotMatch(updater.match(/param\([\s\S]*?\n\)/)?.[0] || "", /\$MyInvocation/);
 });
 
 test("ChatGPT adapter confirms the exact injected turn without capturing its response", async () => {
