@@ -298,6 +298,8 @@ try {
             'System Settings must open and enter busy state before requesting settings.');
         $suite->true(strpos($settings, 'state.factories.createTabs(tabHost') !== false,
             'System Settings must use the native Helper tabs component.');
+        $suite->true(strpos($settings, 'variant: "attached"') !== false,
+            'System Settings must use the canonical attached Helper tab variant.');
         foreach (['General', 'Realtime', 'Authentication', 'Recovery'] as $label) {
             $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing System Settings tab: ' . $label);
         }
@@ -312,7 +314,7 @@ try {
             'The deferred email notification proposal is incomplete.');
     });
 
-    $suite->test('Realtime-enabled timeline reconnects without periodic polling', function () use ($suite, $root) {
+    $suite->test('Realtime-enabled timeline reconnects and reconciles missed task events', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $start = strpos($source, 'async function connectRealtime(');
         $end = strpos($source, 'function scheduleRealtimeReconnect(', $start);
@@ -325,6 +327,20 @@ try {
         $suite->true(strpos($connection, 'new WebSocket(') === false, 'The timeline must not maintain a second hand-written WebSocket protocol client.');
         $suite->true(strpos($connection, 'Promise.all([loadMessages("newer", projectGeneration), loadTasks(projectGeneration)])') !== false,
             'A successful rejoin must perform one message-and-task gap-recovery synchronization.');
+        $suite->true(strpos($connection, 'scheduleTaskReconciliation(projectGeneration);') !== false,
+            'A healthy Realtime connection must schedule bounded authoritative task reconciliation.');
+        $suite->true(strpos($source, 'const TASK_RECONCILIATION_INTERVAL_MS = 60000;') !== false
+            && strpos($source, 'function scheduleTaskReconciliation(') !== false
+            && strpos($source, 'document.visibilityState !== "hidden"') !== false,
+            'Task reconciliation must be bounded and pause its requests while the page is hidden.');
+        $suite->true(strpos($source, 'currentOperation?.generation === projectGeneration && currentOperation.projectId === projectId') !== false
+            && strpos($source, 'projectId !== selectedProjectId()') !== false,
+            'Task loads must coalesce concurrent requests and ignore stale project responses.');
+        $suite->true(strpos($source, 'function reconcileTaskSnapshots(incoming)') !== false
+            && strpos($source, 'Number(current.version || 0) > Number(task.version || 0)') !== false,
+            'A delayed list response must not overwrite a newer Realtime task snapshot.');
+        $suite->true(strpos($source, 'Promise.all([refreshParticipants(projectGeneration), loadTasks(projectGeneration)])') !== false,
+            'Returning to the project must immediately reconcile participants and tasks.');
         $suite->true(strpos($source, 'const delay = Math.min(60000, 5000 * (2 ** Math.min(state.realtimeRetryCount, 4)));') !== false, 'Realtime reconnects must use bounded exponential backoff.');
         $suite->true(is_file($root . '/vendor/pbb-realtime/js/sdk/index.js'), 'The same-origin PBB Realtime SDK is missing.');
     });
@@ -399,7 +415,9 @@ try {
         $suite->true(strpos($source, 'state.components.filterPopover = state.factories.createPopover') !== false, 'Timeline filters must mount through the Helper popover.');
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
         $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
-        $suite->true(strpos($loader, 'const UI_BUNDLE_REV = "0.21.205";') !== false, 'The integrated Helper bundle must retain the current live revision.');
+        $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.207";') !== false,
+            'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
     $suite->test('Navigation uses the Syndicatum brand as the single workspace route', function () use ($suite, $root) {
@@ -429,9 +447,19 @@ try {
         $index = file_get_contents($root . '/index.php');
         $styles = file_get_contents($root . '/assets/app.css');
         $rewrites = file_get_contents($root . '/.htaccess');
-        $suite->true(strpos($source, '{ id: "guide", label: "User Guide"') !== false
-            && strpos($source, 'else if (item?.id === "guide") showGuideSurface();') !== false,
-            'The account menu must expose the User Guide to signed-in users outside administrator capability checks.');
+        $navbarActions = strpos($source, 'const actions = [];', strpos($source, 'function mountNavbar()'));
+        $guideAction = strpos($source, 'id: "guide",', $navbarActions);
+        $guideLabel = strpos($source, 'label: "User Guide",', $guideAction);
+        $administratorAction = strpos($source, 'id: "administrator",', $guideAction);
+        $suite->true($guideAction !== false && $guideLabel !== false && $administratorAction !== false && $guideAction < $administratorAction
+            && strpos($source, 'onAction(action) {') !== false
+            && strpos($source, 'if (action?.id === "guide") showGuideSurface();') !== false,
+            'The navbar must expose User Guide immediately before the administrator gear for all signed-in users.');
+        $accountMenuStart = strpos($source, 'id: "account",', $administratorAction);
+        $accountMenuEnd = strpos($source, 'state.components.navbar?.destroy();', $accountMenuStart);
+        $accountMenu = substr($source, $accountMenuStart, $accountMenuEnd - $accountMenuStart);
+        $suite->true(strpos($accountMenu, 'label: "User Guide"') === false,
+            'User Guide must not remain duplicated inside the account menu.');
         $suite->true(strpos($source, 'function showGuideSurface(') !== false
             && strpos($source, 'function renderGuideSurface()') !== false
             && strpos($source, 'searchGuide(state.guideQuery, { administrator: isAdministrator() })') !== false,
@@ -471,10 +499,11 @@ try {
             && strpos($source, 'guideArticle(articleId, { administrator: isAdministrator() })') !== false,
             'Administration guidance must be excluded from regular-user navigation, search, and direct article selection.');
         $suite->true(strpos($inbox, 'Guide to these views') !== false
-            && strpos($source, 'openGuide: (articleId) => showGuideSurface(articleId)') !== false
-            && strpos($index, 'id="task-guide-trigger"') !== false
-            && strpos($source, 'showGuideSurface("tasks-overview")') !== false,
-            'Responsibility Inbox and Tasks must link directly to their contextual guide topics.');
+            && strpos($source, 'openGuide: (articleId) => showGuideSurface(articleId)') !== false,
+            'Responsibility Inbox must retain its contextual guide link.');
+        $suite->true(strpos($index, 'id="task-guide-trigger"') === false
+            && strpos($source, 'task_guide_trigger') === false,
+            'Tasks must rely on the global navbar User Guide instead of duplicating a local Guide action.');
         $suite->true(strpos($styles, '.guide-browser') !== false
             && strpos($styles, '.guide-tree') !== false
             && strpos($styles, '.guide-article') !== false,
@@ -549,20 +578,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.205 date and time controls retain native theme integration', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.207 retains native theme integration and attached tabs', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.205') !== false,
-                'Every Helper entry point must use the canonical 0.21.205 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.207') !== false,
+                'Every Helper entry point must use the canonical 0.21.207 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.205') !== false,
-                $surface . ' must use the matching canonical 0.21.205 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.207') !== false,
+                $surface . ' must use the matching canonical 0.21.207 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -570,6 +599,9 @@ try {
             'The Helper bundle must theme native date and time controls in light themes.');
         $suite->true(strpos($bundleCss, 'color-scheme:var(--ui-datepicker-color-scheme, dark)') !== false,
             'The Helper bundle must apply the datepicker color scheme to native time inputs.');
+        $suite->true(strpos($bundleCss, '.ui-tabs.is-attached') !== false
+            && strpos($bundleJs, 'o==="attached"?" is-attached":""') !== false,
+            'The Helper bundle must include the canonical attached tabs variant.');
         $suite->true(strpos($bundleJs, 'onContextMenuAction') !== false
             && strpos($bundleJs, 'ui-timeline-menu-trigger') !== false,
             'The Helper bundle must expose the native timeline context-menu implementation.');
@@ -803,6 +835,11 @@ try {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
+        $splitterStart = strpos($source, 'function mountWorkspaceSplitters()');
+        $splitterEnd = strpos($source, 'function showLogin(', $splitterStart + 1);
+        $workspaceSplitters = substr($source, $splitterStart, $splitterEnd - $splitterStart);
+        $suite->same(3, substr_count($workspaceSplitters, 'chrome: false,'),
+            'All three workspace splitters must use the chrome-free Helper presentation.');
         $timeline = strpos($index, 'id="project-messages-column"');
         $tasks = strpos($index, 'id="project-tasks-column"');
         $team = strpos($index, 'id="project-participants-column"');
@@ -810,6 +847,14 @@ try {
             'The task rail must render between the timeline and team columns.');
         $suite->true(strpos($styles, '.task-card-title { font-size: 14px;') !== false,
             'Task-card titles must use compact rail typography without changing task detail headings.');
+        $suite->true(strpos($source, 'timestamp.textContent = formatDate(task.updated_at);') !== false
+            && strpos($source, 'timestamp.title = `Updated ${formatDate(task.updated_at)}`;') !== false
+            && strpos($styles, '.task-card-timestamp { text-align: right; }') !== false,
+            'Task cards must show a friendly updated timestamp in the upper-right corner.');
+        $suite->true(strpos($source, 'taskNumber.textContent = `#${task.id}`;') !== false
+            && strpos($source, 'taskNumber.title = `Task ${task.id}`;') !== false
+            && strpos($styles, '.task-card-number { align-self: end; text-align: right; }') !== false,
+            'Task cards must show their task number in the lower-right corner.');
         $suite->true(strpos($source, 'Every active participant in this project can see this task.') !== false,
             'Task creation must explain project-wide visibility.');
         $suite->true(strpos($source, 'source_message_id: sourceMessage?.id || null') !== false,
@@ -824,6 +869,20 @@ try {
             && strpos($source, 'async onContextMenuAction(action, item)') !== false
             && strpos($source, 'id: "create-task", label: message.action_requested ? "Convert to task" : "Create task"') !== false,
             'Message secondary actions must use the native Helper timeline context-menu contract.');
+        $suite->true(strpos($source, 'id: "message-info", label: "Message Info", icon: "status.info"') !== false
+            && strpos($source, 'function openMessageInfo(message)') !== false
+            && strpos($source, 'content: messageInfoContent(message)') !== false,
+            'Message Info must open a canonical modal with the loaded message metadata.');
+        $messageInfoStart = strpos($source, 'function messageInfoContent(message)');
+        $messageInfoEnd = strpos($source, 'function openMessageInfo(message)', $messageInfoStart);
+        $messageInfo = substr($source, $messageInfoStart, $messageInfoEnd - $messageInfoStart);
+        $suite->true(strpos($messageInfo, 'content.append(facts);') !== false
+            && strpos($messageInfo, 'responsibility-evidence-body') === false,
+            'Message Info must remain metadata-only and must not repeat the message body.');
+        $suite->true(strpos($source, 'id: "copy-message", label: "Copy", icon: "actions.copy"') !== false
+            && strpos($source, 'await navigator.clipboard.writeText(message.body || "");') !== false
+            && strpos($source, 'state.components.toast.success("Message copied.");') !== false,
+            'The message context menu must copy the body through the Clipboard API with visible feedback.');
         $suite->true(strpos($source, 'attachActionMenuTrigger') === false
             && strpos($source, 'message-action-menu-trigger') === false,
             'The retired application-owned timeline trigger workaround must not remain after native adoption.');
@@ -853,6 +912,78 @@ try {
             'The authenticated task giver must not be exposed as an editable supervisor field.');
         $suite->true(strpos($source, 'el.new_task_trigger.addEventListener("click", () => openCreateTaskModal());') !== false,
             'The New task trigger must not leak its click event into source-message attribution.');
+        $suite->true(strpos($index, 'class="task-status-filter" id="task-status-filter"') !== false
+            && strpos($source, 'state.components.taskStatusFilter = state.factories.createSelect(el.task_status_filter') !== false
+            && strpos($source, 'multiple: true') !== false
+            && strpos($source, 'state.taskStatuses = Array.isArray(values) ? values.map(String) : [];') !== false,
+            'Task statuses must use a canonical Helper multi-select and support combined status filtering.');
+        $suite->true(strpos($index, 'class="task-search" id="task-search-mount"') !== false
+            && strpos($source, 'placeholder: "Search tasks"') !== false
+            && strpos($source, 'state.taskSearch = value.trim(); renderTasks();') !== false
+            && strpos($source, '`#${task.id}`') !== false
+            && strpos($source, 'return searchable.includes(query);') !== false
+            && strpos($styles, '.task-search { flex: 1 1 auto; min-width: 0; overflow: hidden; }') !== false,
+            'The task rail must provide a responsive canonical Helper search across task identity and readable metadata.');
+        $suite->true(strpos($source, 'createEmptyState: await uiLoader.get("ui.empty.state", options)') !== false
+            && strpos($source, 'function renderTaskEmptyState()') !== false
+            && strpos($source, 'title: "No tasks yet."') !== false
+            && strpos($source, 'label: "Create a task"') !== false
+            && strpos($source, '"No tasks match your search."') !== false
+            && strpos($source, '"No tasks match your filters."') !== false
+            && strpos($source, '"No tasks match your search and filters."') !== false
+            && strpos($source, '"Clear search and filters"') !== false
+            && strpos($styles, '.task-list > .task-empty-state {') !== false,
+            'True-empty and filtered-empty task states must use the canonical Helper empty-state component with contextual recovery actions.');
+        $suite->true(strpos($source, 'el.task_count.textContent = filtered ? `${tasks.length} of ${state.tasks.length}` : String(state.tasks.length);') !== false
+            && strpos($source, '`${tasks.length} of ${state.tasks.length} tasks visible`') !== false,
+            'The task count must distinguish the visible subset from the project total while filters are active.');
+        $suite->true(strpos($index, 'id="task-filter-trigger" aria-label="Filter tasks: 4 statuses selected"') !== false
+            && strpos($index, 'class="ui-badge task-filter-count" id="task-filter-count"') !== false
+            && strpos($source, 'function renderTaskFilterControl()') !== false
+            && strpos($source, 'state.components.taskFilterPopover = state.factories.createPopover(el.task_filter_trigger') !== false
+            && strpos($source, 'el.task_filter_icon.innerHTML = helperIconHtml("data.filter", 18);') !== false,
+            'Task status filtering must use a compact, counted Filter action backed by the existing Helper multi-select.');
+        $suite->true(strpos($index, 'id="task-refresh-trigger" aria-label="Refresh tasks"') !== false
+            && strpos($source, 'async function refreshTasksFromAction()') !== false
+            && strpos($source, 'await loadTasks(state.generation);') !== false
+            && strpos($source, 'el.task_refresh_trigger.disabled = true;') !== false,
+            'The task rail needs an accessible, duplicate-safe authoritative refresh action.');
+        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-actions-trigger', 'filter-popover-trigger',
+            'timeline-collapse-toggle', 'refresh-button', 'new-task-trigger', 'task-sort-trigger', 'task-refresh-trigger', 'team-actions-trigger'] as $iconActionId) {
+            $suite->true((bool) preg_match('/class="[^"]*ui-button-borderless[^"]*"[^>]*id="' . preg_quote($iconActionId, '/') . '"/', $index),
+                'Icon-only action #' . $iconActionId . ' must use the consistent borderless treatment.');
+        }
+        $suite->true(strpos($index, 'id="new-task-icon" aria-hidden="true"') !== false
+            && strpos($source, 'el.new_task_icon.innerHTML = helperIconHtml("actions.add", 18);') !== false,
+            'The New task action must use the shared icon instead of a text plus sign.');
+        $suite->true(strpos($styles, '.ui-modal-close,') !== false
+            && strpos($styles, '.ui-action-modal-button.is-icon-only,') !== false
+            && strpos($styles, '.ui-timeline-menu-trigger,') !== false
+            && strpos($styles, 'border-color: transparent !important;') !== false
+            && strpos($source, 'ariaLabel: "Participant actions",') !== false
+            && strpos($source, 'variant: "borderless",') !== false,
+            'Helper-owned modal, timeline-menu, and header icon actions must share the borderless treatment.');
+        $suite->true(strpos($index, 'id="task-sort-trigger" aria-label="Sort tasks: Recently updated"') !== false
+            && strpos($source, 'state.components.taskSortDropdown = state.factories.createDropdown(el.task_sort_trigger') !== false
+            && strpos($source, '{ id: "updated_desc", label: "Recently updated" }') !== false
+            && strpos($source, 'el.task_sort_icon.innerHTML = helperIconHtml("actions.sort", 18);') !== false
+            && strpos($source, 'class="task-sort-menu-placeholder"') !== false
+            && strpos($styles, '.task-sort-menu-placeholder { display: block; width: 18px; height: 18px; }') !== false
+            && strpos($source, 'className: "task-sort-menu",') !== false
+            && strpos($styles, '.task-sort-menu .ui-menu-item { min-height: 34px; padding-block: 6px; }') !== false
+            && strpos($source, 'renderTaskSortControl();') !== false
+            && strpos($source, 'function compareTasks(left, right)') !== false
+            && strpos($source, 'return [...tasks].sort(compareTasks);') !== false,
+            'Tasks must expose a compact canonical Helper sort menu with recently updated as the default.');
+        $suite->true(strpos($styles, '--task-status-completed:') !== false
+            && strpos($styles, '.task-card.is-blocked { --task-status-accent:') !== false
+            && strpos($styles, '.task-card-status { color: var(--task-status-accent);') !== false,
+            'Task status color coding must use shared accents while retaining the written status label.');
+        $suite->true(strpos($styles, '.project-card { width: 100%; height: auto; align-self: start; align-content: start; display: grid; gap: 8px; padding: 11px 12px;') !== false,
+            'Project cards must use the compact vertical rhythm without shrinking their text.');
+        $suite->true(strpos($styles, '.project-list { gap: 8px; }') !== false
+            && strpos($styles, '.admin-list { gap: 10px; }') !== false,
+            'Only the project rail spacing should be compacted; administration lists retain their established rhythm.');
         $suite->true(strpos($source, 'modal.setBusy(true, { message: "Loading task details..." })') !== false,
             'Task detail modals must open before loading and expose a busy state.');
         $suite->true(strpos($source, 'modal.setActions(taskActions(task, modal));') !== false

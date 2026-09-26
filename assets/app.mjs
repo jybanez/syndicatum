@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.205";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.207";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260925215000";
@@ -15,6 +15,7 @@ const EXPAND_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hi
 const APP_BASE_PATH = new URL(document.baseURI).pathname.replace(/\/$/, "");
 const WORKSPACE_MOBILE_QUERY = "(max-width: 980px)";
 const TEMPLATE_MOBILE_QUERY = "(max-width: 680px)";
+const TASK_RECONCILIATION_INTERVAL_MS = 60000;
 const TIMELINE_MARKER_ICONS = new Map();
 
 const API = {
@@ -82,7 +83,9 @@ const state = {
   templateMobileView: "library",
   selectedGuideArticleId: "workspace-projects",
   guideQuery: "",
-  taskFilter: "active",
+  taskSearch: "",
+  taskStatuses: ["open", "in_progress", "in_review", "blocked"],
+  taskSort: "updated_desc",
   projectView: "timeline",
   aiIconPackAvailable: false,
   timelineDefaultCollapsed: false,
@@ -97,6 +100,8 @@ const state = {
   filterTimer: null,
   pollingTimer: null,
   foregroundSyncTimer: null,
+  taskReconciliationTimer: null,
+  taskLoadOperation: null,
   realtimeSocket: null,
   realtimeRetryTimer: null,
   realtimeRetryCount: 0,
@@ -115,7 +120,7 @@ const el = Object.fromEntries([
   "app-shell", "navbar-host", "workspace-surface", "admin-surface",
   "workspace-splitter-host", "workspace-inner-splitter-host", "workspace-work-splitter-host", "project-navigation-column", "project-messages-column", "project-tasks-column", "project-participants-column",
   "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
-  "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-status-filter", "new-task-trigger", "task-guide-trigger",
+  "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-search-mount", "task-filter-trigger", "task-filter-icon", "task-filter-count", "task-filter-popover-content", "task-status-filter", "task-sort-trigger", "task-sort-icon", "task-refresh-trigger", "task-refresh-icon", "new-task-trigger", "new-task-icon",
   "participant-search", "new-message-trigger", "new-message-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
@@ -403,6 +408,13 @@ function mountNavbar() {
     if (state.teamVisible) items.push({ id: "mobile-team", label: "Team", icon: helperIconHtml("people.users"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
   }
   const actions = [];
+  if (state.mode === "expanded") actions.push({
+    id: "guide",
+    label: "User Guide",
+    icon: helperIconHtml("assets.document"),
+    iconOnly: true,
+    className: "ui-button-borderless",
+  });
   const administratorItems = state.mode === "expanded" && isAdministrator() ? [
     ...(capability("admin.users") ? [{ id: "users", label: "Users", icon: helperIconHtml("people.users") }] : []),
     ...(capability("admin.audit") ? [{ id: "audit", label: "Audit", icon: helperIconHtml("time.history") }] : []),
@@ -431,7 +443,6 @@ function mountNavbar() {
         label: "Account",
         className: "syndicatum-account-menu-group",
         items: [
-          { id: "guide", label: "User Guide", icon: helperIconHtml("assets.document") },
           { id: "profile", label: "Profile", icon: helperIconHtml("people.profile") },
           ...(accountUsesNativePassword() ? [{ id: "password", label: "Change Password", icon: helperIconHtml("actions.lock") }] : []),
           ...(usesPbbAccount() ? [{ id: "account-profile", label: "Manage PBB Account", icon: helperIconHtml("people.account") }] : []),
@@ -475,9 +486,11 @@ function mountNavbar() {
       else if (item?.id === "mobile-team") showMobileWorkspacePanel("team");
       else if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
     },
+    onAction(action) {
+      if (action?.id === "guide") showGuideSurface();
+    },
     onActionMenuSelect(_action, item) {
       if (["users", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
-      else if (item?.id === "guide") showGuideSurface();
       else if (item?.id === "settings") void openSettings();
       else if (item?.id === "profile") openProfileModal();
       else if (item?.id === "password") openPasswordModal();
@@ -593,6 +606,7 @@ function mountWorkspaceSplitters() {
     className: "workspace-outer-splitter",
     orientation: "horizontal",
     panePadding: 0,
+    chrome: false,
     initialRatio: storedSplitterRatio("syndicatum.workspace.projectsRatio", 0.23),
     minRatio: 0.16,
     maxRatio: 0.36,
@@ -974,7 +988,7 @@ function openParticipantInfoModal(participant) {
       icon: MORE_ACTIONS_ICON,
       iconOnly: true,
       ariaLabel: "Participant actions",
-      variant: "ghost",
+      variant: "borderless",
       closeOnClick: false,
       onClick() { return false; },
     }] : [],
@@ -1238,7 +1252,10 @@ function messageLinkedTasks(messageId) {
 }
 
 function messageContextMenu(message) {
-  const items = [];
+  const items = [
+    { id: "message-info", label: "Message Info", icon: "status.info" },
+    { id: "copy-message", label: "Copy", icon: "actions.copy", disabled: Boolean(message.deleted_at) },
+  ];
   const linkedTasks = messageLinkedTasks(message.id);
   if (linkedTasks.length) items.push({
     id: "linked-tasks",
@@ -1249,7 +1266,54 @@ function messageContextMenu(message) {
       && (!message.action_requested || !linkedTasks.length)) items.push({
     id: "create-task", label: message.action_requested ? "Convert to task" : "Create task", icon: "actions.check",
   });
-  return items.length ? { ariaLabel: `Message actions for #${message.id}`, items } : null;
+  return { ariaLabel: `Message actions for #${message.id}`, items };
+}
+
+function messageInfoContent(message) {
+  const content = projectInfoElement("section", "responsibility-evidence-content message-info-content");
+  const facts = projectInfoElement("dl", "responsibility-evidence-facts");
+  const acknowledgement = !message.current_participant_state?.is_addressee
+    ? "Not addressed to you"
+    : (message.current_participant_state.acknowledged_at
+      ? `Acknowledged ${formatDate(message.current_participant_state.acknowledged_at)}`
+      : "Awaiting your acknowledgement");
+  const rows = [
+    ["Message ID", `#${message.id}`],
+    ["Project position", `Sequence ${message.sequence}`],
+    ["Sender", message.sender?.display_name || "Unknown"],
+    ["Time", formatDate(message.created_at)],
+    ["Addressing", messageAddresseesLabel(message) || "No addressees"],
+    ["Type", message.action_requested ? "Action request" : "Update"],
+    ["Acknowledgement", acknowledgement],
+    ["History", `${message.revision_count || 0} revision${message.revision_count === 1 ? "" : "s"}; ${message.deleted_at ? "Removed" : "Current visible revision"}`],
+    ["Thread", message.reply_to_message_id ? `Reply to message #${message.reply_to_message_id}` : "Top-level message"],
+  ];
+  if (message.uuid) rows.push(["Message UUID", message.uuid]);
+  if (message.correlation_id) rows.push(["Correlation ID", message.correlation_id]);
+  rows.forEach(([label, value]) => facts.append(projectInfoElement("dt", "", label), projectInfoElement("dd", "", value)));
+  content.append(facts);
+  return content;
+}
+
+function openMessageInfo(message) {
+  const modal = state.factories.createActionModal({
+    title: `Message info #${message.id}`,
+    size: "lg",
+    className: "message-info-modal",
+    content: messageInfoContent(message),
+    actions: [{ id: "close", label: "Close", variant: "primary" }],
+  });
+  modal.open();
+}
+
+async function copyMessage(message) {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+    await navigator.clipboard.writeText(message.body || "");
+    state.components.toast.success("Message copied.");
+  } catch (_error) {
+    state.components.toast.warn("Copy failed. Select the message text and copy it manually.", { title: "Unable to copy message" });
+  }
 }
 
 function openLinkedMessageTasks(message) {
@@ -1342,6 +1406,14 @@ function renderTimeline(mode = "replace", changed = state.messages) {
     mountItemContent: mountMessageCard,
     async onContextMenuAction(action, item) {
       const message = item.raw;
+      if (action.id === "message-info") {
+        openMessageInfo(message);
+        return;
+      }
+      if (action.id === "copy-message") {
+        await copyMessage(message);
+        return;
+      }
       if (action.id === "create-task") {
         setTimeout(() => openCreateTaskModal(message), 0);
         return;
@@ -3872,43 +3944,188 @@ function renderAdminDeliveryHealth(report) {
 }
 
 function visibleTasks() {
-  const terminal = new Set(["completed", "cancelled"]);
-  const current = id(state.project?.current_participant?.id);
-  if (state.taskFilter === "active") return state.tasks.filter((task) => !terminal.has(task.status));
-  if (state.taskFilter === "mine") return state.tasks.filter((task) => id(task.assignee_participant_id) === current && !terminal.has(task.status));
-  if (state.taskFilter === "all") return state.tasks;
-  return state.tasks.filter((task) => task.status === state.taskFilter);
+  const statuses = new Set(state.taskStatuses);
+  const query = state.taskSearch.trim().toLocaleLowerCase();
+  const tasks = state.tasks.filter((task) => {
+    if (statuses.size && !statuses.has(task.status)) return false;
+    if (!query) return true;
+    const searchable = [
+      task.id,
+      `#${task.id}`,
+      task.title,
+      task.description,
+      task.assignee_display_name,
+      taskStatusLabel(task.status),
+      String(task.status || "").replaceAll("_", " "),
+      task.priority,
+    ].filter(Boolean).join(" ").toLocaleLowerCase();
+    return searchable.includes(query);
+  });
+  return [...tasks].sort(compareTasks);
+}
+
+function taskTimestamp(value) {
+  const timestamp = Date.parse(normalizeUtcTimestamp(value));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function compareTasks(left, right) {
+  const byUpdated = taskTimestamp(right.updated_at) - taskTimestamp(left.updated_at);
+  const byId = Number(right.id || 0) - Number(left.id || 0);
+  if (state.taskSort === "created_desc") {
+    return taskTimestamp(right.created_at) - taskTimestamp(left.created_at) || byUpdated || byId;
+  }
+  if (state.taskSort === "priority_desc") {
+    const rank = { urgent: 4, high: 3, normal: 2, low: 1 };
+    return (rank[right.priority] || 0) - (rank[left.priority] || 0) || byUpdated || byId;
+  }
+  if (state.taskSort === "due_asc") {
+    const leftDue = left.due_at ? taskTimestamp(left.due_at) : Number.POSITIVE_INFINITY;
+    const rightDue = right.due_at ? taskTimestamp(right.due_at) : Number.POSITIVE_INFINITY;
+    return leftDue - rightDue || byUpdated || byId;
+  }
+  if (state.taskSort === "id_desc") return byId || byUpdated;
+  return byUpdated || byId;
 }
 
 function taskStatusLabel(status) {
   return ({ open: "Open", in_progress: "In progress", in_review: "In review", blocked: "Blocked", completed: "Completed", cancelled: "Cancelled" })[status] || status;
 }
 
+function renderTaskFilterControl() {
+  const count = state.taskStatuses.length;
+  const label = count ? `Filter tasks: ${count} status${count === 1 ? "" : "es"} selected` : "Filter tasks: all statuses";
+  el.task_filter_trigger.setAttribute("aria-label", label);
+  el.task_filter_trigger.title = label;
+  el.task_filter_count.hidden = count === 0;
+  el.task_filter_count.textContent = String(count);
+}
+
+const TASK_SORT_OPTIONS = [
+  { id: "updated_desc", label: "Recently updated" },
+  { id: "created_desc", label: "Newest created" },
+  { id: "priority_desc", label: "Priority" },
+  { id: "due_asc", label: "Due date" },
+  { id: "id_desc", label: "Task number" },
+];
+
+const TASK_STATUS_OPTIONS = [
+  { value: "open", label: "Open" },
+  { value: "in_progress", label: "In progress" },
+  { value: "in_review", label: "In review" },
+  { value: "blocked", label: "Blocked" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+function taskFilterState() {
+  const search = Boolean(state.taskSearch);
+  const statuses = state.taskStatuses.length > 0 && state.taskStatuses.length < TASK_STATUS_OPTIONS.length;
+  return { search, statuses, active: search || statuses };
+}
+
+function resetTaskFilters() {
+  state.taskSearch = "";
+  state.components.taskSearch?.setValue("");
+  state.components.taskStatusFilter?.setValue([]);
+  state.components.taskFilterPopover?.close?.();
+}
+
+function renderTaskEmptyState() {
+  const filtered = state.tasks.length > 0;
+  const filters = taskFilterState();
+  const filteredTitle = filters.search && filters.statuses
+    ? "No tasks match your search and filters."
+    : (filters.search ? "No tasks match your search." : "No tasks match your filters.");
+  const filteredDescription = filters.search && filters.statuses
+    ? "Clear the search and filters to show every task in this project."
+    : (filters.search ? "Clear the search to show every task in this project." : "Clear the filters to show every task in this project.");
+  const resetLabel = filters.search && filters.statuses
+    ? "Clear search and filters"
+    : (filters.search ? "Clear search" : "Clear filters");
+  const data = filtered ? {
+    title: filteredTitle,
+    description: filteredDescription,
+    iconHtml: helperIconHtml("data.filter", 28),
+    actions: [{ id: "reset-filters", label: resetLabel, className: "ui-button-ghost" }],
+  } : {
+    title: "No tasks yet.",
+    description: "Create a task to track structured work for this project.",
+    iconHtml: helperIconHtml("actions.check", 24),
+    actions: can("messages.write") ? [{ id: "create-task", label: "Create a task", className: "ui-button-ghost" }] : [],
+  };
+  state.components.taskEmptyState = state.factories.createEmptyState(el.task_list, data, {
+    ariaLabel: filtered ? "No tasks match the current filters" : "No tasks in this project",
+    className: "task-empty-state",
+    onActionClick(action) {
+      if (action.id === "reset-filters") resetTaskFilters();
+      if (action.id === "create-task") openCreateTaskModal();
+    },
+  });
+}
+
+function renderTaskSortControl() {
+  const current = TASK_SORT_OPTIONS.find((option) => option.id === state.taskSort) || TASK_SORT_OPTIONS[0];
+  const label = `Sort tasks: ${current.label}`;
+  el.task_sort_trigger.setAttribute("aria-label", label);
+  el.task_sort_trigger.title = label;
+  state.components.taskSortDropdown?.destroy?.();
+  state.components.taskSortDropdown = state.factories.createDropdown(el.task_sort_trigger,
+    TASK_SORT_OPTIONS.map((option) => ({
+      ...option,
+      icon: option.id === current.id
+        ? helperIconHtml("actions.check")
+        : '<span class="task-sort-menu-placeholder" aria-hidden="true"></span>',
+    })), {
+      align: "right",
+      ariaLabel: "Sort tasks",
+      className: "task-sort-menu",
+      onSelect(item) {
+        state.taskSort = item.id || "updated_desc";
+        renderTaskSortControl();
+        renderTasks();
+      },
+    });
+}
+
 function renderTasks() {
   if (!el.task_list) return;
   el.new_task_trigger.hidden = !state.project || !can("messages.write");
   const tasks = visibleTasks();
-  el.task_count.textContent = String(tasks.length);
+  const filtered = taskFilterState().active;
+  el.task_count.classList.toggle("is-filtered", filtered);
+  el.task_count.textContent = filtered ? `${tasks.length} of ${state.tasks.length}` : String(state.tasks.length);
+  el.task_count.title = filtered ? `${tasks.length} of ${state.tasks.length} tasks visible` : `${state.tasks.length} tasks`;
+  el.task_count.setAttribute("aria-label", el.task_count.title);
+  state.components.taskEmptyState?.destroy?.();
+  state.components.taskEmptyState = null;
   el.task_list.replaceChildren();
   if (!tasks.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty-state";
-    empty.textContent = state.tasks.length ? "No tasks match this filter." : "No project tasks yet.";
-    el.task_list.append(empty);
+    renderTaskEmptyState();
     return;
   }
   tasks.forEach((task) => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = `ui-panel task-card is-${task.status}`;
+    const header = document.createElement("span"); header.className = "task-card-header";
     const title = document.createElement("span"); title.className = "task-card-title"; title.textContent = task.title;
+    const timestamp = document.createElement("time"); timestamp.className = "task-card-timestamp";
+    timestamp.dateTime = normalizeUtcTimestamp(task.updated_at);
+    timestamp.textContent = formatDate(task.updated_at);
+    timestamp.title = `Updated ${formatDate(task.updated_at)}`;
+    header.append(title, timestamp);
+    const footer = document.createElement("span"); footer.className = "task-card-footer";
     const meta = document.createElement("span"); meta.className = "task-card-meta";
     const status = document.createElement("span"); status.className = "task-card-status"; status.textContent = taskStatusLabel(task.status);
     const priority = document.createElement("span"); priority.className = "task-card-priority"; priority.textContent = `${task.priority} priority`;
     const assignee = document.createElement("span"); assignee.textContent = task.assignee_display_name ? `Assigned: ${task.assignee_display_name}` : "Unassigned";
     meta.append(status, priority, assignee);
     if (task.due_at) { const due = document.createElement("span"); due.textContent = `Due ${formatDate(task.due_at)}`; meta.append(due); }
-    card.append(title, meta);
+    const taskNumber = document.createElement("span"); taskNumber.className = "task-card-number";
+    taskNumber.textContent = `#${task.id}`; taskNumber.title = `Task ${task.id}`;
+    footer.append(meta, taskNumber);
+    card.append(header, footer);
     card.addEventListener("click", () => openTaskDetails(task.id));
     el.task_list.append(card);
   });
@@ -3928,16 +4145,60 @@ function receiveRealtimeTask(source) {
   if (previousLinks !== nextLinks) state.components.responsibilityInbox?.refreshTasks();
 }
 
+function reconcileTaskSnapshots(incoming) {
+  const listed = Array.isArray(incoming) ? incoming : [];
+  const listedIds = new Set(listed.map((task) => id(task.id)));
+  const currentById = new Map(state.tasks.map((task) => [id(task.id), task]));
+  const reconciled = listed.map((task) => {
+    const current = currentById.get(id(task.id));
+    return current && Number(current.version || 0) > Number(task.version || 0) ? current : task;
+  });
+  state.tasks.forEach((task) => {
+    if (!listedIds.has(id(task.id))) reconciled.unshift(task);
+  });
+  return reconciled;
+}
+
 async function loadTasks(projectGeneration = state.generation) {
   if (!selectedProjectId()) return;
-  const payload = await request(`${API.tasks}?${new URLSearchParams({ project_id: selectedProjectId() })}`, { signal: state.abortController?.signal });
-  if (projectGeneration !== state.generation) return;
-  const previousLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
-  state.tasks = unwrap(payload) || [];
-  renderTasks();
-  const nextLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
-  if (previousLinks !== nextLinks && state.components.timeline) renderTimeline();
-  if (previousLinks !== nextLinks) state.components.responsibilityInbox?.refreshTasks();
+  const projectId = selectedProjectId();
+  const currentOperation = state.taskLoadOperation;
+  if (currentOperation?.generation === projectGeneration && currentOperation.projectId === projectId) {
+    return currentOperation.promise;
+  }
+  const operation = (async () => {
+    const payload = await request(`${API.tasks}?${new URLSearchParams({ project_id: projectId })}`, { signal: state.abortController?.signal });
+    if (projectGeneration !== state.generation || projectId !== selectedProjectId()) return;
+    const previousLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
+    state.tasks = reconcileTaskSnapshots(unwrap(payload));
+    renderTasks();
+    const nextLinks = state.tasks.map((task) => `${task.id}:${task.source_message_id || ""}`).join("|");
+    if (previousLinks !== nextLinks && state.components.timeline) renderTimeline();
+    if (previousLinks !== nextLinks) state.components.responsibilityInbox?.refreshTasks();
+  })();
+  state.taskLoadOperation = { generation: projectGeneration, projectId, promise: operation };
+  try {
+    return await operation;
+  } finally {
+    if (state.taskLoadOperation?.promise === operation) state.taskLoadOperation = null;
+  }
+}
+
+async function refreshTasksFromAction() {
+  if (!selectedProjectId() || el.task_refresh_trigger.disabled) return;
+  el.task_refresh_trigger.disabled = true;
+  el.task_refresh_trigger.setAttribute("aria-busy", "true");
+  el.task_refresh_trigger.classList.add("is-loading");
+  try {
+    await loadTasks(state.generation);
+    state.components.toast.success("Tasks refreshed.");
+  } catch (error) {
+    if (error?.name !== "AbortError") state.components.toast.warn(error.message || "Unable to refresh tasks.", { title: "Task refresh failed" });
+  } finally {
+    el.task_refresh_trigger.disabled = false;
+    el.task_refresh_trigger.removeAttribute("aria-busy");
+    el.task_refresh_trigger.classList.remove("is-loading");
+  }
 }
 
 function taskParticipantOptions(includeEmpty = true) {
@@ -4237,7 +4498,9 @@ function scheduleForegroundParticipantRefresh() {
   state.foregroundSyncTimer = setTimeout(() => {
     state.foregroundSyncTimer = null;
     if (document.visibilityState === "hidden" || state.mode !== "expanded" || state.surface !== "project" || projectGeneration !== state.generation) return;
-    void refreshParticipants(projectGeneration).catch(handleLoadError);
+    void Promise.all([refreshParticipants(projectGeneration), loadTasks(projectGeneration)]).catch((error) => {
+      if (error?.name !== "AbortError") handleLoadError(error);
+    });
   }, 100);
 }
 
@@ -4781,6 +5044,7 @@ async function openSettings() {
     modal.refs.rows.replaceChildren(tabHost);
     settingsTabs = state.factories.createTabs(tabHost, {
       ariaLabel: "System settings sections",
+      variant: "attached",
       activeId: activeTabId,
       tabs,
       onChange(_tab, tabId) { activeTabId = tabId; },
@@ -5057,6 +5321,8 @@ function closeRealtime() {
   state.realtimeGeneration += 1;
   clearTimeout(state.realtimeRetryTimer);
   state.realtimeRetryTimer = null;
+  clearTimeout(state.taskReconciliationTimer);
+  state.taskReconciliationTimer = null;
   state.realtimeRetryCount = 0;
   const socket = state.realtimeSocket;
   state.realtimeSocket = null;
@@ -5163,6 +5429,7 @@ async function connectRealtime(projectGeneration = state.generation) {
         window.dispatchEvent(new CustomEvent("syndicatum:realtime-ready", { detail: { rooms: [...joinedRooms] } }));
         if (state.project && joinedRooms.has(admission.room)) {
           void Promise.all([loadMessages("newer", projectGeneration), loadTasks(projectGeneration)]).catch(handleLoadError);
+          scheduleTaskReconciliation(projectGeneration);
         }
         return;
       }
@@ -5233,8 +5500,26 @@ function scheduleRealtimeReconnect(projectGeneration) {
   state.realtimeRetryTimer = setTimeout(() => void connectRealtime(projectGeneration), delay);
 }
 
+function scheduleTaskReconciliation(projectGeneration = state.generation) {
+  clearTimeout(state.taskReconciliationTimer);
+  state.taskReconciliationTimer = null;
+  if (!state.realtimeSocket || state.mode !== "expanded" || state.surface !== "project"
+      || projectGeneration !== state.generation || !selectedProjectId()) return;
+  state.taskReconciliationTimer = setTimeout(async () => {
+    state.taskReconciliationTimer = null;
+    if (!state.realtimeSocket || projectGeneration !== state.generation || !selectedProjectId()) return;
+    if (document.visibilityState !== "hidden") {
+      try { await loadTasks(projectGeneration); }
+      catch (error) { if (error?.name !== "AbortError") handleLoadError(error); }
+    }
+    scheduleTaskReconciliation(projectGeneration);
+  }, TASK_RECONCILIATION_INTERVAL_MS);
+}
+
 function startPolling() {
   clearTimeout(state.pollingTimer);
+  clearTimeout(state.taskReconciliationTimer);
+  state.taskReconciliationTimer = null;
   const tick = async () => {
     try { await Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()]); } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
     finally { state.pollingTimer = setTimeout(tick, 15000); }
@@ -5273,6 +5558,7 @@ async function bootstrap() {
     uiAlert: await uiLoader.get("ui.dialog.alert", options),
     uiConfirm: await uiLoader.get("ui.dialog.confirm", options),
     createProgress: await uiLoader.get("ui.progress", options),
+    createEmptyState: await uiLoader.get("ui.empty.state", options),
     createGrid: await uiLoader.get("ui.grid", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
     createPopover: await uiLoader.get("ui.popover", options),
@@ -5289,6 +5575,10 @@ async function bootstrap() {
   el.team_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
   el.filter_icon.innerHTML = helperIconHtml("data.filter", 18);
   el.refresh_icon.innerHTML = helperIconHtml("actions.refresh", 18);
+  el.task_filter_icon.innerHTML = helperIconHtml("data.filter", 18);
+  el.task_sort_icon.innerHTML = helperIconHtml("actions.sort", 18);
+  el.task_refresh_icon.innerHTML = helperIconHtml("actions.refresh", 18);
+  el.new_task_icon.innerHTML = helperIconHtml("actions.add", 18);
   updateTimelineCollapseButton();
   el.new_message_trigger.addEventListener("click", openMessageComposerModal);
   el.show_timeline.addEventListener("click", () => showProjectView("timeline"));
@@ -5306,6 +5596,13 @@ async function bootstrap() {
   });
   el.project_search_mount.appendChild(projectSearch.wrap);
   projectSearch.bind({ on(target, eventName, handler) { target.addEventListener(eventName, handler); } });
+  const taskSearch = state.factories.createSearchField({
+    classPrefix: "ui-search", placeholder: "Search tasks", clearText: "Clear", inputClass: "ui-input",
+    onChange(value) { state.taskSearch = value.trim(); renderTasks(); },
+  });
+  el.task_search_mount.appendChild(taskSearch.wrap);
+  taskSearch.bind({ on(target, eventName, handler) { target.addEventListener(eventName, handler); } });
+  state.components.taskSearch = taskSearch;
   state.components.primaryFilter = state.factories.createToggleGroup(el.primary_filter, {
     name: "Timeline view", multi: false, allowNone: false, size: "sm", items: [
       { id: "all", label: "All", pressed: true },
@@ -5340,8 +5637,36 @@ async function bootstrap() {
   el.timeline_collapse_toggle.addEventListener("click", () => setAllMessagesCollapsed(!state.timelineDefaultCollapsed));
   el.participant_search.addEventListener("input", () => { state.participantSearch = el.participant_search.value.trim(); renderParticipants(); });
   el.new_task_trigger.addEventListener("click", () => openCreateTaskModal());
-  el.task_guide_trigger.addEventListener("click", () => showGuideSurface("tasks-overview"));
-  el.task_status_filter.addEventListener("change", () => { state.taskFilter = el.task_status_filter.value || "active"; renderTasks(); });
+  state.components.taskStatusFilter = state.factories.createSelect(el.task_status_filter, TASK_STATUS_OPTIONS, {
+    multiple: true,
+    searchable: false,
+    clearable: true,
+    closeOnSelect: false,
+    selected: state.taskStatuses,
+    placeholder: "All task statuses",
+    ariaLabel: "Filter tasks by status",
+    onChange(values) {
+      state.taskStatuses = Array.isArray(values) ? values.map(String) : [];
+      renderTaskFilterControl();
+      renderTasks();
+    },
+  });
+  renderTaskFilterControl();
+  state.components.taskFilterPopover = state.factories.createPopover(el.task_filter_trigger, {
+    placement: "bottom-start",
+    panelRole: "dialog",
+    ariaLabel: "Filter tasks by status",
+    className: "task-filter-popover",
+    initialFocus: "first",
+    content(host) {
+      el.task_filter_popover_content.hidden = false;
+      host.appendChild(el.task_filter_popover_content);
+      return el.task_filter_popover_content;
+    },
+    onOpenChange(open) { el.task_filter_trigger.classList.toggle("is-open", open); },
+  });
+  renderTaskSortControl();
+  el.task_refresh_trigger.addEventListener("click", () => void refreshTasksFromAction());
   el.admin_refresh_button.addEventListener("click", () => void showAdminSurface(state.adminKind, { historyMode: "none" }));
   document.addEventListener("visibilitychange", scheduleForegroundParticipantRefresh);
   addEventListener("focus", scheduleForegroundParticipantRefresh);
