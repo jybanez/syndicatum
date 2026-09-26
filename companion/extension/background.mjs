@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, DELIVERY_REVIEW_STATE, deliveryKey, deliveryReviewItems, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, DELIVERY_REVIEW_STATE, deliveryKey, deliveryReviewItems, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -517,7 +517,7 @@ async function resolveDeliveryReview(key, resolution) {
     }
     if (resolution === "confirm_visible" && item.provider !== "chatgpt") throw new Error("Only a ChatGPT metadata notification can be confirmed from an existing visible turn.");
     const resolvedAt = new Date().toISOString();
-    queue[key] = {
+    const resolved = {
       ...item,
       deliveryState: "pending",
       reviewResolvedAt: resolvedAt,
@@ -528,7 +528,7 @@ async function resolveDeliveryReview(key, resolution) {
         browserDelivery: { ok: true, confirmation: "operator_confirmed_exact_user_turn" },
       } : { operatorRetryAuthorizedAt: resolvedAt, browserDeliveredAt: null, browserDelivery: null }),
     };
-    return { queue, lastDeliveryError: null, lastError: null };
+    return { queue: prioritizeDeliveryReview(queue, key, resolved), lastDeliveryError: null, lastError: null };
   });
   await drain(shard);
   return publicStatus();

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, deliveryKey, deliveryReviewItems, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
+import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, deliveryKey, deliveryReviewItems, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -10,6 +10,21 @@ test("requires an operator-provided Syndicatum server URL", () => {
   assert.throws(() => normalizeBaseUrl("http://syndicatum.example"), /use HTTPS/);
   assert.equal(normalizeBaseUrl("https://syndicatum.example/install/"), "https://syndicatum.example/install");
   assert.equal(normalizeBaseUrl("http://localhost/install/"), "http://localhost/install");
+});
+
+test("prioritizes only the explicitly resolved delivery review", () => {
+  const queue = {
+    older: { deliveryState: "requires_review", message: { id: 1 } },
+    selected: { deliveryState: "requires_review", message: { id: 2 } },
+    later: { deliveryState: "requires_review", message: { id: 3 } },
+  };
+  const resolved = { ...queue.selected, deliveryState: "pending" };
+  const prioritized = prioritizeDeliveryReview(queue, "selected", resolved);
+  assert.deepEqual(Object.keys(prioritized), ["selected", "older", "later"]);
+  assert.equal(prioritized.selected.deliveryState, "pending");
+  assert.equal(prioritized.older.deliveryState, "requires_review");
+  assert.equal(prioritized.later.deliveryState, "requires_review");
+  assert.equal(queue.selected.deliveryState, "requires_review");
 });
 
 test("normalizes an exact ChatGPT discussion URL", () => assert.equal(normalizeDiscussionUrl("https://chatgpt.com/c/abc_123/?utm_source=x"), "https://chatgpt.com/c/abc_123"));
