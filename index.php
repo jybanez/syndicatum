@@ -29,7 +29,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                     <aside class="surface-column project-navigation-column is-mobile-active" id="project-navigation-column" data-panel="projects">
                         <div class="column-filter-row project-filter-row">
                             <div id="project-search-mount" class="project-search"></div>
-                            <button type="button" class="ui-button ui-button-ghost column-action-trigger" id="project-list-actions-trigger" aria-label="Project list actions" title="Project actions">
+                            <button type="button" class="ui-button ui-button-borderless column-action-trigger" id="project-list-actions-trigger" aria-label="Project list actions" title="Project actions">
                                 <span class="timeline-action-icon" id="project-list-actions-icon" aria-hidden="true"></span>
                             </button>
                         </div>
@@ -42,10 +42,10 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <div class="project-overview-heading">
                                     <h1 id="project-title">Select a project</h1>
                                     <div class="project-overview-actions">
-                                        <button type="button" class="ui-button ui-button-primary timeline-icon-action new-message-trigger" id="new-message-trigger" aria-label="New message" title="New message" hidden>
+                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action new-message-trigger" id="new-message-trigger" aria-label="New message" title="New message" hidden>
                                             <span class="timeline-action-icon" id="new-message-icon" aria-hidden="true"></span>
                                         </button>
-                                        <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
+                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
                                             <span class="timeline-action-icon" id="project-actions-icon" aria-hidden="true"></span>
                                         </button>
                                     </div>
@@ -69,14 +69,14 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                             <section class="filter-bar" id="timeline-filter-bar" aria-label="Timeline filters">
                                 <div id="search-mount" class="app-search"></div>
                                 <div class="filter-bar-actions">
-                                    <button type="button" class="ui-button ui-button-ghost timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
+                                    <button type="button" class="ui-button ui-button-borderless timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
                                         <span class="timeline-action-icon" id="filter-icon" aria-hidden="true"></span>
                                         <span class="ui-badge timeline-filter-count" id="filter-count" hidden>0</span>
                                     </button>
-                                    <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="timeline-collapse-toggle" aria-label="Collapse all messages" title="Collapse all messages">
+                                    <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="timeline-collapse-toggle" aria-label="Collapse all messages" title="Collapse all messages">
                                         <span class="timeline-action-icon" id="timeline-collapse-icon" aria-hidden="true"></span>
                                     </button>
-                                    <button type="button" class="ui-button ui-button-ghost timeline-icon-action" id="refresh-button" aria-label="Refresh timeline" title="Refresh">
+                                    <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="refresh-button" aria-label="Refresh timeline" title="Refresh">
                                         <span class="timeline-action-icon" id="refresh-icon" aria-hidden="true"></span>
                                     </button>
                                 </div>
@@ -111,25 +111,35 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                             <div class="column-filter-row task-filter-row">
                                 <div><strong>Tasks</strong> <span class="task-count" id="task-count" aria-live="polite">0</span></div>
                                 <div class="task-heading-actions">
-                                    <button type="button" class="ui-button ui-button-borderless task-guide-trigger" id="task-guide-trigger">Guide</button>
-                                    <button type="button" class="ui-button ui-button-primary column-action-trigger" id="new-task-trigger" aria-label="New task" title="New task" hidden>+</button>
+                                    <button type="button" class="ui-button ui-button-borderless column-action-trigger" id="new-task-trigger" aria-label="New task" title="New task" hidden>
+                                        <span id="new-task-icon" aria-hidden="true"></span>
+                                    </button>
                                 </div>
                             </div>
-                            <select class="ui-input task-status-filter" id="task-status-filter" aria-label="Filter tasks by status">
-                                <option value="active">Active tasks</option>
-                                <option value="all">All tasks</option>
-                                <option value="mine">Assigned to me</option>
-                                <option value="blocked">Blocked</option>
-                                <option value="in_review">In review</option>
-                                <option value="completed">Completed</option>
-                            </select>
+                            <div class="task-list-controls">
+                                <div class="task-search" id="task-search-mount"></div>
+                                <button type="button" class="ui-button ui-button-borderless task-filter-trigger" id="task-filter-trigger" aria-label="Filter tasks: 4 statuses selected" title="Filter tasks">
+                                    <span id="task-filter-icon" aria-hidden="true"></span>
+                                    <span class="ui-badge task-filter-count" id="task-filter-count" aria-hidden="true">4</span>
+                                </button>
+                                <button type="button" class="ui-button ui-button-borderless task-sort-trigger" id="task-sort-trigger" aria-label="Sort tasks: Recently updated" title="Sort tasks: Recently updated">
+                                    <span id="task-sort-icon" aria-hidden="true"></span>
+                                </button>
+                                <button type="button" class="ui-button ui-button-borderless task-refresh-trigger" id="task-refresh-trigger" aria-label="Refresh tasks" title="Refresh tasks">
+                                    <span id="task-refresh-icon" aria-hidden="true"></span>
+                                </button>
+                                <div class="task-filter-popover-content" id="task-filter-popover-content" hidden>
+                                    <span class="task-filter-label">Task status</span>
+                                    <div class="task-status-filter" id="task-status-filter"></div>
+                                </div>
+                            </div>
                             <section class="task-list column-scroll-region" id="task-list"></section>
                         </aside>
 
                         <aside class="surface-column project-participants-column" id="project-participants-column" data-panel="team">
                             <div class="column-filter-row team-filter-row">
                                 <input class="ui-input" id="participant-search" type="search" placeholder="Search team" aria-label="Search team participants">
-                                <button type="button" class="ui-button ui-button-ghost column-action-trigger" id="team-actions-trigger" aria-label="Team actions" title="Team actions" hidden>
+                                <button type="button" class="ui-button ui-button-borderless column-action-trigger" id="team-actions-trigger" aria-label="Team actions" title="Team actions" hidden>
                                     <span class="timeline-action-icon" id="team-actions-icon" aria-hidden="true"></span>
                                 </button>
                             </div>

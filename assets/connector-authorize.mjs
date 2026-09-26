@@ -1,4 +1,4 @@
-import { uiLoader } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.205";
+import { uiLoader } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.207";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 
