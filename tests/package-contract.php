@@ -83,7 +83,7 @@ foreach ($baselineArray['tables'] as $table) {
     $policyCounts[$table['backup_policy']]++;
     $baselineByName[$table['name']] = $table;
 }
-if ($policyCounts !== ['durable' => 33, 'reset' => 17, 'excluded' => 3]) {
+if ($policyCounts !== ['durable' => 37, 'reset' => 17, 'excluded' => 3]) {
     packageContractFail('Reviewed durable/reset/excluded table counts changed unexpectedly.');
 }
 foreach (['syndicatum_sessions', 'oauth_access_tokens', 'message_events_outbox', 'agent_webhook_deliveries'] as $name) {
@@ -97,7 +97,8 @@ foreach (['mcp_service_tokens' => 'reissue_credentials', 'connector_devices' => 
         packageContractFail('Credential-bearing reset table lacks its reviewed recovery action: ' . $name);
     }
 }
-foreach (['oauth_clients', 'agent_activation_bindings', 'agent_notification_webhooks', 'system_settings'] as $name) {
+foreach (['oauth_clients', 'agent_activation_bindings', 'agent_notification_webhooks', 'integration_connections',
+    'integration_credentials', 'integration_event_receipts', 'integration_notification_recipients', 'system_settings'] as $name) {
     if ($baselineByName[$name]['backup_policy'] !== 'durable') {
         packageContractFail('Reviewed integration configuration is not durable: ' . $name);
     }
@@ -622,8 +623,10 @@ $committedBaseline->assertBaselineTables($finalBaselineTableNames);
 $postBaselineTables = array_values(array_diff($finalBaselineTableNames, $baselineTableNames));
 sort($postBaselineTables, SORT_STRING);
 if (count($baselineTableNames) !== 48
-    || count($finalBaselineTableNames) !== 53
+    || count($finalBaselineTableNames) !== 57
     || $postBaselineTables !== [
+        'integration_connections', 'integration_credentials', 'integration_event_receipts',
+        'integration_notification_recipients',
         'project_task_events', 'project_tasks', 'project_template_agents',
         'project_template_categories', 'project_templates',
     ]
@@ -637,7 +640,7 @@ if (stripos($baselineSchema, 'DROP TABLE') !== false
 }
 if ($baselineMetadataArray['source_commit'] !== '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d'
     || $baselineMetadataArray['migration_cutover'] !== '202609180004'
-    || count($baselineMetadataArray['post_baseline_migrations']) !== 11
+    || count($baselineMetadataArray['post_baseline_migrations']) !== 16
     || $baselineMetadataArray['post_baseline_migrations'][0]['id'] !== '202609240001'
     || $baselineMetadataArray['post_baseline_migrations'][1]['id'] !== '202609240002'
     || $baselineMetadataArray['post_baseline_migrations'][2]['id'] !== '202609250001'
@@ -648,7 +651,12 @@ if ($baselineMetadataArray['source_commit'] !== '8d8cfb12aff96ac1a7ce7ce1a8ad05c
     || $baselineMetadataArray['post_baseline_migrations'][7]['id'] !== '202609250006'
     || $baselineMetadataArray['post_baseline_migrations'][8]['id'] !== '202609250007'
     || $baselineMetadataArray['post_baseline_migrations'][9]['id'] !== '202609250008'
-    || $baselineMetadataArray['post_baseline_migrations'][10]['id'] !== '202609250009') {
+    || $baselineMetadataArray['post_baseline_migrations'][10]['id'] !== '202609250009'
+    || $baselineMetadataArray['post_baseline_migrations'][11]['id'] !== '202609260001'
+    || $baselineMetadataArray['post_baseline_migrations'][12]['id'] !== '202609260002'
+    || $baselineMetadataArray['post_baseline_migrations'][13]['id'] !== '202609260003'
+    || $baselineMetadataArray['post_baseline_migrations'][14]['id'] !== '202609260004'
+    || $baselineMetadataArray['post_baseline_migrations'][15]['id'] !== '202609260005') {
     packageContractFail('Committed baseline provenance or cutover identity changed unexpectedly.');
 }
 

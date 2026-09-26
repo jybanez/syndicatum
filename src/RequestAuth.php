@@ -110,6 +110,8 @@ class RequestAuth
                          WHERE counted.project_id = p.id AND counted.kind = 'human' AND counted.status = 'active') AS human_count,
                         (SELECT COUNT(*) FROM project_participants counted
                          WHERE counted.project_id = p.id AND counted.kind = 'agent' AND counted.status = 'active') AS agent_count,
+                        (SELECT COUNT(*) FROM project_participants counted
+                         WHERE counted.project_id = p.id AND counted.kind = 'integration' AND counted.status = 'active') AS integration_count,
                         (SELECT COUNT(*) FROM messages counted
                          WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count,
                         CASE WHEN p.owner_user_id = ? THEN 'owned' ELSE 'shared' END AS relationship
@@ -129,6 +131,8 @@ class RequestAuth
                          WHERE counted.project_id = p.id AND counted.kind = 'human' AND counted.status = 'active') AS human_count,
                         (SELECT COUNT(*) FROM project_participants counted
                          WHERE counted.project_id = p.id AND counted.kind = 'agent' AND counted.status = 'active') AS agent_count,
+                        (SELECT COUNT(*) FROM project_participants counted
+                         WHERE counted.project_id = p.id AND counted.kind = 'integration' AND counted.status = 'active') AS integration_count,
                         (SELECT COUNT(*) FROM messages counted
                          WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count
                  FROM project_agents pa
@@ -155,6 +159,7 @@ class RequestAuth
                 'relationship' => $row['relationship'],
                 'human_count' => (int) $row['human_count'],
                 'agent_count' => (int) $row['agent_count'],
+                'integration_count' => (int) $row['integration_count'],
                 'message_count' => (int) $row['message_count'],
             ];
         }, $statement->fetchAll());

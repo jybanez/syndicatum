@@ -23,6 +23,10 @@ RewriteRule ^oauth/token/?$ oauth/token.php [L,QSA]
 RewriteRule ^oauth/register/?$ oauth/register.php [L,QSA]
 RewriteRule ^oauth/revoke/?$ oauth/revoke.php [L,QSA]
 RewriteRule ^mcp/?$ mcp.php [L,QSA]
+# Capability URLs contain a one-time-issued secret. The application never logs
+# it; production access logs must exclude requests marked by this environment.
+SetEnvIf Request_URI "/api/v1/integration-events/" syndicatum_sensitive_webhook=1
+RewriteRule ^api/v1/integration-events/[a-f0-9-]{36}/[A-Za-z0-9_-]{43}/?$ api/v1/integration-events.php [L,NC]
 RewriteRule ^privacy/?$ privacy.php [L,QSA]
 RewriteRule ^terms/?$ terms.php [L,QSA]
 RewriteRule ^support/?$ support.php [L,QSA]

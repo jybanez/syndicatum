@@ -75,6 +75,30 @@ try {
         $task = $service->update($access, $task['id'], ['version' => $task['version'], 'status' => 'completed', 'completion_summary' => 'Verified']);
         $same('completed', $task['status']); $same('Verified', $task['completion_summary']);
     });
+    $test('meaningful task events create immutable structured system messages', function () use ($pdo, &$task, $access, $same) {
+        $messages = (new ProjectRepository($pdo))->messagePage($access, ['limit' => 20])['data'];
+        $system = array_values(array_filter($messages, function ($message) {
+            return $message['message_kind'] === 'system';
+        }));
+        $same(5, count($system));
+        $same('task.status_changed', $system[0]['system_event']['type']);
+        $same((int) $task['id'], (int) $system[0]['system_event']['data']['task_id']);
+        $same('completed', $system[0]['system_event']['data']['to_status']);
+        $same('success', $system[0]['severity']);
+        $same($access['participant_id'], $system[0]['sender']['participant_id']);
+        $repository = new ProjectRepository($pdo);
+        foreach ([
+            function () use ($repository, $access, $system) { $repository->updateMessage($access, $system[0]['id'], ['body' => 'Rewrite']); },
+            function () use ($repository, $access, $system) { $repository->deleteMessage($access, $system[0]['id']); },
+        ] as $mutation) {
+            try { $mutation(); }
+            catch (RuntimeException $error) {
+                if ($error->getMessage() === 'SYSTEM_MESSAGE_IMMUTABLE') { continue; }
+                throw $error;
+            }
+            throw new RuntimeException('Expected SYSTEM_MESSAGE_IMMUTABLE.');
+        }
+    });
     $test('task mutations enqueue authoritative Realtime snapshots', function () use ($pdo, &$task, $same) {
         $statement = $pdo->prepare("SELECT event_type, payload_json FROM message_events_outbox
             WHERE project_id = ? AND event_type = ? ORDER BY id DESC LIMIT 1");
@@ -87,6 +111,17 @@ try {
         $same((int) $task['version'], (int) $payload['task']['version']);
         $same('completed', $payload['task']['status']);
         $same('status_changed', $payload['change']);
+    });
+    $test('task assignment changes create one system event with the updated subject', function () use ($pdo, $service, $access, &$task, $same) {
+        $task = $service->update($access, $task['id'], [
+            'version' => $task['version'], 'assignee_participant_id' => null,
+        ]);
+        $messageId = (int) $pdo->query("SELECT id FROM messages WHERE message_kind = 'system' ORDER BY id DESC LIMIT 1")->fetchColumn();
+        $message = (new ProjectRepository($pdo))->message($access, $messageId);
+        $same('task.assigned', $message['system_event']['type']);
+        $same('neutral', $message['severity']);
+        $same(null, $message['system_event']['data']['assignee_participant_id']);
+        $same(true, strpos($message['body'], ' unassigned: ') !== false);
     });
     $test('stale task versions are rejected', function () use ($task, $service, $access) {
         try { $service->update($access, $task['id'], ['version' => 1, 'status' => 'open']); }

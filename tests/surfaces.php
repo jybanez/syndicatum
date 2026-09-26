@@ -283,6 +283,7 @@ try {
     $suite->test('System Settings uses Helper tabs and opens before loading its data', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
+        $settingsEndpoint = file_get_contents($root . '/api/v1/admin/settings.php');
         $proposal = file_get_contents($root . '/docs/email-notifications-proposal.md');
         $start = strpos($source, 'async function openSettings()');
         $end = strpos($source, "\nasync function loadExpanded()", $start);
@@ -300,6 +301,20 @@ try {
             'System Settings must use the native Helper tabs component.');
         $suite->true(strpos($settings, 'variant: "attached"') !== false,
             'System Settings must use the canonical attached Helper tab variant.');
+        $suite->true(strpos($settings, 'className: "system-settings-test-realtime-action"') !== false
+            && strpos($settings, 'actionRow.className = "system-settings-realtime-actions"') !== false,
+            'The Realtime connection test must be hosted inside the Realtime tab.');
+        $suite->true(strpos($settings, 'realtimeTestButton.disabled = !settingsLoaded || !Boolean(values.realtime_enabled)') !== false,
+            'The Realtime connection test must remain disabled unless Realtime is enabled.');
+        $suite->true(substr_count($settings, 'input: "password"') >= 4
+            && strpos($settings, 'secretValue("realtime.signing_secret")') !== false
+            && strpos($settings, 'secretValue("account.client_secret")') !== false,
+            'Configured secrets must populate canonical Helper password fields for administrator verification.');
+        $suite->true(strpos($settings, 'JSON.stringify({ operation: "read_secrets" })') !== false
+            && strpos($settingsEndpoint, "\$auth->validateCsrf(\$user, Api::csrfToken());") !== false
+            && strpos($settingsEndpoint, "'settings.secrets_viewed'") !== false
+            && strpos($settingsEndpoint, "'Cache-Control' => 'no-store, private'") !== false,
+            'Plaintext secret reads must use an administrator-only, CSRF-protected, audited, non-cacheable request.');
         foreach (['General', 'Realtime', 'Authentication', 'Recovery'] as $label) {
             $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing System Settings tab: ' . $label);
         }
@@ -384,6 +399,99 @@ try {
         $suite->true(strpos($index, 'Everyone active in this project will be notified.') !== false, 'Composer broadcast warning must not describe broadcasts as response tagging.');
     });
 
+    $suite->test('System messages are visually distinct and keep their actor and task context', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, 'message_kind: String(source.message_kind || "participant")') !== false
+            && strpos($source, 'message.message_kind === "system" ? "System Message" : message.sender.display_name') !== false,
+            'The timeline must identify server-generated events as activity rather than participant-authored messages.');
+        $suite->true(strpos($source, 'return message.sender?.kind === "integration" ? `Source: ${sender}` : `Triggered by: ${sender}`;') !== false
+            && strpos($source, 'renderMessageHeaderSeverity(host, current, severityLabel);') !== false
+            && strpos($source, 'source.className = "system-message-source";') !== false
+            && strpos($source, 'SYNDICATUM_TIMELINE_MARKER_ICON') !== false
+            && strpos($source, 'if (messageKind === "system") return SYNDICATUM_TIMELINE_MARKER_ICON;') !== false
+            && strpos($source, 'assets/brand/svg/syndicatum-micro-white.svg') !== false,
+            'System events must expose a compact severity header, source attribution, and the Syndicatum brand marker.');
+        $suite->true(strpos($source, 'actions.appendChild(actionButton("View task", () => openTaskDetails(systemTaskId)))') !== false
+            && strpos($source, 'message.message_kind !== "system" && !message.deleted_at') !== false,
+            'Task system events must open their subject instead of offering duplicate task creation.');
+        $suite->true(strpos($styles, '.ui-timeline-item.is-system .ui-timeline-body') !== false
+            && strpos($styles, '.ui-timeline-item.is-system .ui-timeline-title') !== false
+            && strpos($styles, 'box-shadow: none') !== false,
+            'System events must use a quiet compact notice treatment rather than participant card emphasis.');
+        $suite->true(strpos($source, 'severity: MESSAGE_SEVERITIES.has') !== false
+            && strpos($source, 'severity.className = `message-severity is-${current.severity}`;') !== false
+            && strpos($source, 'Message severity: ${severityLabel}') !== false
+            && strpos($styles, '.ui-timeline-item.severity-warning') !== false
+            && strpos($styles, '.ui-timeline-item.severity-error') !== false
+            && strpos($styles, '.ui-timeline-item.severity-critical') !== false,
+            'Canonical severity variants must be labelled accessibly and styled without relying on color alone.');
+    });
+
+    $suite->test('external integrations use one documented capability URL gate', function () use ($suite, $root) {
+        $route = file_get_contents($root . '/api/v1/integration-events.php');
+        $credentials = file_get_contents($root . '/api/v1/project-integration-credentials.php');
+        $service = file_get_contents($root . '/src/IntegrationEventService.php');
+        $rewrite = file_get_contents($root . '/.htaccess');
+        $guide = file_get_contents($root . '/docs/integration-webhooks.md');
+        $suite->true(strpos($rewrite, 'api/v1/integration-events/[a-f0-9-]{36}/[A-Za-z0-9_-]{43}') !== false
+            && strpos($rewrite, 'syndicatum_sensitive_webhook') !== false,
+            'The universal secret-bearing callback route and logging marker are missing.');
+        $suite->true(strpos($route, 'IntegrationEventService::MAX_PAYLOAD_BYTES') !== false
+            && strpos($route, "strpos(\$contentType, 'application/json')") !== false,
+            'Inbound callbacks must reject oversized or non-JSON requests before ingestion.');
+        $suite->true(strpos($credentials, "['issue', 'rotate']") !== false
+            && strpos($service, "hash('sha256', \$secret)") !== false
+            && strpos($service, "status = 'revoked'") !== false,
+            'Credential issue, hashed persistence, rotation, and revocation must share one service contract.');
+        $suite->true(strpos($guide, 'Provider payloads may be sent unchanged.') !== false
+            && strpos($guide, 'CustomLog logs/access.log combined env=!syndicatum_sensitive_webhook') !== false,
+            'Webhook interoperability and secret-bearing access-log requirements must be documented.');
+    });
+
+    $suite->test('project administrators can manage external integrations through canonical guarded workflows', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
+        $suite->true(strpos($source, 'label: "Add integration"') !== false
+            && strpos($source, 'helperIconHtml("actions.integration-add")') !== false
+            && strpos($source, 'label: "Manage integrations"') === false
+            && strpos($source, 'can("project.admin")') !== false,
+            'The Team menu must expose integration creation with the canonical integration icon, without duplicating participant-profile management.');
+        $suite->true(strpos($source, 'function openAddIntegrationModal()') !== false
+            && strpos($source, 'state.factories.createFormModal({') !== false
+            && strpos($source, 'type: "multiselect", name: "notification_participant_ids", label: "Notify participants"') !== false
+            && strpos($source, 'Agents respond according to their role instructions.') !== false
+            && strpos($source, 'message.current_participant_state?.is_addressee && message.action_requested ? "requested" : "accepted"') !== false
+            && strpos($source, 'validate(values) { return validateIntegrationForm(values, false); }') !== false
+            && substr_count($source, 'manageBusyOnSubmit: false') >= 2
+            && strpos($source, 'Please address the following issues before continuing:') !== false,
+            'Integration forms must validate before requests and manage busy state only after custom validation succeeds.');
+        $suite->true(strpos($source, 'function openManageIntegrationModal(integrationId)') !== false
+            && strpos($source, 'else if (isIntegration) void openManageIntegrationModal(participant.identity_id);') !== false
+            && strpos($source, 'cancelBusy: { label: "Cancel"') !== false
+            && strpos($source, 'controller.abort();') !== false,
+            'Participant-profile integration management must open immediately with cancellable loading and ignore dismissed results.');
+        $suite->true(strpos($source, 'function showIntegrationCredentialResult(connection, credential)') !== false
+            && strpos($source, 'Copy callback URL') !== false
+            && strpos($source, 'leave it blank. Syndicatum authenticates the capability URL itself.') !== false,
+            'The one-time credential handoff must be copyable and preserve the provider-neutral authentication boundary.');
+        $suite->true(strpos($source, 'function confirmIntegrationCredentialChange') !== false
+            && strpos($source, 'function confirmIntegrationCredentialRevocation') !== false
+            && strpos($source, 'function confirmIntegrationRemoval') !== false
+            && strpos($source, 'id: "change-integration-credential"') !== false
+            && strpos($source, 'id: "revoke-integration-credential"') !== false
+            && strpos($source, 'id: "remove-integration", label: "Remove integration"') !== false
+            && strpos($source, 'function integrationManagementActions(') === false
+            && strpos($source, 'extraActions: integrationManagementActions(') === false,
+            'Credential rotation, revocation, and permanent removal must live in the participant header menu and retain explicit confirmation workflows.');
+        $suite->true(strpos($source, 'function fetchVisibleTeamParticipants(') !== false
+            && strpos($source, 'status: "suspended", kind: "integration"') !== false
+            && strpos($styles, '.integration-callback-copy-row') !== false
+            && strpos($guide, 'id: "integrations-overview"') !== false,
+            'Disabled integrations must remain manageable through Team, with protected handoff presentation and searchable User Guide coverage.');
+    });
+
     $suite->test('Message composer precedes filters and the newest-first timeline', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $styles = file_get_contents($root . '/assets/app.css');
@@ -416,7 +524,7 @@ try {
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
         $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.207";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.209";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -464,7 +572,7 @@ try {
             && strpos($source, 'function renderGuideSurface()') !== false
             && strpos($source, 'searchGuide(state.guideQuery, { administrator: isAdministrator() })') !== false,
             'The guide must provide a dedicated searchable application surface.');
-        foreach (['Getting started', 'Connections and setup', 'Communication and work', 'Responsibility Inbox', 'Tasks', 'Templates', 'Agents', 'Administration', 'Glossary and troubleshooting'] as $section) {
+        foreach (['Getting started', 'Connections and setup', 'Communication and work', 'Responsibility Inbox', 'Tasks', 'Templates', 'Agents', 'External integrations', 'Administration', 'Glossary and troubleshooting'] as $section) {
             $suite->true(strpos($content, 'title: "' . $section . '"') !== false, 'Missing guide section: ' . $section);
         }
         foreach (['setup-companion', 'setup-codex', 'setup-chatgpt', 'setup-gemini'] as $articleId) {
@@ -578,20 +686,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.207 retains native theme integration and attached tabs', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.209 retains native theme integration, attached tabs, and the integration icon family', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.207') !== false,
-                'Every Helper entry point must use the canonical 0.21.207 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.209') !== false,
+                'Every Helper entry point must use the canonical 0.21.209 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.207') !== false,
-                $surface . ' must use the matching canonical 0.21.207 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.209') !== false,
+                $surface . ' must use the matching canonical 0.21.209 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -602,6 +710,10 @@ try {
         $suite->true(strpos($bundleCss, '.ui-tabs.is-attached') !== false
             && strpos($bundleJs, 'o==="attached"?" is-attached":""') !== false,
             'The Helper bundle must include the canonical attached tabs variant.');
+        $suite->true(strpos($bundleJs, 'actions.integration') !== false
+            && strpos($bundleJs, 'actions.integration-add') !== false
+            && strpos($bundleJs, 'actions.integration-remove') !== false,
+            'The Helper bundle must expose the canonical integration icon family.');
         $suite->true(strpos($bundleJs, 'onContextMenuAction') !== false
             && strpos($bundleJs, 'ui-timeline-menu-trigger') !== false,
             'The Helper bundle must expose the native timeline context-menu implementation.');
@@ -747,6 +859,10 @@ try {
         $styles = file_get_contents($root . '/assets/app.css');
         $suite->true(strpos($source, 'if (participant.kind === "agent")') !== false, 'Kind badges must be limited to agents.');
         $suite->true(strpos($source, 'badge.className = "participant-kind-mark is-agent-icon"') !== false && strpos($source, 'helperIconHtml("people.agent", 11)') !== false, 'Agents must use the shared Helper robot identifier.');
+        $suite->true(strpos($source, 'badge.className = "participant-kind-mark is-integration-icon"') !== false
+            && strpos($source, 'badge.innerHTML = helperIconHtml("actions.integration", 11)') !== false
+            && strpos($source, '(isHuman ? "people.user" : "actions.integration")') !== false,
+            'Integration participants must use the shared Helper integration identifier in lists and profiles.');
         $suite->true(strpos($source, 'badge.setAttribute("aria-label", "Agent")') !== false, 'The agent marker must retain an accessible label.');
         $suite->true(strpos($source, 'participant.kind === "agent" ? "A" : "H"') === false, 'Human avatars must not render an H badge.');
         $suite->true(strpos($styles, '.participant-avatar.is-human .participant-kind-mark') === false, 'Human badge styling must be removed.');
@@ -979,6 +1095,16 @@ try {
             && strpos($styles, '.task-card.is-blocked { --task-status-accent:') !== false
             && strpos($styles, '.task-card-status { color: var(--task-status-accent);') !== false,
             'Task status color coding must use shared accents while retaining the written status label.');
+        $suite->true(strpos($source, 'priority.className = `task-card-priority is-${task.priority}`;') !== false
+            && strpos($source, 'topline.append(priority, timestamp);') !== false
+            && strpos($source, 'card.append(topline, title, footer);') !== false
+            && strpos($source, 'meta.append(status, assignee);') !== false
+            && strpos($source, 'footer.append(meta, taskNumber);') !== false
+            && strpos($styles, '.task-card-priority.is-urgent { --task-priority-accent:') !== false
+            && strpos($styles, '.task-card-priority.is-high { --task-priority-accent:') !== false
+            && strpos($styles, '.task-card-priority.is-normal { --task-priority-accent:') !== false
+            && strpos($styles, '.task-card-priority.is-low { --task-priority-accent:') !== false,
+            'Task cards must use the three-row priority, title, and status/assignee/task-number layout.');
         $suite->true(strpos($styles, '.project-card { width: 100%; height: auto; align-self: start; align-content: start; display: grid; gap: 8px; padding: 11px 12px;') !== false,
             'Project cards must use the compact vertical rhythm without shrinking their text.');
         $suite->true(strpos($styles, '.project-list { gap: 8px; }') !== false

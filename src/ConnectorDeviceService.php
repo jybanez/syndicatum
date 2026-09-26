@@ -142,7 +142,7 @@ class ConnectorDeviceService
             "SELECT b.project_id, p.name AS project_name, b.agent_id, target.id AS participant_id,
                     pa.display_name AS agent_name, b.runtime_type, b.conversation_id,
                     m.id AS message_id, m.message_uuid, m.project_sequence, m.sender_participant_id,
-                    COALESCE(sender_user.display_name, sender_agent.display_name) AS sender_name, m.body,
+                    COALESCE(sender_user.display_name, sender_agent.display_name, sender_integration.display_name) AS sender_name, m.body,
                     ma.reason, m.created_at
              FROM agent_activation_bindings b
              JOIN projects p ON p.id = b.project_id AND p.status = 'active'
@@ -155,6 +155,8 @@ class ConnectorDeviceService
              JOIN project_participants sender ON sender.id = m.sender_participant_id
              LEFT JOIN users sender_user ON sender_user.id = sender.user_id
              LEFT JOIN project_agents sender_agent ON sender_agent.project_id = sender.project_id AND sender_agent.agent_id = sender.agent_id
+             LEFT JOIN integration_connections sender_integration ON sender_integration.project_id = sender.project_id
+                AND sender_integration.id = sender.integration_id
              WHERE b.enabled = 1 AND b.created_by_user_id = ? AND b.runtime_type = ? AND b.activation_driver = ?
                 AND m.sender_participant_id <> target.id
              ORDER BY m.created_at, m.id

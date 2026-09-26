@@ -22,7 +22,7 @@ function humanApiError(Exception $exception)
     $code = $exception->getMessage();
     $status = $code === 'AUTHENTICATION_REQUIRED' ? 401
         : ($code === 'RATE_LIMITED' ? 429
-        : (in_array($code, ['PASSWORD_MANAGED_BY_ACCOUNT', 'TEMPLATE_VERSION_CONFLICT'], true) ? 409
+        : (in_array($code, ['PASSWORD_MANAGED_BY_ACCOUNT', 'TEMPLATE_VERSION_CONFLICT', 'INTEGRATION_REMOVED', 'INTEGRATION_CREDENTIAL_EXISTS'], true) ? 409
         : (strpos($code, 'NOT_FOUND') !== false ? 404 : 403)));
     $messages = [
         'AUTHENTICATION_REQUIRED' => 'Authentication is required.', 'CSRF_VALIDATION_FAILED' => 'Request verification failed.',
@@ -30,6 +30,9 @@ function humanApiError(Exception $exception)
         'NEW_OWNER_NOT_FOUND' => 'The new owner is not available.', 'INVITATION_NOT_FOUND' => 'Invitation not found or no longer valid.',
         'MEMBER_NOT_FOUND' => 'Project member not found.', 'OWNER_MEMBERSHIP_LOCKED' => 'Transfer ownership before changing the owner membership.',
         'AGENT_NOT_FOUND' => 'Project agent not found.', 'INVALID_CLAIM' => 'Claim code is invalid or already used.',
+        'INTEGRATION_NOT_FOUND' => 'Project integration not found.',
+        'INTEGRATION_REMOVED' => 'Removed integrations cannot be changed.',
+        'INTEGRATION_CREDENTIAL_EXISTS' => 'This integration already has an active callback URL. Rotate it explicitly to replace it.',
         'TEMPLATE_NOT_FOUND' => 'Project template not found.',
         'TEMPLATE_VERSION_CONFLICT' => 'This project template changed. Reload it before creating the project.',
         'RATE_LIMITED' => 'Too many requests. Try again later.',

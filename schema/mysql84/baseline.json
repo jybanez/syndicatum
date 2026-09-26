@@ -3,7 +3,7 @@
     "format_version": "1.0",
     "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
     "application_version": "1.0.0",
-    "schema_head": "202609250009",
+    "schema_head": "202609260005",
     "migration_cutover": "202609180004",
     "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
     "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e",
@@ -63,6 +63,26 @@
         {
             "id": "202609250009",
             "sha256": "7fc12204d261e698e45028b6cbd598c902e7cee87b6988f67dae155b0273e200"
+        },
+        {
+            "id": "202609260001",
+            "sha256": "fec193cd4df1f9428ac526f539b78eaca04b93f597d148c9f892086769b040fe"
+        },
+        {
+            "id": "202609260002",
+            "sha256": "253e56ea472e66f4f5c7cf45c418d5399541e4cf28d25f2de11d03c401295cce"
+        },
+        {
+            "id": "202609260003",
+            "sha256": "a50bccd58ca866bbf2b76475a37fff555160e18ed00718b2e7cfb893e8f6da8c"
+        },
+        {
+            "id": "202609260004",
+            "sha256": "ec7bb3f2e7472253953139cf5a092b98591a7ed72a152720aaf9a6f2cb70c6af"
+        },
+        {
+            "id": "202609260005",
+            "sha256": "a9207cf565bf1dca36ebe3ad6f8a708dc84cce336e614053e741598526ce1c18"
         }
     ],
     "tables": [
@@ -525,6 +545,109 @@
             "reset_strategy": "truncate"
         },
         {
+            "name": "integration_connections",
+            "backup_policy": "durable",
+            "restore_order": 385,
+            "columns": [
+                "id",
+                "public_id",
+                "project_id",
+                "provider",
+                "display_name",
+                "description",
+                "external_reference",
+                "capabilities_json",
+                "status",
+                "created_by_user_id",
+                "created_at",
+                "updated_at"
+            ],
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "integration_credentials",
+            "backup_policy": "durable",
+            "restore_order": 395,
+            "columns": [
+                "id",
+                "integration_id",
+                "secret_hash",
+                "secret_prefix",
+                "status",
+                "created_by_user_id",
+                "created_at",
+                "revoked_at",
+                "last_used_at"
+            ],
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "integration_event_receipts",
+            "backup_policy": "durable",
+            "restore_order": 445,
+            "columns": [
+                "id",
+                "public_id",
+                "project_id",
+                "integration_id",
+                "credential_id",
+                "idempotency_key_hash",
+                "payload_sha256",
+                "payload_bytes",
+                "event_type",
+                "severity",
+                "source_metadata_json",
+                "message_id",
+                "created_at"
+            ],
+            "identity_columns": [
+                "id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
+            "name": "integration_notification_recipients",
+            "backup_policy": "durable",
+            "restore_order": 398,
+            "columns": [
+                "project_id",
+                "integration_id",
+                "participant_id",
+                "created_at"
+            ],
+            "identity_columns": [
+                "integration_id",
+                "participant_id"
+            ],
+            "sequence_state": "preserve",
+            "integrity_checks": [
+                "row_count",
+                "identity_uniqueness",
+                "foreign_key_consistency"
+            ]
+        },
+        {
             "name": "legacy_api_usage_daily",
             "backup_policy": "durable",
             "restore_order": 60,
@@ -650,6 +773,10 @@
                 "project_id",
                 "project_sequence",
                 "sender_participant_id",
+                "message_kind",
+                "severity",
+                "event_type",
+                "event_data_json",
                 "reply_to_message_id",
                 "body",
                 "client_idempotency_key",
@@ -893,6 +1020,7 @@
                 "kind",
                 "user_id",
                 "agent_id",
+                "integration_id",
                 "status",
                 "created_at",
                 "updated_at",

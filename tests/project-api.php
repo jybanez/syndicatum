@@ -390,6 +390,7 @@ try {
         $suite->same(['title'], $tools['create_task']['required']);
         $suite->same(['task_id', 'version'], $tools['update_task']['required']);
         $suite->same(['body', 'idempotency_key'], $tools['post_message']['required']);
+        $suite->same(['neutral','info','success','warning','error','critical'], $tools['post_message']['properties']['severity']['enum']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
     });
@@ -400,6 +401,7 @@ try {
             'body' => 'Review the project API.',
             'direct_participant_ids' => [$ownerParticipant],
             'mention_participant_ids' => [$memberParticipant, $ownerParticipant],
+            'severity' => 'warning',
             'idempotency_key' => 'project-api-test-message',
         ];
         $created = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders, $payload);
@@ -430,6 +432,14 @@ try {
             }
         }
         $suite->same('agent', $created['body']['data']['sender']['kind']);
+        $suite->same('warning', $created['body']['data']['severity']);
+        $changedSeverity = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders,
+            array_merge($payload, ['severity' => 'critical']));
+        $suite->same(409, $changedSeverity['status']);
+        $invalidSeverity = projectApiRequest($baseUrl, 'POST', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders,
+            array_merge($payload, ['idempotency_key' => 'invalid-severity-message', 'severity' => 'loud']));
+        $suite->same(422, $invalidSeverity['status']);
+        $suite->same('VALIDATION_FAILED', $invalidSeverity['body']['code']);
         $messageId = $created['body']['data']['id'];
         $suite->same(0, (int) $pdo->query('SELECT COUNT(*) FROM message_events_outbox')->fetchColumn());
         $lookup = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&idempotency_key=project-api-test-message', $agentOneHeaders);

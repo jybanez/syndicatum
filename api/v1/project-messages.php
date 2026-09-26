@@ -16,6 +16,7 @@ try {
             'before' => isset($_GET['before']) ? trim((string) $_GET['before']) : '',
             'after' => isset($_GET['after']) ? trim((string) $_GET['after']) : '',
             'sender' => isset($_GET['sender']) ? trim((string) $_GET['sender']) : '',
+            'severity' => isset($_GET['severity']) ? trim((string) $_GET['severity']) : '',
             'idempotency_key' => isset($_GET['idempotency_key']) ? trim((string) $_GET['idempotency_key']) : '',
             'q' => isset($_GET['q']) ? trim((string) $_GET['q']) : '',
             'from' => isset($_GET['from']) ? trim((string) $_GET['from']) : '',

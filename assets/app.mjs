@@ -1,12 +1,13 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.207";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.209";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260925215000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260926103500";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
+const SYNDICATUM_TIMELINE_MARKER_ICON = '<img class="syndicatum-timeline-marker-icon" src="assets/brand/svg/syndicatum-micro-white.svg?v=20260907115852" alt="" aria-hidden="true">';
 const MORE_ACTIONS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.75" fill="currentColor"></circle><circle cx="12" cy="12" r="1.75" fill="currentColor"></circle><circle cx="19" cy="12" r="1.75" fill="currentColor"></circle></svg>';
 const CLAIM_CODE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 14a4.5 4.5 0 1 1 3.9-6.75l7.35.01v3h-2v2h-3v2H11.4A4.48 4.48 0 0 1 7.5 14Zm0-3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor"></path></svg>';
 const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
@@ -17,6 +18,7 @@ const WORKSPACE_MOBILE_QUERY = "(max-width: 980px)";
 const TEMPLATE_MOBILE_QUERY = "(max-width: 680px)";
 const TASK_RECONCILIATION_INTERVAL_MS = 60000;
 const TIMELINE_MARKER_ICONS = new Map();
+const MESSAGE_SEVERITIES = new Set(["neutral", "info", "success", "warning", "error", "critical"]);
 
 const API = {
   session: "api/v1/session.php",
@@ -43,6 +45,8 @@ const API = {
   projectAgents: "api/v1/project-agents.php",
   projectAgentWebhook: "api/v1/project-agent-webhook.php",
   projectAgentActivation: "api/v1/project-agent-activation.php",
+  projectIntegrations: "api/v1/project-integrations.php",
+  projectIntegrationCredentials: "api/v1/project-integration-credentials.php",
   discussionProviders: "api/v1/discussion-providers.php",
   avatarUpload: "api/v1/avatar-upload.php",
   adminUsers: "api/v1/admin/users.php",
@@ -189,9 +193,11 @@ function makeIdempotencyKey() {
 
 function participantFrom(source = {}, fallbackKind = "agent") {
   const participantId = id(source.participant_id ?? source.id ?? source.user_id ?? source.agent_id ?? source.name);
+  const candidateKind = String(source.kind || source.type || fallbackKind).toLowerCase();
+  const participantKind = ["human", "agent", "integration"].includes(candidateKind) ? candidateKind : "agent";
   return {
     id: participantId,
-    kind: String(source.kind || source.type || fallbackKind).toLowerCase() === "human" ? "human" : "agent",
+    kind: participantKind,
     display_name: String(source.display_name || source.name || source.project_name || "Unknown participant"),
     avatar_url: source.avatar_url || null,
     status: String(source.status || (source.is_active === false ? "inactive" : "active")),
@@ -212,6 +218,10 @@ function participantFrom(source = {}, fallbackKind = "agent") {
     message_count: source.message_count === null || source.message_count === undefined ? null : Number(source.message_count),
     email: source.email || null,
     authentication_source: String(source.authentication_source || ""),
+    description: source.description || "",
+    external_reference: source.external_reference || "",
+    credential_configured: Boolean(source.credential_configured),
+    credential_last_used_at: source.credential_last_used_at || null,
   };
 }
 
@@ -256,6 +266,10 @@ function normalizeMessage(source = {}) {
     ...source,
     id: id(source.id ?? source.entry_uuid ?? source.db_id),
     sequence: Number(source.sequence ?? source.project_sequence ?? source.index ?? source.db_id ?? 0),
+    message_kind: String(source.message_kind || "participant"),
+    severity: MESSAGE_SEVERITIES.has(String(source.severity || "neutral").toLowerCase())
+      ? String(source.severity || "neutral").toLowerCase() : "neutral",
+    system_event: source.system_event && typeof source.system_event === "object" ? source.system_event : null,
     body: String(source.body || ""),
     created_at: created,
     updated_at: normalizeUtcTimestamp(source.updated_at) || created,
@@ -532,6 +546,13 @@ function makeAvatar(participant, size = "md") {
     badge.title = "Agent";
     badge.setAttribute("aria-label", "Agent");
     wrap.appendChild(badge);
+  } else if (participant.kind === "integration") {
+    const badge = document.createElement("span");
+    badge.className = "participant-kind-mark is-integration-icon";
+    badge.innerHTML = helperIconHtml("actions.integration", 11);
+    badge.title = "External integration";
+    badge.setAttribute("aria-label", "External integration");
+    wrap.appendChild(badge);
   }
   return wrap;
 }
@@ -805,6 +826,9 @@ function renderProjectHeader() {
   if (hasProject && state.mode === "expanded" && can("agents.manage")) {
     teamActions.push({ id: "add-agent", label: "Add agent", icon: helperIconHtml("people.agent") });
   }
+  if (hasProject && state.mode === "expanded" && can("project.admin")) {
+    teamActions.push({ id: "add-integration", label: "Add integration", icon: helperIconHtml("actions.integration-add") });
+  }
   el.team_actions_trigger.hidden = teamActions.length === 0;
   if (teamActions.length) {
     state.components.teamActions = state.factories.createDropdown(el.team_actions_trigger, teamActions, {
@@ -813,6 +837,7 @@ function renderProjectHeader() {
       onSelect(item) {
         if (item.id === "invite") openInviteMemberModal();
         if (item.id === "add-agent") openAddAgentModal();
+        if (item.id === "add-integration") openAddIntegrationModal();
       },
     });
   }
@@ -836,16 +861,20 @@ function participantCapabilityLabels(capabilities) {
 
 function canEditParticipant(participant) {
   if (participant.kind === "agent") return can("agents.manage");
+  if (participant.kind === "integration") return can("project.admin");
   if (participant.id === id(state.project?.current_participant?.id)) return true;
   return participant.role !== "owner" && can("members.manage");
 }
 
 function openParticipantInfoModal(participant) {
   const isAgent = participant.kind === "agent";
+  const isHuman = participant.kind === "human";
+  const isIntegration = participant.kind === "integration";
   const editable = canEditParticipant(participant);
-  const canRemoveHuman = !isAgent && participant.role !== "owner"
+  const canRemoveHuman = isHuman && participant.role !== "owner"
     && participant.id !== id(state.project?.current_participant?.id) && can("members.manage");
-  const hasProfileActions = (isAgent && can("agents.manage")) || canRemoveHuman;
+  const hasProfileActions = (isAgent && can("agents.manage"))
+    || (isIntegration && can("project.admin")) || canRemoveHuman;
   const content = projectInfoElement("div", "participant-profile-content");
   const layout = projectInfoElement("div", "participant-profile-layout");
   const identity = projectInfoElement("aside", "participant-profile-identity");
@@ -863,8 +892,8 @@ function openParticipantInfoModal(participant) {
   const badges = projectInfoElement("div", "participant-profile-badges");
   const typeBadge = projectInfoElement("span", `participant-profile-badge is-${participant.kind}`);
   const typeIcon = projectInfoElement("span", "participant-profile-badge-icon");
-  typeIcon.innerHTML = helperIconHtml(isAgent ? "people.agent" : "people.user", 17);
-  typeBadge.append(typeIcon, document.createTextNode(isAgent ? "Agent" : "Human"));
+  typeIcon.innerHTML = helperIconHtml(isAgent ? "people.agent" : (isHuman ? "people.user" : "actions.integration"), 17);
+  typeBadge.append(typeIcon, document.createTextNode(isAgent ? "Agent" : (isHuman ? "Human" : "External system")));
   const status = String(participant.status || "active").toLowerCase();
   const statusBadge = projectInfoElement("span", `participant-profile-badge participant-profile-membership-status is-${status}`);
   statusBadge.append(projectInfoElement("span", "participant-profile-status-dot"), document.createTextNode(participantMembershipStatusLabel(status)));
@@ -877,7 +906,7 @@ function openParticipantInfoModal(participant) {
   const membershipList = projectInfoElement("dl", "participant-profile-definition-list");
   participantProfileDefinition(membershipList, "Project role", isAgent
     ? (participant.role_title || "Agent")
-    : projectInfoLabel(participant.role || "member"));
+    : (isIntegration ? "External integration" : projectInfoLabel(participant.role || "member")));
   if (isAgent) {
     if (participant.supervisor) {
       const supervisor = state.participants.find((entry) => entry.id === id(participant.supervisor.participant_id));
@@ -932,6 +961,25 @@ function openParticipantInfoModal(participant) {
       }
       details.append(agentDetails);
     }
+  } else if (isIntegration) {
+    const capabilities = participantCapabilityLabels(participant.capabilities);
+    const connection = participantProfileSection("actions.settings", "Integration identity");
+    const connectionList = projectInfoElement("dl", "participant-profile-definition-list");
+    participantProfileDefinition(connectionList, "Provider", participantProviderLabel(participant.provider));
+    participantProfileDefinition(connectionList, "Addressing", "Not addressable");
+    participantProfileDefinition(connectionList, "Task assignment", "Not permitted");
+    if (participant.external_reference) participantProfileDefinition(connectionList, "External reference", participant.external_reference);
+    participantProfileDefinition(connectionList, "Callback URL", participant.credential_configured ? "Configured" : "Not configured");
+    participantProfileDefinition(connectionList, "Last event received", participant.credential_last_used_at
+      ? participantProfileDate(participant.credential_last_used_at) : "Never");
+    connection.append(connectionList);
+    if (participant.description) connection.append(projectInfoElement("p", "participant-profile-role-summary", participant.description));
+    if (capabilities.length) {
+      const chips = projectInfoElement("div", "participant-profile-capability-list");
+      capabilities.forEach((capability) => chips.append(projectInfoElement("span", "ui-badge participant-profile-capability", capability)));
+      connection.append(chips);
+    }
+    details.append(connection);
   } else if (participant.email || participant.authentication_source) {
     const account = participantProfileSection("people.account", "Human account");
     const accountList = projectInfoElement("dl", "participant-profile-definition-list");
@@ -949,7 +997,7 @@ function openParticipantInfoModal(participant) {
     technicalSummary.append(technicalIcon, projectInfoElement("strong", "", "Technical details"), projectInfoElement("span", "participant-profile-technical-hint", "Authorized administrators only"));
     const technicalList = projectInfoElement("dl", "participant-profile-definition-list participant-profile-technical-list");
     if (participant.id) participantProfileDefinition(technicalList, "Participant ID", participant.id);
-    if (participant.identity_id) participantProfileDefinition(technicalList, isAgent ? "Agent ID" : "User ID", participant.identity_id);
+    if (participant.identity_id) participantProfileDefinition(technicalList, isAgent ? "Agent ID" : (isIntegration ? "Integration ID" : "User ID"), participant.identity_id);
     if (isAgent && participant.role_version !== null) participantProfileDefinition(technicalList, "Role version", participant.role_version);
     if (state.project?.context_version !== null && state.project?.context_version !== undefined) {
       participantProfileDefinition(technicalList, "Project context version", state.project.context_version);
@@ -963,12 +1011,13 @@ function openParticipantInfoModal(participant) {
   const actions = [];
   if (editable) actions.push({
     id: "edit-participant",
-    label: `Edit ${isAgent ? "agent" : "human"}`,
+    label: `Edit ${isAgent ? "agent" : (isIntegration ? "integration" : "human")}`,
     icon: helperIconHtml("actions.edit"),
     closeOnClick: false,
     async onClick({ modal: participantModal }) {
       await participantModal.close({ reason: "edit-participant" });
       if (isAgent) void openEditAgentModal(participant);
+      else if (isIntegration) void openManageIntegrationModal(participant.identity_id);
       else if (participant.id === id(state.project?.current_participant?.id)) openProfileModal();
       else openManageMemberModal(participant);
       return false;
@@ -998,7 +1047,11 @@ function openParticipantInfoModal(participant) {
       const profileActions = isAgent ? [
         { id: "generate-claim-code", label: "Generate claim code", icon: CLAIM_CODE_ICON },
         { id: "remove-agent", label: "Remove from project", icon: REMOVE_ICON },
-      ] : [{ id: "remove-member", label: "Remove from project", icon: REMOVE_ICON }];
+      ] : (isIntegration ? [
+        { id: "change-integration-credential", label: participant.credential_configured ? "Rotate callback URL" : "Create callback URL", icon: helperIconHtml(participant.credential_configured ? "actions.refresh" : "actions.add") },
+        ...(participant.credential_configured ? [{ id: "revoke-integration-credential", label: "Revoke callback URL", icon: helperIconHtml("status.warning"), danger: true }] : []),
+        { id: "remove-integration", label: "Remove integration", icon: REMOVE_ICON, danger: true },
+      ] : [{ id: "remove-member", label: "Remove from project", icon: REMOVE_ICON }]);
       profileMenu = state.factories.createDropdown(trigger, profileActions, {
         align: "right",
         ariaLabel: "Participant actions",
@@ -1009,6 +1062,25 @@ function openParticipantInfoModal(participant) {
           }
           if (item.id === "remove-member") {
             setTimeout(() => confirmMemberRemoval(participant, modal), 0);
+            return;
+          }
+          if (item.id === "change-integration-credential") {
+            const action = participant.credential_configured ? "rotate" : "issue";
+            setTimeout(() => confirmIntegrationCredentialChange({
+              id: participant.identity_id,
+              display_name: participant.display_name,
+            }, action, modal), 0);
+            return;
+          }
+          if (item.id === "revoke-integration-credential") {
+            setTimeout(() => confirmIntegrationCredentialRevocation({
+              id: participant.identity_id,
+              display_name: participant.display_name,
+            }, modal), 0);
+            return;
+          }
+          if (item.id === "remove-integration") {
+            setTimeout(() => confirmIntegrationRemoval(participant.identity_id, participant.display_name, modal), 0);
             return;
           }
           try {
@@ -1093,7 +1165,9 @@ function renderParticipants() {
     const meta = document.createElement("span");
     meta.textContent = participant.kind === "agent"
       ? `Agent · ${participantProviderLabel(participant.provider)}`
-      : `Human${participant.role ? ` · ${participant.role}` : ""}`;
+      : (participant.kind === "integration"
+        ? `Integration · ${participantProviderLabel(participant.provider)}${participant.status === "suspended" ? " · Disabled" : ""}`
+        : `Human${participant.role ? ` · ${participant.role}` : ""}`);
     copy.append(name, meta);
     button.appendChild(copy);
     button.addEventListener("click", () => openParticipantInfoModal(participant));
@@ -1144,6 +1218,7 @@ function replyPreview(message) {
 }
 
 function messageAddresseesLabel(message) {
+  if (message.message_kind === "system") return "";
   if (isBroadcastMessage(message)) return "Project broadcast";
   const names = message.addressees.slice(0, 5).map((entry) => {
     const participant = state.participants.find((candidate) => id(candidate.id) === id(entry.participant_id));
@@ -1175,6 +1250,28 @@ function messageCardPreview(message) {
   return String(message.body || "").replace(/\s+/g, " ").trim() || "Empty message";
 }
 
+function messageSeverityLabel(severity) {
+  return ({ info: "Info", success: "Success", warning: "Warning", error: "Error", critical: "Critical" })[severity] || "";
+}
+
+function systemMessageSourceLabel(message) {
+  const sender = message.sender?.display_name || "Syndicatum";
+  return message.sender?.kind === "integration" ? `Source: ${sender}` : `Triggered by: ${sender}`;
+}
+
+function renderMessageHeaderSeverity(host, message, severityLabel) {
+  if (message.message_kind !== "system") return;
+  const title = host.closest(".ui-timeline-item")?.querySelector(".ui-timeline-title");
+  if (!title) return;
+  title.querySelector(".message-severity")?.remove();
+  if (!severityLabel) return;
+  const severity = document.createElement("span");
+  severity.className = `message-severity is-${message.severity}`;
+  severity.textContent = severityLabel;
+  severity.setAttribute("aria-label", `Message severity: ${severityLabel}`);
+  title.appendChild(severity);
+}
+
 function canAcknowledgeMessage(message) {
   return state.mode === "expanded"
     && message.current_participant_state?.is_addressee
@@ -1202,6 +1299,15 @@ function mountMessageCard(host, item) {
       preview.addEventListener("click", () => jumpToMessage(reply.id));
       details.appendChild(preview);
     }
+    const severityLabel = messageSeverityLabel(current.severity);
+    renderMessageHeaderSeverity(host, current, severityLabel);
+    if (severityLabel && current.message_kind !== "system") {
+      const severity = document.createElement("span");
+      severity.className = `message-severity is-${current.severity}`;
+      severity.textContent = severityLabel;
+      severity.setAttribute("aria-label", `Message severity: ${severityLabel}`);
+      details.appendChild(severity);
+    }
     const body = document.createElement("p");
     body.className = "message-card-body";
     if (current.deleted_at) body.textContent = "This message was removed.";
@@ -1211,7 +1317,18 @@ function mountMessageCard(host, item) {
     footer.className = "message-card-footer";
     const actions = document.createElement("div");
     actions.className = "message-actions";
-    if (state.mode === "expanded" && can("messages.write")) actions.appendChild(actionButton("Reply", () => setReply(current)));
+    if (current.message_kind === "system") {
+      const source = document.createElement("span");
+      source.className = "system-message-source";
+      source.textContent = systemMessageSourceLabel(current);
+      actions.appendChild(source);
+    }
+    const systemTaskId = current.message_kind === "system" && current.system_event?.data?.subject_type === "task"
+      ? id(current.system_event.data.task_id) : "";
+    if (systemTaskId) actions.appendChild(actionButton("View task", () => openTaskDetails(systemTaskId)));
+    if (state.mode === "expanded" && can("messages.write") && current.message_kind !== "system") {
+      actions.appendChild(actionButton("Reply", () => setReply(current)));
+    }
     if (canAcknowledgeMessage(current)) {
       const acknowledge = actionButton("Acknowledge", async () => {
         acknowledge.disabled = true;
@@ -1257,12 +1374,15 @@ function messageContextMenu(message) {
     { id: "copy-message", label: "Copy", icon: "actions.copy", disabled: Boolean(message.deleted_at) },
   ];
   const linkedTasks = messageLinkedTasks(message.id);
+  const systemTaskId = message.message_kind === "system" && message.system_event?.data?.subject_type === "task"
+    ? id(message.system_event.data.task_id) : "";
+  if (systemTaskId) items.push({ id: "system-task", label: "View task", icon: "actions.view" });
   if (linkedTasks.length) items.push({
     id: "linked-tasks",
     label: linkedTasks.length === 1 ? "View linked task" : `View linked tasks (${linkedTasks.length})`,
     icon: "actions.view",
   });
-  if (state.mode === "expanded" && can("messages.write") && !message.deleted_at
+  if (state.mode === "expanded" && can("messages.write") && message.message_kind !== "system" && !message.deleted_at
       && (!message.action_requested || !linkedTasks.length)) items.push({
     id: "create-task", label: message.action_requested ? "Convert to task" : "Create task", icon: "actions.check",
   });
@@ -1272,7 +1392,10 @@ function messageContextMenu(message) {
 function messageInfoContent(message) {
   const content = projectInfoElement("section", "responsibility-evidence-content message-info-content");
   const facts = projectInfoElement("dl", "responsibility-evidence-facts");
-  const acknowledgement = !message.current_participant_state?.is_addressee
+  const systemMessage = message.message_kind === "system";
+  const acknowledgement = systemMessage
+    ? "Not required"
+    : !message.current_participant_state?.is_addressee
     ? "Not addressed to you"
     : (message.current_participant_state.acknowledged_at
       ? `Acknowledged ${formatDate(message.current_participant_state.acknowledged_at)}`
@@ -1280,14 +1403,16 @@ function messageInfoContent(message) {
   const rows = [
     ["Message ID", `#${message.id}`],
     ["Project position", `Sequence ${message.sequence}`],
-    ["Sender", message.sender?.display_name || "Unknown"],
+    [systemMessage ? "Triggered by" : "Sender", message.sender?.display_name || "Unknown"],
     ["Time", formatDate(message.created_at)],
-    ["Addressing", messageAddresseesLabel(message) || "No addressees"],
-    ["Type", message.action_requested ? "Action request" : "Update"],
+    ["Addressing", systemMessage ? "Project timeline" : (messageAddresseesLabel(message) || "No addressees")],
+    ["Type", systemMessage ? "System event" : (message.action_requested ? "Action request" : "Update")],
+    ["Severity", message.severity === "neutral" ? "Neutral" : messageSeverityLabel(message.severity)],
     ["Acknowledgement", acknowledgement],
     ["History", `${message.revision_count || 0} revision${message.revision_count === 1 ? "" : "s"}; ${message.deleted_at ? "Removed" : "Current visible revision"}`],
     ["Thread", message.reply_to_message_id ? `Reply to message #${message.reply_to_message_id}` : "Top-level message"],
   ];
+  if (systemMessage && message.system_event?.type) rows.splice(6, 0, ["Event", message.system_event.type]);
   if (message.uuid) rows.push(["Message UUID", message.uuid]);
   if (message.correlation_id) rows.push(["Correlation ID", message.correlation_id]);
   rows.forEach(([label, value]) => facts.append(projectInfoElement("dt", "", label), projectInfoElement("dd", "", value)));
@@ -1359,7 +1484,8 @@ function timelineMarkerName(sender) {
   }[provider] || "ai.generic";
 }
 
-function timelineMarkerHtml(sender) {
+function timelineMarkerHtml(sender, messageKind = "participant") {
+  if (messageKind === "system") return SYNDICATUM_TIMELINE_MARKER_ICON;
   const name = timelineMarkerName(sender);
   if (!TIMELINE_MARKER_ICONS.has(name)) {
     TIMELINE_MARKER_ICONS.set(name, state.factories.createIcon(name, {
@@ -1372,16 +1498,17 @@ function timelineMarkerHtml(sender) {
 function timelineItems(messages) {
   return messages.map((message) => ({
     id: message.id,
-    className: `syndicatum-message${message.current_participant_state?.is_addressee ? " is-addressed" : ""}`,
-    title: message.sender.display_name,
+    className: `syndicatum-message severity-${message.severity}${message.severity !== "neutral" ? " has-severity" : ""}${message.current_participant_state?.is_addressee ? " is-addressed" : ""}${message.message_kind === "system" ? " is-system" : ""}`,
+    title: message.message_kind === "system" ? "System Message" : message.sender.display_name,
     subtitle: messageAddresseesLabel(message),
     preview: messageCardPreview(message),
     timestamp: message.created_at,
-    status: message.current_participant_state?.acknowledged_at ? "completed" : (message.current_participant_state?.is_addressee ? "requested" : "accepted"),
-    iconHtml: timelineMarkerHtml(message.sender),
+    status: message.current_participant_state?.acknowledged_at ? "completed"
+      : (message.current_participant_state?.is_addressee && message.action_requested ? "requested" : "accepted"),
+    iconHtml: timelineMarkerHtml(message.sender, message.message_kind),
     contextMenu: messageContextMenu(message),
     raw: message,
-    contentKey: `${message.updated_at}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
+    contentKey: `${message.updated_at}|severity:${message.severity}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
   }));
 }
 
@@ -1420,6 +1547,10 @@ function renderTimeline(mode = "replace", changed = state.messages) {
       }
       if (action.id === "linked-tasks") {
         setTimeout(() => openLinkedMessageTasks(message), 0);
+        return;
+      }
+      if (action.id === "system-task") {
+        setTimeout(() => openTaskDetails(message.system_event.data.task_id), 0);
         return;
       }
     },
@@ -2449,6 +2580,313 @@ function confirmAgentClaimGeneration(agentId, credential, onGenerated = null, pr
   confirmation.open();
 }
 
+function showFormValidationSummary(result, context, fieldLabels = {}) {
+  const entries = Object.entries(result?.errors || {});
+  if (entries.length < 2) return;
+  const summary = context.modal.refs.formError;
+  summary.replaceChildren(document.createTextNode("Please address the following issues before continuing:"));
+  const list = document.createElement("ul");
+  list.className = "integration-form-error-list";
+  entries.forEach(([name, message]) => {
+    const label = fieldLabels[name] || context.modal.refs.fields.get(name)?.config?.label || name;
+    const item = document.createElement("li");
+    item.textContent = String(message).toLowerCase().includes("required")
+      ? `${label} — required`
+      : String(message).replace(`${label}: `, "");
+    list.appendChild(item);
+  });
+  summary.appendChild(list);
+  summary.hidden = false;
+}
+
+function integrationFormRows(connection = null) {
+  const editing = Boolean(connection);
+  return [
+    [modalTextField("display_name", "Integration name", { required: true, maxLength: 120,
+      placeholder: "GitHub repository" })],
+    editing
+      ? [{ type: "display", name: "provider_display", label: "System identifier",
+        value: participantProviderLabel(connection.provider), help: "The identifier cannot be changed after creation." }]
+      : [modalTextField("provider", "System identifier", { required: true, minLength: 2, maxLength: 80,
+        pattern: "[a-z][a-z0-9_-]{1,79}", placeholder: "generic",
+        help: "A provider-neutral label using lowercase letters, numbers, underscores, or hyphens." })],
+    [{ type: "textarea", name: "description", label: "Description", maxLength: 500,
+      help: "Optional context about the external system and the events it will send." }],
+    [modalTextField("external_reference", "External reference", { maxLength: 255,
+      placeholder: "Repository, service, or environment name", help: "Optional. This is metadata, not authentication." })],
+    [{ type: "multiselect", name: "notification_participant_ids", label: "Notify participants", required: true,
+      options: state.participants
+        .filter((participant) => participant.kind !== "integration" && participant.status === "active")
+        .map((participant) => ({ value: participant.id, label: participant.display_name })),
+      help: "Each incoming event is sent to these participants as an FYI. Agents respond according to their role instructions." }],
+    ...(editing ? [[{ type: "select", name: "status", label: "Connection status", required: true, options: [
+      { value: "active", label: "Active" },
+      { value: "disabled", label: "Disabled" },
+    ] }]] : []),
+  ];
+}
+
+function validateIntegrationForm(values, editing = false) {
+  const errors = {};
+  const name = String(values.display_name || "").trim();
+  if (name && name.length > 120) errors.display_name = "Integration name must contain no more than 120 characters.";
+  if (!editing) {
+    const provider = String(values.provider || "").trim();
+    if (provider && !/^[a-z][a-z0-9_-]{1,79}$/.test(provider)) {
+      errors.provider = "System identifier — use 2–80 lowercase letters, numbers, underscores, or hyphens, starting with a letter.";
+    }
+  }
+  if (String(values.description || "").length > 500) errors.description = "Description must contain no more than 500 characters.";
+  if (String(values.external_reference || "").length > 255) errors.external_reference = "External reference must contain no more than 255 characters.";
+  if (!Array.isArray(values.notification_participant_ids) || values.notification_participant_ids.length === 0) {
+    errors.notification_participant_ids = "Notify participants — select at least one person or agent.";
+  }
+  return errors;
+}
+
+function showIntegrationCredentialResult(connection, credential) {
+  const callbackUrl = String(credential?.callback_url || "");
+  if (!callbackUrl) return;
+  const rows = [
+    [{ type: "alert", tone: "warning", content: "This callback URL contains the credential and will not be shown again. Copy it now and store it as a secret." }],
+    [{ type: "text", className: "agent-credential-copy-row integration-callback-copy-row", content: callbackUrl }],
+    [{ type: "divider" }],
+    [{ type: "text", content: "Use this complete URL as the external system’s webhook or callback URL. Send POST requests as application/json over HTTPS." }],
+    [{ type: "text", content: "If the external system offers its own webhook Secret field, leave it blank. Syndicatum authenticates the capability URL itself." }],
+  ];
+  const modal = state.factories.createFormModal({
+    title: `${connection.display_name} callback URL`,
+    size: "lg",
+    submitLabel: "Done",
+    context: { badge: "Shown once", summary: "Anyone with this URL can publish events to this project." },
+    rows,
+    async onSubmit() { return true; },
+  });
+  mountCredentialCopyAction(modal, ".integration-callback-copy-row", callbackUrl,
+    "Copy callback URL", "Callback URL copied.");
+  modal.open();
+}
+
+function openAddIntegrationModal() {
+  const labels = { display_name: "Integration name", provider: "System identifier",
+    description: "Description", external_reference: "External reference", notification_participant_ids: "Notify participants" };
+  const currentParticipantId = id(state.project?.current_participant?.id);
+  const modal = state.factories.createFormModal({
+    title: "Add integration",
+    size: "md",
+    submitLabel: "Add and create URL",
+    busyMessage: "Creating integration…",
+    context: { badge: "External system", summary: "Creates a non-addressable project participant with permission only to publish system events." },
+    initialValues: { display_name: "", provider: "generic", description: "", external_reference: "",
+      notification_participant_ids: currentParticipantId ? [currentParticipantId] : [] },
+    rows: integrationFormRows(),
+    manageBusyOnSubmit: false,
+    validate(values) { return validateIntegrationForm(values, false); },
+    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Creating integration…" });
+      let connection = null;
+      try {
+        connection = unwrap(await request(API.projectIntegrations, {
+          method: "POST",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), display_name: String(values.display_name || "").trim(),
+            provider: String(values.provider || "").trim(), description: String(values.description || "").trim(),
+            external_reference: String(values.external_reference || "").trim(),
+            notification_participant_ids: values.notification_participant_ids.map(id) }),
+        })) || {};
+        await refreshActiveParticipants();
+      } catch (error) {
+        context.applyApiErrors?.(error.payload);
+        context.setFormError(error.message);
+        context.setBusy(false);
+        return false;
+      }
+      try {
+        const credential = unwrap(await request(API.projectIntegrationCredentials, {
+          method: "POST", headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), integration_id: connection.id, action: "issue" }),
+        })) || {};
+        state.components.toast.success(`${connection.display_name} was added.`);
+        setTimeout(() => showIntegrationCredentialResult(connection, credential), 0);
+      } catch (error) {
+        state.components.toast.warn(`${connection.display_name} was added, but its callback URL could not be created. ${error.message}`, { title: "Integration added" });
+        setTimeout(() => openManageIntegrationModal(connection.id), 0);
+      }
+      context.setBusy(false);
+      return true;
+    },
+  });
+  modal.open();
+}
+
+function openManageIntegrationModal(integrationId) {
+  if (state.components.integrationManager?.getState?.().open) return;
+  const controller = new AbortController();
+  let connection = null;
+  const labels = { display_name: "Integration name", description: "Description",
+    external_reference: "External reference", status: "Connection status", notification_participant_ids: "Notify participants" };
+  const modal = state.factories.createFormModal({
+    title: "Edit integration",
+    size: "md",
+    submitLabel: "Save integration",
+    busyMessage: "Loading integration…",
+    rows: [[{ type: "text", content: "Loading integration…" }]],
+    manageBusyOnSubmit: false,
+    validate(values) { return connection ? validateIntegrationForm(values, true) : {}; },
+    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    onClose() {
+      controller.abort();
+      if (state.components.integrationManager === modal) state.components.integrationManager = null;
+    },
+    async onSubmit(values, context) {
+      if (!connection) {
+        context.setFormError("Integration details are not available. Close this dialog and try again.");
+        return false;
+      }
+      context.setBusy(true, { message: "Saving integration…" });
+      try {
+        connection = unwrap(await request(API.projectIntegrations, {
+          method: "PATCH", headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), integration_id: connection.id,
+            display_name: String(values.display_name || "").trim(), description: String(values.description || "").trim(),
+            external_reference: String(values.external_reference || "").trim(), status: values.status,
+            notification_participant_ids: values.notification_participant_ids.map(id) }),
+        })) || connection;
+        await refreshActiveParticipants();
+        state.components.toast.success("Integration updated.");
+        return true;
+      } catch (error) {
+        context.applyApiErrors?.(error.payload);
+        context.setFormError(error.message);
+        return false;
+      } finally {
+        if (context.modal.getState().open) context.setBusy(false);
+      }
+    },
+  });
+  state.components.integrationManager = modal;
+  modal.open();
+  modal.setBusy(true, { message: "Loading integration…", cancelBusy: { label: "Cancel", onCancel({ modal: busyModal }) {
+    controller.abort();
+    busyModal.setBusy(false);
+    void busyModal.close({ reason: "cancel-loading" });
+    return false;
+  } } });
+  request(`${API.projectIntegrations}?${new URLSearchParams({ project_id: selectedProjectId(), integration_id: integrationId })}`, { signal: controller.signal })
+    .then((payload) => {
+      if (!modal.getState().open) return;
+      connection = unwrap(payload) || null;
+      if (!connection) throw new Error("Integration details were not returned.");
+      const initialValues = { display_name: connection.display_name || "", provider_display: connection.provider || "generic",
+        description: connection.description || "", external_reference: connection.external_reference || "",
+        status: connection.status || "active",
+        notification_participant_ids: (connection.notification_participant_ids || []).map(id) };
+      const rows = [
+        ...integrationFormRows(connection),
+        [{ type: "divider" }],
+        [{ type: "display", name: "credential_status", label: "Callback URL",
+          value: connection.credential_configured ? "Configured" : "Not configured",
+          help: connection.credential_last_used_at ? `Last event received ${formatDate(connection.credential_last_used_at)}` : "No event has been received." }],
+      ];
+      modal.update({ title: `Edit ${connection.display_name}`, initialValues, rows,
+        context: { badge: "External system", summary: "Update this identity and its project availability. Callback credential actions are available from the participant profile." } });
+      modal.setValues(initialValues);
+    })
+    .catch((error) => {
+      if (error?.name === "AbortError") return;
+      if (!modal.getState().open) return;
+      modal.setFormError(`Unable to load integration configuration. ${error.message}`);
+    })
+    .finally(() => { if (modal.getState().open) modal.setBusy(false); });
+}
+
+function destroyIntegrationActionOrigin(modal) {
+  if (state.components.integrationManager === modal) state.components.integrationManager = null;
+  modal?.destroy?.();
+}
+
+function confirmIntegrationCredentialChange(connection, action, managerModal) {
+  const rotating = action === "rotate";
+  const confirmation = state.factories.createFormModal({
+    title: rotating ? "Rotate callback URL?" : "Create callback URL?",
+    size: "sm",
+    submitLabel: rotating ? "Rotate URL" : "Create URL",
+    submitVariant: rotating ? "danger" : "primary",
+    context: { badge: "Security action", summary: rotating
+      ? "The current callback URL will stop working immediately."
+      : "The credential will be embedded in a URL and shown only once." },
+    rows: [[{ type: "text", content: "Copy the new URL before closing the next dialog. It cannot be recovered later." }]],
+    async onSubmit(_values, context) {
+      try {
+        const credential = unwrap(await request(API.projectIntegrationCredentials, {
+          method: "POST", headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), integration_id: connection.id, action }),
+        })) || {};
+        await refreshActiveParticipants();
+        destroyIntegrationActionOrigin(managerModal);
+        setTimeout(() => showIntegrationCredentialResult(connection, credential), 0);
+        state.components.toast.success(rotating ? "Callback URL rotated." : "Callback URL created.");
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  confirmation.open();
+}
+
+function confirmIntegrationCredentialRevocation(connection, managerModal) {
+  const confirmation = state.factories.createFormModal({
+    title: "Revoke callback URL?",
+    size: "sm",
+    submitLabel: "Revoke URL",
+    submitVariant: "danger",
+    context: { badge: "Immediate revocation", summary: "Events using the current URL will be rejected immediately." },
+    rows: [[{ type: "text", content: "The integration participant remains in the project. A new callback URL can be created later." }]],
+    async onSubmit(_values, context) {
+      try {
+        await request(API.projectIntegrationCredentials, { method: "DELETE", headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), integration_id: connection.id }) });
+        await refreshActiveParticipants();
+        destroyIntegrationActionOrigin(managerModal);
+        state.components.toast.success("Callback URL revoked.");
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  confirmation.open();
+}
+
+function confirmIntegrationRemoval(integrationId, displayName, managerModal) {
+  const confirmation = state.factories.createFormModal({
+    title: `Remove ${displayName}?`,
+    size: "sm",
+    submitLabel: "Remove integration",
+    submitVariant: "danger",
+    context: { badge: "Permanent removal", summary: "Its callback URL will be revoked and cannot be restored." },
+    rows: [[{ type: "text", content: "Existing system messages and audit history remain available." }]],
+    async onSubmit(_values, context) {
+      try {
+        await request(API.projectIntegrations, { method: "DELETE", headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), integration_id: integrationId }) });
+        await refreshActiveParticipants();
+        destroyIntegrationActionOrigin(managerModal);
+        state.components.toast.success(`${displayName} was removed from the project.`);
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  confirmation.open();
+}
+
 function openInviteMemberModal() {
   state.factories.createFormModal({ title: "Invite Member", submitLabel: "Create invitation", initialValues: { role: "member" }, rows: [
     [modalTextField("email", "Email address", { input: "email", required: true })],
@@ -2459,12 +2897,20 @@ function openInviteMemberModal() {
   }}).open();
 }
 
+async function fetchVisibleTeamParticipants(projectId, signal = null, includeDisabledIntegrations = can("project.admin")) {
+  const requests = [request(`${API.participants}?${new URLSearchParams({ project_id: projectId, status: "active" })}`, { signal })];
+  if (includeDisabledIntegrations) {
+    requests.push(request(`${API.participants}?${new URLSearchParams({ project_id: projectId, status: "suspended", kind: "integration" })}`, { signal }));
+  }
+  const payloads = await Promise.all(requests);
+  return payloads.flatMap((payload) => unwrap(payload) || []).map((entry) => participantFrom(entry, entry.kind));
+}
+
 async function refreshActiveParticipants(removedParticipantId = "") {
   if (removedParticipantId && state.filters.sender === id(removedParticipantId)) {
     state.filters.sender = "";
   }
-  const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`));
-  state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind));
+  state.participants = await fetchVisibleTeamParticipants(selectedProjectId());
   rebuildParticipantControls();
   if (removedParticipantId) await reloadForFilters();
 }
@@ -2633,7 +3079,7 @@ async function openAddAgentModal() {
     [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
     [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
     ], async onSubmit(values, context) {
-    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); return true; }
+    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); state.participants = await fetchVisibleTeamParticipants(selectedProjectId()); rebuildParticipantControls(); return true; }
     catch (error) { context.setFormError(error.message); return false; }
     }});
     modal.setValues(initialValues);
@@ -2709,7 +3155,7 @@ async function openEditAgentModal(agent) {
         provider: values.provider, avatar_url: avatarUrl || null,
       }) });
       await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) });
-      const participants = unwrap(await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`)); state.participants = (participants || []).map((entry) => participantFrom(entry, entry.kind)); rebuildParticipantControls(); state.components.toast.success("Agent updated."); return true;
+      state.participants = await fetchVisibleTeamParticipants(selectedProjectId()); rebuildParticipantControls(); state.components.toast.success("Agent updated."); return true;
     }
     catch (error) { context.setFormError(error.message); return false; }
   }});
@@ -4108,24 +4554,27 @@ function renderTasks() {
     const card = document.createElement("button");
     card.type = "button";
     card.className = `ui-panel task-card is-${task.status}`;
-    const header = document.createElement("span"); header.className = "task-card-header";
-    const title = document.createElement("span"); title.className = "task-card-title"; title.textContent = task.title;
+    const topline = document.createElement("span"); topline.className = "task-card-topline";
+    const priority = document.createElement("span");
+    priority.className = `task-card-priority is-${task.priority}`;
+    priority.textContent = `${task.priority} priority`;
     const timestamp = document.createElement("time"); timestamp.className = "task-card-timestamp";
     timestamp.dateTime = normalizeUtcTimestamp(task.updated_at);
     timestamp.textContent = formatDate(task.updated_at);
     timestamp.title = `Updated ${formatDate(task.updated_at)}`;
-    header.append(title, timestamp);
+    topline.append(priority, timestamp);
+    const title = document.createElement("span"); title.className = "task-card-title"; title.textContent = task.title;
     const footer = document.createElement("span"); footer.className = "task-card-footer";
     const meta = document.createElement("span"); meta.className = "task-card-meta";
     const status = document.createElement("span"); status.className = "task-card-status"; status.textContent = taskStatusLabel(task.status);
-    const priority = document.createElement("span"); priority.className = "task-card-priority"; priority.textContent = `${task.priority} priority`;
-    const assignee = document.createElement("span"); assignee.textContent = task.assignee_display_name ? `Assigned: ${task.assignee_display_name}` : "Unassigned";
-    meta.append(status, priority, assignee);
-    if (task.due_at) { const due = document.createElement("span"); due.textContent = `Due ${formatDate(task.due_at)}`; meta.append(due); }
+    const assignee = document.createElement("span"); assignee.className = "task-card-assignee";
+    assignee.textContent = task.assignee_display_name ? `Assigned: ${task.assignee_display_name}` : "Unassigned";
+    assignee.title = assignee.textContent;
+    meta.append(status, assignee);
     const taskNumber = document.createElement("span"); taskNumber.className = "task-card-number";
     taskNumber.textContent = `#${task.id}`; taskNumber.title = `Task ${task.id}`;
     footer.append(meta, taskNumber);
-    card.append(header, footer);
+    card.append(topline, title, footer);
     card.addEventListener("click", () => openTaskDetails(task.id));
     el.task_list.append(card);
   });
@@ -4204,7 +4653,8 @@ async function refreshTasksFromAction() {
 function taskParticipantOptions(includeEmpty = true) {
   return [
     ...(includeEmpty ? [{ value: "", label: "Unassigned" }] : []),
-    ...state.participants.map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind}` })),
+    ...state.participants.filter((participant) => participant.kind !== "integration")
+      .map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind}` })),
   ];
 }
 
@@ -4427,11 +4877,6 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   };
   state.project.id = nextId;
   state.project.capabilities = context.capabilities || state.project.capabilities || {};
-  state.participants = (unwrap(participantsPayload) || context.participants || state.project.participants || []).map((participant) => participantFrom(participant, participant.kind));
-  state.tasks = unwrap(tasksPayload) || [];
-  const currentParticipantId = id(context.current_participant_id || context.current_participant?.id || state.project.participant_id);
-  state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
-    || (context.current_participant ? participantFrom(context.current_participant, "human") : null);
   const role = String(context.current_role || state.project.role || "viewer");
   state.project.role = role;
   state.project.permissions = context.permissions || {
@@ -4440,6 +4885,18 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
     "messages.acknowledge": true,
     "project.admin": ["owner", "admin"].includes(role),
   };
+  state.participants = (unwrap(participantsPayload) || context.participants || state.project.participants || []).map((participant) => participantFrom(participant, participant.kind));
+  if (can("project.admin")) {
+    const suspendedIntegrations = await request(`${API.participants}?${new URLSearchParams({ project_id: nextId, status: "suspended", kind: "integration" })}`, {
+      signal: state.abortController.signal,
+    });
+    if (generation !== state.generation) return;
+    state.participants.push(...(unwrap(suspendedIntegrations) || []).map((participant) => participantFrom(participant, participant.kind)));
+  }
+  state.tasks = unwrap(tasksPayload) || [];
+  const currentParticipantId = id(context.current_participant_id || context.current_participant?.id || state.project.participant_id);
+  state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
+    || (context.current_participant ? participantFrom(context.current_participant, "human") : null);
   state.filters.sender = "";
   setSurface("project");
   setMobilePanel("timeline");
@@ -4466,7 +4923,10 @@ function rebuildParticipantControls() {
   });
   state.components.addresseeSelect?.destroy();
   const currentId = id(state.project?.current_participant?.id);
-  state.components.addresseeSelect = state.factories.createSelect(el.addressee_select, items.filter((item) => item.value !== currentId), {
+  const addressableItems = state.participants
+    .filter((participant) => participant.kind !== "integration")
+    .map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind}` }));
+  state.components.addresseeSelect = state.factories.createSelect(el.addressee_select, addressableItems.filter((item) => item.value !== currentId), {
     placeholder: "Choose people or agents", ariaLabel: "Direct recipients", searchable: true, multiple: true, closeOnSelect: false,
     selected: state.draft.addressees,
     onChange(values) { state.draft.addressees = values.map(id); },
@@ -4477,15 +4937,13 @@ function rebuildParticipantControls() {
 
 async function refreshParticipants(projectGeneration = state.generation) {
   if (state.mode !== "expanded" || projectGeneration !== state.generation || !selectedProjectId()) return;
-  const participantsPayload = await request(`${API.participants}?${new URLSearchParams({ project_id: selectedProjectId(), status: "active" })}`, {
-    signal: state.abortController?.signal,
-  });
+  const participants = await fetchVisibleTeamParticipants(selectedProjectId(), state.abortController?.signal);
   if (projectGeneration !== state.generation) return;
   const currentParticipantId = id(state.project?.current_participant?.id);
-  state.participants = (unwrap(participantsPayload) || []).map((participant) => participantFrom(participant, participant.kind));
+  state.participants = participants;
   state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
     || state.project.current_participant;
-  const activeIds = new Set(state.participants.map((participant) => participant.id));
+  const activeIds = new Set(state.participants.filter((participant) => participant.kind !== "integration").map((participant) => participant.id));
   state.draft.addressees = state.draft.addressees.filter((participantId) => activeIds.has(participantId));
   rebuildParticipantControls();
 }
@@ -4925,10 +5383,13 @@ async function openSettings() {
   if (state.components.settingsModal?.getState?.().open) return;
   const requestController = new AbortController();
   let settings = {};
+  let secretValues = {};
   let settingsTabs = null;
+  let realtimeTestButton = null;
   let activeTabId = "general";
   let settingsLoaded = false;
   const value = (key, fallback = "") => settings[key]?.value ?? settings[key] ?? fallback;
+  const secretValue = (key) => String(secretValues[key] ?? "");
   const configured = (key) => Boolean(settings[key]?.configured);
   const locked = (key) => Boolean(settings[key]?.locked);
   const sections = () => [
@@ -4950,8 +5411,8 @@ async function openSettings() {
         [{ type: "input", input: "url", name: "realtime_base_url", label: "Realtime URL", placeholder: "https://realtime.pbb.ph", disabled: locked("realtime.base_url") }],
         [{ type: "input", name: "realtime_client_code", label: "Realtime client code", disabled: locked("realtime.client_code") }, { type: "input", name: "realtime_project_code", label: "Project scope code", disabled: locked("realtime.project_code") }],
         [{ type: "input", name: "realtime_connector_authorization_project_code", label: "Connector authorization project code", disabled: locked("realtime.connector_authorization_project_code") }],
-        [{ type: "input", input: "password", name: "realtime_signing_secret", label: "Replace token-signing secret", disabled: locked("realtime.signing_secret"), placeholder: configured("realtime.signing_secret") ? "Configured — leave blank to keep" : "Not configured" }],
-        [{ type: "input", input: "password", name: "realtime_backend_ingress_secret", label: "Replace backend-ingress secret", disabled: locked("realtime.backend_ingress_secret"), placeholder: configured("realtime.backend_ingress_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "input", input: "password", name: "realtime_signing_secret", label: "Token-signing secret", readonly: locked("realtime.signing_secret"), autocomplete: "off", placeholder: configured("realtime.signing_secret") ? "Configured" : "Not configured" }],
+        [{ type: "input", input: "password", name: "realtime_backend_ingress_secret", label: "Backend-ingress secret", readonly: locked("realtime.backend_ingress_secret"), autocomplete: "off", placeholder: configured("realtime.backend_ingress_secret") ? "Configured" : "Not configured" }],
         [{ type: "text", content: "Advanced token identity" }],
         [{ type: "input", name: "realtime_issuer", label: "Issuer", disabled: locked("realtime.issuer") }, { type: "input", name: "realtime_audience", label: "Audience", disabled: locked("realtime.audience") }],
       ],
@@ -4964,13 +5425,13 @@ async function openSettings() {
         [{ type: "checkbox", name: "account_enabled", label: "Enable PBB Account", disabled: locked("account.enabled") }, { type: "checkbox", name: "native_login_enabled", label: "Keep native login available", disabled: locked("account.native_login_enabled") }],
         [{ type: "input", input: "url", name: "account_base_url", label: "PBB Account base URL", disabled: locked("account.base_url") }, { type: "input", name: "account_client_id", label: "OAuth client ID", disabled: locked("account.client_id") }],
         [{ type: "input", input: "url", name: "account_profile_url", label: "Account management URL", disabled: locked("account.profile_url") }],
-        [{ type: "input", input: "password", name: "account_client_secret", label: "Replace OAuth client secret", disabled: locked("account.client_secret"), placeholder: configured("account.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "input", input: "password", name: "account_client_secret", label: "OAuth client secret", readonly: locked("account.client_secret"), autocomplete: "off", placeholder: configured("account.client_secret") ? "Configured" : "Not configured" }],
         [{ type: "divider" }],
         [{ type: "text", content: "Optional Google sign-in" }],
         [{ type: "checkbox", name: "google_enabled", label: "Enable Google sign-in", disabled: locked("google.enabled") }],
         [{ type: "input", name: "google_client_id", label: "Google OAuth client ID", disabled: locked("google.client_id") }],
         [{ type: "input", input: "url", name: "google_callback_url", label: "Authorized redirect URI", disabled: locked("google.callback_url") }],
-        [{ type: "input", input: "password", name: "google_client_secret", label: "Replace Google client secret", disabled: locked("google.client_secret"), placeholder: configured("google.client_secret") ? "Configured — leave blank to keep" : "Not configured" }],
+        [{ type: "input", input: "password", name: "google_client_secret", label: "Google client secret", readonly: locked("google.client_secret"), autocomplete: "off", placeholder: configured("google.client_secret") ? "Configured" : "Not configured" }],
         [{ type: "divider" }],
         [{ type: "text", content: "Human account registration" }],
         [{ type: "checkbox", name: "self_registration_enabled", label: "Allow people to register from the login form", disabled: locked("security.self_registration_enabled") }],
@@ -5015,30 +5476,40 @@ async function openSettings() {
     realtime_connector_authorization_project_code: value("realtime.connector_authorization_project_code"),
     realtime_issuer: value("realtime.issuer", "syndicatum@pbb.ph"),
     realtime_audience: value("realtime.audience", "pbb-realtime"),
-    realtime_signing_secret: "",
-    realtime_backend_ingress_secret: "",
+    realtime_signing_secret: secretValue("realtime.signing_secret"),
+    realtime_backend_ingress_secret: secretValue("realtime.backend_ingress_secret"),
     account_enabled: Boolean(value("account.enabled", false)),
     account_base_url: value("account.base_url"),
     account_client_id: value("account.client_id", "pbb-syndicatum"),
     account_profile_url: value("account.profile_url"),
-    account_client_secret: "",
+    account_client_secret: secretValue("account.client_secret"),
     native_login_enabled: Boolean(value("account.native_login_enabled", true)),
     self_registration_enabled: Boolean(value("security.self_registration_enabled", true)),
     google_enabled: Boolean(value("google.enabled", false)),
     google_client_id: value("google.client_id"),
     google_callback_url: value("google.callback_url") || new URL("auth/google-callback.php", document.baseURI).href,
-    google_client_secret: "",
+    google_client_secret: secretValue("google.client_secret"),
   });
+  const syncRealtimeTestButton = (values = {}) => {
+    if (realtimeTestButton) realtimeTestButton.disabled = !settingsLoaded || !Boolean(values.realtime_enabled);
+  };
   const mountTabs = (modal, groups) => {
     settingsTabs?.destroy?.();
     const rowNodes = Array.from(modal.refs.rows.children);
     const tabHost = document.createElement("div");
     tabHost.className = "system-settings-tabs";
+    realtimeTestButton = modal.refs.footer.querySelector(".system-settings-test-realtime-action");
     let offset = 0;
     const tabs = groups.map((group) => {
       const fragment = document.createDocumentFragment();
       rowNodes.slice(offset, offset + group.rows.length).forEach((row) => fragment.appendChild(row));
       offset += group.rows.length;
+      if (group.id === "realtime" && realtimeTestButton) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "system-settings-realtime-actions";
+        actionRow.appendChild(realtimeTestButton);
+        fragment.appendChild(actionRow);
+      }
       return { id: group.id, label: group.label, content: fragment };
     });
     modal.refs.rows.replaceChildren(tabHost);
@@ -5063,15 +5534,16 @@ async function openSettings() {
     submitLabel: "Save settings",
     busyMessage: "Saving settings…",
     manageBusyOnSubmit: false,
-    context: { badge: "Global administration", summary: "Integration settings are optional. Blank secrets keep their current value." },
+    context: { badge: "Global administration", summary: "Integration settings are optional. Secret values are masked by default; reveal them only when needed." },
     extraActionsPlacement: "start",
     extraActions: [{
       id: "test-realtime",
       label: "Test Realtime connection",
       variant: "default",
+      className: "system-settings-test-realtime-action",
+      disabled: true,
       async onClick(values, context) {
-        settingsTabs?.setActive("realtime", false);
-        activeTabId = "realtime";
+        if (!values.realtime_enabled) return false;
         try {
           const result = unwrap(await request(API.integrationTest, {
             method: "POST",
@@ -5089,6 +5561,9 @@ async function openSettings() {
       },
     }],
     rows: [[{ type: "text", content: "Loading system settings…" }]],
+    onChange(values) {
+      syncRealtimeTestButton(values);
+    },
     async onInvalid(result, context) {
       const tabId = fieldTabs[result.firstInvalidField] || "general";
       settingsTabs?.setActive(tabId, false);
@@ -5148,10 +5623,18 @@ async function openSettings() {
         "google.callback_url": values.google_callback_url,
       };
       Object.keys(updates).forEach((key) => { if (locked(key)) delete updates[key]; });
-      if (values.realtime_signing_secret) updates["realtime.signing_secret"] = { operation: "replace", value: values.realtime_signing_secret };
-      if (values.realtime_backend_ingress_secret) updates["realtime.backend_ingress_secret"] = { operation: "replace", value: values.realtime_backend_ingress_secret };
-      if (values.account_client_secret) updates["account.client_secret"] = { operation: "replace", value: values.account_client_secret };
-      if (values.google_client_secret) updates["google.client_secret"] = { operation: "replace", value: values.google_client_secret };
+      const changedSecrets = {
+        realtime_signing_secret: "realtime.signing_secret",
+        realtime_backend_ingress_secret: "realtime.backend_ingress_secret",
+        account_client_secret: "account.client_secret",
+        google_client_secret: "google.client_secret",
+      };
+      Object.entries(changedSecrets).forEach(([field, key]) => {
+        const nextValue = String(values[field] ?? "");
+        if (!locked(key) && nextValue !== "" && nextValue !== secretValue(key)) {
+          updates[key] = { operation: "replace", value: nextValue };
+        }
+      });
       context.setBusy(true, { message: "Saving settings…" });
       try {
         await request(API.settings, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ settings: updates }) });
@@ -5186,12 +5669,19 @@ async function openSettings() {
   });
   try {
     settings = unwrap(await request(API.settings, { signal: requestController.signal }))?.settings || {};
+    secretValues = unwrap(await request(API.settings, {
+      method: "POST",
+      headers: csrfHeaders(),
+      body: JSON.stringify({ operation: "read_secrets" }),
+      signal: requestController.signal,
+    }))?.secrets || {};
     if (!modal.getState().open) return;
     const groups = sections();
     modal.update({ rows: groups.flatMap((group) => group.rows), initialValues: initialValues() });
     settingsLoaded = true;
     modal.setBusy(false);
     mountTabs(modal, groups);
+    syncRealtimeTestButton(modal.getValues());
     setSettingsActionsDisabled(modal, false);
   } catch (error) {
     if (requestController.signal.aborted || !modal.getState().open) return;

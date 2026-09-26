@@ -8,6 +8,7 @@ require_once __DIR__ . '/WorkspaceAgentTriggerService.php';
 require_once __DIR__ . '/ResponsesApiActivationService.php';
 require_once __DIR__ . '/ResponsibilityEventService.php';
 require_once __DIR__ . '/ProjectGovernancePolicy.php';
+require_once __DIR__ . '/MessageSeverity.php';
 
 class ProjectRepository
 {
@@ -174,7 +175,7 @@ class ProjectRepository
             $parameters[] = $filters['status'];
         }
         if (!empty($filters['kind'])) {
-            if (!in_array($filters['kind'], ['human', 'agent'], true)) {
+            if (!in_array($filters['kind'], ['human', 'agent', 'integration'], true)) {
                 throw new InvalidArgumentException('Invalid participant kind filter.');
             }
             $where[] = 'pp.kind = ?';
@@ -203,6 +204,16 @@ class ProjectRepository
                     a.id AS agent_id, pa.display_name AS agent_display_name, pa.avatar_url AS agent_avatar_url,
                     pa.provider, pa.runtime_name, pa.capabilities_json, pa.role_title, pa.role_summary,
                     pa.role_instructions, pa.role_version, pa.supervising_participant_id,
+                    ic.id AS integration_id, ic.display_name AS integration_display_name,
+                    ic.provider AS integration_provider, ic.description AS integration_description,
+                    ic.external_reference AS integration_external_reference,
+                    ic.capabilities_json AS integration_capabilities_json,
+                    EXISTS(SELECT 1 FROM integration_credentials integration_credential
+                        WHERE integration_credential.integration_id = ic.id
+                          AND integration_credential.status = 'active') AS integration_credential_configured,
+                    (SELECT MAX(integration_credential.last_used_at)
+                     FROM integration_credentials integration_credential
+                     WHERE integration_credential.integration_id = ic.id) AS integration_credential_last_used_at,
                     supervisor.kind AS supervisor_kind, supervisor.status AS supervisor_status,
                     COALESCE(supervisor_user.display_name, supervisor_agent.display_name) AS supervisor_display_name
              FROM project_participants pp
@@ -210,13 +221,15 @@ class ProjectRepository
              LEFT JOIN project_members pm ON pm.project_id = pp.project_id AND pm.user_id = pp.user_id
              LEFT JOIN chat_agents a ON a.id = pp.agent_id
              LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN integration_connections ic ON ic.project_id = pp.project_id
+                AND ic.id = pp.integration_id AND pp.kind = 'integration'
              LEFT JOIN project_participants supervisor ON supervisor.project_id = pp.project_id
                 AND supervisor.id = pa.supervising_participant_id
              LEFT JOIN users supervisor_user ON supervisor_user.id = supervisor.user_id
              LEFT JOIN project_agents supervisor_agent ON supervisor_agent.project_id = supervisor.project_id
                 AND supervisor_agent.agent_id = supervisor.agent_id
              WHERE " . implode(' AND ', $where) . "
-             ORDER BY COALESCE(u.display_name, pa.display_name), pp.id"
+             ORDER BY COALESCE(u.display_name, pa.display_name, ic.display_name), pp.id"
         );
         $statement->execute($parameters);
         $identity = isset($access['identity']) && is_array($access['identity']) ? $access['identity'] : [];
@@ -261,6 +274,10 @@ class ProjectRepository
         if (!empty($filters['sender'])) {
             $where[] = 'm.sender_participant_id = ?';
             $parameters[] = (int) $filters['sender'];
+        }
+        if (!empty($filters['severity'])) {
+            $where[] = 'm.severity = ?';
+            $parameters[] = MessageSeverity::normalize($filters['severity']);
         }
         if (!empty($filters['idempotency_key'])) {
             $idempotencyKey = trim((string) $filters['idempotency_key']);
@@ -337,12 +354,13 @@ class ProjectRepository
         $this->message($access, $messageId);
         $statement = $this->pdo->prepare(
             "SELECT mr.id, mr.previous_body, mr.new_body, mr.edited_at, pp.id AS participant_id, pp.kind,
-                    COALESCE(u.display_name, pa.display_name) AS display_name,
+                    COALESCE(u.display_name, pa.display_name, ic.display_name) AS display_name,
                     COALESCE(u.avatar_url, pa.avatar_url) AS avatar_url
              FROM message_revisions mr
              JOIN project_participants pp ON pp.id = mr.editor_participant_id
              LEFT JOIN users u ON u.id = pp.user_id
              LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN integration_connections ic ON ic.project_id = pp.project_id AND ic.id = pp.integration_id
              WHERE mr.message_id = ? ORDER BY mr.id DESC"
         );
         $statement->execute([(int) $messageId]);
@@ -376,6 +394,8 @@ class ProjectRepository
             && !is_bool($input['action_requested'])) {
             throw new InvalidArgumentException('action_requested must be a boolean.');
         }
+        $severity = MessageSeverity::normalize(isset($input['severity']) ? $input['severity'] : 'neutral');
+        $input['severity'] = $severity;
         $actionRequested = !isset($input['responsibility_event'])
             && !empty($input['action_requested']);
         $requestFingerprint = $idempotencyKey === '' ? null
@@ -425,13 +445,14 @@ class ProjectRepository
             $now = Db::now();
             $insert = $this->pdo->prepare(
                 'INSERT INTO messages
-                 (message_uuid, project_id, project_sequence, sender_participant_id, reply_to_message_id, body,
+                 (message_uuid, project_id, project_sequence, sender_participant_id, message_kind, severity,
+                   reply_to_message_id, body,
                    client_idempotency_key, request_fingerprint, correlation_id, reply_depth,
                    action_requested, created_at, updated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                  VALUES (?, ?, ?, ?, \'participant\', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
-                $uuid, $projectId, $sequence, $senderId, $replyTo, $body,
+                $uuid, $projectId, $sequence, $senderId, $severity, $replyTo, $body,
                 $idempotencyKey === '' ? null : $idempotencyKey,
                 $requestFingerprint,
                  empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
@@ -538,6 +559,10 @@ class ProjectRepository
             $fingerprintInput['action_requested'] = !isset($input['responsibility_event'])
                 && !empty($input['action_requested']);
         }
+        $severity = MessageSeverity::normalize(isset($input['severity']) ? $input['severity'] : 'neutral');
+        if ($severity !== 'neutral') {
+            $fingerprintInput['severity'] = $severity;
+        }
         if (isset($input['responsibility_event'])) {
             if (!is_array($input['responsibility_event'])) {
                 throw new InvalidArgumentException('responsibility_event must be an object.');
@@ -573,6 +598,7 @@ class ProjectRepository
     {
         $this->requireWritableProject($access);
         $current = $this->message($access, $messageId);
+        if ($current['message_kind'] !== 'participant') { throw new RuntimeException('SYSTEM_MESSAGE_IMMUTABLE'); }
         $this->requireMessageOwnerOrModerator($access, $current);
         if ($current['deleted_at'] !== null) {
             throw new RuntimeException('MESSAGE_NOT_FOUND');
@@ -609,6 +635,7 @@ class ProjectRepository
     {
         $this->requireWritableProject($access);
         $current = $this->message($access, $messageId);
+        if ($current['message_kind'] !== 'participant') { throw new RuntimeException('SYSTEM_MESSAGE_IMMUTABLE'); }
         $this->requireMessageOwnerOrModerator($access, $current);
         if ($current['deleted_at'] === null) {
             $statement = $this->pdo->prepare('UPDATE messages SET deleted_at = ?, updated_at = ? WHERE id = ? AND project_id = ?');
@@ -628,12 +655,13 @@ class ProjectRepository
         $statement = $this->pdo->prepare(
             "SELECT m.*, pp.kind AS sender_kind,
                     (SELECT COUNT(*) FROM message_revisions mr WHERE mr.message_id = m.id) AS revision_count,
-                    COALESCE(u.display_name, pa.display_name) AS sender_display_name,
+                    COALESCE(u.display_name, pa.display_name, ic.display_name) AS sender_display_name,
                     COALESCE(u.avatar_url, pa.avatar_url) AS sender_avatar_url
              FROM messages m
              JOIN project_participants pp ON pp.id = m.sender_participant_id
              LEFT JOIN users u ON u.id = pp.user_id
              LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN integration_connections ic ON ic.project_id = pp.project_id AND ic.id = pp.integration_id
              WHERE m.project_id = ? AND m.id IN ($placeholders)
              ORDER BY m.project_sequence DESC"
         );
@@ -648,6 +676,12 @@ class ProjectRepository
                 'uuid' => $row['message_uuid'],
                 'project_id' => (int) $row['project_id'],
                 'project_sequence' => (int) $row['project_sequence'],
+                'message_kind' => isset($row['message_kind']) ? $row['message_kind'] : 'participant',
+                'severity' => isset($row['severity']) ? MessageSeverity::normalize($row['severity']) : 'neutral',
+                'system_event' => isset($row['message_kind']) && $row['message_kind'] === 'system' ? [
+                    'type' => $row['event_type'],
+                    'data' => $row['event_data_json'] === null ? null : json_decode($row['event_data_json'], true),
+                ] : null,
                 'sender' => [
                     'participant_id' => (int) $row['sender_participant_id'],
                     'kind' => $row['sender_kind'],
@@ -677,12 +711,13 @@ class ProjectRepository
         $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
         $statement = $this->pdo->prepare(
             "SELECT ma.*, pp.kind,
-                    COALESCE(u.display_name, pa.display_name) AS display_name,
+                    COALESCE(u.display_name, pa.display_name, ic.display_name) AS display_name,
                     COALESCE(u.avatar_url, pa.avatar_url) AS avatar_url
              FROM message_addressees ma
              JOIN project_participants pp ON pp.id = ma.participant_id
              LEFT JOIN users u ON u.id = pp.user_id
              LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN integration_connections ic ON ic.project_id = pp.project_id AND ic.id = pp.integration_id
              WHERE ma.message_id IN ($placeholders) ORDER BY ma.message_id, display_name, ma.participant_id"
         );
         $statement->execute($messageIds);
@@ -709,27 +744,40 @@ class ProjectRepository
     private function normalizeParticipant($row)
     {
         $isHuman = $row['kind'] === 'human';
-        $capabilities = $isHuman || empty($row['capabilities_json']) ? [] : json_decode($row['capabilities_json'], true);
+        $isAgent = $row['kind'] === 'agent';
+        $capabilitiesJson = $isAgent ? $row['capabilities_json']
+            : ($row['kind'] === 'integration' ? $row['integration_capabilities_json'] : null);
+        $capabilities = empty($capabilitiesJson) ? [] : json_decode($capabilitiesJson, true);
+        $identityId = $isHuman ? $row['user_id'] : ($isAgent ? $row['agent_id'] : $row['integration_id']);
+        $displayName = $isHuman ? $row['user_display_name']
+            : ($isAgent ? $row['agent_display_name'] : $row['integration_display_name']);
+        $avatarUrl = $isHuman ? $row['user_avatar_url'] : ($isAgent ? $row['agent_avatar_url'] : null);
         return [
             'id' => (int) $row['id'],
             'project_id' => (int) $row['project_id'],
             'kind' => $row['kind'],
-            'identity_id' => (int) ($isHuman ? $row['user_id'] : $row['agent_id']),
-            'display_name' => $isHuman ? $row['user_display_name'] : $row['agent_display_name'],
-            'avatar_url' => $isHuman ? $row['user_avatar_url'] : $row['agent_avatar_url'],
+            'identity_id' => (int) $identityId,
+            'display_name' => $displayName,
+            'avatar_url' => $avatarUrl,
             'status' => $row['status'],
-            'role' => $isHuman ? $row['human_role'] : 'agent',
+            'role' => $isHuman ? $row['human_role'] : ($isAgent ? 'agent' : 'integration'),
             'joined_at' => $row['joined_at'],
             'last_message_at' => $row['last_message_at'],
             'message_count' => (int) $row['message_count'],
-            'provider' => $isHuman ? null : $row['provider'],
-            'runtime' => $isHuman ? null : $row['runtime_name'],
+            'provider' => $isAgent ? $row['provider'] : ($row['kind'] === 'integration' ? $row['integration_provider'] : null),
+            'runtime' => $isAgent ? $row['runtime_name'] : null,
             'capabilities' => is_array($capabilities) ? $capabilities : [],
-            'role_title' => $isHuman ? null : $row['role_title'],
-            'role_summary' => $isHuman ? null : $row['role_summary'],
-            'role_instructions' => $isHuman ? null : $row['role_instructions'],
-            'role_version' => $isHuman ? null : (int) $row['role_version'],
-            'supervisor' => $isHuman || $row['supervising_participant_id'] === null ? null : [
+            'description' => $row['kind'] === 'integration' ? $row['integration_description'] : null,
+            'external_reference' => $row['kind'] === 'integration' ? $row['integration_external_reference'] : null,
+            'credential_configured' => $row['kind'] === 'integration'
+                ? (bool) $row['integration_credential_configured'] : false,
+            'credential_last_used_at' => $row['kind'] === 'integration'
+                ? $row['integration_credential_last_used_at'] : null,
+            'role_title' => $isAgent ? $row['role_title'] : null,
+            'role_summary' => $isAgent ? $row['role_summary'] : null,
+            'role_instructions' => $isAgent ? $row['role_instructions'] : null,
+            'role_version' => $isAgent ? (int) $row['role_version'] : null,
+            'supervisor' => !$isAgent || $row['supervising_participant_id'] === null ? null : [
                 'participant_id' => (int) $row['supervising_participant_id'],
                 'kind' => $row['supervisor_kind'],
                 'display_name' => $row['supervisor_display_name'],
@@ -743,7 +791,8 @@ class ProjectRepository
         $resolved = [];
         if (!empty($input['broadcast'])) {
             $statement = $this->pdo->prepare(
-                "SELECT id FROM project_participants WHERE project_id = ? AND status = 'active' AND id <> ?"
+                "SELECT id FROM project_participants
+                 WHERE project_id = ? AND status = 'active' AND kind IN ('human', 'agent') AND id <> ?"
             );
             $statement->execute([$projectId, $senderId]);
             foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $participantId) {
@@ -763,7 +812,8 @@ class ProjectRepository
         }
         if (!$resolved) {
             $statement = $this->pdo->prepare(
-                "SELECT id FROM project_participants WHERE project_id = ? AND status = 'active' AND id <> ?"
+                "SELECT id FROM project_participants
+                 WHERE project_id = ? AND status = 'active' AND kind IN ('human', 'agent') AND id <> ?"
             );
             $statement->execute([$projectId, $senderId]);
             foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $participantId) {
@@ -774,7 +824,8 @@ class ProjectRepository
         $ids = array_keys($resolved);
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $statement = $this->pdo->prepare(
-            "SELECT id FROM project_participants WHERE project_id = ? AND status = 'active' AND id IN ($placeholders)"
+            "SELECT id FROM project_participants
+             WHERE project_id = ? AND status = 'active' AND kind IN ('human', 'agent') AND id IN ($placeholders)"
         );
         $statement->execute(array_merge([$projectId], $ids));
         $found = array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
