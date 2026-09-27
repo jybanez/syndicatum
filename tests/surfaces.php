@@ -995,6 +995,11 @@ try {
             && strpos($source, 'function openDeliverableForm(') !== false
             && strpos($source, 'label: "Deliverable"') !== false,
             'Project planning must provide milestone and deliverable forms plus optional task linkage.');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(substr_count($source, 'className: "project-plan-editor-modal"') === 2
+            && strpos($styles, '.project-plan-editor-modal .ui-datepicker') !== false
+            && strpos($styles, 'width: 100%; min-width: 0; max-width: 100%;') !== false,
+            'Project planning date pickers must shrink within multi-column form rows without horizontal overflow.');
         $suite->true(strpos($source, 'message: "Loading deliverables…"') !== false
             && strpos($source, 'modal.setRows(taskFormRows())') !== false
             && strpos($source, 'state.projectPlanLoaded = false') !== false,
