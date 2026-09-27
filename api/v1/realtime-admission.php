@@ -55,12 +55,9 @@ try {
     }
 
     try {
-        $roles = isset($access['identity']['user']['system_roles']) && is_array($access['identity']['user']['system_roles'])
-            ? $access['identity']['user']['system_roles'] : [];
         $additionalRooms = [];
         $humanUserId = isset($access['identity']['user']['id']) ? (int) $access['identity']['user']['id'] : 0;
-        if ($humanUserId > 0) { $additionalRooms[] = RealtimeIntegration::notificationRoom($humanUserId); }
-        if (in_array('administrator', $roles, true)) { $additionalRooms[] = RealtimeIntegration::BACKUP_ROOM; }
+        if ($humanUserId > 0) { $additionalRooms[] = RealtimeIntegration::userRoom($humanUserId); }
         $admission = $realtime->buildAdmission($participant, $projectId, $additionalRooms);
     } catch (InvalidArgumentException $exception) {
         // Configuration errors are operational details and must not be

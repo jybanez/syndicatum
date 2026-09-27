@@ -365,6 +365,11 @@ function isAdministrator() {
   return roles.some((role) => String(typeof role === "object" ? role.name : role).toLowerCase() === "administrator");
 }
 
+function currentUserRealtimeRoom() {
+  const userId = id(state.session?.user?.id);
+  return userId ? `syndicatum.user.${userId}` : "";
+}
+
 function capability(name, fallback = false) {
   const capabilities = state.session?.capabilities || {};
   if (Object.prototype.hasOwnProperty.call(capabilities, name)) return Boolean(capabilities[name]);
@@ -4330,12 +4335,13 @@ function renderBackupRestoreSurface(recovery = null, error = null) {
           const panel = document.createElement("section");
           panel.className = "recovery-workflow-panel recovery-backup-panel";
           host.appendChild(panel);
+          const userRoom = currentUserRealtimeRoom();
           state.backupPage = mountCurrentBackup({ host: panel, factories: state.factories,
             api: API, request, csrfHeaders, toast: state.components.toast, formatDate,
             realtime: {
-              room: "syndicatum.backups.global",
+              room: userRoom,
               state() {
-                return { joined: state.realtimeRooms.has("syndicatum.backups.global"), error: state.realtimeError };
+                return { joined: userRoom !== "" && state.realtimeRooms.has(userRoom), error: state.realtimeError };
               },
             },
           });
@@ -4352,11 +4358,12 @@ function renderBackupRestoreSurface(recovery = null, error = null) {
           const panel = document.createElement("section");
           panel.className = "recovery-workflow-panel";
           host.appendChild(panel);
+          const userRoom = currentUserRealtimeRoom();
           state.backupPage = mountCurrentRestore({ host: panel, factories: state.factories,
             api: API, request, csrfHeaders, toast: state.components.toast, formatDate,
             realtime: {
-              room: "syndicatum.backups.global",
-              state() { return { joined: state.realtimeRooms.has("syndicatum.backups.global"), error: state.realtimeError }; },
+              room: userRoom,
+              state() { return { joined: userRoom !== "" && state.realtimeRooms.has(userRoom), error: state.realtimeError }; },
             },
           });
         },

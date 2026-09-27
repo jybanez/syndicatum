@@ -12,19 +12,20 @@ require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
  */
 class RealtimeIntegration
 {
-    const BACKUP_ROOM = 'syndicatum.backups.global';
     const BACKUP_EVENT = 'syndicatum.backup.updated';
     const RESTORE_EVENT = 'syndicatum.restore.updated';
     const NOTIFICATION_EVENT = 'syndicatum.notifications.changed';
 
     private $settings;
     private $transport;
+    private $administratorUserIds;
     private $publishCurl;
 
-    public function __construct($settings, $transport = null)
+    public function __construct($settings, $transport = null, $administratorUserIds = null)
     {
         $this->settings = $settings;
         $this->transport = $transport;
+        $this->administratorUserIds = $administratorUserIds;
         $this->publishCurl = null;
     }
 
@@ -120,7 +121,7 @@ class RealtimeIntegration
         ];
     }
 
-    /** Build an administrator-only admission for the application-wide Backup room. */
+    /** Build an administrator admission for the caller's private multi-purpose user room. */
     public function buildBackupAdmission(array $user)
     {
         if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
@@ -134,7 +135,7 @@ class RealtimeIntegration
         $expiresAt = $issuedAt + $config['token_ttl_seconds'];
         $tokenId = 'rt_backup_' . bin2hex(self::secureRandomBytes(10));
         $subject = 'administrator:' . $userId;
-        $rooms = [self::BACKUP_ROOM];
+        $rooms = [self::userRoom($userId)];
         $claims = [
             'iss' => $config['issuer'], 'sub' => $subject, 'aud' => $config['audience'],
             'iat' => $issuedAt, 'exp' => $expiresAt, 'jti' => $tokenId,
@@ -146,7 +147,7 @@ class RealtimeIntegration
         return [
             'enabled' => true, 'token' => $this->signJwt($claims, $config['signing_secret']),
             'websocket_url' => $config['websocket_url'], 'app_code' => $config['client_code'],
-            'project_code' => $config['project_code'], 'room' => self::BACKUP_ROOM, 'rooms' => $rooms,
+            'project_code' => $config['project_code'], 'room' => $rooms[0], 'rooms' => $rooms,
             'expires_at' => gmdate('c', $expiresAt),
             'session' => [
                 'token_id' => $tokenId, 'user_id' => $subject, 'display_name' => $displayName,
@@ -156,7 +157,7 @@ class RealtimeIntegration
         ];
     }
 
-    public function buildGlobalAdmission(array $user, $includeBackup = false)
+    public function buildGlobalAdmission(array $user, $administrator = false)
     {
         if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
         $userId = isset($user['id']) ? (int) $user['id'] : 0;
@@ -167,14 +168,13 @@ class RealtimeIntegration
         $expiresAt = $issuedAt + $config['token_ttl_seconds'];
         $tokenId = 'rt_user_' . bin2hex(self::secureRandomBytes(10));
         $subject = 'user:' . $userId;
-        $rooms = [self::notificationRoom($userId)];
-        if ($includeBackup) { $rooms[] = self::BACKUP_ROOM; }
+        $rooms = [self::userRoom($userId)];
         $claims = [
             'iss' => $config['issuer'], 'sub' => $subject, 'aud' => $config['audience'],
             'iat' => $issuedAt, 'exp' => $expiresAt, 'jti' => $tokenId,
             'project_code' => $config['project_code'], 'app_code' => $config['client_code'],
             'user_id' => $subject, 'display_name' => $displayName,
-            'roles' => $includeBackup ? ['administrator'] : [],
+            'roles' => $administrator ? ['administrator'] : [],
             'capabilities' => ['session.connect', 'room.join'],
             'allowed_rooms' => $rooms, 'allowed_room_prefixes' => [], 'attachment_policy' => [],
         ];
@@ -186,11 +186,11 @@ class RealtimeIntegration
         ];
     }
 
-    public static function notificationRoom($userId)
+    public static function userRoom($userId)
     {
         $userId = (int) $userId;
-        if ($userId < 1) { throw new InvalidArgumentException('A user id is required for a notification room.'); }
-        return 'syndicatum.notifications.user.' . $userId;
+        if ($userId < 1) { throw new InvalidArgumentException('A user id is required for a Realtime user room.'); }
+        return 'syndicatum.user.' . $userId;
     }
 
     public function buildConnectorAuthorizationAdmission($authorizationId, $deviceName, $expiresAt)
@@ -237,7 +237,7 @@ class RealtimeIntegration
         return true;
     }
 
-    /** Publish the complete canonical backup snapshot. Failure is terminal to the caller; there is no alternate transport. */
+    /** Publish the complete canonical backup snapshot to every active administrator user room. */
     public function publishBackupUpdated(array $backup)
     {
         if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
@@ -246,23 +246,16 @@ class RealtimeIntegration
         if (!preg_match('/\A[0-9a-f-]{36}\z/i', $operationId) || $revision < 1) {
             throw new InvalidArgumentException('Backup Realtime snapshot is invalid.');
         }
-        $config = $this->publishConfig();
-        $response = $this->sendPublishRequest($config, [
-            'client_code' => $config['client_code'],
-            'project_code' => $config['project_code'],
-            'room' => self::BACKUP_ROOM,
-            'event_type' => self::BACKUP_EVENT,
-            'payload' => ['backup' => $backup],
-            'meta' => ['source_module' => 'syndicatum-backup-service'],
-            'event_id' => 'backup-' . strtolower($operationId) . '-revision-' . $revision,
-        ]);
-        if ((int) (isset($response['status']) ? $response['status'] : 0) !== 202) {
-            throw new RuntimeException('Backup Realtime publish failed: ' . $this->safeResponseError($response));
-        }
-        return true;
+        return $this->publishToAdministratorUserRooms(
+            self::BACKUP_EVENT,
+            ['backup' => $backup],
+            'syndicatum-backup-service',
+            'backup-' . strtolower($operationId) . '-revision-' . $revision,
+            'Backup'
+        );
     }
 
-    /** Publish a complete in-app restore snapshot to the administrator Backup room. */
+    /** Publish a complete in-app restore snapshot to every active administrator user room. */
     public function publishRestoreUpdated(array $restore)
     {
         if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
@@ -271,17 +264,13 @@ class RealtimeIntegration
         if (!preg_match('/\A[0-9a-f-]{36}\z/i', $operationId) || $revision < 1) {
             throw new InvalidArgumentException('Restore Realtime snapshot is invalid.');
         }
-        $config = $this->publishConfig();
-        $response = $this->sendPublishRequest($config, [
-            'client_code'=>$config['client_code'], 'project_code'=>$config['project_code'],
-            'room'=>self::BACKUP_ROOM, 'event_type'=>self::RESTORE_EVENT,
-            'payload'=>['restore'=>$restore], 'meta'=>['source_module'=>'syndicatum-restore-service'],
-            'event_id'=>'restore-'.strtolower($operationId).'-revision-'.$revision,
-        ]);
-        if ((int) ($response['status'] ?? 0) !== 202) {
-            throw new RuntimeException('Restore Realtime publish failed: ' . $this->safeResponseError($response));
-        }
-        return true;
+        return $this->publishToAdministratorUserRooms(
+            self::RESTORE_EVENT,
+            ['restore' => $restore],
+            'syndicatum-restore-service',
+            'restore-' . strtolower($operationId) . '-revision-' . $revision,
+            'Restore'
+        );
     }
 
     public static function connectorAuthorizationRoom($authorizationId)
@@ -317,7 +306,7 @@ class RealtimeIntegration
             if (!empty($event['room_override'])) {
                 $room = (string) $event['room_override'];
                 if ((string) $event['event_type'] !== self::NOTIFICATION_EVENT
-                    || !preg_match('/\Asyndicatum\.notifications\.user\.[1-9][0-9]*\z/', $room)) {
+                    || !preg_match('/\Asyndicatum\.user\.[1-9][0-9]*\z/', $room)) {
                     throw new InvalidArgumentException('Outbox room override is invalid.');
                 }
             }
@@ -384,6 +373,54 @@ class RealtimeIntegration
     public static function normalizeProjectRoom($projectIdentifier)
     {
         return 'chat.thread.' . self::rawProjectRoom($projectIdentifier);
+    }
+
+    private function publishToAdministratorUserRooms($eventType, array $payload, $sourceModule, $eventId, $label)
+    {
+        $config = $this->publishConfig();
+        $userIds = $this->activeAdministratorUserIds();
+        if ($userIds === []) {
+            throw new RuntimeException($label . ' Realtime publish failed: no active administrator recipients are available.');
+        }
+        foreach ($userIds as $userId) {
+            $response = $this->sendPublishRequest($config, [
+                'client_code' => $config['client_code'],
+                'project_code' => $config['project_code'],
+                'room' => self::userRoom($userId),
+                'event_type' => $eventType,
+                'payload' => $payload,
+                'meta' => ['source_module' => $sourceModule],
+                'event_id' => $eventId . '-user-' . $userId,
+            ]);
+            if ((int) (isset($response['status']) ? $response['status'] : 0) !== 202) {
+                throw new RuntimeException($label . ' Realtime publish failed: ' . $this->safeResponseError($response));
+            }
+        }
+        return true;
+    }
+
+    private function activeAdministratorUserIds()
+    {
+        if (is_callable($this->administratorUserIds)) {
+            $ids = call_user_func($this->administratorUserIds);
+        } else {
+            $ids = Db::pdo()->query(
+                "SELECT DISTINCT u.id FROM users u
+                 JOIN user_system_roles ur ON ur.user_id = u.id
+                 JOIN system_roles r ON r.id = ur.role_id AND r.code = 'administrator'
+                 WHERE u.status = 'active' AND u.deleted_at IS NULL
+                 ORDER BY u.id"
+            )->fetchAll(PDO::FETCH_COLUMN);
+        }
+        if (!is_array($ids)) {
+            throw new RuntimeException('Administrator Realtime recipients are unavailable.');
+        }
+        $result = [];
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            if ($id > 0) { $result[$id] = $id; }
+        }
+        return array_values($result);
     }
 
     private function admissionConfig($projectCodeSetting = 'realtime.project_code')
