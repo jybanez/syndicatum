@@ -175,6 +175,7 @@ button, input, textarea { font: inherit; }
 .timeline-scroll { min-height: 0; overflow: hidden; margin: 0 -5px; padding: 8px 5px 4px; box-sizing: border-box; }
 #timeline-host { height: 100%; min-height: 0; }
 #timeline-host .ui-timeline { gap: 12px; }
+#timeline-host .ui-timeline-viewport { box-sizing: border-box; padding-right: 8px; }
 #timeline-host .ui-timeline-group-label:not(.ui-timeline-floating-date) { margin-bottom: 8px; padding: 8px 11px; border: 1px solid rgba(74, 97, 138, .3); border-radius: 11px; background: rgba(10, 18, 31, .96); }
 #timeline-host .ui-timeline-body { position: relative; background: linear-gradient(180deg, rgba(20, 30, 48, .94), rgba(19, 33, 56, .82)); transition: border-color 140ms ease, box-shadow 140ms ease; }
 #timeline-host .ui-timeline-item.is-addressed .ui-timeline-body { border-color: rgba(230, 175, 83, .56); box-shadow: inset 3px 0 rgba(230, 175, 83, .72); }
