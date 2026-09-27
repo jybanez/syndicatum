@@ -55,6 +55,8 @@
     "syndicatum_sessions": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "system_roles": {"backup_policy": "excluded", "excluded_reason": "environment_local", "target_expectation": "locally_initialized"},
     "system_settings": {"backup_policy": "durable"},
+    "user_lifecycle_notifications": {"backup_policy": "durable"},
+    "user_registration_activations": {"backup_policy": "durable"},
     "user_system_roles": {"backup_policy": "durable"},
     "users": {"backup_policy": "durable"},
     "workspace_agent_trigger_deliveries": {"backup_policy": "reset", "reset_strategy": "truncate"},

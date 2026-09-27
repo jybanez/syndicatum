@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/GoogleIntegration.php';
+require_once dirname(__DIR__) . '/src/SettingsService.php';
 
 class GoogleTestSettings
 {
@@ -105,6 +106,7 @@ function googleTestComplete(GoogleIntegration $integration, &$captured, $returnP
 
 $suite = new GoogleTestSuite();
 $database = 'syndicatum_google_test_' . bin2hex(googleTestRandom(6));
+$mailCaptureRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-google-mail-' . bin2hex(googleTestRandom(6));
 $admin = null;
 try {
     $admin = new PDO('mysql:host=127.0.0.1;charset=utf8mb4', 'root', '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -114,9 +116,16 @@ try {
     putenv('PBB_AGENTCHAT_DB_USER=root');
     putenv('PBB_AGENTCHAT_DB_PASS=');
     putenv('PBB_AGENTCHAT_SECRET=' . bin2hex(googleTestRandom(32)));
+    putenv('SYNDICATUM_MAIL_CAPTURE_DIR=' . $mailCaptureRoot);
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
     $auth = new AuthService($pdo);
+    (new SettingsService($pdo))->update([
+        'general.public_origin' => 'https://syndicatum.example.test',
+        'mail.enabled' => true,
+        'mail.sender_name' => 'Syndicatum',
+        'mail.sender_address' => 'notifications@example.test',
+    ], null);
 
     $suite->test('authorization uses state, nonce, and PKCE S256', function () use ($suite, $pdo, $auth) {
         $captured = [];
@@ -139,6 +148,9 @@ try {
         $suite->truthy(isset($captured['payload']['code_verifier']));
         $suite->same('google', $pdo->query('SELECT auth_provider FROM syndicatum_sessions WHERE user_id = ' . $userId)->fetchColumn());
         $suite->same(['user'], $pdo->query('SELECT r.code FROM system_roles r JOIN user_system_roles ur ON ur.role_id = r.id WHERE ur.user_id = ' . $userId)->fetchAll(PDO::FETCH_COLUMN));
+        $suite->same('captured', $result['welcome_notification']['status']);
+        $suite->same(1, (int) $pdo->query("SELECT COUNT(*) FROM user_lifecycle_notifications WHERE user_id = $userId AND event_code = 'welcome' AND status = 'succeeded'")->fetchColumn());
+        $suite->same(0, (int) $pdo->query('SELECT COUNT(*) FROM user_registration_activations WHERE user_id = ' . $userId)->fetchColumn());
     });
 
     $suite->test('default verifier accepts a correctly signed Google identity token', function () use ($suite, $pdo, $auth) {
@@ -183,6 +195,8 @@ try {
         $captured['nonce'] = $query['nonce'];
         $integration->completeCallback(['code' => 'returning', 'state' => $query['state']], $attempt['attempt_token']);
         $suite->same(1, (int) $pdo->query("SELECT COUNT(*) FROM users WHERE google_subject = 'google-subject-001'")->fetchColumn());
+        $userId = (int) $pdo->query("SELECT id FROM users WHERE google_subject = 'google-subject-001'")->fetchColumn();
+        $suite->same(1, (int) $pdo->query("SELECT COUNT(*) FROM user_lifecycle_notifications WHERE user_id = $userId AND event_code = 'welcome' AND status = 'succeeded'")->fetchColumn());
         $suite->same('Updated Google User', $pdo->query("SELECT display_name FROM users WHERE google_subject = 'google-subject-001'")->fetchColumn());
         $suite->throws(function () use ($integration, $attempt, $query) {
             $integration->completeCallback(['code' => 'replay', 'state' => $query['state']], $attempt['attempt_token']);
@@ -300,5 +314,8 @@ try {
     if ($admin instanceof PDO && preg_match('/^syndicatum_google_test_[a-f0-9]{12}$/', $database)) {
         $admin->exec('DROP DATABASE `' . $database . '`');
     }
+    foreach (glob($mailCaptureRoot . DIRECTORY_SEPARATOR . '*') ?: [] as $path) { @unlink($path); }
+    @rmdir($mailCaptureRoot);
+    putenv('SYNDICATUM_MAIL_CAPTURE_DIR');
 }
 exit($suite->finish());

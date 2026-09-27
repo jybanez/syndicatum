@@ -22,6 +22,7 @@ const MESSAGE_SEVERITIES = new Set(["neutral", "info", "success", "warning", "er
 
 const API = {
   session: "api/v1/session.php",
+  registrationActivation: "api/v1/registration-activation.php",
   projects: "api/v1/projects.php",
   context: "api/v1/project.php",
   participants: "api/v1/project-participants.php",
@@ -743,6 +744,7 @@ function openRegistrationModal() {
     submitLabel: "Register",
     cancelLabel: "Back to sign in",
     busyMessage: "Creating your account...",
+    manageBusyOnSubmit: false,
     extraActionsPlacement: "start",
     extraActions,
     rows: [
@@ -752,27 +754,117 @@ function openRegistrationModal() {
       [{ type: "input", input: "password", name: "password", label: "Password", autocomplete: "new-password", required: true, help: "Use at least 12 characters." }],
       [{ type: "input", input: "password", name: "password_confirmation", label: "Confirm password", autocomplete: "new-password", required: true }],
     ],
+    validate(values) {
+      const errors = {};
+      const displayName = String(values.display_name || "").trim();
+      const email = String(values.email || "").trim();
+      const password = String(values.password || "");
+      const confirmation = String(values.password_confirmation || "");
+      if (!displayName) errors.display_name = "Display name — required";
+      else if (displayName.length > 120) errors.display_name = "Display name must contain no more than 120 characters.";
+      if (!email) errors.email = "Email address — required";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Email address — enter a valid email address.";
+      if (!password) errors.password = "Password — required";
+      else if (password.length < 12) errors.password = "Password — use at least 12 characters.";
+      if (!confirmation) errors.password_confirmation = "Confirm password — required";
+      else if (password !== confirmation) errors.password_confirmation = "Confirm password — must match Password.";
+      return errors;
+    },
+    onInvalid(result, context) {
+      showFormValidationSummary(result, context, {
+        display_name: "Display name", email: "Email address", password: "Password", password_confirmation: "Confirm password",
+      });
+    },
     async onSubmit(values, context) {
+      context.setBusy(true, { message: "Creating your account..." });
       try {
         const payload = await request(API.session, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "register", ...values }),
         });
-        state.session = unwrap(payload) || {};
-        const refreshed = await request(API.session);
-        state.session = { ...(unwrap(refreshed) || {}), capabilities: refreshed?.capabilities || unwrap(refreshed)?.capabilities || {} };
-        state.mode = "expanded";
-        await loadExpandedWithPendingInvitation();
+        const result = unwrap(payload) || {};
+        setTimeout(() => showRegistrationPending(result.email || values.email), 0);
         return true;
       } catch (error) {
+        context.applyApiErrors?.(error.payload);
         context.setFormError(error.message);
+        context.setBusy(false);
         return false;
       }
     },
     onClose(event = {}) {
       if (event.reason === "cancel" || event.actionId === "cancel") showLogin();
     },
+  });
+  modal.open();
+}
+
+function showRegistrationPending(email) {
+  const content = projectInfoElement("div", "registration-workflow-message");
+  content.append(
+    projectInfoElement("p", "", "Your registration was received."),
+    projectInfoElement("p", "", `We sent an activation link to ${String(email || "your email address")}. Open that link to activate your account. After activation, you will receive a welcome email.`),
+  );
+  const modal = state.factories.createActionModal({
+    title: "Check your email",
+    size: "sm",
+    content,
+    actions: [{ id: "signin", label: "Back to sign in", variant: "primary", closeOnClick: false, async onClick({ modal: current }) {
+      await current.close({ reason: "signin" });
+      showLogin("Activate your account before signing in.");
+      return false;
+    } }],
+  });
+  modal.open();
+}
+
+function pendingRegistrationActivationToken() {
+  const match = String(location.hash || "").match(/^#activate=([^&]+)$/);
+  if (!match) return "";
+  try { return decodeURIComponent(match[1]); } catch (_error) { return ""; }
+}
+
+function showRegistrationActivation(token) {
+  const content = projectInfoElement("div", "registration-workflow-message");
+  content.append(
+    projectInfoElement("p", "", "Activate your Syndicatum account to finish registration and open your personal workspace."),
+    projectInfoElement("p", "", "This activation link is single-use. If it has expired, submit the registration form again to receive a replacement link."),
+  );
+  const modal = state.factories.createActionModal({
+    title: "Activate your account",
+    size: "sm",
+    content,
+    actions: [
+      { id: "signin", label: "Back to sign in", closeOnClick: false, async onClick({ modal: current }) {
+        history.replaceState(history.state, "", `${location.pathname}${location.search}`);
+        await current.close({ reason: "signin" });
+        showLogin();
+        return false;
+      } },
+      { id: "activate", label: "Activate account", variant: "primary", closeOnClick: false, async onClick({ modal: current }) {
+        current.setBusy(true, { message: "Activating your account…" });
+        try {
+          const payload = await request(API.registrationActivation, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activation_token: token }),
+          });
+          state.session = unwrap(payload) || {};
+          history.replaceState(history.state, "", `${location.pathname}${location.search}`);
+          await current.close({ reason: "activated" });
+          const refreshed = await request(API.session);
+          state.session = { ...(unwrap(refreshed) || {}), capabilities: refreshed?.capabilities || unwrap(refreshed)?.capabilities || {} };
+          state.mode = "expanded";
+          await loadExpandedWithPendingInvitation();
+          state.components.toast.success("Your account is active and your welcome email is on its way.", { title: "Welcome to Syndicatum" });
+        } catch (error) {
+          current.setBusy(false);
+          state.components.toast.error(error.message, { title: "Activation failed" });
+        }
+        return false;
+      } },
+    ],
   });
   modal.open();
 }
@@ -5884,6 +5976,8 @@ async function checkSession() {
     if (session.setup_required) return loadLegacy();
     state.session = session;
     if (session.authenticated === false || !session.user) {
+      const activationToken = pendingRegistrationActivationToken();
+      if (activationToken) { showRegistrationActivation(activationToken); return; }
       const accountFailed = query.get("account_sso_error") === "1";
       const googleFailed = googleSsoFailed;
       showLogin(accountFailed ? "PBB Account sign in could not be completed. You can try again or use native sign in."

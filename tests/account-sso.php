@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/AccountIntegration.php';
+require_once dirname(__DIR__) . '/src/SettingsService.php';
 
 class AccountTestSettings
 {
@@ -114,6 +115,7 @@ function accountTestCallback(AccountIntegration $integration, array $identity, $
 
 $suite = new AccountSsoTestSuite();
 $database = 'syndicatum_account_test_' . bin2hex(accountTestRandom(6));
+$mailCaptureRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-account-mail-' . bin2hex(accountTestRandom(6));
 if (!preg_match('/^syndicatum_account_test_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe Account test database name.');
 }
@@ -127,9 +129,16 @@ try {
     putenv('PBB_AGENTCHAT_DB_USER=root');
     putenv('PBB_AGENTCHAT_DB_PASS=');
     putenv('PBB_AGENTCHAT_SECRET=' . bin2hex(accountTestRandom(32)));
+    putenv('SYNDICATUM_MAIL_CAPTURE_DIR=' . $mailCaptureRoot);
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
     $auth = new AuthService($pdo);
+    (new SettingsService($pdo))->update([
+        'general.public_origin' => 'https://syndicatum.example.test',
+        'mail.enabled' => true,
+        'mail.sender_name' => 'Syndicatum',
+        'mail.sender_address' => 'notifications@example.test',
+    ], null);
 
     $suite->test('Account integration defaults disabled', function () use ($suite, $pdo, $auth) {
         $integration = new AccountIntegration($pdo, new AccountTestSettings([]), $auth);
@@ -176,6 +185,9 @@ try {
         $session = $pdo->query('SELECT account_session_id FROM syndicatum_sessions WHERE user_id = ' . $userId . ' ORDER BY id DESC LIMIT 1')->fetchColumn();
         $suite->same('account-session-one', $session);
         $suite->truthy($auth->currentUser($result['session']['token']) !== null);
+        $suite->same('captured', $result['welcome_notification']['status']);
+        $suite->same(1, (int) $pdo->query("SELECT COUNT(*) FROM user_lifecycle_notifications WHERE user_id = $userId AND event_code = 'welcome' AND status = 'succeeded'")->fetchColumn());
+        $suite->same(0, (int) $pdo->query('SELECT COUNT(*) FROM user_registration_activations WHERE user_id = ' . $userId)->fetchColumn());
     });
 
     $suite->test('callback links only by pbb_user_id and rejects normalized-email collision', function () use ($suite, $pdo, $auth) {
@@ -226,6 +238,7 @@ try {
         };
         $integration = new AccountIntegration($pdo, accountTestSettings(), $auth, $transport);
         accountTestCallback($integration, [], 'account-session-returning');
+        $suite->same(1, (int) $pdo->query("SELECT COUNT(*) FROM user_lifecycle_notifications WHERE user_id = $userId AND event_code = 'welcome' AND status = 'succeeded'")->fetchColumn());
         $suite->same(1, (int) $pdo->query("SELECT COUNT(*) FROM user_system_roles ur JOIN system_roles r ON r.id = ur.role_id WHERE ur.user_id = $userId AND r.code = 'administrator'")->fetchColumn());
         $suite->same(1, (int) $pdo->query('SELECT COUNT(*) FROM workspaces WHERE owner_user_id = ' . $userId)->fetchColumn());
         $row = $pdo->query('SELECT display_name, avatar_url FROM users WHERE id = ' . $userId)->fetch();
@@ -294,6 +307,9 @@ try {
         }
         $admin->exec('DROP DATABASE `' . $database . '`');
     }
+    foreach (glob($mailCaptureRoot . DIRECTORY_SEPARATOR . '*') ?: [] as $path) { @unlink($path); }
+    @rmdir($mailCaptureRoot);
+    putenv('SYNDICATUM_MAIL_CAPTURE_DIR');
 }
 
 exit($suite->finish());

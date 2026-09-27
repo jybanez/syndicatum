@@ -172,7 +172,7 @@ class SettingsService
                 'INSERT INTO administrative_audit_events (actor_user_id, action, subject_type, subject_id, metadata_json, ip_address, created_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)'
             );
-            $audit->execute([(int) $actorUserId, 'settings.updated', 'system_settings', null,
+            $audit->execute([$actorUserId === null ? null : (int) $actorUserId, 'settings.updated', 'system_settings', null,
                 json_encode(['keys' => array_keys($changes)]),
                 isset($_SERVER['REMOTE_ADDR']) ? substr((string) $_SERVER['REMOTE_ADDR'], 0, 80) : null, Db::now()]);
             $this->pdo->commit();

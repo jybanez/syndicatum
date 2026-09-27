@@ -67,6 +67,27 @@ try {
         throw new RuntimeException('Invalid timezone was accepted.');
     });
 
+    $test('registration activation and welcome templates provide professional multipart-ready messages', function () use ($assert) {
+        $renderer = new EmailTemplateRenderer();
+        $activation = $renderer->render('registration_activation', [
+            'display_name' => 'New User',
+            'activation_url' => 'https://syndicatum.example/#activate=activation-token',
+            'expires_at' => '2026-10-03 12:00:00 UTC',
+            'timezone' => 'Asia/Manila',
+        ]);
+        $assert($activation['template_version'] === 1, 'Activation template version is missing.');
+        $assert(strpos($activation['text'], 'Activate your Syndicatum account') !== false, 'Activation copy is missing.');
+        $assert(strpos($activation['html'], '#activate=activation-token') !== false, 'Activation action is missing.');
+        $assert(strpos($activation['html'], 'October 3, 2026 at 8:00 PM (Asia/Manila)') !== false, 'Activation expiry was not localized.');
+        $welcome = $renderer->render('welcome', [
+            'display_name' => 'New User',
+            'application_url' => 'https://syndicatum.example/',
+        ]);
+        $assert($welcome['template_version'] === 1, 'Welcome template version is missing.');
+        $assert(strpos($welcome['text'], 'Your Syndicatum account is active.') !== false, 'Welcome copy is missing.');
+        $assert(strpos($welcome['html'], 'Open Syndicatum') !== false, 'Welcome action is missing.');
+    });
+
     $test('project invitation template preserves an application subpath in its brand URL', function () use ($assert, $data) {
         $subpath = $data;
         $subpath['invitation_url'] = 'http://localhost/pbb/chatviewer/#invitation=test-token';

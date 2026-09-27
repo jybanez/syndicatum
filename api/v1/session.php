@@ -48,9 +48,8 @@ try {
             $email = isset($body['email']) ? strtolower(trim((string) $body['email'])) : '';
             $limiter = new RateLimiter($pdo);
             $limiter->hit('registration', $email . '|' . (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 5, 900, 1800);
-            $result = $auth->register($body);
-            AuthService::setSessionCookies($result['session']);
-            Api::json(['data' => ['authenticated' => true, 'user' => $result['user'], 'csrf_token' => $result['session']['csrf_token']]], 201);
+            $result = $auth->registerForActivation($body);
+            Api::json(['data' => $result], 202);
         }
         if ($action !== 'login') {
             throw new InvalidArgumentException('Unsupported session action.');
@@ -81,6 +80,12 @@ try {
     }
     if ($code === 'AUTHENTICATION_REQUIRED') {
         Api::json(['error' => true, 'code' => 'authentication_required', 'message' => 'Authentication is required.'], 401);
+    }
+    if ($code === 'ACCOUNT_ACTIVATION_REQUIRED') {
+        Api::json(['error' => true, 'code' => 'account_activation_required', 'message' => 'Activate your account using the link sent to your email address.'], 403);
+    }
+    if ($code === 'Registration email delivery is not configured.') {
+        Api::json(['error' => true, 'code' => 'registration_email_unavailable', 'message' => $code], 503);
     }
     if ($code === 'CSRF_VALIDATION_FAILED') {
         Api::json(['error' => true, 'code' => 'csrf_failed', 'message' => 'The request verification token is invalid.'], 403);

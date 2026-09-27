@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
+require_once __DIR__ . '/UserLifecycleNotificationService.php';
 require_once __DIR__ . '/AccountIntegration.php';
 
 class GoogleIntegration
@@ -204,12 +205,14 @@ class GoogleIntegration
         $email = $identity['email'];
         $displayName = $identity['display_name'];
         $avatarUrl = $identity['avatar_url'];
+        $newUser = false;
         $this->pdo->beginTransaction();
         try {
             $lookup = $this->pdo->prepare('SELECT * FROM users WHERE google_subject = ? LIMIT 1 FOR UPDATE');
             $lookup->execute([$subject]);
             $user = $lookup->fetch();
             if (!$user) {
+                $newUser = true;
                 $collision = $this->pdo->prepare('SELECT id FROM users WHERE normalized_email = ? LIMIT 1');
                 $collision->execute([$email]);
                 if ($collision->fetchColumn() !== false) {
@@ -245,7 +248,12 @@ class GoogleIntegration
             throw $exception;
         }
         $this->auth->audit($userId, 'auth.google_login_succeeded', 'user', (string) $userId);
-        return ['user' => $this->auth->publicUser($userId), 'session' => $session];
+        $welcome = ['status' => 'already_active'];
+        if ($newUser && Db::tableExists($this->pdo, 'user_lifecycle_notifications')) {
+            try { $welcome = (new UserLifecycleNotificationService($this->pdo))->sendWelcome($userId); }
+            catch (Exception $exception) { $welcome = ['status' => 'failed']; }
+        }
+        return ['user' => $this->auth->publicUser($userId), 'session' => $session, 'welcome_notification' => $welcome];
     }
 
     private function linkIdentity($userId, array $claims)

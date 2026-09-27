@@ -4,6 +4,7 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/SettingsService.php';
 require_once __DIR__ . '/AvatarService.php';
 require_once __DIR__ . '/TimezoneService.php';
+require_once __DIR__ . '/UserLifecycleNotificationService.php';
 
 class AuthService
 {
@@ -39,6 +40,9 @@ class AuthService
             $this->audit(null, 'auth.login_failed', 'identity', hash('sha256', $identity));
             throw new RuntimeException('Invalid sign-in credentials.');
         }
+        if ($this->registrationActivationPending((int) $user['id'])) {
+            throw new RuntimeException('ACCOUNT_ACTIVATION_REQUIRED');
+        }
 
         if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) {
             $rehash = $this->pdo->prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?');
@@ -47,27 +51,16 @@ class AuthService
 
         $session = $this->createSession((int) $user['id']);
         $this->audit((int) $user['id'], 'auth.login_succeeded', 'user', (string) $user['id']);
+        $this->tryWelcomeNotification((int) $user['id'], true);
         return ['user' => $this->publicUser((int) $user['id']), 'session' => $session];
     }
 
     public function register(array $input)
     {
-        $email = strtolower(trim(isset($input['email']) ? (string) $input['email'] : ''));
-        $displayName = trim(isset($input['display_name']) ? (string) $input['display_name'] : '');
-        $password = isset($input['password']) ? (string) $input['password'] : '';
-        $confirmation = isset($input['password_confirmation']) ? (string) $input['password_confirmation'] : '';
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 191) {
-            throw new InvalidArgumentException('Enter a valid email address.');
-        }
-        if ($displayName === '' || strlen($displayName) > 120) {
-            throw new InvalidArgumentException('Display name is required and must not exceed 120 characters.');
-        }
-        if (strlen($password) < 12) {
-            throw new InvalidArgumentException('Password must be at least 12 characters.');
-        }
-        if (!hash_equals($password, $confirmation)) {
-            throw new InvalidArgumentException('Password confirmation does not match.');
-        }
+        $registration = $this->registrationInput($input);
+        $email = $registration['email'];
+        $displayName = $registration['display_name'];
+        $password = $registration['password'];
 
         $this->pdo->beginTransaction();
         try {
@@ -98,6 +91,120 @@ class AuthService
         }
         $this->audit($userId, 'auth.registration_succeeded', 'user', (string) $userId);
         return ['user' => $this->publicUser($userId), 'session' => $session];
+    }
+
+    public function registerForActivation(array $input)
+    {
+        $registration = $this->registrationInput($input);
+        $notifications = new UserLifecycleNotificationService($this->pdo);
+        $notifications->requireRegistrationDeliveryConfiguration();
+        $email = $registration['email'];
+        $displayName = $registration['display_name'];
+        $password = $registration['password'];
+        $token = self::randomToken(32);
+        $expiresAt = date('Y-m-d H:i:s', time() + 86400);
+
+        $this->pdo->beginTransaction();
+        try {
+            $collision = $this->pdo->prepare(
+                'SELECT u.id, a.user_id AS activation_user_id, a.consumed_at
+                 FROM users u LEFT JOIN user_registration_activations a ON a.user_id = u.id
+                 WHERE u.normalized_email = ? LIMIT 1 FOR UPDATE'
+            );
+            $collision->execute([$email]);
+            $now = Db::now();
+            $existing = $collision->fetch();
+            if ($existing) {
+                if ($existing['activation_user_id'] === null || $existing['consumed_at'] !== null) {
+                    throw new InvalidArgumentException('That email address is already registered.');
+                }
+                $userId = (int) $existing['id'];
+                $this->pdo->prepare(
+                    'UPDATE users SET password_hash = ?, display_name = ?, updated_at = ? WHERE id = ?'
+                )->execute([password_hash($password, PASSWORD_DEFAULT), $displayName, $now, $userId]);
+                $this->pdo->prepare(
+                    'UPDATE user_registration_activations SET token_hash = ?, expires_at = ?, updated_at = ? WHERE user_id = ?'
+                )->execute([hash('sha256', $token), $expiresAt, $now, $userId]);
+                $this->pdo->prepare(
+                    "DELETE FROM user_lifecycle_notifications WHERE user_id = ? AND event_code = 'registration_activation'"
+                )->execute([$userId]);
+            } else {
+                $insert = $this->pdo->prepare(
+                    "INSERT INTO users (normalized_email, username, password_hash, display_name, status, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, 'active', ?, ?)"
+                );
+                $insert->execute([$email, null, password_hash($password, PASSWORD_DEFAULT), $displayName, $now, $now]);
+                $userId = (int) $this->pdo->lastInsertId();
+                $this->pdo->prepare("INSERT INTO user_system_roles (user_id, role_id, granted_by_user_id, created_at)
+                    SELECT ?, id, NULL, ? FROM system_roles WHERE code = 'user'")->execute([$userId, $now]);
+                $this->pdo->prepare('INSERT INTO workspaces (owner_user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+                    ->execute([$userId, $displayName . "'s workspace", $now, $now]);
+                $this->pdo->prepare(
+                    'INSERT INTO user_registration_activations (user_id, token_hash, expires_at, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?)'
+                )->execute([$userId, hash('sha256', $token), $expiresAt, $now, $now]);
+            }
+            $this->pdo->commit();
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            if ($exception instanceof PDOException && (string) $exception->getCode() === '23000') {
+                throw new InvalidArgumentException('That email address is already registered.');
+            }
+            throw $exception;
+        }
+
+        $delivery = $notifications->sendActivation($userId, $token, $expiresAt);
+        $this->audit($userId, 'auth.registration_pending_activation', 'user', (string) $userId);
+        return [
+            'pending_activation' => true,
+            'email' => $email,
+            'expires_at' => $expiresAt,
+            'email_notification' => $delivery,
+        ];
+    }
+
+    public function activateRegistration($token)
+    {
+        $token = trim((string) $token);
+        if ($token === '' || strlen($token) > 200) {
+            throw new InvalidArgumentException('Registration activation token is invalid or expired.');
+        }
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare(
+                "SELECT a.user_id FROM user_registration_activations a
+                 JOIN users u ON u.id = a.user_id
+                 WHERE a.token_hash = ? AND a.consumed_at IS NULL AND a.expires_at > ?
+                   AND u.status = 'active' AND u.deleted_at IS NULL LIMIT 1 FOR UPDATE"
+            );
+            $statement->execute([hash('sha256', $token), Db::now()]);
+            $userId = $statement->fetchColumn();
+            if ($userId === false) {
+                throw new InvalidArgumentException('Registration activation token is invalid or expired.');
+            }
+            $now = Db::now();
+            $consume = $this->pdo->prepare(
+                'UPDATE user_registration_activations SET consumed_at = ?, updated_at = ?
+                 WHERE user_id = ? AND consumed_at IS NULL'
+            );
+            $consume->execute([$now, $now, (int) $userId]);
+            if ($consume->rowCount() !== 1) {
+                throw new InvalidArgumentException('Registration activation token is invalid or expired.');
+            }
+            $session = $this->createSession((int) $userId);
+            $this->pdo->commit();
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
+
+        $welcome = $this->tryWelcomeNotification((int) $userId);
+        $this->audit((int) $userId, 'auth.registration_activated', 'user', (string) ((int) $userId));
+        return [
+            'user' => $this->publicUser((int) $userId),
+            'session' => $session,
+            'welcome_notification' => $welcome,
+        ];
     }
 
     public function createSession($userId, $accountSessionId = null, $authProvider = null)
@@ -393,6 +500,57 @@ class AuthService
             'workspace' => $user['workspace_id'] ? ['id' => (int) $user['workspace_id'], 'name' => $user['workspace_name']] : null,
             'system_roles' => array_map(function ($row) { return $row['code']; }, $roles->fetchAll()),
         ];
+    }
+
+    private function registrationInput(array $input)
+    {
+        $email = strtolower(trim(isset($input['email']) ? (string) $input['email'] : ''));
+        $displayName = trim(isset($input['display_name']) ? (string) $input['display_name'] : '');
+        $password = isset($input['password']) ? (string) $input['password'] : '';
+        $confirmation = isset($input['password_confirmation']) ? (string) $input['password_confirmation'] : '';
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 191) {
+            throw new InvalidArgumentException('Enter a valid email address.');
+        }
+        if ($displayName === '' || strlen($displayName) > 120) {
+            throw new InvalidArgumentException('Display name is required and must not exceed 120 characters.');
+        }
+        if (strlen($password) < 12) {
+            throw new InvalidArgumentException('Password must be at least 12 characters.');
+        }
+        if (!hash_equals($password, $confirmation)) {
+            throw new InvalidArgumentException('Password confirmation does not match.');
+        }
+        return ['email' => $email, 'display_name' => $displayName, 'password' => $password];
+    }
+
+    private function registrationActivationPending($userId)
+    {
+        if (!Db::tableExists($this->pdo, 'user_registration_activations')) {
+            return false;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM user_registration_activations WHERE user_id = ? AND consumed_at IS NULL'
+        );
+        $statement->execute([(int) $userId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function tryWelcomeNotification($userId, $scheduledOnly = false)
+    {
+        if (!Db::tableExists($this->pdo, 'user_lifecycle_notifications')) {
+            return ['status' => 'skipped', 'reason' => 'schema_unavailable'];
+        }
+        try {
+            $notifications = new UserLifecycleNotificationService($this->pdo);
+            return $scheduledOnly
+                ? $notifications->retryWelcomeIfScheduled((int) $userId)
+                : $notifications->sendWelcome((int) $userId);
+        } catch (Exception $exception) {
+            $this->audit((int) $userId, 'auth.welcome_notification_failed', 'user', (string) ((int) $userId), [
+                'error' => substr($exception->getMessage(), 0, 200),
+            ]);
+            return ['status' => 'failed'];
+        }
     }
 
     public function audit($actorUserId, $action, $subjectType = null, $subjectId = null, array $metadata = [])
