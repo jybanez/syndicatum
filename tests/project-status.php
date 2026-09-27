@@ -62,6 +62,8 @@ try {
         $same(1, $summary['tasks']['blocked']);
         $same(1, $summary['tasks']['in_review']);
         $same(1, $summary['tasks']['completed']);
+        $same(4, $summary['tasks']['eligible_total']);
+        $same(25.0, $summary['tasks']['completion_percent']);
         $same(1, $summary['tasks']['overdue']);
         $same(3, $summary['tasks']['needs_attention']);
         $same(1, $summary['team']['active_total']);
@@ -82,7 +84,16 @@ try {
         $same(7, count($activity['series']));
         $same(4, array_sum(array_column($activity['series'], 'tasks_opened')));
         $same(1, array_sum(array_column($activity['series'], 'tasks_completed')));
+        $same(1, array_sum(array_column($activity['series'], 'tasks_blocked')));
+        $same(2, array_sum(array_column($activity['series'], 'sent_for_review')));
+        $same(0, array_sum(array_column($activity['series'], 'responsibilities_reassigned')));
+        $same(4, $activity['totals']['tasks_opened']);
+        $same(1, $activity['totals']['tasks_completed']);
+        $same(1, $activity['totals']['tasks_blocked']);
+        $same(2, $activity['totals']['sent_for_review']);
+        $same(0, $activity['totals']['responsibilities_reassigned']);
         if (array_sum(array_column($activity['series'], 'messages')) < 1) { throw new RuntimeException('Expected message activity.'); }
+        $same(array_sum(array_column($activity['series'], 'messages')), $activity['totals']['messages']);
         try { $status->activity($access, 365); }
         catch (InvalidArgumentException $error) { return; }
         throw new RuntimeException('Expected bounded activity range validation.');

@@ -21,6 +21,7 @@ class ProjectStatusService
                 SUM(status = 'blocked') AS blocked,
                 SUM(status = 'in_review') AS in_review,
                 SUM(status = 'completed') AS completed,
+                SUM(status = 'cancelled') AS cancelled,
                 SUM(due_at IS NOT NULL AND due_at < UTC_TIMESTAMP()
                     AND status NOT IN ('completed','cancelled')) AS overdue,
                 SUM(status IN ('blocked','in_review') OR
@@ -46,14 +47,20 @@ class ProjectStatusService
         );
         $sequence->execute([$projectId]);
 
+        $totalTasks = $this->integer($task, 'total');
+        $completedTasks = $this->integer($task, 'completed');
+        $eligibleTasks = max(0, $totalTasks - $this->integer($task, 'cancelled'));
+
         return [
             'project_id' => $projectId,
             'tasks' => [
-                'total' => $this->integer($task, 'total'),
+                'total' => $totalTasks,
+                'eligible_total' => $eligibleTasks,
                 'active' => $this->integer($task, 'active'),
                 'blocked' => $this->integer($task, 'blocked'),
                 'in_review' => $this->integer($task, 'in_review'),
-                'completed' => $this->integer($task, 'completed'),
+                'completed' => $completedTasks,
+                'completion_percent' => $eligibleTasks === 0 ? 0 : round(($completedTasks / $eligibleTasks) * 100, 1),
                 'overdue' => $this->integer($task, 'overdue'),
                 'needs_attention' => $this->integer($task, 'needs_attention'),
             ],
@@ -104,7 +111,10 @@ class ProjectStatusService
         $taskQuery = $this->pdo->prepare(
             "SELECT DATE(created_at) AS activity_date,
                 SUM(event_type = 'created') AS opened,
-                SUM(to_status = 'completed') AS completed
+                SUM(to_status = 'completed') AS completed,
+                SUM(to_status = 'blocked') AS blocked,
+                SUM(to_status = 'in_review') AS sent_for_review,
+                SUM(event_type = 'assigned') AS reassigned
              FROM project_task_events
              WHERE project_id = ? AND created_at >= ?
              GROUP BY DATE(created_at)"
@@ -114,6 +124,8 @@ class ProjectStatusService
         foreach ($taskQuery->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $taskDays[$row['activity_date']] = [
                 'opened' => (int) $row['opened'], 'completed' => (int) $row['completed'],
+                'blocked' => (int) $row['blocked'], 'sent_for_review' => (int) $row['sent_for_review'],
+                'reassigned' => (int) $row['reassigned'],
             ];
         }
         $messageQuery = $this->pdo->prepare(
@@ -127,17 +139,33 @@ class ProjectStatusService
             $messageDays[$row['activity_date']] = (int) $row['message_count'];
         }
         $series = [];
+        $totals = [
+            'tasks_opened' => 0, 'tasks_completed' => 0, 'tasks_blocked' => 0,
+            'sent_for_review' => 0, 'responsibilities_reassigned' => 0, 'messages' => 0,
+        ];
         for ($offset = 0; $offset < $days; $offset++) {
             $date = gmdate('Y-m-d', strtotime($start . ' +' . $offset . ' days'));
-            $tasks = isset($taskDays[$date]) ? $taskDays[$date] : ['opened' => 0, 'completed' => 0];
-            $series[] = [
+            $tasks = isset($taskDays[$date]) ? $taskDays[$date] : [
+                'opened' => 0, 'completed' => 0, 'blocked' => 0, 'sent_for_review' => 0, 'reassigned' => 0,
+            ];
+            $point = [
                 'date' => $date,
                 'tasks_opened' => $tasks['opened'],
                 'tasks_completed' => $tasks['completed'],
+                'tasks_blocked' => $tasks['blocked'],
+                'sent_for_review' => $tasks['sent_for_review'],
+                'responsibilities_reassigned' => $tasks['reassigned'],
                 'messages' => isset($messageDays[$date]) ? $messageDays[$date] : 0,
             ];
+            $series[] = $point;
+            foreach ($totals as $key => $value) {
+                $totals[$key] += $point[$key];
+            }
         }
-        return ['project_id' => $projectId, 'range_days' => $days, 'series' => $series, 'generated_at' => Db::now()];
+        return [
+            'project_id' => $projectId, 'range_days' => $days, 'totals' => $totals,
+            'series' => $series, 'generated_at' => Db::now(),
+        ];
     }
 
     public function attention(array $access, $limit, $beforeId = null)

@@ -42,9 +42,9 @@ export const USER_GUIDE_SECTIONS = [
         blocks: [
           { type: "steps", items: [
             "Open a project you own, open the project menu beside its title, and choose Project status.",
-            "Review the At a glance and Task progress sections for aggregate work state.",
-            "Change Recent activity between 7, 14, and 30 days without reloading the other sections.",
-            "Use Needs attention to review blocked, in-review, and overdue tasks. Load another bounded page when more results are available.",
+            "Review At a glance and Task progress first. Completed work is shown as a ratio and percentage, and the active team distinguishes people, AI agents, and connected systems.",
+            "Change Project activity between 7, 14, and 30 days to compare work outcomes such as opened, completed, blocked, reviewed, and reassigned tasks. Message volume remains a secondary count.",
+            "Use Needs attention to review blocked, in-review, and overdue tasks. Select an item to open its task details, or load another bounded page when more results are available.",
             "Review Team and Integrations for participant and connection readiness.",
           ] },
           { type: "note", text: "Sections request their data one at a time to keep database load predictable. Each section retains its own result, error, and retry state, so an unavailable section does not prevent the others from being used." },

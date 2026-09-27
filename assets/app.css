@@ -312,11 +312,20 @@ button, input, textarea { font: inherit; }
 .project-status-legend-item.is-completed .project-status-legend-dot { background: var(--task-status-completed); }
 .project-status-legend-item.is-cancelled .project-status-legend-dot { background: var(--task-status-cancelled); }
 .project-status-range { display: block; min-width: 118px; }
+.project-status-activity-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 10px; }
+.project-status-activity-metric { min-width: 0; display: grid; gap: 1px; padding: 8px 10px; border: 1px solid rgba(73, 93, 129, .42); border-radius: 8px; background: rgba(19, 37, 61, .48); }
+.project-status-activity-metric strong { color: var(--app-text); font-size: 18px; }
+.project-status-activity-metric span { color: var(--app-muted); font-size: 11px; }
+.project-status-activity-metric.is-secondary { opacity: .72; }
+.project-status-activity-chart { min-width: 0; }
 .project-status-attention-list { display: grid; gap: 7px; }
-.project-status-attention-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 9px 10px; border: 1px solid rgba(73, 93, 129, .42); border-radius: 8px; background: rgba(19, 37, 61, .48); }
+.project-status-attention-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 9px 10px; color: inherit; font: inherit; text-align: left; cursor: pointer; border: 1px solid rgba(73, 93, 129, .42); border-radius: 8px; background: rgba(19, 37, 61, .48); }
+.project-status-attention-item:hover { border-color: rgba(103, 151, 230, .7); background: rgba(28, 50, 80, .62); }
+.project-status-attention-item:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 2px; }
 .project-status-attention-copy { min-width: 0; display: grid; gap: 2px; }
 .project-status-attention-copy strong { overflow-wrap: anywhere; }
 .project-status-attention-copy span { color: var(--app-muted); font-size: 12px; }
+.project-status-attention-copy .project-status-attention-reason { color: var(--app-text); }
 .project-status-attention-flags { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .project-status-attention-flags .ui-badge { padding: 3px 7px; }
 .project-status-attention-flags .is-overdue, .project-status-attention-flags .is-blocked { color: #ffc1ad; border-color: rgba(245, 117, 72, .52); background: rgba(113, 43, 25, .42); }
@@ -807,6 +816,7 @@ button, input, textarea { font: inherit; }
   .project-status-content { grid-template-columns: 1fr; gap: 8px; }
   .project-status-intro, .project-status-section.is-wide { grid-column: auto; }
   .project-status-section { padding: 11px; }
+  .project-status-activity-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-status-attention-item { align-items: flex-start; }
   .public-policy-links {
     left: 12px;

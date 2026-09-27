@@ -225,12 +225,12 @@ paths:
         '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-status-activity.php:
     get:
-      summary: Read owner-only bounded project activity buckets
+      summary: Read owner-only bounded project outcome activity
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - { name: days, in: query, schema: { type: integer, enum: [7, 14, 30], default: 14 } }
       responses:
-        '200': { description: UTC date buckets for opened/completed tasks and messages }
+        '200': { description: UTC date buckets and totals for opened, completed, blocked, sent-for-review, and reassigned tasks, plus secondary message volume }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
