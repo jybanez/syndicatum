@@ -132,7 +132,7 @@ try {
         && $inspected['backup_policy']['excluded']['count'] === 3
         && $inspected['file_role_counts']['logical_data'] === 39
         && $inspected['file_role_counts']['persistent_asset'] === 1
-        && $inspected['sequence_table_count'] === 39,
+        && $inspected['sequence_table_count'] === 41,
         'Inspection did not return the trusted policy and inventory counts.');
     backupProducerAssert(serialize([
         $restoreTarget->counts, $restoreTarget->rows, $restoreTarget->transaction, $restoreTarget->sequences,
