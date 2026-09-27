@@ -12,6 +12,9 @@ try {
         Api::json(['data' => $service->listForUser($user['id'])], 200, ['Cache-Control' => 'no-store, private']);
     }
     $body = Api::body();
+    if (($body['operation'] ?? '') === 'mark_all_read') {
+        Api::json(['data' => $service->markAllRead($user['id'])]);
+    }
     if (($body['operation'] ?? '') !== 'mark_read' || !isset($body['invitation_ids']) || !is_array($body['invitation_ids'])) {
         throw new InvalidArgumentException('A valid notification operation is required.');
     }

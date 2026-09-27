@@ -301,9 +301,20 @@ try {
         $suite->same('syndicatum.user.' . $member['id'], $notificationEvent['room_override']);
         $accepted = $management->acceptInvitationById($member['id'], $invitation['id']);
         $suite->same($project['id'], $accepted['id']);
+        $acceptedNotifications = $inbox->listForUser($member['id']);
+        $suite->same('accepted', $acceptedNotifications['items'][0]['status']);
+        $suite->same(false, $acceptedNotifications['items'][0]['actionable']);
         $statement = $pdo->prepare("SELECT COUNT(*) FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human' AND status = 'active'");
         $statement->execute([$project['id'], $member['id']]);
         $suite->same(1, (int) $statement->fetchColumn());
+
+        $declinedProject = $management->createProject($administrator['id'], ['name' => 'Declined Product']);
+        $declinedInvitation = $management->invite($declinedProject['id'], $administrator['id'], ['email' => 'member@example.test', 'role' => 'viewer']);
+        $declined = $management->declineInvitationById($member['id'], $declinedInvitation['id']);
+        $suite->same('rejected', $declined['status']);
+        $declinedNotifications = $inbox->listForUser($member['id']);
+        $suite->same('rejected', $declinedNotifications['items'][0]['status']);
+        $suite->same(0, $inbox->markAllRead($member['id'])['unread_count']);
     });
 
     $suite->test('project agent claim is single use and project scoped', function () use ($suite, $pdo, $administrator, $management) {

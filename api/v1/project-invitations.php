@@ -14,6 +14,9 @@ try {
         Api::json(['data' => $data], 200, ['Cache-Control' => 'no-store, private']);
     }
     $body = Api::body();
+    if (($body['operation'] ?? '') === 'decline' && isset($body['invitation_id'])) {
+        Api::json(['data' => $service->declineInvitationById($user['id'], $body['invitation_id'])]);
+    }
     if (isset($body['invitation_token'])) {
         Api::json(['data' => $service->acceptInvitation($user['id'], $body['invitation_token'])]);
     }
