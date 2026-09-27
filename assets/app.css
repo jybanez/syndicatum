@@ -381,7 +381,7 @@ button, input, textarea { font: inherit; }
 .unified-workspace-surface .surface-column { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
 .project-navigation-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; padding: 14px; box-sizing: border-box; }
 .project-participants-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; padding: 14px; box-sizing: border-box; }
-.project-tasks-column { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; overflow: hidden; padding: 14px; box-sizing: border-box; }
+.project-tasks-column { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px; box-sizing: border-box; }
 .task-filter-row > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .task-heading-actions { justify-content: flex-end; }
 .task-count { display: inline-grid; min-width: 22px; height: 22px; place-items: center; border-radius: 999px; color: var(--app-muted); background: color-mix(in srgb, var(--app-accent) 12%, transparent); font-size: 12px; }
@@ -450,7 +450,7 @@ button, input, textarea { font: inherit; }
 .task-detail-activity strong { color: var(--app-text); font-size: 12px; }
 .task-detail-activity span { color: var(--app-muted); font-size: 11px; }
 .task-detail-activity p { font-size: 12px; }
-.project-messages-column { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 16px; box-sizing: border-box; }
+.project-messages-column { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 4px; box-sizing: border-box; }
 .project-messages-column > .timeline-project-overview { grid-row: 1; }
 .project-messages-column > .project-view-switch { grid-row: 2; }
 .identity-card, .workspace-card, .project-overview { padding: 18px; }
