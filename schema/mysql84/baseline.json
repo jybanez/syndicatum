@@ -734,6 +734,7 @@
                 "id",
                 "event_uuid",
                 "project_id",
+                "room_override",
                 "message_id",
                 "event_type",
                 "project_sequence",
@@ -968,7 +969,8 @@
                 "status",
                 "expires_at",
                 "created_at",
-                "responded_at"
+                "responded_at",
+                "notification_read_at"
             ],
             "identity_columns": [
                 "id"
