@@ -232,6 +232,9 @@ class ProjectManagementService
         $token = AuthService::randomToken(32);
         $now = Db::now();
         $expires = date('Y-m-d H:i:s', time() + 7 * 86400);
+        $recipientStatement = $this->pdo->prepare("SELECT id FROM users WHERE normalized_email = ? AND status = 'active' AND deleted_at IS NULL LIMIT 1");
+        $recipientStatement->execute([$email]);
+        $recipientUserId = (int) $recipientStatement->fetchColumn();
         $this->pdo->beginTransaction();
         try {
             $statement = $this->pdo->prepare(
@@ -240,6 +243,9 @@ class ProjectManagementService
             );
             $statement->execute([(int) $projectId, $email, $role, hash('sha256', $token), (int) $actorUserId, $expires, $now]);
             $id = (int) $this->pdo->lastInsertId();
+            if ($recipientUserId > 0) {
+                $this->outbox->enqueueNotificationsChanged((int) $projectId, $recipientUserId, 'invitation_created', $id);
+            }
             $this->auth->audit((int) $actorUserId, 'project.invitation_created', 'project_invitation', (string) $id, ['project_id' => (int) $projectId, 'role' => $role]);
             $this->pdo->commit();
             $result = ['id' => $id, 'project_id' => (int) $projectId, 'email' => $email, 'role' => $role, 'expires_at' => $expires, 'invitation_token' => $token];
@@ -303,7 +309,11 @@ class ProjectManagementService
 
     public function acceptInvitation($userId, $token)
     {
-        $invitation = $this->pendingInvitationForUser($userId, $token);
+        return $this->acceptPendingInvitation($userId, $this->pendingInvitationForUser($userId, $token));
+    }
+
+    private function acceptPendingInvitation($userId, array $invitation)
+    {
         $this->pdo->beginTransaction();
         try {
             $this->ensureMembershipAndParticipant((int) $invitation['project_id'], (int) $userId, $invitation['role']);
@@ -311,6 +321,7 @@ class ProjectManagementService
                 ->execute([(int) $userId, Db::now(), $invitation['id']]);
             $this->auth->audit((int) $userId, 'project.invitation_accepted', 'project_invitation', (string) $invitation['id']);
             $this->enqueueParticipantsChanged((int) $invitation['project_id'], 'human_joined');
+            $this->outbox->enqueueNotificationsChanged((int) $invitation['project_id'], (int) $userId, 'invitation_accepted', (int) $invitation['id']);
             $this->pdo->commit();
             return $this->project((int) $invitation['project_id']);
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
@@ -318,7 +329,11 @@ class ProjectManagementService
 
     public function previewInvitation($userId, $token)
     {
-        $invitation = $this->pendingInvitationForUser($userId, $token);
+        return $this->invitationPreview($this->pendingInvitationForUser($userId, $token));
+    }
+
+    private function invitationPreview(array $invitation)
+    {
         $statement = $this->pdo->prepare(
             'SELECT p.name AS project_name, inviter.display_name AS inviter_name
              FROM projects p
@@ -338,6 +353,17 @@ class ProjectManagementService
         ];
     }
 
+    public function previewInvitationById($userId, $invitationId)
+    {
+        return $this->invitationPreview($this->pendingInvitationForUserById($userId, $invitationId));
+    }
+
+    public function acceptInvitationById($userId, $invitationId)
+    {
+        $invitation = $this->pendingInvitationForUserById($userId, $invitationId);
+        return $this->acceptPendingInvitation($userId, $invitation);
+    }
+
     private function pendingInvitationForUser($userId, $token)
     {
         $token = trim((string) $token);
@@ -347,6 +373,20 @@ class ProjectManagementService
              WHERE i.token_hash = ? AND i.status = 'pending' AND i.expires_at > ? LIMIT 1"
         );
         $statement->execute([(int) $userId, hash('sha256', $token), Db::now()]);
+        $invitation = $statement->fetch();
+        if (!$invitation || strtolower((string) $invitation['normalized_email']) !== strtolower($invitation['invited_email'])) {
+            throw new RuntimeException('INVITATION_NOT_FOUND');
+        }
+        return $invitation;
+    }
+
+    private function pendingInvitationForUserById($userId, $invitationId)
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT i.*, u.normalized_email FROM project_invitations i JOIN users u ON u.id = ?
+             WHERE i.id = ? AND i.status = 'pending' AND i.expires_at > ? LIMIT 1"
+        );
+        $statement->execute([(int) $userId, (int) $invitationId, Db::now()]);
         $invitation = $statement->fetch();
         if (!$invitation || strtolower((string) $invitation['normalized_email']) !== strtolower($invitation['invited_email'])) {
             throw new RuntimeException('INVITATION_NOT_FOUND');

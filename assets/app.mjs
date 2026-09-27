@@ -42,6 +42,7 @@ const API = {
   workspace: "api/v1/workspace.php",
   manageProjects: "api/v1/manage-projects.php",
   projectInvitations: "api/v1/project-invitations.php",
+  notifications: "api/v1/notifications.php",
   projectMembers: "api/v1/project-members.php",
   projectAgents: "api/v1/project-agents.php",
   projectAgentWebhook: "api/v1/project-agent-webhook.php",
@@ -73,6 +74,9 @@ const state = {
   participantSearch: "",
   adminKind: "",
   recoveryStatus: null,
+  notifications: [],
+  notificationUnreadCount: 0,
+  notificationsLoaded: false,
   backupGridColumnWidths: null,
   backupPage: null,
   session: null,
@@ -412,6 +416,23 @@ function helperIconHtml(name, size = 14) {
   }
 }
 
+function notificationIconHtml() {
+  const badge = state.notificationUnreadCount > 0
+    ? `<span class="syndicatum-notification-badge" aria-hidden="true">${Math.min(99, state.notificationUnreadCount)}</span>` : "";
+  return `<span class="syndicatum-notification-icon">${helperIconHtml("notifications.unmuted", 18)}${badge}</span>`;
+}
+
+function notificationMenuItems() {
+  const items = state.notifications.map((notification) => ({
+    id: `notification:${notification.invitation_id}`,
+    label: `${notification.read ? "" : "New · "}${notification.project_name} · Invited by ${notification.inviter_name} · ${notification.role_label}`,
+    icon: helperIconHtml("comms.envelope-open"),
+  }));
+  if (!items.length) items.push({ id: "notifications-empty", label: state.notificationsLoaded ? "No pending notifications" : "Loading notifications…", disabled: true });
+  items.push({ id: "notifications-refresh", label: state.realtimeError ? "Refresh notifications · Realtime disconnected" : "Refresh notifications", icon: helperIconHtml("actions.refresh") });
+  return items;
+}
+
 function mountNavbar() {
   if (!state.factories.createNavbar) return;
   const items = [];
@@ -423,6 +444,14 @@ function mountNavbar() {
     if (state.teamVisible) items.push({ id: "mobile-team", label: "Team", icon: helperIconHtml("people.users"), className: "ui-button-borderless mobile-workspace-nav", disabled: !selectedProjectId() });
   }
   const actions = [];
+  if (state.mode === "expanded") actions.push({
+    id: "notifications",
+    label: state.notificationUnreadCount > 0 ? `Notifications, ${state.notificationUnreadCount} unread` : "Notifications",
+    icon: notificationIconHtml(),
+    iconOnly: true,
+    className: "ui-button-borderless syndicatum-notification-action",
+    menuItems: notificationMenuItems(),
+  });
   if (state.mode === "expanded") actions.push({
     id: "guide",
     label: "User Guide",
@@ -505,7 +534,9 @@ function mountNavbar() {
       if (action?.id === "guide") showGuideSurface();
     },
     onActionMenuSelect(_action, item) {
-      if (["users", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
+      if (String(item?.id || "").startsWith("notification:")) void reviewInboxInvitation(Number(String(item.id).split(":")[1]));
+      else if (item?.id === "notifications-refresh") void loadNotifications({ announce: true });
+      else if (["users", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
       else if (item?.id === "settings") void openSettings();
       else if (item?.id === "profile") openProfileModal();
       else if (item?.id === "password") openPasswordModal();
@@ -1253,6 +1284,10 @@ function invitationReviewDetails(invitation) {
 }
 
 function openPendingInvitationReview(token) {
+  openInvitationReview({ token });
+}
+
+function openInvitationReview({ token = "", invitationId = 0 } = {}) {
   if (state.components.invitationReview?.getState?.().open) return;
   const content = projectInfoElement("div", "invitation-review-content");
   content.append(projectInfoElement("p", "", "Loading invitation details…"));
@@ -1269,8 +1304,10 @@ function openPendingInvitationReview(token) {
       cancelBusy: { label: "Not now", onCancel: () => modal.close({ reason: "cancelled" }) },
     });
     try {
-      const invitation = unwrap(await request(API.projectInvitations, {
-        headers: { "X-Syndicatum-Invitation-Token": token },
+      const previewUrl = invitationId > 0
+        ? `${API.projectInvitations}?invitation_id=${encodeURIComponent(invitationId)}` : API.projectInvitations;
+      const invitation = unwrap(await request(previewUrl, {
+        headers: token ? { "X-Syndicatum-Invitation-Token": token } : {},
         signal: abortController.signal,
       }));
       if (dismissed) return;
@@ -1288,7 +1325,7 @@ function openPendingInvitationReview(token) {
               const acceptedProject = unwrap(await request(API.projectInvitations, {
                 method: "POST",
                 headers: csrfHeaders(),
-                body: JSON.stringify({ invitation_token: token }),
+                body: JSON.stringify(token ? { invitation_token: token } : { invitation_id: invitationId }),
               }));
               history.replaceState(history.state, "", `${location.pathname}${location.search}`);
               await current.close({ reason: "accepted" });
@@ -1333,6 +1370,43 @@ function openPendingInvitationReview(token) {
   state.components.invitationReview = modal;
   modal.open();
   void loadInvitation();
+}
+
+async function loadNotifications({ announce = false } = {}) {
+  if (state.mode !== "expanded") return;
+  try {
+    const result = unwrap(await request(API.notifications)) || {};
+    state.notifications = Array.isArray(result.items) ? result.items : [];
+    state.notificationUnreadCount = Number(result.unread_count || 0);
+    state.notificationsLoaded = true;
+    mountNavbar();
+    if (announce) state.components.toast.success("Notifications refreshed.");
+  } catch (error) {
+    if (announce) state.components.toast.error(error.message, { title: "Notifications unavailable" });
+  }
+}
+
+async function reviewInboxInvitation(invitationId) {
+  const notification = state.notifications.find((item) => Number(item.invitation_id) === Number(invitationId));
+  if (notification && !notification.read) {
+    notification.read = true;
+    state.notificationUnreadCount = Math.max(0, state.notificationUnreadCount - 1);
+    mountNavbar();
+    try {
+      const result = unwrap(await request(API.notifications, {
+        method: "POST",
+        headers: csrfHeaders(),
+        body: JSON.stringify({ operation: "mark_read", invitation_ids: [invitationId] }),
+      })) || {};
+      state.notifications = Array.isArray(result.items) ? result.items : state.notifications;
+      state.notificationUnreadCount = Number(result.unread_count || 0);
+      mountNavbar();
+    } catch (error) {
+      await loadNotifications();
+      state.components.toast.error(error.message, { title: "Notification status was not saved" });
+    }
+  }
+  openInvitationReview({ invitationId });
 }
 
 function participantProfileInstructionBlock(label, value) {
@@ -5985,7 +6059,7 @@ async function openSettings() {
 }
 
 async function loadExpanded() {
-  const projectsPayload = await request(API.projects);
+  const [projectsPayload] = await Promise.all([request(API.projects), loadNotifications()]);
   const source = unwrap(projectsPayload) || {};
   const owned = Array.isArray(source) ? source : (source.owned || source.projects || []);
   const shared = Array.isArray(source.shared) ? source.shared : [];
@@ -5999,6 +6073,7 @@ async function loadExpanded() {
     showApplication();
     if (requestedRoute.surface === "guide") showGuideSurface(requestedRoute.articleId, { historyMode: "replace" });
     else showWorkspaceSurface({ historyMode: "replace" });
+    void connectRealtime(state.generation);
     return;
   }
   showApplication();
@@ -6147,8 +6222,8 @@ function receiveRealtimeMessage(source) {
 async function connectRealtime(projectGeneration = state.generation) {
   if (state.mode !== "expanded" || projectGeneration !== state.generation) return;
   const projectRealtime = state.project?.capabilities?.realtime;
-  const backupOnly = !state.project && isAdministrator();
-  if (!backupOnly && !projectRealtime?.enabled) {
+  const globalOnly = !state.project;
+  if (!globalOnly && !projectRealtime?.enabled) {
     state.realtimeError = "PBB Realtime is disabled for this project.";
     el.status_badge.textContent = "Realtime unavailable";
     window.dispatchEvent(new CustomEvent("syndicatum:realtime-error", { detail: { message: state.realtimeError } }));
@@ -6159,15 +6234,15 @@ async function connectRealtime(projectGeneration = state.generation) {
   state.pollingTimer = null;
   const attempt = ++state.realtimeGeneration;
   try {
-    const admissionPath = applicationResourceUrl(backupOnly
+    const admissionPath = applicationResourceUrl(globalOnly
       ? "api/v1/realtime-admission.php"
       : projectRealtime.admission_url || `api/v1/realtime-admission.php?project_id=${encodeURIComponent(selectedProjectId())}`);
     const admission = unwrap(await request(admissionPath));
     if (!admission?.enabled) {
       state.realtimeError = "PBB Realtime admission is disabled.";
-      el.status_badge.textContent = "Polling";
+      el.status_badge.textContent = globalOnly ? "Realtime unavailable" : "Polling";
       window.dispatchEvent(new CustomEvent("syndicatum:realtime-error", { detail: { message: state.realtimeError } }));
-      if (!backupOnly) startPolling();
+      if (!globalOnly) startPolling();
       return;
     }
     const rooms = Array.from(new Set([
@@ -6212,6 +6287,7 @@ async function connectRealtime(projectGeneration = state.generation) {
         state.pollingTimer = null;
         el.status_badge.textContent = "Realtime";
         window.dispatchEvent(new CustomEvent("syndicatum:realtime-ready", { detail: { rooms: [...joinedRooms] } }));
+        void loadNotifications();
         if (state.project && joinedRooms.has(admission.room)) {
           void Promise.all([loadMessages("newer", projectGeneration), loadTasks(projectGeneration)]).catch(handleLoadError);
           scheduleTaskReconciliation(projectGeneration);
@@ -6236,6 +6312,10 @@ async function connectRealtime(projectGeneration = state.generation) {
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.participants.changed") {
         void refreshParticipants(projectGeneration).catch(handleLoadError);
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.notifications.changed") {
+        void loadNotifications();
         return;
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.task.updated") {

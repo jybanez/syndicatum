@@ -352,13 +352,18 @@ try {
         $suite->true(strpos($settings, '"mail.enabled": Boolean(values.mail_enabled)') !== false
             && strpos($settings, '"mail.smtp_host"') === false,
             'The Mail tab must persist capture settings without submitting inactive SMTP settings.');
-        $previewPosition = strpos($source, 'headers: { "X-Syndicatum-Invitation-Token": token }');
-        $acceptPosition = strpos($source, 'body: JSON.stringify({ invitation_token: token })');
+        $previewPosition = strpos($source, 'headers: token ? { "X-Syndicatum-Invitation-Token": token } : {}');
+        $acceptPosition = strpos($source, 'body: JSON.stringify(token ? { invitation_token: token } : { invitation_id: invitationId })');
         $suite->true(strpos($source, 'loadExpandedWithPendingInvitation()') !== false
             && strpos($source, 'title: "Review project invitation"') !== false
             && strpos($source, 'label: "Accept invitation"') !== false
             && $previewPosition !== false && $acceptPosition !== false && $previewPosition < $acceptPosition,
             'Invitation links must load a read-only review before offering explicit acceptance.');
+        $suite->true(strpos($source, 'id: "notifications"') !== false
+            && strpos($source, 'syndicatum.notifications.changed') !== false
+            && strpos($source, 'void loadNotifications();') !== false
+            && strpos($source, 'setInterval(loadNotifications') === false,
+            'The notification inbox must use global Realtime reconciliation without polling.');
         $suite->true(strpos($settings, 'settingsTabs?.setActive(tabId, false);') !== false,
             'Validation must reveal the tab containing the first invalid field.');
         $suite->true(strpos($settings, 'Please address the following issues before continuing:') !== false,

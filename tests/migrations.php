@@ -79,9 +79,9 @@ try {
         $suite->assertSame($migrationCount, (int) $pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn());
         $versions = $pdo->query('SELECT version FROM syndicatum_schema_migrations ORDER BY version')->fetchAll(PDO::FETCH_COLUMN);
         $suite->assertSame('202609050001_expansion_foundation', $versions[0]);
-        $checksum = $pdo->query("SELECT checksum FROM syndicatum_schema_migrations WHERE version = '202609270002'")->fetchColumn();
+        $checksum = $pdo->query("SELECT checksum FROM syndicatum_schema_migrations WHERE version = '202609270003'")->fetchColumn();
         $suite->assertSame(
-            PostBaselineMigrator::canonicalSha256(dirname(__DIR__) . '/migrations/202609270002.php'),
+            PostBaselineMigrator::canonicalSha256(dirname(__DIR__) . '/migrations/202609270003.php'),
             $checksum,
             'Migration checksums must be independent of checkout line endings.'
         );
@@ -93,7 +93,7 @@ try {
     });
 
     $suite->test('legacy raw CRLF migration checksums remain valid across checkout platforms', function () use ($suite, $pdo) {
-        $version = '202609270002';
+        $version = '202609270003';
         $source = dirname(__DIR__) . '/migrations/' . $version . '.php';
         $directory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-migration-crlf-' . bin2hex(random_bytes(6));
         mkdir($directory, 0700, true);

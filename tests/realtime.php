@@ -112,6 +112,15 @@ $suite->test('admission is exact-room and subscribe-only', function () use ($sui
     $suite->truthy(!in_array('chat.publish', $claims['capabilities'], true));
 });
 
+$suite->test('global user admission includes a private notification room without publish capability', function () use ($suite) {
+    $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()));
+    $admission = $integration->buildGlobalAdmission(['id' => 27, 'display_name' => 'Invited User']);
+    $claims = realtimeDecodeJwtPayload($admission['token']);
+    $suite->same(['syndicatum.notifications.user.27'], $claims['allowed_rooms']);
+    $suite->same('user:27', $claims['user_id']);
+    $suite->truthy(!in_array('chat.publish', $claims['capabilities'], true));
+});
+
 $suite->test('connector authorization admission is exact-room, short-lived, and subscribe-only', function () use ($suite) {
     $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()));
     $authorizationId = str_repeat('a', 32);
@@ -161,6 +170,33 @@ $suite->test('publisher sends the complete canonical outbox payload', function (
     $suite->same($eventPayload, $capturedRequest['payload']);
     $suite->same('chat.thread.syndicatum.project.42', $capturedRequest['room']);
     $suite->same('event-1', $capturedRequest['event_id']);
+});
+
+$suite->test('publisher honors the server-generated user notification room', function () use ($suite) {
+    $captured = null;
+    $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()), function ($config, $request) use (&$captured) {
+        $captured = $request; return ['status' => 202, 'body' => '{}'];
+    });
+    $integration->publishOutboxEvent([
+        'event_uuid' => 'notification-event-1', 'project_id' => 42,
+        'room_override' => 'syndicatum.notifications.user.27',
+        'event_type' => 'syndicatum.notifications.changed', 'payload_json' => '{"change":"invitation_created"}',
+    ]);
+    $suite->same('syndicatum.notifications.user.27', $captured['room']);
+    $suite->same('syndicatum.notifications.changed', $captured['event_type']);
+});
+
+$suite->test('publisher rejects room overrides outside the notification contract', function () use ($suite) {
+    $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()), function () {
+        throw new RuntimeException('Transport must not be reached.');
+    });
+    $result = $integration->publishOutboxEvent([
+        'event_uuid' => 'notification-event-invalid', 'project_id' => 42,
+        'room_override' => 'syndicatum.backups.global',
+        'event_type' => 'syndicatum.notifications.changed', 'payload_json' => '{}',
+    ]);
+    $suite->same('invalid_request', $result['failure_code']);
+    $suite->same(false, $result['retryable']);
 });
 
 $suite->test('publisher retries transient responses and rejects permanent responses', function () use ($suite) {

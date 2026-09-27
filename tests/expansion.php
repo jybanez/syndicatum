@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/ProjectRepository.php';
 require_once dirname(__DIR__) . '/src/ResponsibilityInboxService.php';
 require_once dirname(__DIR__) . '/src/ResponsibilityMigrationAssessment.php';
+require_once dirname(__DIR__) . '/src/NotificationInboxService.php';
 
 class ExpansionTestSuite
 {
@@ -290,7 +291,15 @@ try {
         $membershipStatement = $pdo->prepare("SELECT COUNT(*) FROM project_members WHERE project_id = ? AND user_id = ? AND status = 'active'");
         $membershipStatement->execute([$project['id'], $member['id']]);
         $suite->same(0, (int) $membershipStatement->fetchColumn());
-        $accepted = $management->acceptInvitation($member['id'], $invitation['invitation_token']);
+        $inbox = new NotificationInboxService($pdo);
+        $notifications = $inbox->listForUser($member['id']);
+        $suite->same(1, $notifications['unread_count']);
+        $suite->same($invitation['id'], $notifications['items'][0]['invitation_id']);
+        $suite->same(0, $inbox->markRead($member['id'], [$invitation['id']])['unread_count']);
+        $suite->same('Shared Product', $management->previewInvitationById($member['id'], $invitation['id'])['project_name']);
+        $notificationEvent = $pdo->query("SELECT event_type, room_override FROM message_events_outbox WHERE event_type = 'syndicatum.notifications.changed' ORDER BY id LIMIT 1")->fetch();
+        $suite->same('syndicatum.notifications.user.' . $member['id'], $notificationEvent['room_override']);
+        $accepted = $management->acceptInvitationById($member['id'], $invitation['id']);
         $suite->same($project['id'], $accepted['id']);
         $statement = $pdo->prepare("SELECT COUNT(*) FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human' AND status = 'active'");
         $statement->execute([$project['id'], $member['id']]);
