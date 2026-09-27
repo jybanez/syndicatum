@@ -579,6 +579,8 @@ try {
             'Programmatic project changes must keep the canonical tabs synchronized without duplicate change events.');
         $suite->true(strpos($styles, '.project-view-switch .ui-button') === false,
             'Application CSS must not recreate the removed button-style view switch.');
+        $suite->true(strpos($styles, '.project-view-switch .ui-tabpanel { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }') !== false,
+            'Project tab panels must retain only their top divider so timeline content can use the full column width.');
     });
 
     $suite->test('Workspace columns use compact four-pixel spacing', function () use ($suite, $root) {
