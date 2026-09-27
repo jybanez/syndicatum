@@ -3000,6 +3000,13 @@
       "mode": 420
     },
     {
+      "source": "migrations/202609280002.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202609280002.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
       "source": "api/v1/_project-status.php",
       "action": "ship",
       "path": "app/api/v1/_project-status.php",
@@ -3049,9 +3056,58 @@
       "mode": 420
     },
     {
+      "source": "api/v1/project-status-plan.php",
+      "action": "ship",
+      "path": "app/api/v1/project-status-plan.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-plan.php",
+      "action": "ship",
+      "path": "app/api/v1/project-plan.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-milestones.php",
+      "action": "ship",
+      "path": "app/api/v1/project-milestones.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-milestone.php",
+      "action": "ship",
+      "path": "app/api/v1/project-milestone.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-deliverables.php",
+      "action": "ship",
+      "path": "app/api/v1/project-deliverables.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/project-deliverable.php",
+      "action": "ship",
+      "path": "app/api/v1/project-deliverable.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/ProjectStatusService.php",
       "action": "ship",
       "path": "app/src/ProjectStatusService.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ProjectPlanService.php",
+      "action": "ship",
+      "path": "app/src/ProjectPlanService.php",
       "role": "application",
       "mode": 420
     },

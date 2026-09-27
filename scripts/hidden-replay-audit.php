@@ -62,6 +62,7 @@ assertExactFiles('Legacy installSchema', $installSchemaCallers, [
     'tests/integration-connections.php',
     'tests/migrations.php',
     'tests/project-api.php',
+    'tests/project-plan.php',
     'tests/project-status.php',
     'tests/project-tasks.php',
     'tests/project-templates.php',
