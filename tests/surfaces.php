@@ -558,6 +558,8 @@ try {
         $suite->same(1, substr_count($index, 'class="project-overview timeline-project-overview"'), 'The project overview must render only in the message column.');
         $suite->true(strpos($styles, '#timeline-host .ui-timeline-group-label:not(.ui-timeline-floating-date)') !== false,
             'Application date styling must exclude the Helper-owned floating date label.');
+        $suite->true(strpos($styles, '#timeline-host .ui-timeline-viewport { box-sizing: border-box; padding-right: 8px; }') !== false,
+            'Timeline content must keep a visible gutter before the Helper-owned scrollbar.');
         $suite->true(strpos($styles, '#timeline-host .ui-timeline-group-label { position: sticky;') === false,
             'Legacy sticky positioning must not override the Helper timeline floating-date implementation.');
     });
