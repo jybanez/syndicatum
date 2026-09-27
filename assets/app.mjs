@@ -453,14 +453,17 @@ function notificationStatusLabel(status) {
 function notificationRow(notification, { compact = false } = {}) {
   const row = document.createElement("article");
   row.className = `notification-row${notification.read ? "" : " is-unread"}${compact ? " is-compact" : ""}`;
-  const indicator = document.createElement("span");
-  indicator.className = "notification-unread-indicator";
-  indicator.setAttribute("aria-hidden", "true");
   const icon = document.createElement("span");
   icon.className = "notification-row-icon";
   icon.innerHTML = helperIconHtml("comms.envelope-open", compact ? 17 : 19);
   const body = document.createElement("div");
   body.className = "notification-row-body";
+  if (!notification.read) {
+    const unread = document.createElement("span");
+    unread.className = "app-visually-hidden";
+    unread.textContent = "Unread notification.";
+    body.append(unread);
+  }
   const heading = document.createElement("div");
   heading.className = "notification-row-heading";
   const title = document.createElement("strong");
@@ -488,7 +491,10 @@ function notificationRow(notification, { compact = false } = {}) {
     event.stopPropagation();
     void reviewNotification(notification);
   });
-  row.append(indicator, icon, body, action);
+  const actions = document.createElement("div");
+  actions.className = "notification-row-actions";
+  actions.append(action);
+  row.append(icon, body, actions);
   return row;
 }
 
