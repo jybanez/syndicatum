@@ -591,6 +591,9 @@ try {
             'The project task column must use four-pixel padding and inter-section gaps.');
         $suite->true(strpos($styles, '.project-participants-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px;') !== false,
             'The project participant column must use four-pixel padding and inter-section gaps.');
+        $suite->true(strpos($styles, '.project-overview.timeline-project-overview { padding: 0 0 4px;') !== false
+            && strpos($styles, '.column-filter-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding-bottom: 4px;') !== false,
+            'All four workspace header separators must share compact four-pixel bottom spacing.');
     });
 
     $suite->test('Timeline search stays visible while structured filters use the Helper popover', function () use ($suite, $root) {
