@@ -1840,6 +1840,8 @@ function messageContextMenu(message) {
     { id: "message-info", label: "Message Info", icon: "status.info" },
     { id: "copy-message", label: "Copy", icon: "actions.copy", disabled: Boolean(message.deleted_at) },
   ];
+  if (hasIntegrationMessageData(message)) items.splice(1, 0,
+    { id: "message-data", label: "Show message data", icon: "actions.view" });
   const linkedTasks = messageLinkedTasks(message.id);
   const systemTaskId = message.message_kind === "system" && message.system_event?.data?.subject_type === "task"
     ? id(message.system_event.data.task_id) : "";
@@ -1894,6 +1896,38 @@ function openMessageInfo(message) {
     className: "message-info-modal",
     content: messageInfoContent(message),
     actions: [{ id: "close", label: "Close", variant: "primary" }],
+  });
+  modal.open();
+}
+
+function hasIntegrationMessageData(message) {
+  return message.message_kind === "system"
+    && message.sender?.kind === "integration"
+    && message.system_event?.data
+    && typeof message.system_event.data === "object"
+    && !Array.isArray(message.system_event.data);
+}
+
+function openMessageData(message) {
+  if (!hasIntegrationMessageData(message)) return;
+  const content = document.createElement("div");
+  content.className = "message-data-content";
+  const inspectorHost = document.createElement("div");
+  content.append(inspectorHost);
+  const data = {
+    event_type: message.system_event.type,
+    ...message.system_event.data,
+  };
+  const inspector = state.factories.createDataInspector(inspectorHost, data, {
+    ariaLabel: `Structured data for message #${message.id}`,
+  });
+  const modal = state.factories.createActionModal({
+    title: `Message data #${message.id}`,
+    size: "lg",
+    className: "message-data-modal",
+    content,
+    actions: [{ id: "close", label: "Close", variant: "primary" }],
+    onClose() { inspector.destroy?.(); },
   });
   modal.open();
 }
@@ -2002,6 +2036,10 @@ function renderTimeline(mode = "replace", changed = state.messages) {
       const message = item.raw;
       if (action.id === "message-info") {
         openMessageInfo(message);
+        return;
+      }
+      if (action.id === "message-data") {
+        openMessageData(message);
         return;
       }
       if (action.id === "copy-message") {
