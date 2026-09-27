@@ -103,6 +103,7 @@ def main() -> None:
                 ("API health", "/api/v1/health.php", {200}),
                 ("static asset", "/assets/app.css", {200}),
                 ("authenticated route", "/users", {200}),
+                ("notification route", "/notifications", {200}),
                 ("OAuth route", "/oauth/authorize", {200}),
             ]
             for label, path, expected in checks:
