@@ -6,6 +6,12 @@ final class EmailTemplateRenderer
 {
     public function render($template, array $data)
     {
+        if ($template === 'registration_activation') {
+            return $this->renderRegistrationActivation($data);
+        }
+        if ($template === 'welcome') {
+            return $this->renderWelcome($data);
+        }
         if ($template !== 'project_invitation') {
             throw new InvalidArgumentException('Unknown email template.');
         }
@@ -120,6 +126,110 @@ HTML;
             'html' => $this->replace($html, $templateData, true),
             'brand_logo_url' => $templateData['brand_logo_url'],
         ];
+    }
+
+    private function renderRegistrationActivation(array $data)
+    {
+        $this->requireData($data, ['display_name', 'activation_url', 'expires_at', 'timezone']);
+        $values = $data;
+        $values['brand_logo_url'] = $this->brandLogoUrl($data['activation_url']);
+        $values['expires_at'] = TimezoneService::formatUtc($data['expires_at'], $data['timezone']);
+        $text = <<<'TEXT'
+Activate your Syndicatum account
+
+Hello {{display_name}},
+
+Your registration was received. Activate your account to finish creating your personal workspace.
+
+Activate account:
+{{activation_url}}
+
+This activation link expires {{expires_at}}.
+
+If you did not register for Syndicatum, you can ignore this email. Keep this link private.
+TEXT;
+        $html = $this->lifecycleHtml(
+            'Activate your Syndicatum account',
+            'ACCOUNT ACTIVATION',
+            'Hello {{display_name}},',
+            'Your registration was received. Activate your account to finish creating your personal workspace.',
+            'Activate account',
+            '{{activation_url}}',
+            '<strong style="color:#172033">Expires {{expires_at}}.</strong><br>If you did not register for Syndicatum, you can ignore this email. Keep this link private.'
+        );
+        return [
+            'template' => 'registration_activation',
+            'template_version' => 1,
+            'subject' => 'Activate your Syndicatum account',
+            'text' => $this->replace($text, $values, false),
+            'html' => $this->replace($html, $values, true),
+            'brand_logo_url' => $values['brand_logo_url'],
+        ];
+    }
+
+    private function renderWelcome(array $data)
+    {
+        $this->requireData($data, ['display_name', 'application_url']);
+        $values = $data;
+        $values['brand_logo_url'] = $this->brandLogoUrl($data['application_url']);
+        $text = <<<'TEXT'
+Welcome to Syndicatum
+
+Hello {{display_name}},
+
+Your Syndicatum account is active. Your personal workspace is ready for collaboration with people and AI agents.
+
+Open Syndicatum:
+{{application_url}}
+
+Welcome aboard.
+TEXT;
+        $html = $this->lifecycleHtml(
+            'Welcome to Syndicatum',
+            'WELCOME',
+            'Hello {{display_name}},',
+            'Your Syndicatum account is active. Your personal workspace is ready for collaboration with people and AI agents.',
+            'Open Syndicatum',
+            '{{application_url}}',
+            'Welcome aboard.'
+        );
+        return [
+            'template' => 'welcome',
+            'template_version' => 1,
+            'subject' => 'Welcome to Syndicatum',
+            'text' => $this->replace($text, $values, false),
+            'html' => $this->replace($html, $values, true),
+            'brand_logo_url' => $values['brand_logo_url'],
+        ];
+    }
+
+    private function lifecycleHtml($title, $eyebrow, $greeting, $body, $actionLabel, $actionUrl, $note)
+    {
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<meta name="color-scheme" content="light"><title>' . $title . '</title></head>'
+            . '<body style="margin:0;padding:0;background:#f3f6fb;color:#172033;font-family:Arial,Helvetica,sans-serif;line-height:1.5">'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f3f6fb"><tr><td align="center" style="padding:28px 14px">'
+            . '<table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:100%;background:#fff;border-top:5px solid #2563eb"><tr><td style="padding:34px 36px">'
+            . '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 28px"><tr><td style="padding:0 11px 0 0;vertical-align:middle">'
+            . '<img src="{{brand_logo_url}}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;border:0"></td>'
+            . '<td style="vertical-align:middle;color:#172033;font-size:20px;line-height:24px;font-weight:bold">Syndicatum</td></tr></table>'
+            . '<div style="margin:0 0 8px;color:#2563eb;font-size:12px;line-height:17px;font-weight:bold;letter-spacing:1.3px">' . $eyebrow . '</div>'
+            . '<h1 style="margin:0 0 14px;color:#172033;font-size:27px;line-height:33px;font-weight:bold">' . $title . '</h1>'
+            . '<p style="margin:0 0 10px;color:#172033;font-size:17px;line-height:26px;font-weight:bold">' . $greeting . '</p>'
+            . '<p style="margin:0 0 24px;color:#39445a;font-size:16px;line-height:25px">' . $body . '</p>'
+            . '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 22px"><tr><td bgcolor="#2563eb" style="border-radius:7px;background:#2563eb">'
+            . '<a href="' . $actionUrl . '" style="display:inline-block;padding:14px 22px;color:#fff;font-size:16px;line-height:20px;font-weight:bold;text-decoration:none">' . $actionLabel . '</a>'
+            . '</td></tr></table><div style="margin:0;padding:14px 16px;background:#f8fafc;border-left:3px solid #2563eb;color:#4d5970;font-size:14px;line-height:21px">' . $note . '</div>'
+            . '</td></tr></table></td></tr></table></body></html>';
+    }
+
+    private function requireData(array $data, array $required)
+    {
+        foreach ($required as $key) {
+            if (!array_key_exists($key, $data) || trim((string) $data[$key]) === '') {
+                throw new InvalidArgumentException('Email template data is incomplete: ' . $key . '.');
+            }
+        }
     }
 
     private function brandLogoUrl($invitationUrl)

@@ -282,6 +282,27 @@ try {
         $suite->true(strpos($rewrites, '^privacy/?$ privacy.php') !== false && strpos($rewrites, '^terms/?$ terms.php') !== false, 'Clean public legal routes are missing.');
     });
 
+    $suite->test('native registration activates explicitly while SSO remains immediately usable', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $sessionApi = file_get_contents($root . '/api/v1/session.php');
+        $activationApi = file_get_contents($root . '/api/v1/registration-activation.php');
+        $suite->true(strpos($source, 'registrationActivation: "api/v1/registration-activation.php"') !== false,
+            'The browser must expose the registration activation endpoint.');
+        $suite->true(strpos($source, 'manageBusyOnSubmit: false') !== false
+            && strpos($source, 'Please address the following issues before continuing:') !== false,
+            'Registration must validate through the canonical form before entering busy state.');
+        $suite->true(strpos($source, 'showRegistrationPending(result.email || values.email)') !== false
+            && strpos($source, 'function showRegistrationActivation(token)') !== false
+            && strpos($source, 'pendingRegistrationActivationToken()') !== false,
+            'Native registration must show a pending message and consume explicit activation links.');
+        $suite->true(strpos($sessionApi, 'registerForActivation') !== false
+            && strpos($sessionApi, "Api::json(['data' => \$result], 202);") !== false,
+            'Public native registration must create a pending activation without a session.');
+        $suite->true(strpos($activationApi, 'activateRegistration') !== false
+            && strpos($activationApi, 'AuthService::setSessionCookies($result[\'session\'])') !== false,
+            'Activation must create the native session only after the token is confirmed.');
+    });
+
     $suite->test('System Settings uses Helper tabs and opens before loading its data', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');

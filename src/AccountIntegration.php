@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
+require_once __DIR__ . '/UserLifecycleNotificationService.php';
 
 class AccountIntegration
 {
@@ -257,6 +258,7 @@ class AccountIntegration
             }
         }
 
+        $newUser = false;
         $this->pdo->beginTransaction();
         try {
             $lookup = $this->pdo->prepare('SELECT * FROM users WHERE pbb_user_id = ? LIMIT 1 FOR UPDATE');
@@ -273,6 +275,7 @@ class AccountIntegration
 
             $now = Db::now();
             if (!$user) {
+                $newUser = true;
                 $insert = $this->pdo->prepare(
                     "INSERT INTO users
                      (normalized_email, username, password_hash, display_name, avatar_url, pbb_user_id, status, created_at, updated_at)
@@ -317,7 +320,12 @@ class AccountIntegration
         }
 
         $this->auth->audit($userId, 'auth.account_login_succeeded', 'user', (string) $userId);
-        return ['user' => $this->auth->publicUser($userId), 'session' => $session];
+        $welcome = ['status' => 'already_active'];
+        if ($newUser && Db::tableExists($this->pdo, 'user_lifecycle_notifications')) {
+            try { $welcome = (new UserLifecycleNotificationService($this->pdo))->sendWelcome($userId); }
+            catch (Exception $exception) { $welcome = ['status' => 'failed']; }
+        }
+        return ['user' => $this->auth->publicUser($userId), 'session' => $session, 'welcome_notification' => $welcome];
     }
 
     private function requireEnabled()
