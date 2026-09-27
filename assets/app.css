@@ -998,7 +998,7 @@ button, input, textarea { font: inherit; }
 .notification-row {
   position: relative;
   display: grid;
-  grid-template-columns: 7px 28px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
   padding: 14px;
@@ -1009,18 +1009,19 @@ button, input, textarea { font: inherit; }
 }
 .notification-row:hover { border-color: color-mix(in srgb, var(--app-accent) 72%, var(--app-border)); }
 .notification-row.is-unread { background: color-mix(in srgb, var(--app-accent) 10%, var(--app-panel)); }
-.notification-row.is-compact { grid-template-columns: 6px 24px minmax(0, 1fr) auto; gap: 8px; padding: 11px 12px; border: 0; border-radius: 0; }
+.notification-row.is-compact { grid-template-columns: 24px minmax(0, 1fr); gap: 8px; padding: 12px; border: 0; border-radius: 0; }
 .notification-row.is-compact + .notification-row.is-compact { border-top: 1px solid var(--app-border); }
-.notification-unread-indicator { width: 7px; height: 7px; margin-top: 7px; border-radius: 999px; background: transparent; }
-.notification-row.is-unread .notification-unread-indicator { background: var(--app-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent) 15%, transparent); }
 .notification-row-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; color: var(--app-muted); }
+.notification-row.is-compact .notification-row-icon { width: 24px; height: 24px; }
+.notification-row.is-unread .notification-row-icon { color: var(--app-accent); }
 .notification-row-body { min-width: 0; display: grid; gap: 3px; }
 .notification-row-heading { min-width: 0; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .notification-row-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .notification-row-heading time { flex: 0 0 auto; color: var(--app-muted); font-size: 11px; white-space: nowrap; }
-.notification-row-project { overflow: hidden; color: var(--app-text); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.notification-row-project { overflow: hidden; color: var(--app-text); font-size: 14px; font-weight: 700; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 .notification-row-body p { margin: 0; overflow-wrap: anywhere; color: var(--app-muted); font-size: 12px; line-height: 1.4; }
-.notification-review-action { align-self: center; min-height: 28px !important; padding: 3px 8px !important; font-size: 12px !important; }
+.notification-row-actions { grid-column: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 3px; }
+.notification-review-action { min-height: 28px !important; padding: 3px 8px !important; font-size: 12px !important; }
 .notification-status { display: inline-flex; justify-self: start; margin-top: 3px; padding: 2px 7px; border: 1px solid var(--app-border); border-radius: 999px; color: var(--app-muted); font-size: 11px; font-weight: 700; }
 .notification-status.is-pending { border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-border)); color: var(--app-accent); }
 .notification-status.is-accepted { border-color: color-mix(in srgb, var(--ui-success, #38a169) 55%, var(--app-border)); color: var(--ui-success, #56d38a); }
@@ -1041,6 +1042,6 @@ button, input, textarea { font: inherit; }
 @media (max-width: 680px) {
   .notification-page-controls { align-items: stretch; flex-direction: column; }
   .notification-page-search { width: 100%; }
-  .notification-row { grid-template-columns: 7px 24px minmax(0, 1fr); }
-  .notification-review-action { grid-column: 3; justify-self: start; }
+  .notification-row { grid-template-columns: 24px minmax(0, 1fr); }
+  .notification-row-actions { justify-content: flex-start; }
 }
