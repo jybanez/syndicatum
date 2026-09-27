@@ -402,7 +402,7 @@ button, input, textarea { font: inherit; }
 .task-sort-menu .ui-menu-item { min-height: 34px; padding-block: 6px; }
 .task-refresh-trigger.is-loading svg { animation: syndicatum-task-refresh-spin .8s linear infinite; }
 @keyframes syndicatum-task-refresh-spin { to { transform: rotate(360deg); } }
-.task-list { display: grid; align-content: start; gap: 9px; padding: 0 2px 16px; }
+.task-list { display: grid; align-content: start; gap: 9px; padding: 0 8px 16px 2px; }
 .task-list > .task-empty-state { margin: 18px 2px 0; min-height: 132px; align-content: center; box-sizing: border-box; }
 .task-list > .task-empty-state .ui-empty-state-icon,
 .task-list > .task-empty-state .ui-empty-state-icon svg { width: 28px; height: 28px; }
