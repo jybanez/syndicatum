@@ -14,6 +14,12 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
+| `/api/v1/project-status-summary.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/summary` |
+| `/api/v1/project-status-task-progress.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/task-progress` |
+| `/api/v1/project-status-activity.php?project_id={project}&days={7\|14\|30}` | GET | `/api/v1/projects/{project}/status/activity` |
+| `/api/v1/project-status-attention.php?project_id={project}&limit={1..20}&before={task}` | GET | `/api/v1/projects/{project}/status/attention` |
+| `/api/v1/project-status-team.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/team` |
+| `/api/v1/project-status-integrations.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/integrations` |
 | `/api/v1/project-responsibility-inbox.php?project_id={project}` | GET | `/api/v1/projects/{project}/responsibility-inbox` |
 | `/api/v1/project-messages.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/messages` |
 | `/api/v1/project-message.php?project_id={project}&id={message}` | GET, PATCH, DELETE | `/api/v1/projects/{project}/messages/{message}` |

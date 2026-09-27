@@ -50,6 +50,7 @@ function projectApiError(Exception $exception)
         'RESPONSIBILITY_TARGET_INACTIVE' => [409, 'The responsibility target is not active.'],
         'RESPONSIBILITY_BASELINE_UNAVAILABLE' => [409, 'Historical request requires responsibility migration before state changes.'],
         'PROJECT_ARCHIVED' => [409, 'Archived projects are read-only.'],
+        'PROJECT_STATUS_FORBIDDEN' => [403, 'Only the project owner can view project status.'],
         'RATE_LIMITED' => [429, 'Too many requests. Try again later.'],
     ];
     if (isset($errors[$code])) {

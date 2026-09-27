@@ -35,6 +35,22 @@ export const USER_GUIDE_SECTIONS = [
         ],
       },
       {
+        id: "project-owner-status",
+        title: "Review project status",
+        summary: "Use the owner-only status view to spot progress, activity, and work needing attention.",
+        keywords: ["owner", "status", "dashboard", "progress", "blocked", "overdue", "activity"],
+        blocks: [
+          { type: "steps", items: [
+            "Open a project you own, open the project menu beside its title, and choose Project status.",
+            "Review the At a glance and Task progress sections for aggregate work state.",
+            "Change Recent activity between 7, 14, and 30 days without reloading the other sections.",
+            "Use Needs attention to review blocked, in-review, and overdue tasks. Load another bounded page when more results are available.",
+            "Review Team and Integrations for participant and connection readiness.",
+          ] },
+          { type: "note", text: "Each section loads and retries independently. A slow or unavailable section does not prevent the other project-status sections from being used." },
+        ],
+      },
+      {
         id: "registration-profile-timezone",
         title: "Registration, activation, and timezone",
         summary: "Understand account activation and how Syndicatum chooses your displayed email timezone.",

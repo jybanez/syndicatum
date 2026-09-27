@@ -201,6 +201,75 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Task version conflict or invalid lifecycle transition }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-summary.php:
+    get:
+      summary: Read owner-only headline project status aggregates
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Task, active-team, and message-sequence aggregates }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-task-progress.php:
+    get:
+      summary: Read owner-only task counts by status and completion percentage
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Aggregate task progress without task records }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-activity.php:
+    get:
+      summary: Read owner-only bounded project activity buckets
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: days, in: query, schema: { type: integer, enum: [7, 14, 30], default: 14 } }
+      responses:
+        '200': { description: UTC date buckets for opened/completed tasks and messages }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-attention.php:
+    get:
+      summary: Read an owner-only bounded page of tasks needing attention
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 10 } }
+        - { name: before, in: query, description: Exclusive task-ID cursor., schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Cursor page of blocked, in-review, or overdue tasks }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-team.php:
+    get:
+      summary: Read owner-only participant state aggregates
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Participant counts by identity kind and membership state }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-integrations.php:
+    get:
+      summary: Read owner-only integration readiness aggregates
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Connection state and active-credential readiness aggregates }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-participants.php:
     get:
       summary: List normalized human, agent, and external integration participants

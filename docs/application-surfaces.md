@@ -115,6 +115,15 @@ The desktop Project surface has four independently scrolling columns separated b
 - reply context, addressee responsibility, acknowledgement, and revision indicators;
 - browser-local rendering and filtering of server UTC timestamps.
 
+Project owners also receive **Project status** in the project action menu. It
+opens a canonical wide modal immediately and presents Helper stat cards,
+segmented task progress, and a bounded XY activity chart. At a glance, Task
+progress, Recent activity, Needs attention, Team, and Integrations load through
+separate owner-authorized requests. Each section owns its loading, error, retry,
+and refresh boundary; failure in one section does not hide the others. Activity
+is limited to 7, 14, or 30 UTC days, and attention returns no more than 20 tasks
+per cursor page.
+
 The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters.
 
 ### Tasks
@@ -236,6 +245,12 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-bootstrap.php` | GET | Project context, effective instructions, assignment, permissions, work summary, and timeline attention state |
 | `/api/v1/project-tasks.php` | GET, POST | List/filter shared project tasks or create a task under the authenticated giver identity |
 | `/api/v1/project-task.php` | GET, PATCH | Read one task with activity history or apply a version-checked lifecycle update |
+| `/api/v1/project-status-summary.php` | GET | Owner-only headline task, active-team, and message-sequence aggregates |
+| `/api/v1/project-status-task-progress.php` | GET | Owner-only task counts by status and completion percentage |
+| `/api/v1/project-status-activity.php` | GET | Owner-only date-bucketed task/message activity for a bounded 7, 14, or 30-day range |
+| `/api/v1/project-status-attention.php` | GET | Owner-only cursor page of blocked, in-review, or overdue tasks; maximum 20 |
+| `/api/v1/project-status-team.php` | GET | Owner-only participant counts by identity kind and membership state |
+| `/api/v1/project-status-integrations.php` | GET | Owner-only connection and active-credential readiness aggregates |
 | `/api/v1/project-responsibility-inbox.php` | GET | Read accountable action-request state projected from canonical messages and responsibility events |
 | `/api/v1/project-templates.php` | GET | List built-in and authorized custom project templates |
 | `/api/v1/manage-projects.php` | POST | Create a project from the Add Project modal |
