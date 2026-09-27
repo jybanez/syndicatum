@@ -33,7 +33,7 @@ You’ve been invited to join {{project_name}}.
 Invited by: {{inviter_name}}
 Your role: {{role_label}}
 
-View invitation:
+Review invitation:
 {{invitation_url}}
 
 If the invitation link will not open, use this invitation token:
@@ -41,7 +41,7 @@ If the invitation link will not open, use this invitation token:
 
 This invitation expires {{expires_at}}.
 
-Check the invitation details before continuing. If you were not expecting this invitation, you can ignore this email. Keep the invitation link and token private.
+Review the invitation details before continuing. You will not join the project until you explicitly accept the invitation. If you were not expecting this invitation, you can ignore this email. Keep the invitation link and token private.
 TEXT;
         $html = <<<'HTML'
 <!doctype html>
@@ -62,7 +62,7 @@ TEXT;
   </style>
 </head>
 <body style="margin:0;padding:0;background:#f3f6fb;color:#172033;font-family:Arial,Helvetica,sans-serif;line-height:1.5">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">{{inviter_name}} invited you as {{role_label}}. View the invitation.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">{{inviter_name}} invited you as {{role_label}}. Review the invitation.</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f3f6fb">
     <tr>
       <td align="center" style="padding:28px 14px">
@@ -94,18 +94,18 @@ TEXT;
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 22px">
                 <tr>
                   <td class="action-cell" bgcolor="#2563eb" style="border-radius:7px;background:#2563eb">
-                    <a class="action-link" href="{{invitation_url}}" style="display:inline-block;padding:14px 22px;color:#ffffff;font-size:16px;line-height:20px;font-weight:bold;text-decoration:none">View invitation</a>
+                    <a class="action-link" href="{{invitation_url}}" style="display:inline-block;padding:14px 22px;color:#ffffff;font-size:16px;line-height:20px;font-weight:bold;text-decoration:none">Review invitation</a>
                   </td>
                 </tr>
               </table>
 
               <div style="margin:0;padding:14px 16px;background:#f8fafc;border-left:3px solid #2563eb;color:#4d5970;font-size:14px;line-height:21px">
                 <strong style="color:#172033">Expires {{expires_at}}.</strong><br>
-                Check the invitation details before continuing. If this was unexpected, you can ignore this email. Keep the invitation link and token private.
+                Review the invitation details before continuing. You will not join the project until you choose <strong style="color:#172033">Accept invitation</strong>. If this was unexpected, you can ignore this email. Keep the invitation link and token private.
               </div>
 
               <div style="margin:25px 0 0;padding:20px 0 0;border-top:1px solid #dce3ef;color:#5c6880;font-size:14px;line-height:21px;word-break:break-word">
-                <a href="{{invitation_url}}" style="color:#2563eb;text-decoration:underline">Open invitation link</a><br>
+                <a href="{{invitation_url}}" style="color:#2563eb;text-decoration:underline">Review invitation</a><br>
                 If the link will not open, use this invitation token:
                 <div style="margin-top:8px;padding:8px 10px;background:#eef1f6;color:#39445a;font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:19px;word-break:break-all">{{invitation_token}}</div>
               </div>
@@ -120,7 +120,7 @@ HTML;
 
         return [
             'template' => $template,
-            'template_version' => 5,
+            'template_version' => 6,
             'subject' => 'Invitation to ' . (string) $data['project_name'],
             'text' => $this->replace($text, $templateData, false),
             'html' => $this->replace($html, $templateData, true),

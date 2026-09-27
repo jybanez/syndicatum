@@ -1236,29 +1236,103 @@ function pendingInvitationToken() {
 
 async function loadExpandedWithPendingInvitation() {
   const token = pendingInvitationToken();
-  let acceptedProject = null;
-  let invitationError = null;
-  if (token) {
-    try {
-      acceptedProject = unwrap(await request(API.projectInvitations, {
-        method: "POST",
-        headers: csrfHeaders(),
-        body: JSON.stringify({ invitation_token: token }),
-      }));
-      history.replaceState(history.state, "", `${location.pathname}${location.search}`);
-    } catch (error) {
-      invitationError = error;
-    }
-  }
+  if (token) openPendingInvitationReview(token);
   await loadExpanded();
-  if (acceptedProject) {
-    const project = state.projects.find((entry) => id(entry.id) === id(acceptedProject.id)
-      || id(entry.public_id) === id(acceptedProject.public_id));
-    if (project && id(project.id) !== selectedProjectId()) await switchProject(project.id, { historyMode: "replace" });
-    state.components.toast.success(`You joined ${acceptedProject.name || "the project"}.`, { title: "Invitation accepted" });
-  } else if (invitationError) {
-    state.components.toast.error(invitationError.message, { title: "Invitation could not be accepted" });
-  }
+}
+
+function invitationReviewDetails(invitation) {
+  const content = projectInfoElement("div", "invitation-review-content");
+  content.append(projectInfoElement("p", "", "Review the invitation details below. You will not join the project until you choose Accept invitation."));
+  const details = projectInfoElement("dl", "project-info-definition-list");
+  participantProfileDefinition(details, "Project", invitation.project_name);
+  participantProfileDefinition(details, "Invited by", invitation.inviter_name);
+  participantProfileDefinition(details, "Your role", invitation.role_label);
+  participantProfileDefinition(details, "Expires", formatDate(invitation.expires_at));
+  content.append(details);
+  return content;
+}
+
+function openPendingInvitationReview(token) {
+  if (state.components.invitationReview?.getState?.().open) return;
+  const content = projectInfoElement("div", "invitation-review-content");
+  content.append(projectInfoElement("p", "", "Loading invitation details…"));
+  const abortController = new AbortController();
+  let dismissed = false;
+  let modal;
+
+  const closeAction = { id: "close", label: "Not now" };
+  const loadInvitation = async () => {
+    content.replaceChildren(projectInfoElement("p", "", "Loading invitation details…"));
+    modal.setActions([closeAction]);
+    modal.setBusy(true, {
+      message: "Loading invitation…",
+      cancelBusy: { label: "Not now", onCancel: () => modal.close({ reason: "cancelled" }) },
+    });
+    try {
+      const invitation = unwrap(await request(API.projectInvitations, {
+        headers: { "X-Syndicatum-Invitation-Token": token },
+        signal: abortController.signal,
+      }));
+      if (dismissed) return;
+      content.replaceChildren(...invitationReviewDetails(invitation).childNodes);
+      modal.setActions([
+        closeAction,
+        {
+          id: "accept",
+          label: "Accept invitation",
+          variant: "primary",
+          closeOnClick: false,
+          async onClick({ modal: current }) {
+            current.setBusy(true, { message: "Accepting invitation…" });
+            try {
+              const acceptedProject = unwrap(await request(API.projectInvitations, {
+                method: "POST",
+                headers: csrfHeaders(),
+                body: JSON.stringify({ invitation_token: token }),
+              }));
+              history.replaceState(history.state, "", `${location.pathname}${location.search}`);
+              await current.close({ reason: "accepted" });
+              await loadExpanded();
+              const project = state.projects.find((entry) => id(entry.id) === id(acceptedProject.id)
+                || id(entry.public_id) === id(acceptedProject.public_id));
+              if (project && id(project.id) !== selectedProjectId()) await switchProject(project.id, { historyMode: "replace" });
+              state.components.toast.success(`You joined ${acceptedProject.name || "the project"}.`, { title: "Invitation accepted" });
+            } catch (error) {
+              current.setBusy(false);
+              state.components.toast.error(error.message, { title: "Invitation could not be accepted" });
+            }
+            return false;
+          },
+        },
+      ]);
+      modal.setBusy(false);
+    } catch (error) {
+      if (dismissed || error.name === "AbortError") return;
+      modal.setBusy(false);
+      const failure = projectInfoElement("div", "ui-alert ui-alert-danger", `Unable to load this invitation. ${error.message}`);
+      failure.setAttribute("role", "alert");
+      content.replaceChildren(failure);
+      modal.setActions([
+        { id: "close", label: "Close" },
+        { id: "retry", label: "Retry", variant: "primary", closeOnClick: false, onClick() { void loadInvitation(); return false; } },
+      ]);
+    }
+  };
+
+  modal = state.factories.createActionModal({
+    title: "Review project invitation",
+    size: "sm",
+    content,
+    actions: [closeAction],
+    onClose() {
+      dismissed = true;
+      abortController.abort();
+      if (state.components.invitationReview === modal) state.components.invitationReview = null;
+    },
+  });
+  state.components.invitationReview = modal;
+  modal.open();
+  void loadInvitation();
 }
 
 function participantProfileInstructionBlock(label, value) {

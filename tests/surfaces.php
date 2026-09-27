@@ -352,9 +352,13 @@ try {
         $suite->true(strpos($settings, '"mail.enabled": Boolean(values.mail_enabled)') !== false
             && strpos($settings, '"mail.smtp_host"') === false,
             'The Mail tab must persist capture settings without submitting inactive SMTP settings.');
+        $previewPosition = strpos($source, 'headers: { "X-Syndicatum-Invitation-Token": token }');
+        $acceptPosition = strpos($source, 'body: JSON.stringify({ invitation_token: token })');
         $suite->true(strpos($source, 'loadExpandedWithPendingInvitation()') !== false
-            && strpos($source, 'body: JSON.stringify({ invitation_token: token })') !== false,
-            'Signed-in recipients must be able to accept an emailed invitation link.');
+            && strpos($source, 'title: "Review project invitation"') !== false
+            && strpos($source, 'label: "Accept invitation"') !== false
+            && $previewPosition !== false && $acceptPosition !== false && $previewPosition < $acceptPosition,
+            'Invitation links must load a read-only review before offering explicit acceptance.');
         $suite->true(strpos($settings, 'settingsTabs?.setActive(tabId, false);') !== false,
             'Validation must reveal the tab containing the first invalid field.');
         $suite->true(strpos($settings, 'Please address the following issues before continuing:') !== false,
