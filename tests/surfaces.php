@@ -948,6 +948,26 @@ try {
             'Project Info must distinguish the shared governance baseline from project-specific instructions.');
     });
 
+    $suite->test('project owners receive a section-loaded Helper status visualization', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'label: "Project status"') !== false
+            && strpos($source, 'String(project.role || "") === "owner"') !== false,
+            'Project status must be visible only to the project owner.');
+        $suite->true(strpos($source, 'createStatCards: await uiLoader.get("ui.stat.cards"') !== false
+            && strpos($source, 'createProgress: await uiLoader.get("ui.progress"') !== false
+            && strpos($source, 'createXyChart: await uiLoader.get("ui.chart.xy"') !== false
+            && strpos($source, 'createSkeleton: await uiLoader.get("ui.skeleton"') !== false,
+            'Project status must use complete Helper visualization and loading components.');
+        $suite->true(strpos($source, 'title: "Project status"') !== false
+            && strpos($source, 'message: "Loading project status…"') !== false
+            && strpos($source, 'Each section loads independently.') !== false,
+            'The canonical modal must open before its independently loaded sections begin.');
+        foreach (['Summary', 'TaskProgress', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
+            $suite->true(strpos($source, 'API.projectStatus' . $section) !== false,
+                'Missing independent Project Status request for ' . $section . '.');
+        }
+    });
+
     $suite->test('Project routes use public UUIDs while API state retains internal IDs', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $suite->true(strpos($source, 'updateApplicationRoute("project", state.project.public_id || nextId, historyMode);') !== false, 'Project routes must prefer the public UUID.');

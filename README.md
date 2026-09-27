@@ -61,6 +61,7 @@ C:\wamp64\bin\php\php8.2.29\php.exe tests\avatar-webhooks.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\agent-activation.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\workspace-agent-triggers.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\project-tasks.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\project-status.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\responsibility-events.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\integration-connections.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\email-notifications.php

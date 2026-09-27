@@ -1,7 +1,7 @@
 import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.209";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260926103500";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928150000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -29,6 +29,12 @@ const API = {
   messages: "api/v1/project-messages.php",
   tasks: "api/v1/project-tasks.php",
   task: "api/v1/project-task.php",
+  projectStatusSummary: "api/v1/project-status-summary.php",
+  projectStatusTaskProgress: "api/v1/project-status-task-progress.php",
+  projectStatusActivity: "api/v1/project-status-activity.php",
+  projectStatusAttention: "api/v1/project-status-attention.php",
+  projectStatusTeam: "api/v1/project-status-team.php",
+  projectStatusIntegrations: "api/v1/project-status-integrations.php",
   acknowledge: "api/v1/project-message-acknowledge.php",
   responsibilityInbox: "api/v1/project-responsibility-inbox.php",
   message: "api/v1/project-message.php",
@@ -1042,6 +1048,9 @@ function renderProjectHeader() {
   state.components.projectActions?.destroy?.();
   state.components.projectActions = null;
   const actions = [];
+  if (hasProject && state.mode === "expanded" && String(project.role || "") === "owner") {
+    actions.push({ id: "status", label: "Project status", icon: helperIconHtml("data.grid") });
+  }
   if (hasProject) actions.push({ id: "info", label: "Project Info", icon: helperIconHtml("status.info") });
   if (hasProject && state.mode === "expanded" && (can("project.manage") || can("project.admin"))) {
     actions.push({ id: "edit", label: "Edit project", icon: helperIconHtml("actions.edit") });
@@ -1057,6 +1066,7 @@ function renderProjectHeader() {
       align: "right",
       ariaLabel: "Project actions",
       onSelect(item) {
+        if (item.id === "status") openProjectStatusModal();
         if (item.id === "info") openProjectInfoModal();
         if (item.id === "edit") openEditProjectModal();
         if (item.id === "toggle-team") setTeamVisible(!state.teamVisible);
@@ -2928,6 +2938,249 @@ function openProjectInfoModal() {
     actions,
   });
   modal.open();
+}
+
+function projectStatusSection(title, subtitle, className = "") {
+  const section = projectInfoElement("section", `project-status-section ${className}`.trim());
+  const header = projectInfoElement("header", "project-status-section-header");
+  const copy = projectInfoElement("span", "project-status-section-copy");
+  copy.append(projectInfoElement("h3", "", title), projectInfoElement("p", "", subtitle));
+  const action = projectInfoElement("span", "project-status-section-action");
+  header.append(copy, action);
+  const body = projectInfoElement("div", "project-status-section-body");
+  section.append(header, body);
+  return { section, body, action };
+}
+
+function projectStatusError(section, message, retry) {
+  section.body.replaceChildren();
+  const error = projectInfoElement("div", "project-status-error");
+  error.setAttribute("role", "alert");
+  error.append(projectInfoElement("strong", "", "Section unavailable"), projectInfoElement("p", "", message));
+  const button = projectInfoElement("button", "ui-button ui-button-sm", "Retry");
+  button.type = "button";
+  button.addEventListener("click", retry);
+  error.append(button);
+  section.body.append(error);
+}
+
+function projectStatusSkeleton(section, options = {}) {
+  section.body.replaceChildren();
+  const host = projectInfoElement("div", "project-status-skeleton");
+  section.body.append(host);
+  return state.factories.createSkeleton(host, {
+    lines: options.lines || 4,
+    rows: options.rows || 2,
+  }, {
+    variant: options.variant || "lines",
+    columns: options.columns || 3,
+    animated: true,
+  });
+}
+
+function projectStatusQuery(endpoint, parameters, signal) {
+  return request(`${endpoint}?${new URLSearchParams({ project_id: selectedProjectId(), ...parameters })}`, { signal })
+    .then((payload) => unwrap(payload) || {});
+}
+
+function openProjectStatusModal() {
+  if (String(state.project?.role || "") !== "owner") return;
+  if (state.components.projectStatusModal?.getState?.().open) return;
+  const projectId = selectedProjectId();
+  const abortController = new AbortController();
+  const ownedComponents = [];
+  const content = projectInfoElement("div", "project-status-content");
+  const intro = projectInfoElement("header", "project-status-intro");
+  intro.append(projectInfoElement("p", "", `Current operational status for ${state.project?.name || "this project"}. Each section loads independently.`));
+  content.append(intro);
+  const summary = projectStatusSection("At a glance", "Small indexed aggregates for the current project.", "is-wide");
+  const progress = projectStatusSection("Task progress", "Distribution and completion across all project tasks.");
+  const activity = projectStatusSection("Recent activity", "Bounded task and message activity in UTC.");
+  const attention = projectStatusSection("Needs attention", "The newest blocked, review, or overdue tasks.", "is-wide");
+  const team = projectStatusSection("Team", "Participant counts by identity and membership state.");
+  const integrations = projectStatusSection("Integrations", "Connection and credential readiness without exposing secrets.");
+  content.append(summary.section, progress.section, activity.section, attention.section, team.section, integrations.section);
+
+  const closeAction = { id: "close", label: "Close", variant: "primary", autoFocus: true };
+  let modal = null;
+  const destroyOwned = () => {
+    while (ownedComponents.length) ownedComponents.pop()?.destroy?.();
+  };
+  modal = state.factories.createActionModal({
+    title: "Project status",
+    size: "xl",
+    className: "project-status-modal",
+    content,
+    actions: [closeAction],
+    onClose() {
+      abortController.abort();
+      destroyOwned();
+      if (state.components.projectStatusModal === modal) state.components.projectStatusModal = null;
+    },
+  });
+  state.components.projectStatusModal = modal;
+  modal.open();
+  modal.setBusy(true, {
+    message: "Loading project status…",
+    cancelBusy: { label: "Close", onCancel: () => modal.close({ reason: "cancelled" }) },
+  });
+
+  const loadSummary = () => {
+    const skeleton = projectStatusSkeleton(summary, { variant: "grid", columns: 4, rows: 1 });
+    ownedComponents.push(skeleton);
+    return projectStatusQuery(API.projectStatusSummary, {}, abortController.signal).then((data) => {
+      if (!modal.getState().open || selectedProjectId() !== projectId) return;
+      skeleton.destroy?.();
+      summary.body.replaceChildren();
+      ownedComponents.push(state.factories.createStatCards(summary.body, [
+        { id: "active", label: "Active tasks", value: data.tasks?.active || 0, icon: "actions.check", tone: "info", note: `${data.tasks?.total || 0} total` },
+        { id: "attention", label: "Needs attention", value: data.tasks?.needs_attention || 0, icon: "status.warning", tone: "warning", note: "Blocked, review, or overdue" },
+        { id: "completed", label: "Completed", value: data.tasks?.completed || 0, icon: "status.success", tone: "success", note: "All time" },
+        { id: "team", label: "Active team", value: data.team?.active_total || 0, icon: "people.users", tone: "neutral", note: `${data.team?.humans || 0} human · ${data.team?.agents || 0} agent` },
+      ], { columns: "4", size: "sm", ariaLabel: "Project status summary" }));
+    }).catch((error) => {
+      if (error.name !== "AbortError" && modal.getState().open) projectStatusError(summary, error.message, loadSummary);
+    });
+  };
+
+  const loadProgress = () => {
+    const skeleton = projectStatusSkeleton(progress, { variant: "card" });
+    ownedComponents.push(skeleton);
+    return projectStatusQuery(API.projectStatusTaskProgress, {}, abortController.signal).then((data) => {
+      if (!modal.getState().open || selectedProjectId() !== projectId) return;
+      skeleton.destroy?.();
+      progress.body.replaceChildren();
+      const progressHost = projectInfoElement("div", "project-status-progress");
+      const legend = projectInfoElement("div", "project-status-legend");
+      const labels = { open: "Open", in_progress: "In progress", in_review: "In review", blocked: "Blocked", completed: "Completed", cancelled: "Cancelled" };
+      Object.entries(labels).forEach(([status, label]) => {
+        const item = projectInfoElement("span", `project-status-legend-item is-${status}`);
+        item.append(projectInfoElement("span", "project-status-legend-dot"), document.createTextNode(`${label} ${data.counts?.[status] || 0}`));
+        legend.append(item);
+      });
+      progress.body.append(progressHost, legend);
+      ownedComponents.push(state.factories.createProgress(progressHost, {
+        value: data.completion_percent || 0,
+        label: `${data.counts?.completed || 0} of ${Math.max(0, (data.total || 0) - (data.counts?.cancelled || 0))} eligible tasks completed`,
+      }, { style: "segmented", segments: 10, size: "md", showLabel: true, showPercent: true, rounded: true, ariaLabel: "Project task completion" }));
+    }).catch((error) => {
+      if (error.name !== "AbortError" && modal.getState().open) projectStatusError(progress, error.message, loadProgress);
+    });
+  };
+
+  let activityRange = "14";
+  const rangeHost = projectInfoElement("span", "project-status-range");
+  activity.action.append(rangeHost);
+  ownedComponents.push(state.factories.createSelect(rangeHost, [
+    { value: "7", label: "7 days" }, { value: "14", label: "14 days" }, { value: "30", label: "30 days" },
+  ], { selected: activityRange, ariaLabel: "Activity range", clearable: false, onChange(value) {
+    activityRange = String(value || "14");
+    void loadActivity();
+  } }));
+  const loadActivity = () => {
+    const requestedRange = activityRange;
+    const skeleton = projectStatusSkeleton(activity, { variant: "card" });
+    ownedComponents.push(skeleton);
+    return projectStatusQuery(API.projectStatusActivity, { days: requestedRange }, abortController.signal).then((data) => {
+      if (!modal.getState().open || selectedProjectId() !== projectId || String(data.range_days) !== activityRange) return;
+      skeleton.destroy?.();
+      activity.body.replaceChildren();
+      ownedComponents.push(state.factories.createXyChart(activity.body, {
+        ariaLabel: `Project activity over ${data.range_days} days`, xType: "date", xLabel: "Date", yLabel: "Count",
+        height: 250, size: "sm", showLegend: true, showPoints: false,
+        series: [
+          { id: "opened", label: "Tasks opened", tone: "info", points: (data.series || []).map((row) => ({ x: row.date, y: row.tasks_opened })) },
+          { id: "completed", label: "Tasks completed", tone: "success", points: (data.series || []).map((row) => ({ x: row.date, y: row.tasks_completed })) },
+          { id: "messages", label: "Messages", tone: "neutral", points: (data.series || []).map((row) => ({ x: row.date, y: row.messages })) },
+        ],
+      }));
+    }).catch((error) => {
+      if (error.name !== "AbortError" && modal.getState().open && requestedRange === activityRange) projectStatusError(activity, error.message, loadActivity);
+    });
+  };
+
+  let attentionBefore = "";
+  const loadAttention = (append = false) => {
+    let skeleton = null;
+    if (!append) {
+      attentionBefore = "";
+      skeleton = projectStatusSkeleton(attention, { lines: 3 });
+      ownedComponents.push(skeleton);
+    }
+    return projectStatusQuery(API.projectStatusAttention, { limit: "10", ...(attentionBefore ? { before: attentionBefore } : {}) }, abortController.signal).then((data) => {
+      if (!modal.getState().open || selectedProjectId() !== projectId) return;
+      skeleton?.destroy?.();
+      if (!append) attention.body.replaceChildren();
+      const list = append ? attention.body.querySelector(".project-status-attention-list") : projectInfoElement("div", "project-status-attention-list");
+      if (!append) attention.body.append(list);
+      (data.items || []).forEach((item) => {
+        const row = projectInfoElement("article", "project-status-attention-item");
+        const copy = projectInfoElement("span", "project-status-attention-copy");
+        copy.append(projectInfoElement("strong", "", item.title), projectInfoElement("span", "", `${taskStatusLabel(item.status)}${item.assignee_name ? ` · ${item.assignee_name}` : ""}`));
+        const flags = projectInfoElement("span", "project-status-attention-flags");
+        if (item.overdue) flags.append(projectInfoElement("span", "ui-badge is-overdue", "Overdue"));
+        if (item.status === "blocked") flags.append(projectInfoElement("span", "ui-badge is-blocked", "Blocked"));
+        if (item.status === "in_review") flags.append(projectInfoElement("span", "ui-badge is-review", "Review"));
+        row.append(copy, flags);
+        list.append(row);
+      });
+      if (!list.children.length) list.append(projectInfoElement("p", "project-status-empty", "Nothing currently needs the owner's attention."));
+      attentionBefore = data.next_before ? String(data.next_before) : "";
+      attention.action.replaceChildren();
+      if (data.has_more && attentionBefore) {
+        const more = projectInfoElement("button", "ui-button ui-button-sm", "Load more");
+        more.type = "button";
+        more.addEventListener("click", () => { more.disabled = true; void loadAttention(true); });
+        attention.action.append(more);
+      }
+    }).catch((error) => {
+      if (error.name !== "AbortError" && modal.getState().open) projectStatusError(attention, error.message, () => loadAttention(false));
+    });
+  };
+
+  const loadTeam = () => {
+    const skeleton = projectStatusSkeleton(team, { variant: "grid", columns: 3, rows: 1 });
+    ownedComponents.push(skeleton);
+    return projectStatusQuery(API.projectStatusTeam, {}, abortController.signal).then((data) => {
+      if (!modal.getState().open || selectedProjectId() !== projectId) return;
+      skeleton.destroy?.();
+      team.body.replaceChildren();
+      ownedComponents.push(state.factories.createStatCards(team.body, [
+        { id: "humans", label: "Humans", value: data.counts?.human?.active || 0, icon: "people.user", tone: "info", note: `${data.counts?.human?.total || 0} total` },
+        { id: "agents", label: "Agents", value: data.counts?.agent?.active || 0, icon: "people.agent", tone: "success", note: `${data.counts?.agent?.total || 0} total` },
+        { id: "integrations", label: "Integrations", value: data.counts?.integration?.active || 0, icon: "actions.integration", tone: "neutral", note: `${data.counts?.integration?.total || 0} total` },
+      ], { columns: "3", size: "sm", ariaLabel: "Project team status" }));
+    }).catch((error) => {
+      if (error.name !== "AbortError" && modal.getState().open) projectStatusError(team, error.message, loadTeam);
+    });
+  };
+
+  const loadIntegrations = () => {
+    const skeleton = projectStatusSkeleton(integrations, { variant: "grid", columns: 3, rows: 1 });
+    ownedComponents.push(skeleton);
+    return projectStatusQuery(API.projectStatusIntegrations, {}, abortController.signal).then((data) => {
+      if (!modal.getState().open || selectedProjectId() !== projectId) return;
+      skeleton.destroy?.();
+      integrations.body.replaceChildren();
+      ownedComponents.push(state.factories.createStatCards(integrations.body, [
+        { id: "active", label: "Active", value: data.active || 0, icon: "status.success", tone: "success", note: `${data.total || 0} total` },
+        { id: "disabled", label: "Disabled", value: data.disabled || 0, icon: "status.warning", tone: data.disabled ? "warning" : "neutral", note: "Not accepting events" },
+        { id: "credential", label: "Needs credential", value: data.without_active_credential || 0, icon: "actions.lock", tone: data.without_active_credential ? "danger" : "neutral", note: data.last_used_at ? `Last used ${projectInfoDate(data.last_used_at).primary}` : "No recorded use" },
+      ], { columns: "3", size: "sm", ariaLabel: "Project integration status" }));
+    }).catch((error) => {
+      if (error.name !== "AbortError" && modal.getState().open) projectStatusError(integrations, error.message, loadIntegrations);
+    });
+  };
+
+  const summaryPromise = loadSummary();
+  void loadProgress();
+  void loadActivity();
+  void loadAttention(false);
+  void loadTeam();
+  void loadIntegrations();
+  summaryPromise.finally(() => {
+    if (modal.getState().open) modal.setBusy(false);
+  });
 }
 
 function projectInfoElement(tagName, className = "", text = null) {
@@ -6741,7 +6994,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -6770,6 +7023,9 @@ async function bootstrap() {
     uiAlert: await uiLoader.get("ui.dialog.alert", options),
     uiConfirm: await uiLoader.get("ui.dialog.confirm", options),
     createProgress: await uiLoader.get("ui.progress", options),
+    createSkeleton: await uiLoader.get("ui.skeleton", options),
+    createStatCards: await uiLoader.get("ui.stat.cards", options),
+    createXyChart: await uiLoader.get("ui.chart.xy", options),
     createEmptyState: await uiLoader.get("ui.empty.state", options),
     createGrid: await uiLoader.get("ui.grid", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
