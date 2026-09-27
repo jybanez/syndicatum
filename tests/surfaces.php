@@ -356,7 +356,9 @@ try {
         $acceptPosition = strpos($source, 'body: JSON.stringify(token ? { invitation_token: token } : { invitation_id: invitationId })');
         $suite->true(strpos($source, 'loadExpandedWithPendingInvitation()') !== false
             && strpos($source, 'title: "Review project invitation"') !== false
-            && strpos($source, 'label: "Accept invitation"') !== false
+            && strpos($source, 'label: "Accept"') !== false
+            && strpos($source, 'label: "Decline"') !== false
+            && strpos($source, 'label: "Not now"') === false
             && $previewPosition !== false && $acceptPosition !== false && $previewPosition < $acceptPosition,
             'Invitation links must load a read-only review before offering explicit acceptance.');
         $suite->true(strpos($source, 'id: "notifications"') !== false
