@@ -72,6 +72,7 @@ try {
         $settings = new SettingsService($pdo);
         $settings->update([
             'general.public_origin' => 'https://syndicatum.example.test/',
+            'general.default_timezone' => 'America/New_York',
             'messaging.max_message_bytes' => 24000,
             'mail.enabled' => true,
             'mail.sender_name' => 'Syndicatum Test',
@@ -81,6 +82,7 @@ try {
         ], $administrator['id']);
         $suite->same(24000, $settings->get('messaging.max_message_bytes'));
         $suite->same('https://syndicatum.example.test', $settings->get('general.public_origin'));
+        $suite->same('America/New_York', $settings->get('general.default_timezone'));
         $suite->same('test-signing-secret', $settings->get('realtime.signing_secret'));
         $public = $settings->publicSettings('integrations');
         $suite->same(null, $public['realtime.signing_secret']['value']);
@@ -112,6 +114,9 @@ try {
         });
         $suite->throws('general.public_origin must be an HTTPS origin without a path, query, fragment, or credentials', function () use ($settings, $administrator) {
             $settings->update(['general.public_origin' => 'http://syndicatum.example.test'], $administrator['id']);
+        });
+        $suite->throws('general.default_timezone must be a valid IANA timezone identifier', function () use ($settings, $administrator) {
+            $settings->update(['general.default_timezone' => 'UTC+08:00'], $administrator['id']);
         });
     });
 
@@ -262,13 +267,19 @@ try {
     ], $administrator['id']);
     $management = new ProjectManagementService($pdo);
 
-    $suite->test('project invitations capture email and create a unified human participant', function () use ($suite, $pdo, $administrator, $member, $management, $mailCaptureRoot) {
+    $suite->test('project invitations use recipient or system timezone and create a unified human participant', function () use ($suite, $pdo, $auth, $administrator, $member, $management, $mailCaptureRoot) {
+        $auth->updateProfile($member, ['display_name' => $member['display_name'], 'timezone' => 'Asia/Manila']);
         $project = $management->createProject($administrator['id'], ['name' => 'Shared Product']);
         $invitation = $management->invite($project['id'], $administrator['id'], ['email' => 'member@example.test', 'role' => 'member']);
         $suite->same('captured', $invitation['email_notification']['status']);
+        $fallbackInvitation = $management->invite($project['id'], $administrator['id'], ['email' => 'new.invitee@example.test', 'role' => 'viewer']);
+        $suite->same('captured', $fallbackInvitation['email_notification']['status']);
         $captures = glob($mailCaptureRoot . DIRECTORY_SEPARATOR . '*.eml') ?: [];
-        $suite->same(1, count($captures));
-        $suite->truthy(strpos(file_get_contents($captures[0]), '#invitation=') !== false, 'Captured invitation link is missing.');
+        $suite->same(2, count($captures));
+        $capturedContents = implode("\n", array_map('file_get_contents', $captures));
+        $suite->truthy(strpos($capturedContents, '#invitation=') !== false, 'Captured invitation link is missing.');
+        $suite->truthy(strpos($capturedContents, '(Asia/Manila)') !== false, 'Existing recipient timezone was not used.');
+        $suite->truthy(strpos($capturedContents, '(America/New_York)') !== false, 'System default timezone was not used for a new invitee.');
         $accepted = $management->acceptInvitation($member['id'], $invitation['invitation_token']);
         $suite->same($project['id'], $accepted['id']);
         $statement = $pdo->prepare("SELECT COUNT(*) FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human' AND status = 'active'");

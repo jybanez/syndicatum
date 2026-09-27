@@ -1811,6 +1811,17 @@ async function uploadAvatar(file, { kind, projectId = "", agentId = "" } = {}) {
   return avatarUrl;
 }
 
+function timezoneOptions({ includeSystemDefault = false, effectiveTimezone = "UTC" } = {}) {
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  let identifiers = [];
+  try { identifiers = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []; }
+  catch (_error) { identifiers = []; }
+  const zones = Array.from(new Set(["UTC", browserTimezone, ...identifiers])).sort((left, right) => left.localeCompare(right));
+  const options = zones.map((zone) => ({ value: zone, label: zone === browserTimezone ? `${zone} (this browser)` : zone }));
+  if (includeSystemDefault) options.unshift({ value: "", label: `Use system default (${effectiveTimezone || "UTC"})` });
+  return options;
+}
+
 function openProfileModal() {
   const user = state.session?.user || {};
   const googleEnabled = capability("google_sso");
@@ -1839,11 +1850,15 @@ function openProfileModal() {
     },
   }] : [];
   state.factories.createFormModal({
-    title: "Edit Profile", size: googleEnabled ? "md" : "sm", submitLabel: "Save profile", initialValues: { display_name: user.display_name || "", avatar: null },
+    title: "Edit Profile", size: googleEnabled ? "md" : "sm", submitLabel: "Save profile", initialValues: { display_name: user.display_name || "", timezone: user.timezone || "", avatar: null },
     extraActionsPlacement: "start", extraActions: googleActions,
-    rows: [[{ type: "avatar", name: "avatar", label: "Profile photo", accept: "image/jpeg,image/png,image/webp", previewUrl: user.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }], [modalTextField("display_name", "Display name", { required: true })]],
+    rows: [
+      [{ type: "avatar", name: "avatar", label: "Profile photo", accept: "image/jpeg,image/png,image/webp", previewUrl: user.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }],
+      [modalTextField("display_name", "Display name", { required: true })],
+      [{ type: "select", name: "timezone", label: "Timezone", options: timezoneOptions({ includeSystemDefault: true, effectiveTimezone: user.effective_timezone }), help: "Used for invitation expiry and other dates addressed to you." }],
+    ],
     async onSubmit(values, context) {
-      try { const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "human" }) : user.avatar_url; const result = unwrap(await request(API.profile, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ display_name: values.display_name, avatar_url: avatarUrl || null }) })); state.session.user = result.user || result; renderWorkspace(); mountNavbar(); state.components.toast.success("Profile updated."); return true; }
+      try { const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "human" }) : user.avatar_url; const result = unwrap(await request(API.profile, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ display_name: values.display_name, avatar_url: avatarUrl || null, timezone: values.timezone || null }) })); state.session.user = result.user || result; renderWorkspace(); mountNavbar(); state.components.toast.success("Profile updated."); return true; }
       catch (error) { context.setFormError(error.message); return false; }
     },
   }).open();
@@ -5459,6 +5474,7 @@ async function openSettings() {
       rows: [
         [{ type: "text", content: "Installation and messaging" }],
         [{ type: "input", name: "site_name", label: "Installation name", required: true, disabled: locked("general.installation_name") }, { type: "input", input: "url", name: "public_origin", label: "Public Syndicatum URL", placeholder: "https://syndicatum.example.com", required: true, disabled: locked("general.public_origin") }],
+        [{ type: "select", name: "default_timezone", label: "Default timezone", required: true, disabled: locked("general.default_timezone"), options: timezoneOptions(), help: "Used for invitations and users who have not selected a personal timezone." }],
         [{ type: "input", input: "number", name: "message_max_length", label: "Maximum message length", min: 1000, required: true, disabled: locked("messaging.max_message_bytes") }],
       ],
     },
@@ -5528,7 +5544,7 @@ async function openSettings() {
     },
   ];
   const fieldTabs = {
-    site_name: "general", public_origin: "general", message_max_length: "general",
+    site_name: "general", public_origin: "general", default_timezone: "general", message_max_length: "general",
     realtime_enabled: "realtime", realtime_base_url: "realtime", realtime_client_code: "realtime",
     realtime_project_code: "realtime", realtime_connector_authorization_project_code: "realtime",
     realtime_signing_secret: "realtime", realtime_backend_ingress_secret: "realtime",
@@ -5545,13 +5561,14 @@ async function openSettings() {
     mail_timeout_seconds: "mail", backup_base_location: "recovery",
   };
   const fieldLabels = {
-    site_name: "Installation name", public_origin: "Public Syndicatum URL",
+    site_name: "Installation name", public_origin: "Public Syndicatum URL", default_timezone: "Default timezone",
     message_max_length: "Maximum message length", mail_sender_address: "Sender email address",
     backup_base_location: "Base location for generated backups",
   };
   const initialValues = () => ({
     site_name: value("general.installation_name", "Syndicatum"),
     public_origin: value("general.public_origin"),
+    default_timezone: value("general.default_timezone", "UTC"),
     message_max_length: value("messaging.max_message_bytes", 24000),
     backup_base_location: String(value("recovery.backup_base_path") || "").trim(),
     realtime_enabled: Boolean(value("realtime.enabled", false)),
@@ -5708,6 +5725,7 @@ async function openSettings() {
       const updates = {
         "general.installation_name": values.site_name,
         "general.public_origin": values.public_origin,
+        "general.default_timezone": values.default_timezone,
         "messaging.max_message_bytes": Number(values.message_max_length),
         "mail.enabled": Boolean(values.mail_enabled),
         "mail.sender_name": values.mail_sender_name,

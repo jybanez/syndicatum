@@ -107,10 +107,19 @@ try {
         $updated = $auth->updateProfile($currentUser, [
             'display_name' => 'Updated Profile',
             'avatar_url' => $managedAvatar,
+            'timezone' => 'Asia/Manila',
         ]);
         $suite->same('Updated Profile', $updated['display_name']);
         $suite->same($managedAvatar, $updated['avatar_url']);
         $suite->same(true, $updated['has_native_password']);
+        $suite->same('Asia/Manila', $updated['timezone']);
+        $suite->same('Asia/Manila', $updated['effective_timezone']);
+        $systemDefault = $auth->updateProfile($updated, ['display_name' => 'Updated Profile', 'timezone' => null]);
+        $suite->same(null, $systemDefault['timezone']);
+        $suite->same('UTC', $systemDefault['effective_timezone']);
+        $suite->throws(function () use ($auth, $updated) {
+            $auth->updateProfile($updated, ['display_name' => 'Updated Profile', 'timezone' => 'UTC+08:00']);
+        }, 'valid IANA timezone');
         $suite->throws(function () use ($auth, $currentUser) {
             $auth->updateProfile($currentUser, ['display_name' => 'Unsafe', 'avatar_url' => 'https://images.example.test/profile.webp']);
         }, 'uploaded Syndicatum image');

@@ -640,7 +640,7 @@ if (stripos($baselineSchema, 'DROP TABLE') !== false
 }
 if ($baselineMetadataArray['source_commit'] !== '8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d'
     || $baselineMetadataArray['migration_cutover'] !== '202609180004'
-    || count($baselineMetadataArray['post_baseline_migrations']) !== 16
+    || count($baselineMetadataArray['post_baseline_migrations']) !== 17
     || $baselineMetadataArray['post_baseline_migrations'][0]['id'] !== '202609240001'
     || $baselineMetadataArray['post_baseline_migrations'][1]['id'] !== '202609240002'
     || $baselineMetadataArray['post_baseline_migrations'][2]['id'] !== '202609250001'
@@ -656,7 +656,8 @@ if ($baselineMetadataArray['source_commit'] !== '8d8cfb12aff96ac1a7ce7ce1a8ad05c
     || $baselineMetadataArray['post_baseline_migrations'][12]['id'] !== '202609260002'
     || $baselineMetadataArray['post_baseline_migrations'][13]['id'] !== '202609260003'
     || $baselineMetadataArray['post_baseline_migrations'][14]['id'] !== '202609260004'
-    || $baselineMetadataArray['post_baseline_migrations'][15]['id'] !== '202609260005') {
+    || $baselineMetadataArray['post_baseline_migrations'][15]['id'] !== '202609260005'
+    || $baselineMetadataArray['post_baseline_migrations'][16]['id'] !== '202609270001') {
     packageContractFail('Committed baseline provenance or cutover identity changed unexpectedly.');
 }
 

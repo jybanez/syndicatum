@@ -3,6 +3,7 @@
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/SettingsService.php';
 require_once __DIR__ . '/AvatarService.php';
+require_once __DIR__ . '/TimezoneService.php';
 
 class AuthService
 {
@@ -221,8 +222,13 @@ class AuthService
             }
         }
 
-        $statement = $this->pdo->prepare('UPDATE users SET display_name = ?, avatar_url = ?, updated_at = ? WHERE id = ? AND status = \'active\' AND deleted_at IS NULL');
-        $statement->execute([$displayName, $avatarUrl, Db::now(), (int) $user['id']]);
+        $timezone = isset($user['timezone']) && trim((string) $user['timezone']) !== '' ? (string) $user['timezone'] : null;
+        if (array_key_exists('timezone', $input)) {
+            $timezone = TimezoneService::normalize($input['timezone'], true);
+        }
+
+        $statement = $this->pdo->prepare('UPDATE users SET display_name = ?, avatar_url = ?, timezone = ?, updated_at = ? WHERE id = ? AND status = \'active\' AND deleted_at IS NULL');
+        $statement->execute([$displayName, $avatarUrl, $timezone, Db::now(), (int) $user['id']]);
         if ($statement->rowCount() < 1 && !$this->publicUser((int) $user['id'])) {
             throw new RuntimeException('AUTHENTICATION_REQUIRED');
         }
@@ -358,7 +364,7 @@ class AuthService
     public function publicUser($userId)
     {
         $statement = $this->pdo->prepare(
-            'SELECT u.id, u.normalized_email, u.display_name, u.avatar_url, u.pbb_user_id, u.google_subject, u.status,
+            'SELECT u.id, u.normalized_email, u.display_name, u.avatar_url, u.timezone, u.pbb_user_id, u.google_subject, u.status,
                     CASE WHEN u.password_hash IS NULL OR u.password_hash = \'\' THEN 0 ELSE 1 END AS has_native_password,
                     w.id AS workspace_id, w.name AS workspace_name
              FROM users u LEFT JOIN workspaces w ON w.owner_user_id = u.id WHERE u.id = ?'
@@ -372,11 +378,14 @@ class AuthService
             'SELECT r.code FROM system_roles r JOIN user_system_roles ur ON ur.role_id = r.id WHERE ur.user_id = ? ORDER BY r.code'
         );
         $roles->execute([$userId]);
+        $systemTimezone = (new SettingsService($this->pdo))->get('general.default_timezone');
         return [
             'id' => (int) $user['id'],
             'email' => $user['normalized_email'],
             'display_name' => $user['display_name'],
             'avatar_url' => $user['avatar_url'],
+            'timezone' => $user['timezone'],
+            'effective_timezone' => TimezoneService::resolve($user['timezone'], $systemTimezone),
             'pbb_user_id' => $user['pbb_user_id'],
             'google_linked' => trim((string) $user['google_subject']) !== '',
             'status' => $user['status'],

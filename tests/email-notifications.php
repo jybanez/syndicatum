@@ -19,13 +19,14 @@ try {
         'inviter_name' => 'Test Administrator',
         'role_label' => 'Member',
         'expires_at' => '2026-10-03 12:00:00 UTC',
+        'timezone' => 'UTC',
         'invitation_url' => 'https://syndicatum.example/#invitation=test-token',
         'invitation_token' => 'test-token',
     ];
 
     $test('project invitation template produces plain text and escaped HTML', function () use ($assert, $data) {
         $message = (new EmailTemplateRenderer())->render('project_invitation', $data);
-        $assert($message['template_version'] === 4, 'Project invitation template version was not advanced.');
+        $assert($message['template_version'] === 5, 'Project invitation template version was not advanced.');
         $assert(strpos($message['text'], '<Pilot & Review>') !== false, 'Plain-text project name is missing.');
         $assert(strpos($message['html'], '&lt;Pilot &amp; Review&gt;') !== false, 'HTML template data was not escaped.');
         $assert(strpos($message['html'], 'PROJECT INVITATION') !== false, 'Project-brief heading is missing.');
@@ -40,10 +41,30 @@ try {
         $assert(strpos($message['text'], "View invitation:\nhttps://syndicatum.example/#invitation=test-token") !== false, 'Plain-text invitation action is incomplete.');
         $assert(stripos($message['text'], 'installation') === false, 'Technical installation wording remains in plain text.');
         $assert(strpos($message['text'], 'Keep the invitation link and token private.') !== false, 'Plain-text privacy guidance is missing.');
-        $assert(strpos($message['html'], 'Expires October 3, 2026 at 12:00 PM UTC.') !== false, 'Human-friendly HTML expiry is missing.');
-        $assert(strpos($message['text'], 'This invitation expires October 3, 2026 at 12:00 PM UTC.') !== false, 'Human-friendly plain-text expiry is missing.');
+        $assert(strpos($message['html'], 'Expires October 3, 2026 at 12:00 PM (UTC).') !== false, 'Human-friendly HTML expiry is missing.');
+        $assert(strpos($message['text'], 'This invitation expires October 3, 2026 at 12:00 PM (UTC).') !== false, 'Human-friendly plain-text expiry is missing.');
         $assert(strpos($message['html'], '2026-10-03 12:00:00 UTC') === false, 'Raw expiry leaked into HTML output.');
         $assert(strpos($message['html'], '{{') === false && strpos($message['text'], '{{') === false, 'Template placeholders remain unresolved.');
+    });
+
+    $test('project invitation expiry converts from UTC into the recipient timezone', function () use ($assert, $data) {
+        $localized = $data;
+        $localized['timezone'] = 'Asia/Manila';
+        $message = (new EmailTemplateRenderer())->render('project_invitation', $localized);
+        $assert(strpos($message['html'], 'Expires October 3, 2026 at 8:00 PM (Asia/Manila).') !== false, 'Recipient timezone conversion is missing from HTML.');
+        $assert(strpos($message['text'], 'This invitation expires October 3, 2026 at 8:00 PM (Asia/Manila).') !== false, 'Recipient timezone conversion is missing from plain text.');
+    });
+
+    $test('project invitation template rejects an invalid timezone', function () use ($assert, $data) {
+        $invalid = $data;
+        $invalid['timezone'] = 'UTC+08:00';
+        try {
+            (new EmailTemplateRenderer())->render('project_invitation', $invalid);
+        } catch (InvalidArgumentException $error) {
+            $assert(strpos($error->getMessage(), 'valid IANA timezone') !== false, 'Unexpected timezone validation error.');
+            return;
+        }
+        throw new RuntimeException('Invalid timezone was accepted.');
     });
 
     $test('project invitation template preserves an application subpath in its brand URL', function () use ($assert, $data) {
@@ -105,7 +126,7 @@ try {
         $contents = file_get_contents($captures[0]);
         $preview = file_get_contents($previews[0]);
         $assert(strpos($contents, 'X-Syndicatum-Transport: development-capture') !== false, 'Transport metadata is missing.');
-        $assert(strpos($contents, 'X-Syndicatum-Template: project_invitation; version=4') !== false, 'Template version metadata is missing.');
+        $assert(strpos($contents, 'X-Syndicatum-Template: project_invitation; version=5') !== false, 'Template version metadata is missing.');
         $assert(strpos($contents, 'Content-Type: multipart/alternative') !== false, 'Email capture is not multipart.');
         $assert(strpos($contents, 'Content-Type: multipart/related') !== false, 'Email capture does not group HTML and inline assets.');
         $assert(strpos($contents, 'Content-Type: image/png; name="syndicatum-128.png"') !== false, 'Inline brand image MIME part is missing.');
