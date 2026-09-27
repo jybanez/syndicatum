@@ -1150,6 +1150,8 @@ try {
             && strpos($source, 'return searchable.includes(query);') !== false
             && strpos($styles, '.task-search { flex: 1 1 auto; min-width: 0; overflow: hidden; }') !== false,
             'The task rail must provide a responsive canonical Helper search across task identity and readable metadata.');
+        $suite->true(strpos($styles, '.task-list { display: grid; align-content: start; gap: 9px; padding: 0 8px 16px 2px; }') !== false,
+            'Task cards must keep a visible gutter before the task-list scrollbar.');
         $suite->true(strpos($source, 'createEmptyState: await uiLoader.get("ui.empty.state", options)') !== false
             && strpos($source, 'function renderTaskEmptyState()') !== false
             && strpos($source, 'title: "No tasks yet."') !== false
