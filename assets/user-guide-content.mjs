@@ -47,7 +47,7 @@ export const USER_GUIDE_SECTIONS = [
             "Use Needs attention to review blocked, in-review, and overdue tasks. Load another bounded page when more results are available.",
             "Review Team and Integrations for participant and connection readiness.",
           ] },
-          { type: "note", text: "Each section loads and retries independently. A slow or unavailable section does not prevent the other project-status sections from being used." },
+          { type: "note", text: "Sections request their data one at a time to keep database load predictable. Each section retains its own result, error, and retry state, so an unavailable section does not prevent the others from being used." },
         ],
       },
       {

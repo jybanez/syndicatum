@@ -119,8 +119,9 @@ Project owners also receive **Project status** in the project action menu. It
 opens a canonical wide modal immediately and presents Helper stat cards,
 segmented task progress, and a bounded XY activity chart. At a glance, Task
 progress, Recent activity, Needs attention, Team, and Integrations load through
-separate owner-authorized requests. Each section owns its loading, error, retry,
-and refresh boundary; failure in one section does not hide the others. Activity
+separate owner-authorized requests serialized one at a time per open modal. Each
+section owns its loading, error, retry, and refresh boundary; failure in one
+section does not hide the others. Activity
 is limited to 7, 14, or 30 UTC days, and attention returns no more than 20 tasks
 per cursor page.
 
