@@ -1042,6 +1042,11 @@ try {
             && strpos($source, 'function openMessageInfo(message)') !== false
             && strpos($source, 'content: messageInfoContent(message)') !== false,
             'Message Info must open a canonical modal with the loaded message metadata.');
+        $suite->true(strpos($source, 'id: "message-data", label: "Show message data", icon: "actions.view"') !== false
+            && strpos($source, 'message.sender?.kind === "integration"') !== false
+            && strpos($source, 'function openMessageData(message)') !== false
+            && strpos($source, 'state.factories.createDataInspector(inspectorHost, data') !== false,
+            'Integration-authored system messages must expose their structured event data through the canonical data inspector.');
         $messageInfoStart = strpos($source, 'function messageInfoContent(message)');
         $messageInfoEnd = strpos($source, 'function openMessageInfo(message)', $messageInfoStart);
         $messageInfo = substr($source, $messageInfoStart, $messageInfoEnd - $messageInfoStart);
