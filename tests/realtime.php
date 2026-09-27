@@ -112,13 +112,21 @@ $suite->test('admission is exact-room and subscribe-only', function () use ($sui
     $suite->truthy(!in_array('chat.publish', $claims['capabilities'], true));
 });
 
-$suite->test('global user admission includes a private notification room without publish capability', function () use ($suite) {
+$suite->test('global user admission includes one private multi-purpose user room without publish capability', function () use ($suite) {
     $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()));
     $admission = $integration->buildGlobalAdmission(['id' => 27, 'display_name' => 'Invited User']);
     $claims = realtimeDecodeJwtPayload($admission['token']);
-    $suite->same(['syndicatum.notifications.user.27'], $claims['allowed_rooms']);
+    $suite->same(['syndicatum.user.27'], $claims['allowed_rooms']);
     $suite->same('user:27', $claims['user_id']);
     $suite->truthy(!in_array('chat.publish', $claims['capabilities'], true));
+});
+
+$suite->test('administrator global admission uses the same single user room', function () use ($suite) {
+    $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()));
+    $admission = $integration->buildGlobalAdmission(['id' => 27, 'display_name' => 'Administrator'], true);
+    $claims = realtimeDecodeJwtPayload($admission['token']);
+    $suite->same(['syndicatum.user.27'], $claims['allowed_rooms']);
+    $suite->same(['administrator'], $claims['roles']);
 });
 
 $suite->test('connector authorization admission is exact-room, short-lived, and subscribe-only', function () use ($suite) {
@@ -172,18 +180,35 @@ $suite->test('publisher sends the complete canonical outbox payload', function (
     $suite->same('event-1', $capturedRequest['event_id']);
 });
 
-$suite->test('publisher honors the server-generated user notification room', function () use ($suite) {
+$suite->test('publisher honors the server-generated multi-purpose user room', function () use ($suite) {
     $captured = null;
     $integration = new RealtimeIntegration(new RealtimeTestSettings(realtimeTestConfig()), function ($config, $request) use (&$captured) {
         $captured = $request; return ['status' => 202, 'body' => '{}'];
     });
     $integration->publishOutboxEvent([
         'event_uuid' => 'notification-event-1', 'project_id' => 42,
-        'room_override' => 'syndicatum.notifications.user.27',
+        'room_override' => 'syndicatum.user.27',
         'event_type' => 'syndicatum.notifications.changed', 'payload_json' => '{"change":"invitation_created"}',
     ]);
-    $suite->same('syndicatum.notifications.user.27', $captured['room']);
+    $suite->same('syndicatum.user.27', $captured['room']);
     $suite->same('syndicatum.notifications.changed', $captured['event_type']);
+});
+
+$suite->test('backup publisher fans one snapshot out to active administrator user rooms', function () use ($suite) {
+    $captured = [];
+    $integration = new RealtimeIntegration(
+        new RealtimeTestSettings(realtimeTestConfig()),
+        function ($config, $request) use (&$captured) {
+            $captured[] = $request;
+            return ['status' => 202, 'body' => '{}'];
+        },
+        function () { return [9, 4, 9]; }
+    );
+    $backup = ['operation_id' => '12345678-1234-4123-8123-123456789abc', 'revision' => 3];
+    $suite->same(true, $integration->publishBackupUpdated($backup));
+    $suite->same(['syndicatum.user.9', 'syndicatum.user.4'], array_column($captured, 'room'));
+    $suite->same(['backup-12345678-1234-4123-8123-123456789abc-revision-3-user-9',
+        'backup-12345678-1234-4123-8123-123456789abc-revision-3-user-4'], array_column($captured, 'event_id'));
 });
 
 $suite->test('publisher rejects room overrides outside the notification contract', function () use ($suite) {

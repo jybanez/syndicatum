@@ -153,7 +153,7 @@ class MessageOutbox
              VALUES (?, ?, ?, NULL, ?, NULL, ?, 0, ?, ?)'
         );
         $statement->execute([
-            $eventUuid, (int) $projectId, RealtimeIntegration::notificationRoom($userId),
+            $eventUuid, (int) $projectId, RealtimeIntegration::userRoom($userId),
             self::EVENT_NOTIFICATIONS_CHANGED, $payloadJson, $now, $now,
         ]);
         return $this->findById((int) $this->pdo->lastInsertId());
