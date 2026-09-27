@@ -553,7 +553,7 @@ try {
             'Rejected responsibility writes left canonical messages behind.');
     });
 
-    $suite->test('all project members see messages while addressed filters express responsibility', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $messageId, &$contractSamples) {
+    $suite->test('all project members see messages while addressed and sender filters express responsibility', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $messageId, $agentOne, $ownerParticipant, &$contractSamples) {
         $all = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne, $agentOneHeaders);
         $mine = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&addressed_to=me&acknowledged=false', $humanHeaders);
         $suite->same(200, $all['status']);
@@ -565,6 +565,18 @@ try {
         $contractSamples[] = ['schema' => 'MessagePageResponse', 'path' => '/api/v1/project-messages.php', 'method' => 'get', 'status' => 200, 'body' => $emptyForward['body']];
         $suite->same($messageId, $all['body']['data'][0]['id']);
         $suite->same(1, count($mine['body']['data']));
+        $senders = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne
+            . '&sender=' . $agentOne['participant_id'] . ',' . $ownerParticipant, $agentOneHeaders);
+        $suite->same(200, $senders['status']);
+        $suite->true(count($senders['body']['data']) > 0, 'A multi-sender filter must return matching messages.');
+        foreach ($senders['body']['data'] as $filteredMessage) {
+            $suite->true(in_array((int) $filteredMessage['sender']['participant_id'], [$agentOne['participant_id'], $ownerParticipant], true),
+                'A multi-sender filter returned a message from an unselected sender.');
+        }
+        $invalidSenders = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne
+            . '&sender=' . $agentOne['participant_id'] . ',invalid', $agentOneHeaders);
+        $suite->same(422, $invalidSenders['status']);
+        $suite->same('VALIDATION_FAILED', $invalidSenders['body']['code']);
         $unsupported = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&acknowledged=true', $humanHeaders);
         $suite->same(422, $unsupported['status']);
         $suite->same('VALIDATION_FAILED', $unsupported['body']['code']);

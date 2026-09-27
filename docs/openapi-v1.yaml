@@ -299,7 +299,7 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
         - { name: before, in: query, description: Opaque cursor for older messages, schema: { type: string } }
         - { name: after, in: query, description: Opaque cursor for forward recovery, schema: { type: string } }
-        - { name: sender, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: sender, in: query, description: One or more sender participant IDs., style: form, explode: false, schema: { type: array, maxItems: 100, items: { type: integer, minimum: 1 } } }
         - { name: q, in: query, schema: { type: string } }
         - { name: from, in: query, schema: { type: string, format: date } }
         - { name: to, in: query, schema: { type: string, format: date } }
