@@ -53,11 +53,8 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <span class="app-visually-hidden" id="status-badge" aria-live="polite">Loading</span>
                                 <span class="app-visually-hidden" id="timeline-count" aria-live="polite">0 messages</span>
                                 <span class="app-visually-hidden" id="connection-label">HTTP</span>
-                                <div class="project-view-switch" id="project-view-switch" role="group" aria-label="Project view" hidden>
-                                    <button type="button" class="ui-button ui-button-ghost is-active" id="show-timeline" aria-pressed="true">Timeline</button>
-                                    <button type="button" class="ui-button ui-button-ghost" id="show-responsibility" aria-pressed="false">Responsibility Inbox</button>
-                                </div>
                             </header>
+                            <div class="project-view-switch" id="project-view-switch" hidden></div>
                             <section class="composer-shell" id="composer-shell" hidden aria-label="Compose message">
                                 <div class="reply-context" id="reply-context" hidden></div>
                                 <div class="addressing-row" id="addressing-row">
