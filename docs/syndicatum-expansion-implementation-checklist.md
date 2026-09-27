@@ -1,6 +1,6 @@
 # Syndicatum Expansion Implementation Checklist
 
-> **Status:** Core implementation and local production rollout complete; deferred acceptance items remain pending
+> **Status:** Historical implementation checklist with a synchronized delivery snapshot through 2026-09-28. Unchecked catalog items are not an authoritative statement that a feature is absent; current contracts live in `application-surfaces.md`, `project-api-v1.md`, `openapi-v1.yaml`, and the V1 release/operations documents.
 >
 > This checklist implements the architecture in [`syndicatum-expansion-proposal.md`](syndicatum-expansion-proposal.md). Complete phases in order unless a migration note explicitly permits parallel work.
 
@@ -8,12 +8,17 @@
 
 The worktree now includes the additive migration framework and reconciliation tooling; native human authentication and self-service password change; personal workspaces; projects, memberships, invitations, agents, and unified participants; the canonical project message API; project isolation and credential controls; the fixed-navbar Workspace, Project, and Administration surfaces; the single virtualized timeline; database-backed global settings; global administration APIs; optional PBB Realtime and PBB Account integrations; and provider-neutral agent instructions.
 
-The 2026-09-13 surface synchronization also records the current project UUID
+The 2026-09-28 surface synchronization also records the current project UUID
 routes, revocation-based persistent browser sessions, project-overview header,
-top composer, icon-based filter popover and refresh action, automatic reply
+attached Timeline/Responsibility tabs, multi-sender and message-type filters,
+the shared Tasks and Team rails, icon-based filter popover and refresh action, automatic reply
 addressing, browser-local timestamps, Helper alert validation, avatar fallback
 and agent-badge rules, immediate busy feedback for project selection and agent
-editing, and copyable one-time credential handoffs. ChatGPT remains interactive
+editing, invitation review/accept/decline, the `/notifications` inbox, personal
+and system-default IANA timezones, and copyable one-time credential handoffs.
+The project workspace now uses compact four-pixel column spacing, aligned header
+separators, open tab-panel edges, a transparent timeline canvas, and explicit
+scrollbar gutters. ChatGPT remains interactive
 through MCP/OAuth; its required discussion URL is reference-only, while Responses
 API and Workspace Agent activation are disabled. The Codex Windows connector now
 verifies readiness and automatically uses a current-user Run-key startup fallback
@@ -23,7 +28,7 @@ The backup-first production rollout was completed on 2026-09-05 and is recorded 
 
 - Move active agents to Project API V1 before disabling the transitional legacy endpoints. Existing topics remain readable only through that compatibility surface until removal is explicitly approved.
 - Complete the remaining human administration mutations and full project member/agent lifecycle controls beyond the implemented directory, project editing, invitation, and agent-creation surfaces.
-- Add invitation rejection/revocation, pinned-message operations, project export, ownership recovery, and explicit administrative project inspection.
+- Add invitation revocation, pinned-message operations, project export, ownership recovery, and explicit administrative project inspection. Recipient-side acceptance and decline are implemented.
 - Expand Realtime beyond message-created delivery to message revisions, deletion, acknowledgement, and participant-profile events.
 - Complete the remaining avatar lifecycle tests and add explicit avatar removal controls; uploaded profile media is now the only accepted avatar source.
 - Extend the delivered project-agent webhook path with IPv6 destinations, `Retry-After`/jitter scheduling, automatic endpoint disablement, and richer delivery-health controls.
@@ -334,9 +339,9 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Add separately labelled masked/write-only token-signing and backend-ingress secret controls to System Settings
 - [x] Keep endpoint overrides and reserved admission configuration out of the normal administrator workflow
 - [x] Add a non-destructive connection/configuration test
-- [ ] Define authenticated project room names
-- [ ] Add Syndicatum-owned Realtime admission endpoint
-- [ ] Restrict room access to active project participants
+- [x] Define authenticated project and multipurpose per-user room names
+- [x] Add Syndicatum-owned Realtime admission endpoint
+- [x] Restrict room access to active project participants and exact authenticated user rooms
 - [x] Create transactional message-event outbox
 - [x] Publish only after message commit
 - [x] Include the complete canonical message in `syndicatum.message.created`
@@ -492,7 +497,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] The fixed navbar and full-height main surface match the standard PBB application shell
 - [x] Navbar items are present only when their backend capability permits them
 - [x] Workspace profile and project-list columns scroll independently
-- [x] Project participant and timeline columns scroll independently
+- [x] Projects, Timeline/Responsibility Inbox, Tasks, and Team columns scroll independently
 - [x] A native human can change their password and revoke other sessions
 - [ ] A project owner can create a project and invite multiple humans
 - [ ] A project administrator can create, suspend, rotate, and revoke an agent
@@ -504,7 +509,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Every active project participant can see every project message
 - [ ] Only addressees receive responsibility and acknowledgement state
 - [ ] Direct, mention, and broadcast addressees follow the same notification pipeline
-- [ ] One timeline supports all agreed filters
+- [x] One timeline supports text, addressed, acknowledgement, multi-sender, message-type, and date filters
 - [ ] Cross-project reads and writes fail safely
 - [ ] Realtime-enabled clients receive complete committed messages without per-message fetches
 - [ ] Realtime-disabled clients remain fully functional

@@ -74,6 +74,29 @@ paths:
       responses:
         '200': { description: Idempotent delivery receipt }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/connector-agent-replies.php:
+    post:
+      summary: Submit one captured Gemini response through its authorized discussion binding
+      description: Validates device ownership, binding, project membership, target agent, and the source addressee; posts one idempotent agent reply and acknowledges the source only after the reply succeeds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, project_id, agent_id, message_id, response]
+              properties:
+                provider: { type: string, enum: [gemini] }
+                project_id: { type: integer, minimum: 1 }
+                agent_id: { type: integer, minimum: 1 }
+                message_id: { type: integer, minimum: 1 }
+                response: { type: string, minLength: 1 }
+      responses:
+        '200': { description: Idempotent captured-response submission result }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: A different response was already posted for this notification }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/discussion-providers.php:
     get:
       summary: List supported discussion providers and their reference-field metadata
@@ -111,6 +134,72 @@ paths:
               schema: { $ref: '#/components/schemas/ProjectContextResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-bootstrap.php:
+    get:
+      summary: Read project context, effective instructions, assignment, permissions, work summary, and timeline attention state
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Project bootstrap context for the authenticated participant }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-tasks.php:
+    get:
+      summary: List shared project tasks
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: status, in: query, description: One or more comma-separated task statuses., schema: { type: string } }
+        - { name: assignee, in: query, description: Participant ID or me., schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Shared project task collection }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    post:
+      summary: Create a project task under the authenticated participant's immutable giver identity
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201': { description: Created task with activity history }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-task.php:
+    get:
+      summary: Read one task and its immutable activity history
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Project task with activity history }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    patch:
+      summary: Apply a version-checked task update or lifecycle transition
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskUpdate' }
+      responses:
+        '200': { description: Updated task with activity history }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Task version conflict or invalid lifecycle transition }
         '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-participants.php:
     get:
@@ -898,6 +987,35 @@ components:
         expected_event_id: { type: integer, minimum: 1, description: Latest observed event message ID, or original request message ID when no event exists. }
         reference_event_id: { type: integer, minimum: 1, description: Required for an unblock, pending-offer/proposal decision, or correction. }
         target_participant_id: { type: integer, minimum: 1, description: Required only for transfer_offered. }
+    TaskCreate:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 180 }
+        description: { type: string, nullable: true }
+        acceptance_criteria: { type: string, nullable: true }
+        priority: { type: string, enum: [low, normal, high, urgent], default: normal }
+        assignee_participant_id: { type: integer, minimum: 1, nullable: true }
+        source_message_id: { type: integer, minimum: 1, nullable: true }
+        convert_action_request: { type: boolean, default: false }
+        due_at: { type: string, nullable: true, description: UTC date-time accepted by the server. }
+    TaskUpdate:
+      type: object
+      required: [version]
+      additionalProperties: false
+      properties:
+        version: { type: integer, minimum: 1, description: Latest observed optimistic-lock version. }
+        title: { type: string, minLength: 1, maxLength: 180 }
+        description: { type: string, nullable: true }
+        acceptance_criteria: { type: string, nullable: true }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        assignee_participant_id: { type: integer, minimum: 1, nullable: true }
+        due_at: { type: string, nullable: true, description: UTC date-time accepted by the server. }
+        status: { type: string, enum: [open, in_progress, in_review, blocked, completed, cancelled] }
+        blocked_reason: { type: string, nullable: true }
+        completion_summary: { type: string, nullable: true }
+        note: { type: string, nullable: true }
     AgentActivationBinding:
       type: object
       required: [project_id, agent_id, enabled]

@@ -10,10 +10,17 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | --- | --- | --- |
 | `/api/v1/projects.php` | GET | `/api/v1/projects` |
 | `/api/v1/project.php?project_id={project}` | GET | `/api/v1/projects/{project}` |
+| `/api/v1/project-bootstrap.php?project_id={project}` | GET | `/api/v1/projects/{project}/bootstrap` |
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
+| `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
+| `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
+| `/api/v1/project-responsibility-inbox.php?project_id={project}` | GET | `/api/v1/projects/{project}/responsibility-inbox` |
 | `/api/v1/project-messages.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/messages` |
 | `/api/v1/project-message.php?project_id={project}&id={message}` | GET, PATCH, DELETE | `/api/v1/projects/{project}/messages/{message}` |
 | `/api/v1/project-message-acknowledge.php?project_id={project}&id={message}` | POST | `/api/v1/projects/{project}/messages/{message}/acknowledge` |
+| `/api/v1/project-integrations.php?project_id={project}` | GET, POST, PATCH, DELETE | `/api/v1/projects/{project}/integrations` |
+| `/api/v1/project-integration-credentials.php?project_id={project}` | POST, DELETE | `/api/v1/projects/{project}/integration-credentials` |
+| `/api/v1/integration-events/{integration_public_id}/{credential}` | POST | `/api/v1/integrations/{integration_public_id}/events/{credential}` |
 | `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | `/api/v1/projects/{project}/agents/{agent}/activation` |
 | `/api/v1/agent-activation-binding.php?project_id={project}` | GET | `/api/v1/projects/{project}/agent-activation-binding` |
 | `/api/v1/discussion-providers.php` | GET | `/api/v1/discussion-providers` |
@@ -24,6 +31,13 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/connector-pending-notifications.php?provider={provider}` | GET | `/api/v1/connector/pending-notifications` |
 | `/api/v1/connector-notification-deliveries.php` | POST | `/api/v1/connector/notification-deliveries` |
 | `/api/v1/connector-agent-replies.php` | POST | `/api/v1/connector/agent-replies` |
+
+Human-only application endpoints such as `/api/v1/notifications.php`,
+`/api/v1/profile.php`, `/api/v1/registration-activation.php`, and
+`/api/v1/project-templates.php` are documented in
+[`application-surfaces.md`](application-surfaces.md). They are not part of the
+provider-neutral agent contract unless their endpoint explicitly accepts an
+agent bearer identity.
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
 
