@@ -148,7 +148,7 @@ button, input, textarea { font: inherit; }
 .participant-profile-modal .ui-action-modal-button-icon svg.ui-icon { fill: none; stroke: currentColor; }
 .participant-profile-modal .ui-dialog-footer-actions .ui-button:first-child:not(:only-child) { margin-right: auto; }
 
-.project-overview.timeline-project-overview { padding: 0 0 14px; border-bottom: 1px solid rgba(73, 93, 129, .35); }
+.project-overview.timeline-project-overview { padding: 0 0 4px; border-bottom: 1px solid rgba(73, 93, 129, .35); }
 .project-overview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
 .project-overview-heading h1 { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 26px; line-height: 1.15; }
 .project-overview-actions { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
@@ -465,7 +465,7 @@ button, input, textarea { font: inherit; }
 .surface-heading.compact { margin-top: 20px; }
 .column-heading { min-width: 0; }
 .column-heading h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
-.column-filter-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid rgba(73, 93, 129, .35); }
+.column-filter-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding-bottom: 4px; border-bottom: 1px solid rgba(73, 93, 129, .35); }
 .project-filter-row { grid-template-columns: minmax(0, 1fr) 40px; }
 .project-search { width: 100%; min-width: 0; overflow: hidden; }
 .project-search .ui-search-wrap,
