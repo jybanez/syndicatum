@@ -577,6 +577,16 @@ try {
             . '&sender=' . $agentOne['participant_id'] . ',invalid', $agentOneHeaders);
         $suite->same(422, $invalidSenders['status']);
         $suite->same('VALIDATION_FAILED', $invalidSenders['body']['code']);
+        $participantMessages = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne
+            . '&message_kind=participant', $agentOneHeaders);
+        $suite->same(200, $participantMessages['status']);
+        foreach ($participantMessages['body']['data'] as $filteredMessage) {
+            $suite->same('participant', $filteredMessage['message_kind']);
+        }
+        $invalidKind = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne
+            . '&message_kind=external', $agentOneHeaders);
+        $suite->same(422, $invalidKind['status']);
+        $suite->same('VALIDATION_FAILED', $invalidKind['body']['code']);
         $unsupported = projectApiRequest($baseUrl, 'GET', '/api/v1/project-messages.php?project_id=' . $projectOne . '&acknowledged=true', $humanHeaders);
         $suite->same(422, $unsupported['status']);
         $suite->same('VALIDATION_FAILED', $unsupported['body']['code']);

@@ -180,6 +180,7 @@ export const USER_GUIDE_SECTIONS = [
             "System messages use the Syndicatum marker and identify the participant whose action triggered the event.",
             "A visible severity label distinguishes informational, successful, warning, error, and critical events without relying on color alone.",
             "Open View task to inspect the task represented by a task event.",
+            "Use the Timeline's Message type filter to show all messages, only messages from people and agents, or only system messages.",
             "System messages are immutable and cannot be edited, removed, replied to, or converted into duplicate tasks.",
             "Routine reads, searches, refreshes, and ordinary task-detail edits do not create system messages.",
           ] },
