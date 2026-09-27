@@ -255,7 +255,7 @@ paths:
     post:
       security: []
       summary: Ingest an authenticated external event through a universal capability URL
-      description: The URL credential determines the project and integration identity. Requests must use HTTPS and application/json. The raw payload is never persisted; Syndicatum stores its digest, bounded source metadata, an immutable system message, and audit evidence. Exact replays reconcile to the original receipt.
+      description: The URL credential determines the project and integration identity. Requests must use HTTPS and application/json. The decoded JSON payload is retained in the immutable system event and is readable by project members; Syndicatum also stores its digest, bounded source metadata, and audit evidence. Exact replays reconcile to the original receipt.
       parameters:
         - name: integration_public_id
           in: path
@@ -834,7 +834,7 @@ components:
             created_at: { type: string }
     IntegrationEventInput:
       type: object
-      description: Arbitrary provider JSON is accepted when it omits the optional normalized fields. Only the normalized fields below influence presentation; the raw payload is not persisted.
+      description: Arbitrary provider JSON is accepted when it omits the optional normalized fields. Only the normalized fields below influence the timeline summary; the complete decoded JSON object is retained in the immutable system event for project members to inspect.
       properties:
         event_type: { type: string, enum: [event, alert, status, build, deployment, incident, security, monitoring, source_control], default: event }
         severity: { type: string, enum: [neutral, info, success, warning, error, critical], default: info }

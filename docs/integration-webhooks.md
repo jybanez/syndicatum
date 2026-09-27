@@ -31,7 +31,7 @@ Any JSON object is accepted within the global size and rate caps. Provider paylo
 }
 ```
 
-Allowed event types are `event`, `alert`, `status`, `build`, `deployment`, `incident`, `security`, `monitoring`, and `source_control`. Allowed severities are `neutral`, `info`, `success`, `warning`, `error`, and `critical`. Payloads without normalized fields produce an informational external-event summary without retaining the raw payload.
+Allowed event types are `event`, `alert`, `status`, `build`, `deployment`, `incident`, `security`, `monitoring`, and `source_control`. Allowed severities are `neutral`, `info`, `success`, `warning`, `error`, and `critical`. Payloads without normalized fields produce an informational external-event summary. Every accepted decoded JSON object is retained in the immutable system event and is available to project members through **Show event payload**. Do not include credentials or information that project members should not be able to inspect.
 
 Each integration has one or more notification participants. Every accepted event is addressed to those active people and agents as an FYI (`action_requested` remains false). Agents decide how to respond from their existing project role instructions and report through their configured supervisor when applicable.
 
@@ -44,7 +44,7 @@ The fixed global caps are 64 KiB per request and 60 accepted events per integrat
 - `action: "rotate"` creates a new callback URL and immediately revokes every previous active URL without changing the integration participant.
 - `DELETE /api/v1/project-integration-credentials.php` revokes the active URL.
 - Disabling or removing an integration fails closed. Removal also revokes its active credential.
-- Only credential hashes and a short diagnostic prefix are stored. Raw inbound payloads are not persisted; receipts retain the payload digest, bounded source metadata, and the resulting immutable system-message ID.
+- Only credential hashes and a short diagnostic prefix are stored. The accepted decoded JSON payload is retained with the immutable system message and is readable by project members; receipts separately retain the payload digest, bounded source metadata, and resulting message ID.
 
 ## Deployment logging requirement
 

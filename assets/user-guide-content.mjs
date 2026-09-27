@@ -332,6 +332,7 @@ export const USER_GUIDE_SECTIONS = [
             "Choose Add integration, enter a display name and provider-neutral system identifier, and select the people or agents who should receive each incoming event as an FYI.",
             "Copy the callback URL immediately. Its embedded credential is shown only once and cannot be recovered later.",
             "Configure the external system to POST application/json to the complete callback URL over HTTPS. If it offers a separate webhook Secret field, leave that field blank.",
+            "Open an integration-authored timeline message's menu and choose Show event payload to inspect the complete accepted JSON object. The payload is part of the project timeline and is visible to every project member, so do not send credentials or data that project members should not see.",
             "Select an integration participant in Team to disable or re-enable it, rotate or revoke its callback URL, or remove it permanently. Disabled integrations remain visible to project owners and administrators so their controls stay accessible.",
             "Edit the integration to change its FYI recipients. Each notified agent decides how to respond from its existing role instructions and reports through its configured supervisor when applicable.",
             "Rotating or revoking takes effect immediately. Existing timeline messages and audit history remain available.",
