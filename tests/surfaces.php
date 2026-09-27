@@ -960,8 +960,11 @@ try {
             'Project status must use complete Helper visualization and loading components.');
         $suite->true(strpos($source, 'title: "Project status"') !== false
             && strpos($source, 'message: "Loading project status…"') !== false
-            && strpos($source, 'Each section loads independently.') !== false,
-            'The canonical modal must open before its independently loaded sections begin.');
+            && strpos($source, 'Sections load one at a time.') !== false,
+            'The canonical modal must open before its serialized section loads begin.');
+        $suite->true(strpos($source, 'const queued = requestQueue.then(() => projectStatusQuery') !== false
+            && strpos($source, 'Promise.allSettled(initialRequests).finally') !== false,
+            'Project Status requests must remain section-specific while executing one at a time.');
         foreach (['Summary', 'TaskProgress', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
             $suite->true(strpos($source, 'API.projectStatus' . $section) !== false,
                 'Missing independent Project Status request for ' . $section . '.');

@@ -1,7 +1,7 @@
 import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.209";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928150000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928160000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -2989,9 +2989,15 @@ function openProjectStatusModal() {
   const projectId = selectedProjectId();
   const abortController = new AbortController();
   const ownedComponents = [];
+  let requestQueue = Promise.resolve();
+  const enqueueProjectStatusQuery = (endpoint, parameters = {}) => {
+    const queued = requestQueue.then(() => projectStatusQuery(endpoint, parameters, abortController.signal));
+    requestQueue = queued.catch(() => undefined);
+    return queued;
+  };
   const content = projectInfoElement("div", "project-status-content");
   const intro = projectInfoElement("header", "project-status-intro");
-  intro.append(projectInfoElement("p", "", `Current operational status for ${state.project?.name || "this project"}. Each section loads independently.`));
+  intro.append(projectInfoElement("p", "", `Current operational status for ${state.project?.name || "this project"}. Sections load one at a time.`));
   content.append(intro);
   const summary = projectStatusSection("At a glance", "Small indexed aggregates for the current project.", "is-wide");
   const progress = projectStatusSection("Task progress", "Distribution and completion across all project tasks.");
@@ -3028,7 +3034,7 @@ function openProjectStatusModal() {
   const loadSummary = () => {
     const skeleton = projectStatusSkeleton(summary, { variant: "grid", columns: 4, rows: 1 });
     ownedComponents.push(skeleton);
-    return projectStatusQuery(API.projectStatusSummary, {}, abortController.signal).then((data) => {
+    return enqueueProjectStatusQuery(API.projectStatusSummary).then((data) => {
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
       skeleton.destroy?.();
       summary.body.replaceChildren();
@@ -3046,7 +3052,7 @@ function openProjectStatusModal() {
   const loadProgress = () => {
     const skeleton = projectStatusSkeleton(progress, { variant: "card" });
     ownedComponents.push(skeleton);
-    return projectStatusQuery(API.projectStatusTaskProgress, {}, abortController.signal).then((data) => {
+    return enqueueProjectStatusQuery(API.projectStatusTaskProgress).then((data) => {
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
       skeleton.destroy?.();
       progress.body.replaceChildren();
@@ -3081,7 +3087,7 @@ function openProjectStatusModal() {
     const requestedRange = activityRange;
     const skeleton = projectStatusSkeleton(activity, { variant: "card" });
     ownedComponents.push(skeleton);
-    return projectStatusQuery(API.projectStatusActivity, { days: requestedRange }, abortController.signal).then((data) => {
+    return enqueueProjectStatusQuery(API.projectStatusActivity, { days: requestedRange }).then((data) => {
       if (!modal.getState().open || selectedProjectId() !== projectId || String(data.range_days) !== activityRange) return;
       skeleton.destroy?.();
       activity.body.replaceChildren();
@@ -3107,7 +3113,7 @@ function openProjectStatusModal() {
       skeleton = projectStatusSkeleton(attention, { lines: 3 });
       ownedComponents.push(skeleton);
     }
-    return projectStatusQuery(API.projectStatusAttention, { limit: "10", ...(attentionBefore ? { before: attentionBefore } : {}) }, abortController.signal).then((data) => {
+    return enqueueProjectStatusQuery(API.projectStatusAttention, { limit: "10", ...(attentionBefore ? { before: attentionBefore } : {}) }).then((data) => {
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
       skeleton?.destroy?.();
       if (!append) attention.body.replaceChildren();
@@ -3141,7 +3147,7 @@ function openProjectStatusModal() {
   const loadTeam = () => {
     const skeleton = projectStatusSkeleton(team, { variant: "grid", columns: 3, rows: 1 });
     ownedComponents.push(skeleton);
-    return projectStatusQuery(API.projectStatusTeam, {}, abortController.signal).then((data) => {
+    return enqueueProjectStatusQuery(API.projectStatusTeam).then((data) => {
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
       skeleton.destroy?.();
       team.body.replaceChildren();
@@ -3158,7 +3164,7 @@ function openProjectStatusModal() {
   const loadIntegrations = () => {
     const skeleton = projectStatusSkeleton(integrations, { variant: "grid", columns: 3, rows: 1 });
     ownedComponents.push(skeleton);
-    return projectStatusQuery(API.projectStatusIntegrations, {}, abortController.signal).then((data) => {
+    return enqueueProjectStatusQuery(API.projectStatusIntegrations).then((data) => {
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
       skeleton.destroy?.();
       integrations.body.replaceChildren();
@@ -3172,13 +3178,15 @@ function openProjectStatusModal() {
     });
   };
 
-  const summaryPromise = loadSummary();
-  void loadProgress();
-  void loadActivity();
-  void loadAttention(false);
-  void loadTeam();
-  void loadIntegrations();
-  summaryPromise.finally(() => {
+  const initialRequests = [
+    loadSummary(),
+    loadAttention(false),
+    loadProgress(),
+    loadActivity(),
+    loadTeam(),
+    loadIntegrations(),
+  ];
+  Promise.allSettled(initialRequests).finally(() => {
     if (modal.getState().open) modal.setBusy(false);
   });
 }
