@@ -965,6 +965,20 @@ try {
         $suite->true(strpos($source, 'const queued = requestQueue.then(() => projectStatusQuery') !== false
             && strpos($source, 'Promise.allSettled(initialRequests).finally') !== false,
             'Project Status requests must remain section-specific while executing one at a time.');
+        $suite->true(strpos($source, 'projectStatusSection("Project activity"') !== false
+            && strpos($source, 'label: "Tasks blocked"') !== false
+            && strpos($source, 'label: "Sent for review"') !== false
+            && strpos($source, 'yFormatter:') !== false
+            && strpos($source, 'id: "messages", label: "Messages"') === false,
+            'Project activity must prioritize integer-formatted task outcomes over message traffic.');
+        $suite->true(strpos($source, 'value: `${data.tasks?.completed || 0} / ${data.tasks?.eligible_total || 0}`') !== false
+            && strpos($source, 'label: "People"') !== false
+            && strpos($source, 'label: "AI agents"') !== false
+            && strpos($source, 'label: "Connected systems"') !== false,
+            'Project status must use outcome-oriented progress and non-technical team language.');
+        $suite->true(strpos($source, 'const row = projectInfoElement("button", "project-status-attention-item")') !== false
+            && strpos($source, 'void openTaskDetails(item.id)') !== false,
+            'Needs-attention rows must be keyboard-operable and open the existing task workflow.');
         foreach (['Summary', 'TaskProgress', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
             $suite->true(strpos($source, 'API.projectStatus' . $section) !== false,
                 'Missing independent Project Status request for ' . $section . '.');

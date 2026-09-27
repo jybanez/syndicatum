@@ -1,7 +1,7 @@
 import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.209";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928160000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928170000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -3001,7 +3001,7 @@ function openProjectStatusModal() {
   content.append(intro);
   const summary = projectStatusSection("At a glance", "Small indexed aggregates for the current project.", "is-wide");
   const progress = projectStatusSection("Task progress", "Distribution and completion across all project tasks.");
-  const activity = projectStatusSection("Recent activity", "Bounded task and message activity in UTC.");
+  const activity = projectStatusSection("Project activity", "Outcome-focused task activity in UTC.");
   const attention = projectStatusSection("Needs attention", "The newest blocked, review, or overdue tasks.", "is-wide");
   const team = projectStatusSection("Team", "Participant counts by identity and membership state.");
   const integrations = projectStatusSection("Integrations", "Connection and credential readiness without exposing secrets.");
@@ -3041,8 +3041,8 @@ function openProjectStatusModal() {
       ownedComponents.push(state.factories.createStatCards(summary.body, [
         { id: "active", label: "Active tasks", value: data.tasks?.active || 0, icon: "actions.check", tone: "info", note: `${data.tasks?.total || 0} total` },
         { id: "attention", label: "Needs attention", value: data.tasks?.needs_attention || 0, icon: "status.warning", tone: "warning", note: "Blocked, review, or overdue" },
-        { id: "completed", label: "Completed", value: data.tasks?.completed || 0, icon: "status.success", tone: "success", note: "All time" },
-        { id: "team", label: "Active team", value: data.team?.active_total || 0, icon: "people.users", tone: "neutral", note: `${data.team?.humans || 0} human · ${data.team?.agents || 0} agent` },
+        { id: "completed", label: "Completed", value: `${data.tasks?.completed || 0} / ${data.tasks?.eligible_total || 0}`, icon: "status.success", tone: "success", note: `${data.tasks?.completion_percent || 0}% complete` },
+        { id: "team", label: "Active team", value: data.team?.active_total || 0, icon: "people.users", tone: "neutral", note: `${data.team?.humans || 0} people · ${data.team?.agents || 0} AI agents · ${data.team?.integrations || 0} connected systems` },
       ], { columns: "4", size: "sm", ariaLabel: "Project status summary" }));
     }).catch((error) => {
       if (error.name !== "AbortError" && modal.getState().open) projectStatusError(summary, error.message, loadSummary);
@@ -3091,13 +3091,38 @@ function openProjectStatusModal() {
       if (!modal.getState().open || selectedProjectId() !== projectId || String(data.range_days) !== activityRange) return;
       skeleton.destroy?.();
       activity.body.replaceChildren();
-      ownedComponents.push(state.factories.createXyChart(activity.body, {
+      const totals = data.totals || {};
+      const summary = projectInfoElement("div", "project-status-activity-summary");
+      [
+        ["Tasks opened", totals.tasks_opened],
+        ["Completed", totals.tasks_completed],
+        ["Blocked", totals.tasks_blocked],
+        ["Sent for review", totals.sent_for_review],
+        ["Reassigned", totals.responsibilities_reassigned],
+        ["Messages", totals.messages, "is-secondary"],
+      ].forEach(([label, value, className = ""]) => {
+        const metric = projectInfoElement("span", `project-status-activity-metric ${className}`.trim());
+        metric.append(projectInfoElement("strong", "", value || 0), projectInfoElement("span", "", label));
+        summary.append(metric);
+      });
+      activity.body.append(summary);
+      const outcomeTotal = ["tasks_opened", "tasks_completed", "tasks_blocked", "sent_for_review", "responsibilities_reassigned"]
+        .reduce((total, key) => total + Number(totals[key] || 0), 0);
+      if (!outcomeTotal) {
+        activity.body.append(projectInfoElement("p", "project-status-empty", "No task activity in this period."));
+        return;
+      }
+      const chartHost = projectInfoElement("div", "project-status-activity-chart");
+      activity.body.append(chartHost);
+      ownedComponents.push(state.factories.createXyChart(chartHost, {
         ariaLabel: `Project activity over ${data.range_days} days`, xType: "date", xLabel: "Date", yLabel: "Count",
         height: 250, size: "sm", showLegend: true, showPoints: false,
+        yFormatter: (value) => Number(value) < 0 ? "" : new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Math.round(value)),
         series: [
           { id: "opened", label: "Tasks opened", tone: "info", points: (data.series || []).map((row) => ({ x: row.date, y: row.tasks_opened })) },
           { id: "completed", label: "Tasks completed", tone: "success", points: (data.series || []).map((row) => ({ x: row.date, y: row.tasks_completed })) },
-          { id: "messages", label: "Messages", tone: "neutral", points: (data.series || []).map((row) => ({ x: row.date, y: row.messages })) },
+          { id: "blocked", label: "Tasks blocked", tone: "danger", points: (data.series || []).map((row) => ({ x: row.date, y: row.tasks_blocked })) },
+          { id: "review", label: "Sent for review", tone: "warning", points: (data.series || []).map((row) => ({ x: row.date, y: row.sent_for_review })) },
         ],
       }));
     }).catch((error) => {
@@ -3120,14 +3145,21 @@ function openProjectStatusModal() {
       const list = append ? attention.body.querySelector(".project-status-attention-list") : projectInfoElement("div", "project-status-attention-list");
       if (!append) attention.body.append(list);
       (data.items || []).forEach((item) => {
-        const row = projectInfoElement("article", "project-status-attention-item");
+        const row = projectInfoElement("button", "project-status-attention-item");
+        row.type = "button";
         const copy = projectInfoElement("span", "project-status-attention-copy");
-        copy.append(projectInfoElement("strong", "", item.title), projectInfoElement("span", "", `${taskStatusLabel(item.status)}${item.assignee_name ? ` · ${item.assignee_name}` : ""}`));
+        const relativeTime = notificationRelativeTime(item.updated_at);
+        copy.append(projectInfoElement("strong", "", item.title), projectInfoElement("span", "", `${taskStatusLabel(item.status)}${item.assignee_name ? ` · ${item.assignee_name}` : ""}${relativeTime ? ` · ${relativeTime}` : ""}`));
+        if (item.blocked_reason) copy.append(projectInfoElement("span", "project-status-attention-reason", item.blocked_reason));
         const flags = projectInfoElement("span", "project-status-attention-flags");
         if (item.overdue) flags.append(projectInfoElement("span", "ui-badge is-overdue", "Overdue"));
         if (item.status === "blocked") flags.append(projectInfoElement("span", "ui-badge is-blocked", "Blocked"));
         if (item.status === "in_review") flags.append(projectInfoElement("span", "ui-badge is-review", "Review"));
         row.append(copy, flags);
+        row.addEventListener("click", () => {
+          void modal.close({ reason: "open-task" });
+          void openTaskDetails(item.id);
+        });
         list.append(row);
       });
       if (!list.children.length) list.append(projectInfoElement("p", "project-status-empty", "Nothing currently needs the owner's attention."));
@@ -3152,9 +3184,9 @@ function openProjectStatusModal() {
       skeleton.destroy?.();
       team.body.replaceChildren();
       ownedComponents.push(state.factories.createStatCards(team.body, [
-        { id: "humans", label: "Humans", value: data.counts?.human?.active || 0, icon: "people.user", tone: "info", note: `${data.counts?.human?.total || 0} total` },
-        { id: "agents", label: "Agents", value: data.counts?.agent?.active || 0, icon: "people.agent", tone: "success", note: `${data.counts?.agent?.total || 0} total` },
-        { id: "integrations", label: "Integrations", value: data.counts?.integration?.active || 0, icon: "actions.integration", tone: "neutral", note: `${data.counts?.integration?.total || 0} total` },
+        { id: "humans", label: "People", value: data.counts?.human?.active || 0, icon: "people.user", tone: "info", note: `${data.counts?.human?.total || 0} total` },
+        { id: "agents", label: "AI agents", value: data.counts?.agent?.active || 0, icon: "people.agent", tone: "success", note: `${data.counts?.agent?.total || 0} total` },
+        { id: "integrations", label: "Connected systems", value: data.counts?.integration?.active || 0, icon: "actions.integration", tone: "neutral", note: `${data.counts?.integration?.total || 0} total` },
       ], { columns: "3", size: "sm", ariaLabel: "Project team status" }));
     }).catch((error) => {
       if (error.name !== "AbortError" && modal.getState().open) projectStatusError(team, error.message, loadTeam);
