@@ -15,6 +15,7 @@ class RealtimeIntegration
     const BACKUP_ROOM = 'syndicatum.backups.global';
     const BACKUP_EVENT = 'syndicatum.backup.updated';
     const RESTORE_EVENT = 'syndicatum.restore.updated';
+    const NOTIFICATION_EVENT = 'syndicatum.notifications.changed';
 
     private $settings;
     private $transport;
@@ -155,6 +156,43 @@ class RealtimeIntegration
         ];
     }
 
+    public function buildGlobalAdmission(array $user, $includeBackup = false)
+    {
+        if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
+        $userId = isset($user['id']) ? (int) $user['id'] : 0;
+        $displayName = isset($user['display_name']) ? trim((string) $user['display_name']) : '';
+        if ($userId < 1 || $displayName === '') { throw new InvalidArgumentException('A user identity is required for Realtime admission.'); }
+        $config = $this->admissionConfig();
+        $issuedAt = time();
+        $expiresAt = $issuedAt + $config['token_ttl_seconds'];
+        $tokenId = 'rt_user_' . bin2hex(self::secureRandomBytes(10));
+        $subject = 'user:' . $userId;
+        $rooms = [self::notificationRoom($userId)];
+        if ($includeBackup) { $rooms[] = self::BACKUP_ROOM; }
+        $claims = [
+            'iss' => $config['issuer'], 'sub' => $subject, 'aud' => $config['audience'],
+            'iat' => $issuedAt, 'exp' => $expiresAt, 'jti' => $tokenId,
+            'project_code' => $config['project_code'], 'app_code' => $config['client_code'],
+            'user_id' => $subject, 'display_name' => $displayName,
+            'roles' => $includeBackup ? ['administrator'] : [],
+            'capabilities' => ['session.connect', 'room.join'],
+            'allowed_rooms' => $rooms, 'allowed_room_prefixes' => [], 'attachment_policy' => [],
+        ];
+        return [
+            'enabled' => true, 'token' => $this->signJwt($claims, $config['signing_secret']),
+            'websocket_url' => $config['websocket_url'], 'app_code' => $config['client_code'],
+            'project_code' => $config['project_code'], 'room' => $rooms[0], 'rooms' => $rooms,
+            'expires_at' => gmdate('c', $expiresAt),
+        ];
+    }
+
+    public static function notificationRoom($userId)
+    {
+        $userId = (int) $userId;
+        if ($userId < 1) { throw new InvalidArgumentException('A user id is required for a notification room.'); }
+        return 'syndicatum.notifications.user.' . $userId;
+    }
+
     public function buildConnectorAuthorizationAdmission($authorizationId, $deviceName, $expiresAt)
     {
         if (!$this->isEnabled()) { throw new RuntimeException('Realtime integration is disabled.'); }
@@ -275,10 +313,18 @@ class RealtimeIntegration
                 throw new InvalidArgumentException('Outbox payload is not valid JSON.');
             }
 
+            $room = self::normalizeProjectRoom($event['project_id']);
+            if (!empty($event['room_override'])) {
+                $room = (string) $event['room_override'];
+                if ((string) $event['event_type'] !== self::NOTIFICATION_EVENT
+                    || !preg_match('/\Asyndicatum\.notifications\.user\.[1-9][0-9]*\z/', $room)) {
+                    throw new InvalidArgumentException('Outbox room override is invalid.');
+                }
+            }
             $request = [
                 'client_code' => $config['client_code'],
                 'project_code' => $config['project_code'],
-                'room' => self::normalizeProjectRoom($event['project_id']),
+                'room' => $room,
                 'event_type' => (string) $event['event_type'],
                 'payload' => $payload,
                 'meta' => [

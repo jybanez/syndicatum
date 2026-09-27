@@ -953,3 +953,27 @@ button, input, textarea { font: inherit; }
   .recovery-backup-metadata-list dd { margin-bottom: 10px; }
   .recovery-restore-choice-grid { grid-template-columns: minmax(0, 1fr); }
 }
+.syndicatum-notification-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.syndicatum-notification-badge {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid var(--ui-color-surface, #fff);
+  border-radius: 999px;
+  background: var(--ui-color-danger, #dc2626);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+  box-sizing: border-box;
+}

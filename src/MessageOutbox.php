@@ -2,12 +2,14 @@
 
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/DeliveryFailureTaxonomy.php';
+require_once __DIR__ . '/RealtimeIntegration.php';
 
 class MessageOutbox
 {
     const EVENT_MESSAGE_CREATED = 'syndicatum.message.created';
     const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
     const EVENT_TASK_UPDATED = 'syndicatum.task.updated';
+    const EVENT_NOTIFICATIONS_CHANGED = 'syndicatum.notifications.changed';
     const DEFAULT_MAX_ATTEMPTS = 8;
 
     private $pdo;
@@ -129,6 +131,31 @@ class MessageOutbox
             $now,
         ]);
 
+        return $this->findById((int) $this->pdo->lastInsertId());
+    }
+
+    public function enqueueNotificationsChanged($projectId, $userId, $change, $invitationId)
+    {
+        $eventUuid = self::uuidV4();
+        $payload = [
+            'event_id' => $eventUuid,
+            'type' => self::EVENT_NOTIFICATIONS_CHANGED,
+            'change' => trim((string) $change),
+            'invitation_id' => (int) $invitationId,
+        ];
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payloadJson === false) { throw new RuntimeException('Unable to encode the notification outbox event.'); }
+        $now = Db::now();
+        $statement = $this->pdo->prepare(
+            'INSERT INTO message_events_outbox
+             (event_uuid, project_id, room_override, message_id, event_type, project_sequence, payload_json,
+              attempt_count, available_at, created_at)
+             VALUES (?, ?, ?, NULL, ?, NULL, ?, 0, ?, ?)'
+        );
+        $statement->execute([
+            $eventUuid, (int) $projectId, RealtimeIntegration::notificationRoom($userId),
+            self::EVENT_NOTIFICATIONS_CHANGED, $payloadJson, $now, $now,
+        ]);
         return $this->findById((int) $this->pdo->lastInsertId());
     }
 

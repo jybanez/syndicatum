@@ -32,8 +32,9 @@ try {
     if (!$realtime->isEnabled()) { Api::json(['data' => ['enabled' => false]]); }
 
     if ($projectId < 1) {
-        $user = (new AuthService($pdo))->requireAdministrator();
-        try { $admission = $realtime->buildBackupAdmission($user); }
+        $user = (new AuthService($pdo))->requireUser();
+        $roles = isset($user['system_roles']) && is_array($user['system_roles']) ? $user['system_roles'] : [];
+        try { $admission = $realtime->buildGlobalAdmission($user, in_array('administrator', $roles, true)); }
         catch (InvalidArgumentException $exception) { throw new RuntimeException('REALTIME_CONFIGURATION_INVALID'); }
         Api::json(['data' => $admission]);
     }
@@ -56,7 +57,10 @@ try {
     try {
         $roles = isset($access['identity']['user']['system_roles']) && is_array($access['identity']['user']['system_roles'])
             ? $access['identity']['user']['system_roles'] : [];
-        $additionalRooms = in_array('administrator', $roles, true) ? [RealtimeIntegration::BACKUP_ROOM] : [];
+        $additionalRooms = [];
+        $humanUserId = isset($access['identity']['user']['id']) ? (int) $access['identity']['user']['id'] : 0;
+        if ($humanUserId > 0) { $additionalRooms[] = RealtimeIntegration::notificationRoom($humanUserId); }
+        if (in_array('administrator', $roles, true)) { $additionalRooms[] = RealtimeIntegration::BACKUP_ROOM; }
         $admission = $realtime->buildAdmission($participant, $projectId, $additionalRooms);
     } catch (InvalidArgumentException $exception) {
         // Configuration errors are operational details and must not be
