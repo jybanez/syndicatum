@@ -29,10 +29,10 @@ class SchemaMigrator
             foreach ($this->migrationFiles() as $file) {
                 $migration = $this->loadMigration($file);
                 $version = $migration['version'];
-                $checksum = hash_file('sha256', $file);
+                $checksum = PostBaselineMigrator::canonicalSha256($file);
 
                 if (isset($applied[$version])) {
-                    if (!hash_equals($applied[$version], $checksum)) {
+                    if (!$this->checksumMatches($applied[$version], $file)) {
                         throw new RuntimeException('Applied migration ' . $version . ' has been modified.');
                     }
                     continue;
@@ -82,7 +82,8 @@ class SchemaMigrator
                 'version' => $version,
                 'description' => $migration['description'],
                 'applied' => isset($applied[$version]),
-                'checksum_valid' => !isset($applied[$version]) || hash_equals($applied[$version], hash_file('sha256', $file)),
+                'checksum_valid' => !isset($applied[$version])
+                    || $this->checksumMatches($applied[$version], $file),
             ];
         }
 
@@ -137,6 +138,16 @@ class SchemaMigrator
         }
 
         return $migration;
+    }
+
+    private function checksumMatches($storedChecksum, $file)
+    {
+        $canonical = PostBaselineMigrator::canonicalSha256($file);
+        if (hash_equals((string) $storedChecksum, $canonical)) {
+            return true;
+        }
+        $legacyRaw = hash_file('sha256', $file);
+        return is_string($legacyRaw) && hash_equals((string) $storedChecksum, $legacyRaw);
     }
 
     private function acquireLock()

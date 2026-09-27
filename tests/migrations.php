@@ -79,10 +79,37 @@ try {
         $suite->assertSame($migrationCount, (int) $pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn());
         $versions = $pdo->query('SELECT version FROM syndicatum_schema_migrations ORDER BY version')->fetchAll(PDO::FETCH_COLUMN);
         $suite->assertSame('202609050001_expansion_foundation', $versions[0]);
+        $checksum = $pdo->query("SELECT checksum FROM syndicatum_schema_migrations WHERE version = '202609270002'")->fetchColumn();
+        $suite->assertSame(
+            PostBaselineMigrator::canonicalSha256(dirname(__DIR__) . '/migrations/202609270002.php'),
+            $checksum,
+            'Migration checksums must be independent of checkout line endings.'
+        );
         $roles = $pdo->query('SELECT code FROM system_roles ORDER BY code')->fetchAll(PDO::FETCH_COLUMN);
         $suite->assertSame(['administrator', 'user'], $roles);
         foreach (['agent_webhook_deliveries', 'workspace_agent_trigger_deliveries', 'responses_api_deliveries'] as $table) {
             $suite->assertTrue(Db::columnExists($pdo, $table, 'terminal_at'), $table . ' has no terminal transition timestamp.');
+        }
+    });
+
+    $suite->test('legacy raw CRLF migration checksums remain valid across checkout platforms', function () use ($suite, $pdo) {
+        $version = '202609270002';
+        $source = dirname(__DIR__) . '/migrations/' . $version . '.php';
+        $directory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-migration-crlf-' . bin2hex(random_bytes(6));
+        mkdir($directory, 0700, true);
+        $canonical = PostBaselineMigrator::canonicalSha256($source);
+        $crlf = str_replace("\n", "\r\n", str_replace("\r\n", "\n", file_get_contents($source)));
+        $copy = $directory . DIRECTORY_SEPARATOR . $version . '.php';
+        file_put_contents($copy, $crlf);
+        $legacyRaw = hash_file('sha256', $copy);
+        $suite->assertTrue($legacyRaw !== $canonical, 'CRLF fixture did not produce a distinct legacy checksum.');
+        $pdo->prepare('UPDATE syndicatum_schema_migrations SET checksum = ? WHERE version = ?')->execute([$legacyRaw, $version]);
+        try {
+            $suite->assertSame([], (new SchemaMigrator($pdo, $directory))->migrate());
+        } finally {
+            $pdo->prepare('UPDATE syndicatum_schema_migrations SET checksum = ? WHERE version = ?')->execute([$canonical, $version]);
+            @unlink($copy);
+            @rmdir($directory);
         }
     });
 
