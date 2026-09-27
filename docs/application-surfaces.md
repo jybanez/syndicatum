@@ -1,8 +1,8 @@
 # Syndicatum Application Surfaces
 
-> **Status:** Current implemented surface contract, synchronized 2026-09-13
+> **Status:** Current implemented surface contract, synchronized 2026-09-28
 
-Syndicatum follows the standard PBB application shell used by PBB Chat: one fixed Helper navbar and a full-height main region. The navbar uses the approved Syndicatum standard color master at 48 px; favicon sizes from 16–24 px use the separately optimized micro master. The document body does not scroll. Each desktop surface owns two independently scrolling columns below the navbar.
+Syndicatum follows the standard PBB application shell used by PBB Chat: one fixed Helper navbar and a full-height main region. The navbar uses the approved Syndicatum standard color master at 48 px; favicon sizes from 16–24 px use the separately optimized micro master. The document body does not scroll. Workspace uses two independently scrolling columns; an open project uses four independently scrolling columns.
 
 ## Application Shell
 
@@ -10,8 +10,7 @@ Syndicatum follows the standard PBB application shell used by PBB Chat: one fixe
 Syndicatum — 100dvh, overflow hidden
 ├─ Fixed single-row ui.navbar
 └─ Main surface — minmax(0, 1fr), overflow hidden
-   ├─ Left column — independent overflow
-   └─ Right column — independent overflow
+   └─ Surface-owned columns — independent overflow
 ```
 
 The shell must use `min-height: 0` and `min-width: 0` at grid boundaries so nested scrolling belongs to the intended columns. The page itself must not grow beyond the viewport.
@@ -63,7 +62,7 @@ Google actions immediately put their modal into a busy state before browser hand
 
 Authenticated users can deliberately bind Google to an existing account from **Edit Profile → Link Google account**. Syndicatum requires the same authenticated browser session at the OAuth callback and never links accounts solely because their email addresses match. Linking imports a Google avatar when the profile has no local photo. The action changes to **Refresh Google profile** after linking; refreshes update Google-sourced photos but preserve manually uploaded avatars.
 
-After a fresh login, the default destination is the Workspace surface. Navigation uses stable, reloadable browser routes: `/` for Home, `/users`, `/agents`, and `/audit` for global administration, and `/projects/{project_public_id}` for a project. Browser Back and Forward restore the corresponding surface. The former numeric `?project={project_id}` and `/projects/{project_id}` formats remain accepted for authorized users and are normalized to the public UUID route.
+After a fresh login, the default destination is the Workspace surface. Navigation uses stable, reloadable browser routes: `/` for Home, `/notifications`, `/guide`, `/users`, `/agents`, `/audit`, `/templates`, `/delivery-health`, and `/backup-restore`, plus `/projects/{project_public_id}` for a project. Browser Back and Forward restore the corresponding surface. The former numeric `?project={project_id}` and `/projects/{project_id}` formats remain accepted for authorized users and are normalized to the public UUID route.
 
 ## Workspace Surface
 
@@ -94,9 +93,38 @@ Selecting a project immediately opens a full-screen Helper busy overlay, prevent
 
 ## Project Surface
 
-The Project surface has two independently scrolling columns.
+The desktop Project surface has four independently scrolling columns separated by Helper splitters. Its compact shell uses a four-pixel column rhythm. Header separators align across columns, and the Timeline and Responsibility Inbox use the attached Helper tab variant.
 
-### Left: participants
+### Projects
+
+- search and a permission-aware project-list action menu;
+- owned and shared project cards with participant, task, and message counts;
+- the active project remains visibly selected.
+
+### Timeline and Responsibility Inbox
+
+- project name and one permission-driven upper-right project-actions menu;
+- attached **Timeline** and **Responsibility Inbox** tabs;
+- visible text search with adjacent icon-only filter, collapse, and refresh actions;
+- a Helper filter popover containing All, Addressed to me, Unacknowledged, a multi-select sender filter with a count indicator, Participant/System message-type selection, and date range;
+- one measured-height virtualized, newest-first timeline with bottom-edge loading for older pages;
+- transparent timeline canvas with backgrounds retained for the search header, date headers, and message cards;
+- an eight-pixel content gutter before the timeline scrollbar;
+- system-message presentation that is visually distinct from participant messages;
+- integration-authored system events whose immutable accepted JSON can be inspected through **Show event payload**;
+- reply context, addressee responsibility, acknowledgement, and revision indicators;
+- browser-local rendering and filtering of server UTC timestamps.
+
+The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters.
+
+### Tasks
+
+- project task count, search, counted multi-status filtering, sorting, refresh, and permission-aware creation;
+- structured cards showing status, priority, assignee, update time, and task number;
+- task details and immutable activity history, including source-message links where applicable;
+- an eight-pixel content gutter before the task scrollbar.
+
+### Team
 
 - participant search or filtering when the list is long;
 - normalized human and agent participants with avatars;
@@ -139,24 +167,7 @@ project owners and administrators. Notification delivery resumes the existing
 provider discussion; it does not create a replacement discussion or change its
 permissions.
 
-### Right: messages
-
-- project name, description, operating instructions, and one permission-driven
-  upper-right project-actions menu; connection and message counts remain
-  accessible status text rather than visible pills;
-- composer above the search, filters, and newest-first timeline;
-- reply mode automatically addresses the original sender and temporarily hides
-  the normal addressing controls; cancelling or sending restores those controls;
-- visible text search with adjacent icon-only filter and refresh actions;
-- a Helper popover containing All, Addressed to me, Unacknowledged, sender, and
-  date-range filters;
-- one measured-height virtualized, newest-first timeline;
-- bottom-edge loading for older pages;
-- reply context, addressee responsibility, acknowledgement, and revision indicators;
-- composer contained in the right column, including long reply previews;
-- browser-local rendering and filtering of server UTC timestamps.
-
-The right column, not the page, owns timeline scrolling. Loading and rendering must preserve the user's position and must not repeatedly fire bottom-page loading.
+The Timeline column, not the page, owns timeline scrolling. Loading and rendering must preserve the user's position and must not repeatedly fire bottom-page loading. Message composition opens in its canonical modal; reply mode automatically addresses the original sender and temporarily hides normal addressing controls until cancel or send.
 
 An unaddressed historical message is presented as a project broadcast. Composer
 validation uses a Helper alert dialog for conditions requiring user action, such
@@ -170,7 +181,7 @@ Administration uses the same fixed shell. Navbar items are omitted unless their 
 - **Users:** account state, system roles, profile, recovery, and suspension.
 - **Agents:** installation-wide emergency suspension and credential revocation.
 - **Audit:** security and administrative events without secret or message leakage.
-- **System Settings:** an administrator-only, tabbed modal for General, Realtime, Authentication, and Recovery settings. General includes installation and messaging controls plus the canonical **Public Syndicatum URL** used as the MCP/OAuth issuer and resource origin; production values require HTTPS and never derive from request Host headers. Authentication groups PBB Account, Google sign-in, native-login availability, and self-registration. Recovery owns the server-side backup base location.
+- **System Settings:** an administrator-only modal with General, Realtime, Authentication, Mail, and Recovery tabs. General includes the IANA **Default timezone**, installation and messaging controls, and the canonical **Public Syndicatum URL** used as the MCP/OAuth issuer and resource origin; production values require HTTPS and never derive from request Host headers. Authentication groups PBB Account, Google sign-in, native-login availability, and self-registration. Mail currently exposes the private development-capture boundary while production SMTP controls remain disabled. Recovery owns the server-side backup base location.
 
 Project ownership and ordinary project management remain project-scoped even when accessed by a global administrator.
 
@@ -178,7 +189,7 @@ Project ownership and ordinary project management remain project-scoped even whe
 
 The avatar menu and Workspace profile column open the same profile actions.
 
-Avatar editing uses a local file chooser/upload with preview and replacement. It must not present an arbitrary URL field. Human avatar upload changes the current user's global profile media; agent avatar upload changes only that project-agent identity. The returned `avatar_url` is a read-only Syndicatum media location. Explicit avatar removal remains follow-up work. Avatar upload is not exposed in the message composer and does not create general message attachments.
+Avatar editing uses a local file chooser/upload with preview and replacement. It must not present an arbitrary URL field. Human avatar upload changes the current user's global profile media; agent avatar upload changes only that project-agent identity. The returned `avatar_url` is a read-only Syndicatum media location. Explicit avatar removal remains follow-up work. Avatar upload is not exposed in the message composer and does not create general message attachments. A human profile may also select an IANA timezone or **Use system default**; timestamps remain stored in UTC and effective display/email timezone resolves from personal preference, system default, then UTC.
 
 A native password change requires:
 
@@ -196,10 +207,10 @@ Administrator-assisted password reset remains a distinct recovery action and mus
 
 ## Responsive Behavior
 
-Desktop and sufficiently wide tablet layouts show both columns. On narrow screens, each two-column surface becomes switchable panels while preserving one scroll position per panel:
+Desktop and sufficiently wide tablet layouts show all columns. On narrow screens, each surface becomes switchable panels while preserving one scroll position per panel:
 
 - Workspace: **Profile** and **Projects**;
-- Project: **Participants** and **Timeline**.
+- Project: **Projects**, **Timeline**, **Tasks**, and **Team**.
 
 The Timeline panel should be selected automatically after opening a project. Browser Back returns to the Workspace project list with its search and scroll state preserved where practical.
 
@@ -216,15 +227,25 @@ The frontend implementation uses the existing static PHP route style while retai
 | Endpoint | Method | Surface purpose |
 | --- | --- | --- |
 | `/api/v1/session.php` | GET | Current human, authentication capabilities, and capability-driven navigation |
-| `/api/v1/profile.php` | PATCH | Update the current human's display name; `avatar_url` is read-only |
+| `/api/v1/profile.php` | PATCH | Update the current human's display name and optional IANA timezone override; `avatar_url` is read-only |
 | `/api/v1/avatar-upload.php` | POST | Multipart avatar upload/replace for the current human, or a project-authorized agent (`kind`, optional project/agent IDs) |
 | `/api/v1/avatar.php?file={opaque-name}` | GET | Serve validated immutable avatar media by unguessable generated name |
 | `/api/v1/password.php` | POST | Verify and replace the current native password, rotate the current session, and revoke other sessions |
 | `/api/v1/workspace.php` | PATCH | Rename the current human's personal workspace |
 | `/api/v1/projects.php` | GET | Workspace owned/shared project list |
+| `/api/v1/project-bootstrap.php` | GET | Project context, effective instructions, assignment, permissions, work summary, and timeline attention state |
+| `/api/v1/project-tasks.php` | GET, POST | List/filter shared project tasks or create a task under the authenticated giver identity |
+| `/api/v1/project-task.php` | GET, PATCH | Read one task with activity history or apply a version-checked lifecycle update |
+| `/api/v1/project-responsibility-inbox.php` | GET | Read accountable action-request state projected from canonical messages and responsibility events |
+| `/api/v1/project-templates.php` | GET | List built-in and authorized custom project templates |
 | `/api/v1/manage-projects.php` | POST | Create a project from the Add Project modal |
 | `/api/v1/project.php` | GET | Project identity, permissions, capabilities, and current participant |
 | `/api/v1/project-participants.php` | GET | Project participant column |
+| `/api/v1/project-integrations.php` | GET, POST, PATCH, DELETE | Manage project-scoped external integration identities |
+| `/api/v1/project-integration-credentials.php` | POST, DELETE | Issue, rotate, or revoke one-way integration callback credentials |
+| `/api/v1/integration-events/{integration_public_id}/{credential}` | POST | Accept an authenticated external JSON event as an immutable system message |
+| `/api/v1/notifications.php` | GET, POST | List the current human's invitation notifications or mark them read |
+| `/api/v1/registration-activation.php` | POST | Consume a native registration activation token, establish the session, and schedule the one-time welcome notification |
 | `/api/v1/project-agent-webhook.php?project_id={project}&agent_id={agent}` | GET, PATCH | Inspect, configure, enable/disable, or replace the one-time signing secret for one agent webhook |
 | `/api/v1/discussion-providers.php` | GET | Provider choices and mapped discussion-reference field metadata |
 | `/api/v1/project-agent-activation.php?project_id={project}&agent_id={agent}` | GET, PATCH | Project-admin management of the shared provider discussion binding |

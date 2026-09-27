@@ -1,16 +1,17 @@
 # Email Notifications Proposal
 
-Status: Phase 1 development capture started
+Status: Transactional development-capture slice implemented; production SMTP and general work notifications remain proposed
 Created: September 26, 2026  
 Audience: Product, engineering, operations, security, and support
 
 ## Current implementation boundary
 
-The first development slice supports Team human invitations through the shared
-template renderer and a private development transport. When invitation capture
-is enabled in System Settings, the normal invitation mutation renders matching
-plain-text and HTML bodies and atomically writes an inspectable `.eml` file plus
-a matching HTML-only `.html` preview for template styling
+The implemented development slice supports Team human invitations, native
+registration activation, and one-time welcome messages through the shared
+template renderer and a private development transport. When mail capture is
+enabled in System Settings, those lifecycle mutations render matching plain-text
+and HTML bodies and atomically write an inspectable `.eml` file plus a matching
+HTML-only `.html` preview for template styling
 under private installation storage (or `SYNDICATUM_MAIL_CAPTURE_DIR`). The
 administrator still receives the one-time invitation token as a fallback, and
 the email link uses a URL fragment so the token is not sent in ordinary HTTP
@@ -23,7 +24,7 @@ remain outside the repository and public web root with restricted access.
 
 The invitation template uses the approved **Project brief** design: a compact
 Syndicatum brand row, the project name as the primary heading, labeled
-inviter and role details, one **View invitation** action, explicit
+inviter and role details, one **Review invitation** action, explicit
 expiry and privacy guidance, and direct-link/token fallbacks. The HTML uses a
 conservative table layout and inline essential styles, with the packaged
 128 px color mark displayed at 48 px. The plain-text alternative carries the
@@ -36,6 +37,14 @@ with UTC as the final fallback. Timestamps remain stored in UTC. The renderer re
 compatibility. Development captures are self-contained: the `.eml` includes
 the packaged PNG as an inline CID attachment, while the standalone `.html`
 embeds the same PNG as a base64 data URI for offline design inspection.
+
+Following the link does not accept the invitation. It opens a canonical review
+modal showing project, inviter, role, and localized expiry. The recipient must
+choose **Accept** or **Decline**; closing the modal leaves the invitation pending.
+The same pending invitations appear in the signed-in notification dropdown and
+`/notifications` page. Realtime publishes notification-change signals through
+the recipient's multipurpose `syndicatum.user.{user_id}` room; refresh remains a
+manual recovery action rather than a polling fallback.
 
 ## 1. Purpose
 
@@ -52,7 +61,7 @@ Email is not an AI-agent activation channel. Codex, ChatGPT, Gemini, and webhook
 
 - Send for attention, not for every change.
 - Keep the Timeline and Responsibility Inbox authoritative.
-- Prefer one clear call to action: **View invitation**.
+- Prefer one clear call to action: **Review invitation**.
 - Do not support reply-by-email in the initial release.
 - Do not acknowledge, start, resolve, or otherwise mutate work merely because an email was delivered or opened.
 - Avoid sensitive message content in email by default.
@@ -108,7 +117,9 @@ Project invitations and essential account/security messages are transactional an
 
 ### Administration
 
-Add a future **Email** tab to System Settings only after delivery exists. It should include:
+The implemented **Mail** tab in System Settings exposes the private development
+capture location and lifecycle-template status. When production SMTP delivery
+is implemented, extend that canonical tab with:
 
 - enabled state;
 - SMTP host and port;
@@ -121,7 +132,9 @@ Add a future **Email** tab to System Settings only after delivery exists. It sho
 - **Send test email** action;
 - non-sensitive delivery-health summary.
 
-Email remains disabled until configuration is complete and a sender address is valid. Environment-provided settings may be exposed as locked values using the existing settings registry conventions.
+Production delivery must remain disabled until configuration is complete and a
+sender address is valid. Environment-provided settings may be exposed as locked
+values using the existing settings registry conventions.
 
 ## 6. Delivery architecture
 

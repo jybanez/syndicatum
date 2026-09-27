@@ -34,6 +34,36 @@ export const USER_GUIDE_SECTIONS = [
           ] },
         ],
       },
+      {
+        id: "registration-profile-timezone",
+        title: "Registration, activation, and timezone",
+        summary: "Understand account activation and how Syndicatum chooses your displayed email timezone.",
+        keywords: ["register", "activation", "welcome", "timezone", "profile", "system default"],
+        blocks: [
+          { type: "list", items: [
+            "Native registration sends a single-use activation link. Registration does not create a signed-in session until that link is opened and confirmed.",
+            "Google and PBB Account registrations are active immediately after the provider verifies the identity.",
+            "A welcome message is sent once after successful activation or first-time SSO provisioning.",
+            "Edit Profile lets you choose an IANA timezone or Use system default. Administrators set the global default in Settings → General.",
+            "Syndicatum stores timestamps in UTC. Invitation expiry uses the recipient profile timezone when available, then the system default, then UTC.",
+          ] },
+        ],
+      },
+      {
+        id: "notifications-invitations",
+        title: "Notifications and project invitations",
+        summary: "Review pending invitations without accepting them accidentally.",
+        keywords: ["bell", "notifications", "invitation", "accept", "decline", "review"],
+        blocks: [
+          { type: "p", text: "The bell shows invitation notifications for your account. New notifications arrive through your private multipurpose Realtime user room when Realtime is available." },
+          { type: "steps", items: [
+            "Open the bell dropdown for recent items, or choose View all notifications to open /notifications.",
+            "Choose Review to open the invitation details. Opening the email link or review modal does not join the project.",
+            "Choose Accept to join, Decline to reject, or close the modal to leave the invitation pending.",
+          ] },
+          { type: "note", text: "Email and in-app notifications are attention channels. The invitation remains authoritative in Syndicatum, and only an explicit Accept changes membership." },
+        ],
+      },
     ],
   },
   {

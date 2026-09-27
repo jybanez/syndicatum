@@ -62,6 +62,21 @@ The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
 reloaded. It never downloads or executes remote code.
 
+The source-tree manifest may be newer than the latest canonical GitHub Release.
+Version notes below describe the checked-out source; installable release status
+is determined only by the signed archive and checksum on GitHub Releases.
+
+Version 0.10.6 requires the target ChatGPT discussion to visibly confirm the
+submitted notification turn before the Companion records delivery. A missing
+confirmation remains recoverable instead of being reported as delivered.
+
+Version 0.10.5 resolves operator-review items by their exact delivery identity
+and discussion shard, so confirming or retrying one targeted delivery does not
+clear unrelated review work.
+
+Version 0.10.4 identifies the affected agent by name in delivery review instead
+of relying on an ambiguous numeric or internal identity.
+
 Version 0.10.3 treats an unconfirmed browser submission as an uncertain outcome,
 pauses only that discussion's delivery shard, and preserves the item for explicit
 operator review instead of scheduling an automatic replay. On upgrade it

@@ -261,6 +261,34 @@ try {
     $pdo = Db::pdo();
     (new ChatRepository($pdo))->installSchema();
 
+    $suite->test('current documentation matches the implemented application surfaces', function () use ($suite, $root) {
+        $surfaces = file_get_contents($root . '/docs/application-surfaces.md');
+        $agentProtocol = file_get_contents($root . '/docs/agent-protocol-v1.md');
+        $emailNotifications = file_get_contents($root . '/docs/email-notifications-proposal.md');
+        $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
+        $companionReadme = file_get_contents($root . '/companion/README.md');
+        $manifest = json_decode(file_get_contents($root . '/companion/extension/manifest.json'), true);
+
+        $suite->true(strpos($surfaces, 'four independently scrolling columns') !== false,
+            'The current surface contract must describe the four-column project workspace.');
+        $suite->true(strpos($surfaces, '`/notifications`') !== false
+            && strpos($surfaces, '`/api/v1/project-tasks.php`') !== false
+            && stripos($surfaces, 'default timezone') !== false,
+            'The current surface contract must cover notifications, tasks, and timezone behavior.');
+        $suite->true(strpos($agentProtocol, 'plugin-managed, per-user background connector') !== false
+            && strpos($agentProtocol, 'Codex 0.153.4') === false,
+            'The agent protocol must describe the current plugin connector rather than the retired queue prototype.');
+        $suite->true(strpos($emailNotifications, '**Review invitation**') !== false
+            && strpos($emailNotifications, '**View invitation**') === false,
+            'Invitation documentation must use the implemented review wording.');
+        $suite->true(strpos($guide, 'registration-profile-timezone') !== false
+            && strpos($guide, 'notifications-invitations') !== false,
+            'The in-app guide must cover registration, timezone, notifications, and invitations.');
+        $suite->true(is_array($manifest) && isset($manifest['version']), 'The Companion manifest version is missing.');
+        $suite->true(strpos($companionReadme, 'Version ' . $manifest['version']) !== false,
+            'The Companion README must document the checked-out manifest version.');
+    });
+
     $suite->test('public legal pages describe hosted privacy, Google sign-in, and service terms', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');

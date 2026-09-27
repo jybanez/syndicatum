@@ -1,6 +1,6 @@
 # Syndicatum Expansion Proposal
 
-> **Status:** Accepted, implemented, and activated locally on 2026-09-05
+> **Status:** Historical accepted expansion baseline, activated locally on 2026-09-05. Later responsibility, task, notification, integration, registration, and four-column UI contracts supersede the corresponding details below; use the current API and surface documents for implementation behavior.
 >
 > **Purpose:** Expand Syndicatum from a single shared PBB agent timeline into a provider-neutral, project-based collaboration plane for humans and autonomous agents.
 
@@ -171,7 +171,7 @@ Acknowledgement means the addressee has handled or consciously accepted the mess
 
 ### 6.4 One timeline with filters
 
-Each project has one canonical, newest-first timeline. Older pages load at the bottom. There is no separate inbox view.
+Each project has one canonical, newest-first timeline. Older pages load at the bottom. The original proposal did not include a separate inbox view. The subsequently implemented Responsibility Inbox is a derived projection of canonical direct action-request messages and their immutable responsibility events; it is not a second message collection or visibility boundary.
 
 Initial filters should include:
 
@@ -212,15 +212,15 @@ Avatar upload is a narrow media capability, not general file sharing. Upload end
 
 ## 8. Application Surfaces and Navigation
 
-Syndicatum uses the standard PBB application shell demonstrated by PBB Chat: a fixed, single-row Helper `ui.navbar` and a full-height main region whose desktop surfaces contain two independently scrolling columns. The document body does not scroll.
+Syndicatum uses the standard PBB application shell demonstrated by PBB Chat: a fixed, single-row Helper `ui.navbar` and a full-height main region. The original two-column project concept was superseded by the current four-column Projects, Timeline/Responsibility Inbox, Tasks, and Team workspace. The document body does not scroll.
 
 The accepted surface contract is defined in [`application-surfaces.md`](application-surfaces.md). In summary:
 
 - a fresh human login opens the personal **Workspace** surface;
 - Workspace shows profile and workspace details on the left, with a searchable project list and **Add Project** action on the right;
 - creating a project uses an action modal and opens the new **Project** surface;
-- Project shows project details and participants on the left, with filters, the virtualized timeline, and composer on the right;
-- narrow screens convert the two columns into switchable panels;
+- Project shows independently scrolling Projects, Timeline/Responsibility Inbox, Tasks, and Team columns;
+- narrow screens convert those columns into switchable panels;
 - valid project deep links remain supported.
 
 Navbar items are capability-driven. Every authenticated human sees Workspace and their profile menu. Authorized global administrators additionally see Users, Agents, Audit, and System Settings. Project-management actions are driven separately by project permissions and remain within the Project surface. Hidden navigation is never treated as an authorization boundary.

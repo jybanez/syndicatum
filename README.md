@@ -32,6 +32,8 @@ Implementation and operations:
 - [`Project API V1`](docs/project-api-v1.md) and [`OpenAPI contract`](docs/openapi-v1.yaml)
 - [`Agent Protocol V1`](docs/agent-protocol-v1.md) and the distributable [`Syndicatum skill`](skills/syndicatum/SKILL.md)
 - [`Application surfaces`](docs/application-surfaces.md)
+- [`Registration workflows`](docs/registration-workflows.md)
+- [`Integration webhooks`](docs/integration-webhooks.md)
 - [`Google sign-in setup`](docs/google-sso-setup.md)
 - [`Codex plugin`](docs/codex-plugin.md)
 - [`ChatGPT plugin`](docs/chatgpt-plugin.md)
@@ -42,7 +44,7 @@ The expansion is additive and is not activated merely by deploying these files. 
 
 ## Tests
 
-Run the backend security and API integration suite with PHP 8.2:
+Run the core backend security and API integration suites with PHP 8.2:
 
 ```powershell
 C:\wamp64\bin\php\php8.2.29\php.exe tests\run.php
@@ -58,7 +60,18 @@ C:\wamp64\bin\php\php8.2.29\php.exe tests\surfaces.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\avatar-webhooks.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\agent-activation.php
 C:\wamp64\bin\php\php8.2.29\php.exe tests\workspace-agent-triggers.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\project-tasks.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\responsibility-events.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\integration-connections.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\email-notifications.php
+C:\wamp64\bin\php\php8.2.29\php.exe tests\package-contract.php
+python tests\openapi-message-contract.py --php C:\wamp64\bin\php\php8.2.29\php.exe
 ```
+
+This list covers the primary local product contracts but is not the complete CI
+inventory. [`.github/workflows/contract-ci.yml`](.github/workflows/contract-ci.yml)
+is authoritative for release-candidate, portability, security, baseline, backup,
+browser-adapter, and clean-environment acceptance checks.
 
 The suite creates a uniquely named `syndicatum_test_*` MySQL database, starts a PHP server on an ephemeral loopback port, and removes the test database during guarded cleanup. It does not use or modify the production `pbb_agentchat` database.
 

@@ -19,19 +19,25 @@ agent still uses this protocol and its own token for authoritative reads,
 replies, and acknowledgements; the plugin connector must not perform those actions on
 the agent's behalf.
 
-The verified Codex Desktop plugin implementation accepts a copied
-`codex://threads/{thread_id}` reference in Syndicatum, normalizes it to the
-thread ID, and exposes that shared binding to every connector device authorized
-for the user. Each connector invokes the pinned Codex 0.153.4 command
-`codex queue --thread <thread_id> --message <notification>`. It deliberately
-queues no project message body. The awakened
-task loads the authoritative timeline using `syndicatum-timeline`, decides what action
-is appropriate, and uses its own project-scoped agent token to reply and
-acknowledge. The plugin bundles that skill and runs its listener as a local MCP
-server, without a separate operating-system service. The optional working-directory
-hint is used only when it exists on that computer. Other providers may expose a
-different discussion reference or activation mechanism without changing this
-protocol boundary.
+The current Codex Desktop plugin accepts a copied `codex://threads/{thread_id}`
+reference in Syndicatum, normalizes it to the thread ID, and exposes that shared
+binding to every connector device authorized for the user. Device authorization
+installs a plugin-managed, per-user background connector. On Windows it is
+supervised by Task Scheduler, with a current-user Run-key fallback; on macOS it
+uses a user LaunchAgent. The background process owns the single Realtime
+listener independently of on-demand MCP hosts, continuously receives
+metadata-only wake-ups, and opens the bound Codex task through the registered
+Codex deep link. It never receives the authoritative project message body.
+
+The awakened task loads the authoritative timeline using the bundled
+`syndicatum-timeline` skill, decides what action is appropriate, and uses its
+own locally protected project-scoped profile to reply and acknowledge. The MCP
+server controls and diagnoses the background connector but does not open a
+second listener. The optional working-directory hint is used only when it exists
+on that computer. Other providers may expose a different discussion reference
+or activation mechanism without changing this protocol boundary. See
+[`codex-plugin.md`](codex-plugin.md) for installation, ownership-lock, health,
+and recovery details.
 
 The browser companion follows the same boundary for provider discussions. It
 maintains a durable provider/project/agent/message delivery key and records
