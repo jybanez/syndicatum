@@ -79,9 +79,9 @@ try {
         $suite->assertSame($migrationCount, (int) $pdo->query('SELECT COUNT(*) FROM syndicatum_schema_migrations')->fetchColumn());
         $versions = $pdo->query('SELECT version FROM syndicatum_schema_migrations ORDER BY version')->fetchAll(PDO::FETCH_COLUMN);
         $suite->assertSame('202609050001_expansion_foundation', $versions[0]);
-        $checksum = $pdo->query("SELECT checksum FROM syndicatum_schema_migrations WHERE version = '202609280001'")->fetchColumn();
+        $checksum = $pdo->query("SELECT checksum FROM syndicatum_schema_migrations WHERE version = '202609280002'")->fetchColumn();
         $suite->assertSame(
-            PostBaselineMigrator::canonicalSha256(dirname(__DIR__) . '/migrations/202609280001.php'),
+            PostBaselineMigrator::canonicalSha256(dirname(__DIR__) . '/migrations/202609280002.php'),
             $checksum,
             'Migration checksums must be independent of checkout line endings.'
         );

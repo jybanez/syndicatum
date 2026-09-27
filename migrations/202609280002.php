@@ -1,0 +1,56 @@
+<?php
+
+return [
+    'version' => '202609280002',
+    'description' => 'Add project milestones and deliverables',
+    'statements' => [
+        "CREATE TABLE IF NOT EXISTS project_milestones (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            public_id CHAR(36) NOT NULL,
+            project_id BIGINT UNSIGNED NOT NULL,
+            title VARCHAR(180) NOT NULL,
+            description TEXT NULL,
+            status ENUM('planned','in_progress','completed','at_risk','cancelled') NOT NULL DEFAULT 'planned',
+            target_at DATETIME NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 0,
+            created_by_participant_id BIGINT UNSIGNED NOT NULL,
+            version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_project_milestones_public_id (public_id),
+            KEY idx_project_milestones_project (project_id, position, target_at, id),
+            CONSTRAINT fk_project_milestones_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            CONSTRAINT fk_project_milestones_creator FOREIGN KEY (created_by_participant_id) REFERENCES project_participants(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS project_deliverables (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            public_id CHAR(36) NOT NULL,
+            project_id BIGINT UNSIGNED NOT NULL,
+            milestone_id BIGINT UNSIGNED NULL,
+            title VARCHAR(180) NOT NULL,
+            description TEXT NULL,
+            status ENUM('planned','in_progress','in_review','approved','completed','blocked','cancelled') NOT NULL DEFAULT 'planned',
+            owner_participant_id BIGINT UNSIGNED NULL,
+            due_at DATETIME NULL,
+            artifact_url VARCHAR(2048) NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 0,
+            created_by_participant_id BIGINT UNSIGNED NOT NULL,
+            version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_project_deliverables_public_id (public_id),
+            KEY idx_project_deliverables_project (project_id, milestone_id, position, due_at, id),
+            KEY idx_project_deliverables_owner (project_id, owner_participant_id, status),
+            CONSTRAINT fk_project_deliverables_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            CONSTRAINT fk_project_deliverables_milestone FOREIGN KEY (milestone_id) REFERENCES project_milestones(id) ON DELETE SET NULL,
+            CONSTRAINT fk_project_deliverables_owner FOREIGN KEY (owner_participant_id) REFERENCES project_participants(id) ON DELETE SET NULL,
+            CONSTRAINT fk_project_deliverables_creator FOREIGN KEY (created_by_participant_id) REFERENCES project_participants(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        [
+            'unless_column' => ['project_tasks', 'deliverable_id'],
+            'sql' => 'ALTER TABLE project_tasks ADD COLUMN deliverable_id BIGINT UNSIGNED NULL AFTER source_message_id, ADD INDEX idx_project_tasks_deliverable (project_id, deliverable_id, status), ADD CONSTRAINT fk_project_tasks_deliverable FOREIGN KEY (deliverable_id) REFERENCES project_deliverables(id) ON DELETE SET NULL',
+        ],
+    ],
+];

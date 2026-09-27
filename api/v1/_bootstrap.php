@@ -51,6 +51,11 @@ function projectApiError(Exception $exception)
         'RESPONSIBILITY_BASELINE_UNAVAILABLE' => [409, 'Historical request requires responsibility migration before state changes.'],
         'PROJECT_ARCHIVED' => [409, 'Archived projects are read-only.'],
         'PROJECT_STATUS_FORBIDDEN' => [403, 'Only the project owner can view project status.'],
+        'PROJECT_PLAN_FORBIDDEN' => [403, 'Only a project owner or administrator can change the project plan.'],
+        'MILESTONE_NOT_FOUND' => [404, 'Milestone not found.'],
+        'DELIVERABLE_NOT_FOUND' => [404, 'Deliverable not found.'],
+        'MILESTONE_VERSION_CONFLICT' => [409, 'This milestone changed. Reload it before trying again.'],
+        'DELIVERABLE_VERSION_CONFLICT' => [409, 'This deliverable changed. Reload it before trying again.'],
         'RATE_LIMITED' => [429, 'Too many requests. Try again later.'],
     ];
     if (isset($errors[$code])) {

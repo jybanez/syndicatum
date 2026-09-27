@@ -201,6 +201,59 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Task version conflict or invalid lifecycle transition }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-plan.php:
+    get:
+      summary: Read project milestones, deliverables, and task-backed progress
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Project plan visible to every active project participant }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-milestones.php:
+    post:
+      summary: Create a project milestone as an owner or administrator
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '201': { description: Created milestone }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-milestone.php:
+    patch:
+      summary: Apply a version-checked milestone update
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated milestone }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Milestone version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-deliverables.php:
+    post:
+      summary: Create a standalone or milestone-bound deliverable
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '201': { description: Created deliverable }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-deliverable.php:
+    patch:
+      summary: Apply a version-checked deliverable update
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated deliverable with task-backed progress }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Deliverable version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-status-summary.php:
     get:
       summary: Read owner-only headline project status aggregates
@@ -219,6 +272,17 @@ paths:
         - $ref: '#/components/parameters/ProjectId'
       responses:
         '200': { description: Aggregate task progress without task records }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-status-plan.php:
+    get:
+      summary: Read bounded owner-only milestone and deliverable readiness
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Aggregate counts plus at most three milestone summaries; never the full hierarchy }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1066,6 +1130,7 @@ components:
         acceptance_criteria: { type: string, nullable: true }
         priority: { type: string, enum: [low, normal, high, urgent], default: normal }
         assignee_participant_id: { type: integer, minimum: 1, nullable: true }
+        deliverable_id: { type: integer, minimum: 1, nullable: true, description: Optional deliverable produced by this task. }
         source_message_id: { type: integer, minimum: 1, nullable: true }
         convert_action_request: { type: boolean, default: false }
         due_at: { type: string, nullable: true, description: UTC date-time accepted by the server. }
@@ -1080,6 +1145,7 @@ components:
         acceptance_criteria: { type: string, nullable: true }
         priority: { type: string, enum: [low, normal, high, urgent] }
         assignee_participant_id: { type: integer, minimum: 1, nullable: true }
+        deliverable_id: { type: integer, minimum: 1, nullable: true, description: Optional deliverable produced by this task. }
         due_at: { type: string, nullable: true, description: UTC date-time accepted by the server. }
         status: { type: string, enum: [open, in_progress, in_review, blocked, completed, cancelled] }
         blocked_reason: { type: string, nullable: true }

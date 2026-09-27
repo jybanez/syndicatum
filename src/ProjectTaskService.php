@@ -92,12 +92,13 @@ class ProjectTaskService
             }
             $insert = $this->pdo->prepare(
                 'INSERT INTO project_tasks (public_id, project_id, title, description, acceptance_criteria, status, priority,
-                 assignee_participant_id, supervising_participant_id, created_by_participant_id, source_message_id, due_at,
-                 version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
+                 assignee_participant_id, supervising_participant_id, created_by_participant_id, source_message_id, deliverable_id, due_at,
+                 version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
             );
             $insert->execute([$this->uuid(), $projectId, $title, $this->optionalText($input, 'description'),
                 $this->optionalText($input, 'acceptance_criteria'), 'open', $priority, $assignee, $supervisor,
-                $creator, $source, $dueAt, $now, $now]);
+                $creator, $source, $this->optionalDeliverable($projectId, isset($input['deliverable_id']) ? $input['deliverable_id'] : null),
+                $dueAt, $now, $now]);
             $id = (int) $this->pdo->lastInsertId();
             $this->event($id, $projectId, $creator, 'created', null, 'open', null,
                 ['assignee_participant_id' => $assignee, 'supervising_participant_id' => $supervisor]);
@@ -127,7 +128,7 @@ class ProjectTaskService
         if (!$manager && !$responsible) { throw new RuntimeException('TASK_WRITE_FORBIDDEN'); }
 
         $sets = []; $values = []; $eventType = 'updated';
-        foreach (['title', 'description', 'acceptance_criteria', 'priority', 'due_at', 'assignee_participant_id'] as $field) {
+        foreach (['title', 'description', 'acceptance_criteria', 'priority', 'due_at', 'assignee_participant_id', 'deliverable_id'] as $field) {
             if (!array_key_exists($field, $input)) { continue; }
             if (!$taskGiver) { throw new RuntimeException('TASK_WRITE_FORBIDDEN'); }
             $value = $input[$field];
@@ -137,6 +138,7 @@ class ProjectTaskService
             } elseif ($field === 'priority') { $value = (string) $value; $this->requireChoice($value, $this->priorities, 'priority'); }
             elseif ($field === 'due_at') { $value = $this->optionalDate($value); }
             elseif (strpos($field, 'participant_id') !== false) { $value = $this->optionalParticipant((int) $access['project_id'], $value); $eventType = 'assigned'; }
+            elseif ($field === 'deliverable_id') { $value = $this->optionalDeliverable((int) $access['project_id'], $value); }
             else { $value = trim((string) $value) === '' ? null : trim((string) $value); }
             $sets[] = $field . ' = ?'; $values[] = $value;
         }
@@ -190,8 +192,10 @@ class ProjectTaskService
             ap.kind AS assignee_kind,
             COALESCE(su.display_name, spa.display_name) AS supervisor_display_name,
             sp.kind AS supervisor_kind,
-            COALESCE(cu.display_name, cpa.display_name) AS creator_display_name
+            COALESCE(cu.display_name, cpa.display_name) AS creator_display_name,
+            d.title AS deliverable_title
           FROM project_tasks t
+          LEFT JOIN project_deliverables d ON d.id = t.deliverable_id AND d.project_id = t.project_id
           LEFT JOIN project_participants ap ON ap.id = t.assignee_participant_id
           LEFT JOIN users au ON au.id = ap.user_id
           LEFT JOIN project_agents apa ON apa.project_id = ap.project_id AND apa.agent_id = ap.agent_id
@@ -205,7 +209,7 @@ class ProjectTaskService
 
     private function normalize(array $row)
     {
-        $integerFields = ['id','project_id','assignee_participant_id','supervising_participant_id','created_by_participant_id','source_message_id','version'];
+        $integerFields = ['id','project_id','assignee_participant_id','supervising_participant_id','created_by_participant_id','source_message_id','deliverable_id','version'];
         foreach ($integerFields as $field) { $row[$field] = $row[$field] === null ? null : (int) $row[$field]; }
         return $row;
     }
@@ -279,6 +283,14 @@ class ProjectTaskService
         if ($value === null || $value === '') { return null; }
         $statement = $this->pdo->prepare('SELECT id FROM messages WHERE project_id = ? AND id = ? AND deleted_at IS NULL');
         $statement->execute([$projectId, (int) $value]); if (!$statement->fetchColumn()) { throw new InvalidArgumentException('Source message must belong to this project.'); }
+        return (int) $value;
+    }
+    private function optionalDeliverable($projectId, $value) {
+        if ($value === null || $value === '') { return null; }
+        if (!preg_match('/^[1-9][0-9]*$/', (string) $value)) { throw new InvalidArgumentException('Select a valid deliverable.'); }
+        $statement = $this->pdo->prepare("SELECT id FROM project_deliverables WHERE project_id = ? AND id = ? AND status <> 'cancelled'");
+        $statement->execute([$projectId, (int) $value]);
+        if (!$statement->fetchColumn()) { throw new InvalidArgumentException('Select an active deliverable from this project.'); }
         return (int) $value;
     }
     private function requireSourceLink(array $access, $sourceMessageId, $conversionRequested) {

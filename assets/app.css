@@ -334,6 +334,31 @@ button, input, textarea { font: inherit; }
 .project-status-error { display: grid; justify-items: start; gap: 7px; min-height: 82px; padding: 10px; color: #ffd1cc; border: 1px solid rgba(218, 83, 83, .48); border-radius: 8px; background: rgba(92, 31, 39, .3); }
 .project-status-error p { margin: 0; color: #e7b9b9; }
 .project-status-modal .ui-chart-xy { min-width: 0; }
+.project-plan-modal .ui-modal-body { padding: 14px 20px 20px; }
+.project-plan-content { display: grid; gap: 12px; min-width: 0; }
+.project-plan-loading { margin: 0; color: var(--app-muted); }
+.project-plan-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.project-plan-toolbar p { margin: 0; color: var(--app-muted); }
+.project-plan-toolbar-actions, .project-plan-deliverable-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; }
+.project-plan-empty { padding: 22px; color: var(--app-muted); text-align: center; border: 1px dashed var(--app-border); border-radius: 10px; }
+.project-plan-milestone { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--app-border); border-radius: 10px; background: rgba(14, 29, 49, .5); }
+.project-plan-milestone-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.project-plan-milestone-copy, .project-plan-deliverable-copy { min-width: 0; display: grid; gap: 2px; }
+.project-plan-milestone-copy strong { font-size: 16px; }
+.project-plan-milestone-copy span, .project-plan-deliverable-copy span { color: var(--app-muted); font-size: 12px; }
+.project-plan-deliverables { display: grid; gap: 7px; }
+.project-plan-deliverable { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid rgba(73, 93, 129, .42); border-left: 3px solid var(--task-status-open); border-radius: 8px; background: rgba(19, 37, 61, .48); }
+.project-plan-deliverable.is-in_progress { border-left-color: var(--task-status-in-progress); }
+.project-plan-deliverable.is-in_review { border-left-color: var(--task-status-in-review); }
+.project-plan-deliverable.is-approved, .project-plan-deliverable.is-completed { border-left-color: var(--task-status-completed); }
+.project-plan-deliverable.is-blocked { border-left-color: var(--task-status-blocked); }
+.project-plan-deliverable.is-cancelled { opacity: .65; border-left-color: var(--task-status-cancelled); }
+.project-plan-deliverable-copy p { margin: 2px 0 0; color: var(--app-text); font-size: 12px; }
+.project-plan-inline-add { justify-self: start; padding: 3px 0; color: var(--app-accent); cursor: pointer; border: 0; background: transparent; }
+.project-plan-inline-add:hover { text-decoration: underline; }
+.project-plan-status-stats { min-width: 0; }
+.project-status-milestone-list { display: grid; gap: 5px; margin-top: 10px; }
+.project-status-milestone-item { padding: 7px 9px; color: var(--app-muted); font-size: 12px; border: 1px solid rgba(73, 93, 129, .35); border-radius: 7px; }
 
 .syndicatum-login-modal .ui-form-modal-branding {
   grid-column: 1 / -1;
@@ -813,11 +838,13 @@ button, input, textarea { font: inherit; }
   .project-info-modal .ui-dialog-footer-actions .ui-button { width: 100%; min-width: 0; justify-content: center; }
   .project-info-modal .ui-dialog-footer-actions .ui-button:only-child { grid-column: 1 / -1; }
   .project-status-modal .ui-modal-body { padding: 8px 12px 14px; }
+  .project-plan-modal .ui-modal-body { padding: 8px 12px 14px; }
   .project-status-content { grid-template-columns: 1fr; gap: 8px; }
   .project-status-intro, .project-status-section.is-wide { grid-column: auto; }
   .project-status-section { padding: 11px; }
   .project-status-activity-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-status-attention-item { align-items: flex-start; }
+  .project-plan-toolbar, .project-plan-deliverable { align-items: flex-start; flex-direction: column; }
   .public-policy-links {
     left: 12px;
     right: 12px;
