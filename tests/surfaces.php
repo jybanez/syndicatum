@@ -576,6 +576,11 @@ try {
         $suite->true(strpos($source, 'state.components.filterPopover = state.factories.createPopover') !== false, 'Timeline filters must mount through the Helper popover.');
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
         $suite->true(strpos($source, 'helperIconHtml("actions.refresh", 18)') !== false, 'The refresh action must use the shared Helper icon registry.');
+        $suite->true(strpos($source, 'ariaLabel: "Filter by senders"') !== false
+            && strpos($source, 'multiple: true, closeOnSelect: false') !== false
+            && strpos($source, 'state.filters.sender.join(",")') !== false
+            && strpos($source, 'selectedSenderCount') !== false,
+            'Sender filtering must use the canonical Helper multi-select and count every selected sender on the filter action.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_BUNDLE_REV = "0.21.209";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');

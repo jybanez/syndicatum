@@ -100,7 +100,7 @@ const state = {
   projectView: "timeline",
   aiIconPackAvailable: false,
   timelineDefaultCollapsed: false,
-  filters: { primary: "all", q: "", sender: "", from: "", to: "" },
+  filters: { primary: "all", q: "", sender: [], from: "", to: "" },
   draft: { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
   newestCursor: "",
@@ -1644,12 +1644,12 @@ function renderParticipants() {
 }
 
 function renderFilters() {
+  const selectedSenderCount = state.filters.sender.length;
   const activeCount = [
     state.filters.primary !== "all",
-    Boolean(state.filters.sender),
     Boolean(state.filters.from),
     Boolean(state.filters.to),
-  ].filter(Boolean).length;
+  ].filter(Boolean).length + selectedSenderCount;
   el.clear_filters.hidden = activeCount === 0;
   el.filter_count.hidden = activeCount === 0;
   el.filter_count.textContent = String(activeCount);
@@ -2077,7 +2077,7 @@ function messageQuery({ before = "", after = "", order = "desc" } = {}) {
   if (before) params.set("before", before);
   if (after) params.set("after", after);
   if (state.filters.q) params.set("q", state.filters.q);
-  if (state.filters.sender) params.set(state.mode === "legacy" ? "participant" : "sender", state.filters.sender);
+  if (state.filters.sender.length) params.set(state.mode === "legacy" ? "participant" : "sender", state.filters.sender.join(","));
   if (state.filters.from) params.set("from", state.filters.from);
   if (state.filters.to) params.set("to", state.filters.to);
   if (state.filters.primary === "addressed") {
@@ -3448,8 +3448,8 @@ async function fetchVisibleTeamParticipants(projectId, signal = null, includeDis
 }
 
 async function refreshActiveParticipants(removedParticipantId = "") {
-  if (removedParticipantId && state.filters.sender === id(removedParticipantId)) {
-    state.filters.sender = "";
+  if (removedParticipantId && state.filters.sender.includes(id(removedParticipantId))) {
+    state.filters.sender = state.filters.sender.filter((senderId) => senderId !== id(removedParticipantId));
   }
   state.participants = await fetchVisibleTeamParticipants(selectedProjectId());
   rebuildParticipantControls();
@@ -5524,7 +5524,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   const currentParticipantId = id(context.current_participant_id || context.current_participant?.id || state.project.participant_id);
   state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
     || (context.current_participant ? participantFrom(context.current_participant, "human") : null);
-  state.filters.sender = "";
+  state.filters.sender = [];
   setSurface("project");
   setMobilePanel("timeline");
   updateApplicationRoute("project", state.project.public_id || nextId, historyMode);
@@ -5544,9 +5544,13 @@ function rebuildParticipantControls() {
   const items = state.participants.map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind}` }));
   state.components.senderSelect?.destroy();
   state.components.senderSelect = state.factories.createSelect(el.sender_filter, items, {
-    placeholder: "Any sender", ariaLabel: "Filter by sender", searchable: true, clearable: true,
-    selected: state.filters.sender || null,
-    onChange(value) { state.filters.sender = id(value); void reloadForFilters(); },
+    placeholder: "Any sender", ariaLabel: "Filter by senders", searchable: true, clearable: true,
+    multiple: true, closeOnSelect: false,
+    selected: state.filters.sender,
+    onChange(values) {
+      state.filters.sender = Array.isArray(values) ? [...new Set(values.map(id).filter(Boolean))] : [];
+      void reloadForFilters();
+    },
   });
   state.components.addresseeSelect?.destroy();
   const currentId = id(state.project?.current_participant?.id);
@@ -6507,7 +6511,7 @@ function closeRealtime() {
 
 function messageMatchesFilters(message) {
   const ownId = id(state.project?.current_participant?.id);
-  if (state.filters.sender && message.sender.id !== state.filters.sender) return false;
+  if (state.filters.sender.length && !state.filters.sender.includes(message.sender.id)) return false;
   if (state.filters.q && !message.body.toLocaleLowerCase().includes(state.filters.q.toLocaleLowerCase())) return false;
   const day = localDateKey(message.created_at);
   if (state.filters.from && day < state.filters.from) return false;
@@ -6807,10 +6811,10 @@ async function bootstrap() {
   el.date_from.addEventListener("change", () => { state.filters.from = el.date_from.value; void reloadForFilters(); });
   el.date_to.addEventListener("change", () => { state.filters.to = el.date_to.value; void reloadForFilters(); });
   el.clear_filters.addEventListener("click", () => {
-    state.filters = { ...state.filters, primary: "all", sender: "", from: "", to: "" };
+    state.filters = { ...state.filters, primary: "all", sender: [], from: "", to: "" };
     el.date_from.value = ""; el.date_to.value = "";
     state.components.primaryFilter.setPressed("all", true);
-    state.components.senderSelect?.setValue(null);
+    state.components.senderSelect?.setValue([]);
     void reloadForFilters();
   });
   el.refresh_button.addEventListener("click", () => void reloadForFilters());

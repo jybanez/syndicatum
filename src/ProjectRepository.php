@@ -272,8 +272,19 @@ class ProjectRepository
             $parameters[] = $after;
         }
         if (!empty($filters['sender'])) {
-            $where[] = 'm.sender_participant_id = ?';
-            $parameters[] = (int) $filters['sender'];
+            $senderIds = [];
+            foreach (explode(',', (string) $filters['sender']) as $senderId) {
+                $senderId = trim($senderId);
+                if (!preg_match('/^[1-9][0-9]*$/', $senderId)) {
+                    throw new InvalidArgumentException('sender must contain positive participant IDs separated by commas.');
+                }
+                $senderIds[(int) $senderId] = (int) $senderId;
+            }
+            if (count($senderIds) > 100) {
+                throw new InvalidArgumentException('sender supports at most 100 participant IDs.');
+            }
+            $where[] = 'm.sender_participant_id IN (' . implode(', ', array_fill(0, count($senderIds), '?')) . ')';
+            array_push($parameters, ...array_values($senderIds));
         }
         if (!empty($filters['severity'])) {
             $where[] = 'm.severity = ?';
