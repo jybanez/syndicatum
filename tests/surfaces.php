@@ -979,10 +979,30 @@ try {
         $suite->true(strpos($source, 'const row = projectInfoElement("button", "project-status-attention-item")') !== false
             && strpos($source, 'void openTaskDetails(item.id)') !== false,
             'Needs-attention rows must be keyboard-operable and open the existing task workflow.');
-        foreach (['Summary', 'TaskProgress', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
+        foreach (['Summary', 'TaskProgress', 'Plan', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
             $suite->true(strpos($source, 'API.projectStatus' . $section) !== false,
                 'Missing independent Project Status request for ' . $section . '.');
         }
+    });
+
+    $suite->test('project planning distinguishes milestones, deliverables, and linked tasks', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'label: "Project plan"') !== false
+            && strpos($source, 'title: "Project plan"') !== false
+            && strpos($source, 'message: "Loading project plan…"') !== false,
+            'Project plan must open its canonical modal before loading its content.');
+        $suite->true(strpos($source, 'function openMilestoneForm(') !== false
+            && strpos($source, 'function openDeliverableForm(') !== false
+            && strpos($source, 'label: "Deliverable"') !== false,
+            'Project planning must provide milestone and deliverable forms plus optional task linkage.');
+        $suite->true(strpos($source, 'message: "Loading deliverables…"') !== false
+            && strpos($source, 'modal.setRows(taskFormRows())') !== false
+            && strpos($source, 'state.projectPlanLoaded = false') !== false,
+            'Task forms must open before lazily loading deliverable choices instead of expanding every project-selection request.');
+        $suite->true(strpos($source, 'projectStatusSection("Milestones & deliverables"') !== false
+            && strpos($source, 'API.projectStatusPlan') !== false
+            && strpos($source, 'loadPlanOverview()') !== false,
+            'Project Status must load milestone and deliverable readiness as an independent section.');
     });
 
     $suite->test('Project routes use public UUIDs while API state retains internal IDs', function () use ($suite, $root) {

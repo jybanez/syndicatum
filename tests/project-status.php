@@ -6,6 +6,7 @@ require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/ProjectTaskService.php';
 require_once dirname(__DIR__) . '/src/ProjectStatusService.php';
+require_once dirname(__DIR__) . '/src/ProjectPlanService.php';
 require_once dirname(__DIR__) . '/src/IntegrationConnectionService.php';
 require_once dirname(__DIR__) . '/src/PostBaselineMigrator.php';
 
@@ -42,6 +43,7 @@ try {
         'identity' => ['kind' => 'human', 'user' => ['id' => (int) $owner['id']]]];
     $tasks = new ProjectTaskService($pdo);
     $status = new ProjectStatusService($pdo);
+    $plan = new ProjectPlanService($pdo);
 
     $overdue = $tasks->create($access, ['title' => 'Overdue task', 'due_at' => '2020-01-01 00:00:00']);
     $blocked = $tasks->create($access, ['title' => 'Blocked task']);
@@ -54,6 +56,9 @@ try {
     $complete = $tasks->update($access, $complete['id'], ['version' => $complete['version'], 'status' => 'in_progress']);
     $complete = $tasks->update($access, $complete['id'], ['version' => $complete['version'], 'status' => 'in_review']);
     $complete = $tasks->update($access, $complete['id'], ['version' => $complete['version'], 'status' => 'completed']);
+    $milestone = $plan->createMilestone($access, ['title' => 'Status milestone', 'status' => 'in_progress']);
+    $plan->createDeliverable($access, ['title' => 'Ready output', 'milestone_id' => $milestone['id'], 'status' => 'approved']);
+    $plan->createDeliverable($access, ['title' => 'Blocked output', 'milestone_id' => $milestone['id'], 'status' => 'blocked']);
 
     $test('summary returns small owner-scoped aggregates', function () use ($status, $access, $same) {
         $summary = $status->summary($access);
@@ -77,6 +82,16 @@ try {
         $same(1, $progress['counts']['in_review']);
         $same(1, $progress['counts']['completed']);
         $same(25.0, $progress['completion_percent']);
+    });
+
+    $test('plan status returns bounded aggregates instead of the full hierarchy', function () use ($status, $access, $same) {
+        $overview = $status->plan($access);
+        $same(1, $overview['milestones']['total']);
+        $same(2, $overview['deliverables']['total']);
+        $same(1, $overview['deliverables']['ready']);
+        $same(1, $overview['deliverables']['blocked']);
+        $same(1, count($overview['next_milestones']));
+        $same(false, array_key_exists('description', $overview['next_milestones'][0]));
     });
 
     $test('activity is date-bucketed and range bounded', function () use ($status, $access, $same) {

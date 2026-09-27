@@ -100,6 +100,55 @@ class ProjectStatusService
         ];
     }
 
+    public function plan(array $access)
+    {
+        $projectId = $this->ownerProjectId($access);
+        $milestones = $this->pdo->prepare(
+            "SELECT COUNT(*) AS total, SUM(status = 'completed') AS completed
+             FROM project_milestones WHERE project_id = ? AND status <> 'cancelled'"
+        );
+        $milestones->execute([$projectId]);
+        $milestoneCounts = $milestones->fetch(PDO::FETCH_ASSOC) ?: [];
+        $deliverables = $this->pdo->prepare(
+            "SELECT COUNT(*) AS total,
+                SUM(status IN ('approved','completed')) AS ready,
+                SUM(status = 'in_review') AS in_review,
+                SUM(status = 'blocked') AS blocked
+             FROM project_deliverables WHERE project_id = ? AND status <> 'cancelled'"
+        );
+        $deliverables->execute([$projectId]);
+        $deliverableCounts = $deliverables->fetch(PDO::FETCH_ASSOC) ?: [];
+        $next = $this->pdo->prepare(
+            "SELECT m.id, m.title, m.status, m.target_at,
+                COUNT(CASE WHEN d.status <> 'cancelled' THEN d.id END) AS deliverable_count,
+                SUM(d.status IN ('approved','completed')) AS ready_deliverable_count
+             FROM project_milestones m
+             LEFT JOIN project_deliverables d ON d.milestone_id = m.id
+             WHERE m.project_id = ? AND m.status <> 'cancelled'
+             GROUP BY m.id
+             ORDER BY m.status = 'completed', m.target_at IS NULL, m.target_at, m.position, m.id
+             LIMIT 3"
+        );
+        $next->execute([$projectId]);
+        $items = array_map(function ($row) {
+            return [
+                'id' => (int) $row['id'], 'title' => $row['title'], 'status' => $row['status'],
+                'target_at' => $row['target_at'], 'deliverable_count' => (int) $row['deliverable_count'],
+                'ready_deliverable_count' => (int) $row['ready_deliverable_count'],
+            ];
+        }, $next->fetchAll(PDO::FETCH_ASSOC));
+        return [
+            'project_id' => $projectId,
+            'milestones' => ['total' => $this->integer($milestoneCounts, 'total'), 'completed' => $this->integer($milestoneCounts, 'completed')],
+            'deliverables' => [
+                'total' => $this->integer($deliverableCounts, 'total'), 'ready' => $this->integer($deliverableCounts, 'ready'),
+                'in_review' => $this->integer($deliverableCounts, 'in_review'), 'blocked' => $this->integer($deliverableCounts, 'blocked'),
+            ],
+            'next_milestones' => $items,
+            'generated_at' => Db::now(),
+        ];
+    }
+
     public function activity(array $access, $days)
     {
         $projectId = $this->ownerProjectId($access);

@@ -127,6 +127,15 @@ while retaining message volume as a secondary count. Activity is limited to 7,
 each row opens the existing task-detail workflow. User-facing team labels
 distinguish people, AI agents, and connected systems.
 
+Every active project participant receives **Project plan** in the project action
+menu. The canonical modal opens before requesting its content and groups concrete
+deliverables beneath optional milestones. Project owners and administrators can
+create or edit both entities; other participants have a read-only view. A
+deliverable has one accountable person or AI agent, may carry a final artifact
+URL, and derives its completion percentage from its linked non-cancelled tasks.
+Tasks may remain standalone, preserving existing projects and workflows. Project
+Status includes a separately loaded Milestones & deliverables readiness section.
+
 The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters.
 
 ### Tasks
@@ -248,8 +257,14 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-bootstrap.php` | GET | Project context, effective instructions, assignment, permissions, work summary, and timeline attention state |
 | `/api/v1/project-tasks.php` | GET, POST | List/filter shared project tasks or create a task under the authenticated giver identity |
 | `/api/v1/project-task.php` | GET, PATCH | Read one task with activity history or apply a version-checked lifecycle update |
+| `/api/v1/project-plan.php` | GET | Read milestones, deliverables, and computed task-backed progress |
+| `/api/v1/project-milestones.php` | POST | Owner/admin milestone creation |
+| `/api/v1/project-milestone.php` | PATCH | Owner/admin version-checked milestone update |
+| `/api/v1/project-deliverables.php` | POST | Owner/admin standalone or milestone-bound deliverable creation |
+| `/api/v1/project-deliverable.php` | PATCH | Owner/admin version-checked deliverable update |
 | `/api/v1/project-status-summary.php` | GET | Owner-only headline task, active-team, and message-sequence aggregates |
 | `/api/v1/project-status-task-progress.php` | GET | Owner-only task counts by status and completion percentage |
+| `/api/v1/project-status-plan.php` | GET | Owner-only bounded milestone and deliverable readiness aggregates plus at most three milestone summaries |
 | `/api/v1/project-status-activity.php` | GET | Owner-only date-bucketed task outcomes plus secondary message volume for a bounded 7, 14, or 30-day range |
 | `/api/v1/project-status-attention.php` | GET | Owner-only cursor page of blocked, in-review, or overdue tasks; maximum 20 |
 | `/api/v1/project-status-team.php` | GET | Owner-only participant counts by identity kind and membership state |

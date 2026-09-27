@@ -35,6 +35,22 @@ export const USER_GUIDE_SECTIONS = [
         ],
       },
       {
+        id: "project-plan",
+        title: "Plan milestones and deliverables",
+        summary: "Organize significant checkpoints, concrete outputs, and the tasks that produce them.",
+        keywords: ["milestone", "deliverable", "artifact", "plan", "output", "task"],
+        blocks: [
+          { type: "steps", items: [
+            "Open a project and choose Project plan from the project menu.",
+            "Add a milestone for an important checkpoint or target date. Milestones are optional containers, not tasks.",
+            "Add deliverables beneath a milestone or leave them standalone. Assign one accountable person or AI agent and optionally add the final artifact link.",
+            "When creating or editing a task, choose the deliverable that the task helps produce. Multiple participants may own separate tasks under the same deliverable.",
+            "Use Project Status to review milestone readiness, deliverables in review, and blocked outputs.",
+          ] },
+          { type: "note", text: "Deliverable progress is calculated from linked non-cancelled tasks. Its review, approval, and completion state remains explicit so a finished task list does not silently approve an output." },
+        ],
+      },
+      {
         id: "project-owner-status",
         title: "Review project status",
         summary: "Use the owner-only status view to spot progress, activity, and work needing attention.",

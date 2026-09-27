@@ -14,8 +14,14 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
+| `/api/v1/project-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/plan` |
+| `/api/v1/project-milestones.php?project_id={project}` | POST | `/api/v1/projects/{project}/milestones` |
+| `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
+| `/api/v1/project-deliverables.php?project_id={project}` | POST | `/api/v1/projects/{project}/deliverables` |
+| `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}` |
 | `/api/v1/project-status-summary.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/summary` |
 | `/api/v1/project-status-task-progress.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/task-progress` |
+| `/api/v1/project-status-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/plan` |
 | `/api/v1/project-status-activity.php?project_id={project}&days={7\|14\|30}` | GET | `/api/v1/projects/{project}/status/activity` |
 | `/api/v1/project-status-attention.php?project_id={project}&limit={1..20}&before={task}` | GET | `/api/v1/projects/{project}/status/attention` |
 | `/api/v1/project-status-team.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/team` |
