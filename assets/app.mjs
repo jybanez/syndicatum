@@ -2956,6 +2956,10 @@ function projectPlanDateValue(value) {
   return value ? String(value).replace(" ", "T").slice(0, 16) : "";
 }
 
+function projectPlanDayValue(value) {
+  return value ? String(value).slice(0, 10) : "";
+}
+
 function projectPlanStatusLabel(value) {
   return projectInfoLabel(value === "at_risk" ? "At risk" : value);
 }
@@ -2978,7 +2982,7 @@ function openMilestoneForm(item = null, onSaved = null) {
     submitLabel: editing ? "Save milestone" : "Add milestone",
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
-      target_at: projectPlanDateValue(item?.target_at), position: item?.position || 0,
+      target_at: projectPlanDayValue(item?.target_at), position: item?.position || 0,
     },
     rows: [
       [modalTextField("title", "Milestone title", { required: true, maxlength: 180 })],
@@ -2987,7 +2991,7 @@ function openMilestoneForm(item = null, onSaved = null) {
         { value: "planned", label: "Planned" }, { value: "in_progress", label: "In progress" },
         { value: "at_risk", label: "At risk" }, { value: "completed", label: "Completed" },
         { value: "cancelled", label: "Cancelled" },
-      ] }, { type: "ui.datepicker", name: "target_at", label: "Target date", showTime: true, timePrecision: "minute", valueMode: "wall-clock", closeOnSelect: false, placeholder: "Optional" }],
+      ] }, { type: "ui.datepicker", name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true, placeholder: "Optional" }],
       [modalTextField("position", "Display order")],
     ],
     async onSubmit(values, context) {

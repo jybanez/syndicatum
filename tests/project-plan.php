@@ -38,6 +38,10 @@ try {
     $first = $tasks->update($access, $first['id'], ['version' => $first['version'], 'status' => 'in_review']);
     $tasks->update($access, $first['id'], ['version' => $first['version'], 'status' => 'completed']);
 
+    $test('milestone target dates are stored without a time component', function () use ($same, $milestone) {
+        $same('2030-10-15 00:00:00', $milestone['target_at']);
+    });
+
     $test('plan groups deliverables under milestones and computes task progress', function () use ($plan, $access, $same, $milestone, $deliverable) {
         $result = $plan->plan($access);
         $same(true, $result['can_manage']); $same(1, count($result['milestones'])); $same(1, count($result['deliverables']));

@@ -1000,6 +1000,9 @@ try {
             && strpos($styles, '.project-plan-editor-modal .ui-datepicker') !== false
             && strpos($styles, 'width: 100%; min-width: 0; max-width: 100%;') !== false,
             'Project planning date pickers must shrink within multi-column form rows without horizontal overflow.');
+        $suite->true(strpos($source, 'name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true') !== false
+            && strpos($source, 'target_at: projectPlanDayValue(item?.target_at)') !== false,
+            'Milestone target dates must use the canonical date-only picker without exposing time controls.');
         $suite->true(strpos($source, 'message: "Loading deliverables…"') !== false
             && strpos($source, 'modal.setRows(taskFormRows())') !== false
             && strpos($source, 'state.projectPlanLoaded = false') !== false,
