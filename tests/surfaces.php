@@ -562,6 +562,25 @@ try {
             'Legacy sticky positioning must not override the Helper timeline floating-date implementation.');
     });
 
+    $suite->test('Project views use the attached Helper tabs variant', function () use ($suite, $root) {
+        $index = file_get_contents($root . '/index.php');
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($index, 'class="project-view-switch" id="project-view-switch" hidden') !== false,
+            'The project view tabs need a dedicated Helper mount.');
+        $suite->true(strpos($index, 'id="show-timeline"') === false && strpos($index, 'id="show-responsibility"') === false,
+            'Legacy project view buttons must not remain beside the canonical tabs.');
+        $suite->true(strpos($source, 'state.components.projectViewTabs = state.factories.createTabs') !== false
+            && strpos($source, 'variant: "attached"') !== false
+            && strpos($source, 'id: "timeline"') !== false
+            && strpos($source, 'id: "responsibility"') !== false,
+            'Timeline and Responsibility Inbox must be rendered by the attached Helper tabs variant.');
+        $suite->true(strpos($source, 'state.components.projectViewTabs?.setActive?.(state.projectView, false);') !== false,
+            'Programmatic project changes must keep the canonical tabs synchronized without duplicate change events.');
+        $suite->true(strpos($styles, '.project-view-switch .ui-button') === false,
+            'Application CSS must not recreate the removed button-style view switch.');
+    });
+
     $suite->test('Timeline search stays visible while structured filters use the Helper popover', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');

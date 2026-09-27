@@ -136,7 +136,7 @@ const el = Object.fromEntries([
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
   "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-host",
-  "project-view-switch", "show-timeline", "show-responsibility", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
+  "project-view-switch", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
   "admin-eyebrow", "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
@@ -5848,14 +5848,43 @@ async function acknowledgeMessage(message) {
   }
 }
 
+function mountProjectViewTabs() {
+  state.components.projectViewTabs?.destroy?.();
+  state.components.projectViewTabs = state.factories.createTabs(el.project_view_switch, {
+    ariaLabel: "Project view",
+    variant: "attached",
+    activeId: state.projectView,
+    tabs: [
+      {
+        id: "timeline",
+        label: "Timeline",
+        render(host) {
+          host.classList.add("project-view-tabpanel", "is-timeline");
+          host.append(el.composer_shell, el.timeline_filter_bar, el.timeline_notice, el.timeline_scroll);
+        },
+      },
+      {
+        id: "responsibility",
+        label: "Responsibility Inbox",
+        render(host) {
+          host.classList.add("project-view-tabpanel", "is-responsibility");
+          host.append(el.responsibility_host);
+        },
+      },
+    ],
+    onChange(_tab, tabId) {
+      showProjectView(tabId);
+    },
+  });
+}
+
 function showProjectView(view) {
   if (state.mode !== "expanded" || !["workspace", "project"].includes(state.surface) || !selectedProjectId()) return;
   state.projectView = view === "responsibility" ? "responsibility" : "timeline";
   const inbox = state.projectView === "responsibility";
-  el.show_timeline.classList.toggle("is-active", !inbox);
-  el.show_responsibility.classList.toggle("is-active", inbox);
-  el.show_timeline.setAttribute("aria-pressed", String(!inbox));
-  el.show_responsibility.setAttribute("aria-pressed", String(inbox));
+  if (state.components.projectViewTabs?.getActiveId?.() !== state.projectView) {
+    state.components.projectViewTabs?.setActive?.(state.projectView, false);
+  }
   el.new_message_trigger.hidden = inbox || !can("messages.write");
   el.timeline_filter_bar.hidden = inbox;
   el.timeline_notice.hidden = inbox || !el.timeline_notice.textContent;
@@ -6752,6 +6781,7 @@ async function bootstrap() {
     createNavigationStack: await uiLoader.get("ui.navigation.stack", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
+  mountProjectViewTabs();
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
   el.new_message_icon.innerHTML = helperIconHtml("actions.add", 18);
   el.project_list_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
@@ -6764,8 +6794,6 @@ async function bootstrap() {
   el.new_task_icon.innerHTML = helperIconHtml("actions.add", 18);
   updateTimelineCollapseButton();
   el.new_message_trigger.addEventListener("click", openMessageComposerModal);
-  el.show_timeline.addEventListener("click", () => showProjectView("timeline"));
-  el.show_responsibility.addEventListener("click", () => showProjectView("responsibility"));
   mountWorkspaceSplitters();
   const search = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search this project", clearText: "Clear", inputClass: "ui-input",

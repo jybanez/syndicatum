@@ -450,11 +450,9 @@ button, input, textarea { font: inherit; }
 .task-detail-activity strong { color: var(--app-text); font-size: 12px; }
 .task-detail-activity span { color: var(--app-muted); font-size: 11px; }
 .task-detail-activity p { font-size: 12px; }
-.project-messages-column { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); overflow: hidden; padding: 16px; box-sizing: border-box; }
+.project-messages-column { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 16px; box-sizing: border-box; }
 .project-messages-column > .timeline-project-overview { grid-row: 1; }
-.project-messages-column > .filter-bar { grid-row: 2; }
-.project-messages-column > .timeline-notice { grid-row: 3; }
-.project-messages-column > .timeline-scroll { grid-row: 4; }
+.project-messages-column > .project-view-switch { grid-row: 2; }
 .identity-card, .workspace-card, .project-overview { padding: 18px; }
 .identity-card { display: grid; gap: 14px; }
 .identity-card h1, .workspace-card h2, .project-overview h1, .surface-heading h1, .surface-heading h2 { margin: 0; }
@@ -793,9 +791,11 @@ button, input, textarea { font: inherit; }
   .message-card-footer { align-items: stretch; }
   .message-actions { width: auto; justify-content: flex-start; }
 }
-.project-view-switch { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.project-view-switch .ui-button { min-height: 34px; padding: 6px 11px; }
-.project-view-switch .is-active { border-color: #6e94d7; background: rgba(44, 71, 117, .68); color: #f2f7ff; }
+.project-view-switch { min-width: 0; min-height: 0; margin-top: 12px; overflow: hidden; }
+.project-view-switch > .ui-tabs { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+.project-view-switch .ui-tablist { flex: 0 0 auto; }
+.project-view-switch .ui-tabpanel { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; }
+.project-view-switch .timeline-scroll, .project-view-switch .responsibility-scroll { flex: 1 1 auto; }
 .responsibility-scroll { min-height: 0; overflow: auto; overflow-anchor: none; padding: 12px 3px 16px; }
 .responsibility-inbox { display: grid; gap: 12px; align-content: start; }
 .responsibility-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
@@ -881,8 +881,6 @@ button, input, textarea { font: inherit; }
 .recovery-stage-restore-modal .ui-form-modal-checkbox { display: flex; min-width: 0; max-width: 100%; align-items: flex-start; }
 .recovery-stage-restore-modal .ui-form-modal-checkbox-input { flex: 0 0 16px; margin-top: 1px; }
 .recovery-stage-restore-modal .ui-form-modal-checkbox-label { display: block; flex: 1 1 auto; }
-.project-messages-column > .responsibility-scroll { grid-row: 4; }
-.project-messages-column > .responsibility-scroll[hidden] { display: none; }
 @media (max-width: 700px) {
   .backup-restore-overview-grid { grid-template-columns: minmax(0, 1fr); }
   .backup-restore-intro, .backup-restore-operation-heading { display: grid; }
