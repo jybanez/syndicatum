@@ -674,8 +674,8 @@ try {
             'Guide article content must retain natural top-aligned spacing instead of stretching to fill the pane.');
         $suite->true(strpos($styles, '.guide-tree { display: block;') !== false,
             'Guide navigation must override the shared panel grid so search and filtered results retain natural height.');
-        $suite->true(strpos($rewrites, 'guide|users|agents|audit|templates') !== false,
-            'Direct User Guide navigation must resolve through the application route.');
+        $suite->true(strpos($rewrites, 'notifications|guide|users|agents|audit|templates') !== false,
+            'Direct notification and User Guide navigation must resolve through the application route.');
     });
 
     $suite->test('Templates navigation sits between Audit and Settings with a guarded route', function () use ($suite, $root) {
