@@ -581,12 +581,16 @@ try {
             'Application CSS must not recreate the removed button-style view switch.');
     });
 
-    $suite->test('Primary work columns use compact four-pixel spacing', function () use ($suite, $root) {
+    $suite->test('Workspace columns use compact four-pixel spacing', function () use ($suite, $root) {
         $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($styles, '.project-navigation-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px;') !== false,
+            'The project navigation column must use four-pixel padding and inter-section gaps.');
         $suite->true(strpos($styles, '.project-messages-column { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 4px;') !== false,
             'The project message column must use the compact four-pixel padding.');
         $suite->true(strpos($styles, '.project-tasks-column { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px;') !== false,
             'The project task column must use four-pixel padding and inter-section gaps.');
+        $suite->true(strpos($styles, '.project-participants-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px;') !== false,
+            'The project participant column must use four-pixel padding and inter-section gaps.');
     });
 
     $suite->test('Timeline search stays visible while structured filters use the Helper popover', function () use ($suite, $root) {

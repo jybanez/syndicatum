@@ -379,8 +379,8 @@ button, input, textarea { font: inherit; }
 .unified-workspace-surface.is-team-hidden .workspace-work-splitter > .ui-splitter-divider,
 .unified-workspace-surface.is-team-hidden .workspace-work-splitter > .ui-splitter-pane.is-b { display: none; }
 .unified-workspace-surface .surface-column { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
-.project-navigation-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; padding: 14px; box-sizing: border-box; }
-.project-participants-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; padding: 14px; box-sizing: border-box; }
+.project-navigation-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px; box-sizing: border-box; }
+.project-participants-column { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px; box-sizing: border-box; }
 .project-tasks-column { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 4px; overflow: hidden; padding: 4px; box-sizing: border-box; }
 .task-filter-row > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .task-heading-actions { justify-content: flex-end; }
