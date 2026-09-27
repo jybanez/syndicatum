@@ -795,6 +795,8 @@ button, input, textarea { font: inherit; }
 .project-view-switch > .ui-tabs { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .project-view-switch .ui-tablist { flex: 0 0 auto; }
 .project-view-switch .ui-tabpanel { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
+.project-view-switch .ui-tabpanel.is-timeline { background: transparent; }
+.project-view-switch .ui-tabpanel.is-timeline .filter-bar { background: var(--ui-bg-soft); }
 .project-view-switch .timeline-scroll, .project-view-switch .responsibility-scroll { flex: 1 1 auto; }
 .responsibility-scroll { min-height: 0; overflow: auto; overflow-anchor: none; padding: 12px 3px 16px; }
 .responsibility-inbox { display: grid; gap: 12px; align-content: start; }
