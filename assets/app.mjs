@@ -2974,6 +2974,7 @@ function openMilestoneForm(item = null, onSaved = null) {
   const editing = Boolean(item);
   const modal = state.factories.createFormModal({
     title: editing ? "Edit milestone" : "Add milestone",
+    className: "project-plan-editor-modal",
     submitLabel: editing ? "Save milestone" : "Add milestone",
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
@@ -3013,7 +3014,7 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
   const editing = Boolean(item);
   const modal = state.factories.createFormModal({
     title: editing ? "Edit deliverable" : "Add deliverable",
-    size: "lg", submitLabel: editing ? "Save deliverable" : "Add deliverable",
+    size: "lg", className: "project-plan-editor-modal", submitLabel: editing ? "Save deliverable" : "Add deliverable",
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
       milestone_id: id(item?.milestone_id || presetMilestoneId), owner_participant_id: id(item?.owner_participant_id),
