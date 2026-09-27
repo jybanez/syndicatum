@@ -1390,7 +1390,7 @@ async function loadExpandedWithPendingInvitation() {
 
 function invitationReviewDetails(invitation) {
   const content = projectInfoElement("div", "invitation-review-content");
-  content.append(projectInfoElement("p", "", "Review the invitation details below. You will not join the project until you choose Accept invitation."));
+  content.append(projectInfoElement("p", "", "Review the invitation details below. You will not join the project until you choose Accept."));
   const details = projectInfoElement("dl", "project-info-definition-list");
   participantProfileDefinition(details, "Project", invitation.project_name);
   participantProfileDefinition(details, "Invited by", invitation.inviter_name);
@@ -1412,13 +1412,12 @@ function openInvitationReview({ token = "", invitationId = 0 } = {}) {
   let dismissed = false;
   let modal;
 
-  const closeAction = { id: "close", label: "Not now" };
   const loadInvitation = async () => {
     content.replaceChildren(projectInfoElement("p", "", "Loading invitation details…"));
-    modal.setActions([closeAction]);
+    modal.setActions([]);
     modal.setBusy(true, {
       message: "Loading invitation…",
-      cancelBusy: { label: "Not now", onCancel: () => modal.close({ reason: "cancelled" }) },
+      cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancelled" }) },
     });
     try {
       const previewUrl = invitationId > 0
@@ -1429,10 +1428,10 @@ function openInvitationReview({ token = "", invitationId = 0 } = {}) {
       }));
       if (dismissed) return;
       content.replaceChildren(...invitationReviewDetails(invitation).childNodes);
-      const actions = [closeAction];
+      const actions = [];
       if (invitationId > 0) actions.push({
         id: "decline",
-        label: "Decline invitation",
+        label: "Decline",
         variant: "danger",
         closeOnClick: false,
         async onClick({ modal: current }) {
@@ -1455,7 +1454,7 @@ function openInvitationReview({ token = "", invitationId = 0 } = {}) {
       });
       actions.push({
           id: "accept",
-          label: "Accept invitation",
+          label: "Accept",
           variant: "primary",
           closeOnClick: false,
           async onClick({ modal: current }) {
@@ -1499,7 +1498,7 @@ function openInvitationReview({ token = "", invitationId = 0 } = {}) {
     title: "Review project invitation",
     size: "sm",
     content,
-    actions: [closeAction],
+    actions: [],
     onClose() {
       dismissed = true;
       abortController.abort();
