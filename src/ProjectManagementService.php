@@ -364,6 +364,27 @@ class ProjectManagementService
         return $this->acceptPendingInvitation($userId, $invitation);
     }
 
+    public function declineInvitationById($userId, $invitationId)
+    {
+        $invitation = $this->pendingInvitationForUserById($userId, $invitationId);
+        $this->pdo->beginTransaction();
+        try {
+            $now = Db::now();
+            $statement = $this->pdo->prepare(
+                "UPDATE project_invitations
+                 SET status = 'rejected', responded_at = ?, notification_read_at = ?
+                 WHERE id = ? AND status = 'pending'"
+            );
+            $statement->execute([$now, $now, (int) $invitation['id']]);
+            if ($statement->rowCount() !== 1) { throw new RuntimeException('INVITATION_NOT_FOUND'); }
+            $this->auth->audit((int) $userId, 'project.invitation_declined', 'project_invitation', (string) $invitation['id']);
+            $this->outbox->enqueueNotificationsChanged((int) $invitation['project_id'], (int) $userId,
+                'invitation_declined', (int) $invitation['id']);
+            $this->pdo->commit();
+            return ['invitation_id' => (int) $invitation['id'], 'status' => 'rejected'];
+        } catch (Exception $exception) { $this->rollback(); throw $exception; }
+    }
+
     private function pendingInvitationForUser($userId, $token)
     {
         $token = trim((string) $token);

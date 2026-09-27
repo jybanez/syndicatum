@@ -362,8 +362,13 @@ try {
         $suite->true(strpos($source, 'id: "notifications"') !== false
             && strpos($source, 'syndicatum.notifications.changed') !== false
             && strpos($source, 'void loadNotifications();') !== false
+            && strpos($source, 'applicationPath("notifications")') !== false
+            && strpos($source, 'showNotificationsSurface') !== false
+            && strpos($source, 'View all notifications') !== false
+            && strpos($source, 'notification-review-action') !== false
+            && strpos($source, 'operation: "decline"') !== false
             && strpos($source, 'setInterval(loadNotifications') === false,
-            'The notification inbox must use global Realtime reconciliation without polling.');
+            'The notification inbox must use a dedicated route, compact actions, modal processing, and global Realtime reconciliation without polling.');
         $suite->true(strpos($settings, 'settingsTabs?.setActive(tabId, false);') !== false,
             'Validation must reveal the tab containing the first invalid field.');
         $suite->true(strpos($settings, 'Please address the following issues before continuing:') !== false,

@@ -12,19 +12,21 @@ class NotificationInboxService
     {
         $statement = $this->pdo->prepare(
             "SELECT i.id, i.project_id, p.name AS project_name, inviter.display_name AS inviter_name,
-                    i.role, i.expires_at, i.created_at, i.notification_read_at
+                    i.role, i.status, i.expires_at, i.created_at, i.responded_at, i.notification_read_at
              FROM users recipient
              JOIN project_invitations i ON LOWER(i.invited_email) = LOWER(recipient.normalized_email)
              JOIN projects p ON p.id = i.project_id
              JOIN users inviter ON inviter.id = i.invited_by_user_id
-             WHERE recipient.id = ? AND i.status = 'pending' AND i.expires_at > ?
+             WHERE recipient.id = ?
              ORDER BY i.created_at DESC, i.id DESC"
         );
-        $statement->execute([(int) $userId, Db::now()]);
+        $statement->execute([(int) $userId]);
         $items = [];
         $unread = 0;
         $labels = ['admin' => 'Administrator', 'member' => 'Member', 'viewer' => 'Viewer'];
         foreach ($statement->fetchAll() as $row) {
+            $status = (string) $row['status'];
+            if ($status === 'pending' && (string) $row['expires_at'] <= Db::now()) { $status = 'expired'; }
             if ($row['notification_read_at'] === null) { $unread++; }
             $items[] = [
                 'id' => 'project_invitation:' . (int) $row['id'],
@@ -35,8 +37,11 @@ class NotificationInboxService
                 'inviter_name' => (string) $row['inviter_name'],
                 'role' => (string) $row['role'],
                 'role_label' => isset($labels[$row['role']]) ? $labels[$row['role']] : ucfirst((string) $row['role']),
+                'status' => $status,
+                'actionable' => $status === 'pending',
                 'expires_at' => (string) $row['expires_at'],
                 'created_at' => (string) $row['created_at'],
+                'responded_at' => $row['responded_at'] === null ? null : (string) $row['responded_at'],
                 'read' => $row['notification_read_at'] !== null,
             ];
         }
@@ -56,6 +61,18 @@ class NotificationInboxService
         $now = Db::now();
         $write = $this->pdo->prepare('UPDATE project_invitations SET notification_read_at = ? WHERE id = ?');
         foreach ($eligible->fetchAll(PDO::FETCH_COLUMN) as $id) { $write->execute([$now, (int) $id]); }
+        return $this->listForUser($userId);
+    }
+
+    public function markAllRead($userId)
+    {
+        $write = $this->pdo->prepare(
+            "UPDATE project_invitations i
+             JOIN users u ON u.id = ? AND LOWER(i.invited_email) = LOWER(u.normalized_email)
+             SET i.notification_read_at = ?
+             WHERE i.notification_read_at IS NULL"
+        );
+        $write->execute([(int) $userId, Db::now()]);
         return $this->listForUser($userId);
     }
 }

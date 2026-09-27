@@ -77,6 +77,8 @@ const state = {
   notifications: [],
   notificationUnreadCount: 0,
   notificationsLoaded: false,
+  notificationFilter: "all",
+  notificationQuery: "",
   backupGridColumnWidths: null,
   backupPage: null,
   session: null,
@@ -325,6 +327,7 @@ function routeForSurface(surface, projectId = "") {
   if (surface === "project" && projectId) return applicationPath(`projects/${encodeURIComponent(projectId)}`);
   if (surface === "backup-restore") return `${applicationPath()}?admin=backup-restore`;
   if (surface === "guide") return `${applicationPath("guide")}#${encodeURIComponent(state.selectedGuideArticleId || "workspace-projects")}`;
+  if (surface === "notifications") return applicationPath("notifications");
   if (["users", "agents", "audit", "templates", "delivery-health"].includes(surface)) return applicationPath(surface);
   return applicationPath();
 }
@@ -343,7 +346,7 @@ function currentApplicationRoute() {
     try { return { surface: "guide", projectId: "", articleId: decodeURIComponent(location.hash.replace(/^#/, "")) || "workspace-projects" }; }
     catch (_error) { return { surface: "guide", projectId: "", articleId: "workspace-projects" }; }
   }
-  if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(parts[0])) return { surface: parts[0], projectId: "" };
+  if (["notifications", "users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(parts[0])) return { surface: parts[0], projectId: "" };
   const legacyProjectId = new URLSearchParams(location.search).get("project") || "";
   return legacyProjectId ? { surface: "project", projectId: legacyProjectId } : { surface: "workspace", projectId: "" };
 }
@@ -427,15 +430,120 @@ function notificationIconHtml() {
   return `<span class="syndicatum-notification-icon">${helperIconHtml("notifications.unmuted", 18)}${badge}</span>`;
 }
 
-function notificationMenuItems() {
-  const items = state.notifications.map((notification) => ({
-    id: `notification:${notification.invitation_id}`,
-    label: `${notification.read ? "" : "New · "}${notification.project_name} · Invited by ${notification.inviter_name} · ${notification.role_label}`,
-    icon: helperIconHtml("comms.envelope-open"),
-  }));
-  if (!items.length) items.push({ id: "notifications-empty", label: state.notificationsLoaded ? "No pending notifications" : "Loading notifications…", disabled: true });
-  items.push({ id: "notifications-refresh", label: state.realtimeError ? "Refresh notifications · Realtime disconnected" : "Refresh notifications", icon: helperIconHtml("actions.refresh") });
-  return items;
+function notificationRelativeTime(value) {
+  const date = new Date(normalizeUtcTimestamp(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const ranges = [[60, "second"], [60, "minute"], [24, "hour"], [7, "day"], [4.345, "week"], [12, "month"]];
+  let amount = seconds;
+  let unit = "second";
+  for (const [size, nextUnit] of ranges) {
+    unit = nextUnit;
+    if (Math.abs(amount) < size) break;
+    amount /= size;
+  }
+  if (Math.abs(amount) >= 12 && unit === "month") { amount /= 12; unit = "year"; }
+  return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(Math.round(amount), unit);
+}
+
+function notificationStatusLabel(status) {
+  return ({ pending: "Pending", accepted: "Accepted", rejected: "Declined", expired: "Expired", revoked: "Cancelled" })[status] || "Updated";
+}
+
+function notificationRow(notification, { compact = false } = {}) {
+  const row = document.createElement("article");
+  row.className = `notification-row${notification.read ? "" : " is-unread"}${compact ? " is-compact" : ""}`;
+  const indicator = document.createElement("span");
+  indicator.className = "notification-unread-indicator";
+  indicator.setAttribute("aria-hidden", "true");
+  const icon = document.createElement("span");
+  icon.className = "notification-row-icon";
+  icon.innerHTML = helperIconHtml("comms.envelope-open", compact ? 17 : 19);
+  const body = document.createElement("div");
+  body.className = "notification-row-body";
+  const heading = document.createElement("div");
+  heading.className = "notification-row-heading";
+  const title = document.createElement("strong");
+  title.textContent = "Project invitation";
+  const time = document.createElement("time");
+  time.dateTime = notification.created_at;
+  time.title = formatDate(notification.created_at);
+  time.textContent = notificationRelativeTime(notification.created_at);
+  heading.append(title, time);
+  const project = document.createElement("div");
+  project.className = "notification-row-project";
+  project.textContent = notification.project_name;
+  const summary = document.createElement("p");
+  summary.textContent = `${notification.inviter_name} invited you as ${notification.role_label}`;
+  const status = document.createElement("span");
+  status.className = `notification-status is-${notification.status || "pending"}`;
+  status.textContent = notificationStatusLabel(notification.status);
+  body.append(heading, project, summary);
+  if (!compact || !notification.actionable) body.append(status);
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = "ui-button ui-button-ghost notification-review-action";
+  action.textContent = notification.actionable ? "Review" : "View";
+  action.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void reviewNotification(notification);
+  });
+  row.append(indicator, icon, body, action);
+  return row;
+}
+
+function renderNotificationPopover(host) {
+  host.replaceChildren();
+  const panel = document.createElement("section");
+  panel.className = "notification-preview";
+  const header = document.createElement("header");
+  const title = document.createElement("strong");
+  title.textContent = "Notifications";
+  const markAll = document.createElement("button");
+  markAll.type = "button";
+  markAll.className = "ui-button ui-button-borderless notification-header-action";
+  markAll.textContent = "Mark all read";
+  markAll.disabled = state.notificationUnreadCount < 1;
+  markAll.addEventListener("click", () => void markAllNotificationsRead());
+  header.append(title, markAll);
+  const list = document.createElement("div");
+  list.className = "notification-preview-list";
+  const recent = state.notifications.slice(0, 5);
+  if (!recent.length) {
+    const empty = document.createElement("p");
+    empty.className = "notification-preview-empty";
+    empty.textContent = state.notificationsLoaded ? "You have no notifications." : "Loading notifications…";
+    list.append(empty);
+  } else recent.forEach((notification) => list.append(notificationRow(notification, { compact: true })));
+  const footer = document.createElement("footer");
+  const viewAll = document.createElement("button");
+  viewAll.type = "button";
+  viewAll.className = "ui-button ui-button-borderless notification-view-all";
+  viewAll.textContent = "View all notifications";
+  viewAll.addEventListener("click", () => {
+    state.components.notificationPopover?.close?.();
+    showNotificationsSurface();
+  });
+  footer.append(viewAll);
+  panel.append(header, list, footer);
+  host.append(panel);
+  return panel;
+}
+
+function mountNotificationPopover() {
+  state.components.notificationPopover?.destroy?.();
+  state.components.notificationPopover = null;
+  const trigger = el.navbar_host.querySelector(".syndicatum-notification-action");
+  if (!trigger || !state.factories.createPopover) return;
+  state.components.notificationPopover = state.factories.createPopover(trigger, {
+    placement: "bottom-end",
+    panelRole: "dialog",
+    ariaLabel: "Notifications",
+    className: "syndicatum-notification-popover",
+    initialFocus: "first",
+    content(host) { return renderNotificationPopover(host); },
+    onOpenChange(open) { trigger.classList.toggle("is-open", open); },
+  });
 }
 
 function mountNavbar() {
@@ -454,8 +562,7 @@ function mountNavbar() {
     label: state.notificationUnreadCount > 0 ? `Notifications, ${state.notificationUnreadCount} unread` : "Notifications",
     icon: notificationIconHtml(),
     iconOnly: true,
-    className: "ui-button-borderless syndicatum-notification-action",
-    menuItems: notificationMenuItems(),
+    className: `ui-button-borderless syndicatum-notification-action${state.surface === "notifications" ? " is-active" : ""}`,
   });
   if (state.mode === "expanded") actions.push({
     id: "guide",
@@ -539,9 +646,7 @@ function mountNavbar() {
       if (action?.id === "guide") showGuideSurface();
     },
     onActionMenuSelect(_action, item) {
-      if (String(item?.id || "").startsWith("notification:")) void reviewInboxInvitation(Number(String(item.id).split(":")[1]));
-      else if (item?.id === "notifications-refresh") void loadNotifications({ announce: true });
-      else if (["users", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
+      if (["users", "audit", "templates", "delivery-health", "backup-restore"].includes(item?.id)) void showAdminSurface(item.id);
       else if (item?.id === "settings") void openSettings();
       else if (item?.id === "profile") openProfileModal();
       else if (item?.id === "password") openPasswordModal();
@@ -553,6 +658,7 @@ function mountNavbar() {
       else if (item?.id === "signout") void logout();
     },
   });
+  mountNotificationPopover();
 }
 
 function makeAvatar(participant, size = "md") {
@@ -1317,9 +1423,31 @@ function openInvitationReview({ token = "", invitationId = 0 } = {}) {
       }));
       if (dismissed) return;
       content.replaceChildren(...invitationReviewDetails(invitation).childNodes);
-      modal.setActions([
-        closeAction,
-        {
+      const actions = [closeAction];
+      if (invitationId > 0) actions.push({
+        id: "decline",
+        label: "Decline invitation",
+        variant: "danger",
+        closeOnClick: false,
+        async onClick({ modal: current }) {
+          current.setBusy(true, { message: "Declining invitation…" });
+          try {
+            await request(API.projectInvitations, {
+              method: "POST",
+              headers: csrfHeaders(),
+              body: JSON.stringify({ operation: "decline", invitation_id: invitationId }),
+            });
+            await current.close({ reason: "declined" });
+            await loadNotifications();
+            state.components.toast.success("Invitation declined.");
+          } catch (error) {
+            current.setBusy(false);
+            state.components.toast.error(error.message, { title: "Invitation could not be declined" });
+          }
+          return false;
+        },
+      });
+      actions.push({
           id: "accept",
           label: "Accept invitation",
           variant: "primary",
@@ -1345,8 +1473,8 @@ function openInvitationReview({ token = "", invitationId = 0 } = {}) {
             }
             return false;
           },
-        },
-      ]);
+        });
+      modal.setActions(actions);
       modal.setBusy(false);
     } catch (error) {
       if (dismissed || error.name === "AbortError") return;
@@ -1385,32 +1513,82 @@ async function loadNotifications({ announce = false } = {}) {
     state.notificationUnreadCount = Number(result.unread_count || 0);
     state.notificationsLoaded = true;
     mountNavbar();
+    if (state.surface === "notifications") renderNotificationsSurface();
     if (announce) state.components.toast.success("Notifications refreshed.");
   } catch (error) {
     if (announce) state.components.toast.error(error.message, { title: "Notifications unavailable" });
   }
 }
 
+async function markNotificationRead(invitationId) {
+  const notification = state.notifications.find((item) => Number(item.invitation_id) === Number(invitationId));
+  if (!notification || notification.read) return;
+  notification.read = true;
+  state.notificationUnreadCount = Math.max(0, state.notificationUnreadCount - 1);
+  mountNavbar();
+  if (state.surface === "notifications") renderNotificationsSurface();
+  try {
+    const result = unwrap(await request(API.notifications, {
+      method: "POST",
+      headers: csrfHeaders(),
+      body: JSON.stringify({ operation: "mark_read", invitation_ids: [invitationId] }),
+    })) || {};
+    state.notifications = Array.isArray(result.items) ? result.items : state.notifications;
+    state.notificationUnreadCount = Number(result.unread_count || 0);
+    mountNavbar();
+    if (state.surface === "notifications") renderNotificationsSurface();
+  } catch (error) {
+    await loadNotifications();
+    state.components.toast.error(error.message, { title: "Notification status was not saved" });
+  }
+}
+
+async function markAllNotificationsRead() {
+  if (state.notificationUnreadCount < 1) return;
+  try {
+    const result = unwrap(await request(API.notifications, {
+      method: "POST",
+      headers: csrfHeaders(),
+      body: JSON.stringify({ operation: "mark_all_read" }),
+    })) || {};
+    state.notifications = Array.isArray(result.items) ? result.items : state.notifications.map((item) => ({ ...item, read: true }));
+    state.notificationUnreadCount = Number(result.unread_count || 0);
+    mountNavbar();
+    if (state.surface === "notifications") renderNotificationsSurface();
+  } catch (error) {
+    state.components.toast.error(error.message, { title: "Notifications could not be updated" });
+  }
+}
+
+function openNotificationDetails(notification) {
+  if (state.components.notificationDetails?.getState?.().open) return;
+  const content = invitationReviewDetails(notification);
+  const status = document.createElement("p");
+  status.className = `notification-modal-status notification-status is-${notification.status}`;
+  status.textContent = `Status: ${notificationStatusLabel(notification.status)}`;
+  content.append(status);
+  let modal;
+  modal = state.factories.createActionModal({
+    title: "Project invitation",
+    size: "sm",
+    content,
+    actions: [{ id: "close", label: "Close" }],
+    onClose() { if (state.components.notificationDetails === modal) state.components.notificationDetails = null; },
+  });
+  state.components.notificationDetails = modal;
+  modal.open();
+}
+
+function reviewNotification(notification) {
+  state.components.notificationPopover?.close?.();
+  if (notification.actionable) openInvitationReview({ invitationId: notification.invitation_id });
+  else openNotificationDetails(notification);
+  void markNotificationRead(notification.invitation_id);
+}
+
 async function reviewInboxInvitation(invitationId) {
   const notification = state.notifications.find((item) => Number(item.invitation_id) === Number(invitationId));
-  if (notification && !notification.read) {
-    notification.read = true;
-    state.notificationUnreadCount = Math.max(0, state.notificationUnreadCount - 1);
-    mountNavbar();
-    try {
-      const result = unwrap(await request(API.notifications, {
-        method: "POST",
-        headers: csrfHeaders(),
-        body: JSON.stringify({ operation: "mark_read", invitation_ids: [invitationId] }),
-      })) || {};
-      state.notifications = Array.isArray(result.items) ? result.items : state.notifications;
-      state.notificationUnreadCount = Number(result.unread_count || 0);
-      mountNavbar();
-    } catch (error) {
-      await loadNotifications();
-      state.components.toast.error(error.message, { title: "Notification status was not saved" });
-    }
-  }
+  if (notification) { reviewNotification(notification); return; }
   openInvitationReview({ invitationId });
 }
 
@@ -1940,7 +2118,7 @@ function setSurface(name) {
   state.surface = name;
   const workspaceVisible = ["workspace", "project"].includes(name);
   el.workspace_surface.hidden = !workspaceVisible;
-  el.admin_surface.hidden = !["users", "agents", "audit", "templates", "delivery-health", "backup-restore", "guide"].includes(name);
+  el.admin_surface.hidden = !["notifications", "users", "agents", "audit", "templates", "delivery-health", "backup-restore", "guide"].includes(name);
   mountNavbar();
 }
 
@@ -4617,7 +4795,7 @@ function showGuideSurface(articleId = state.selectedGuideArticleId, { historyMod
   state.selectedGuideArticleId = guideArticle(articleId, { administrator: isAdministrator() }).article.id;
   state.adminKind = "";
   setSurface("guide");
-  el.admin_surface.classList.remove("is-backup-restore", "is-templates");
+  el.admin_surface.classList.remove("is-backup-restore", "is-templates", "is-notifications");
   el.admin_surface.classList.add("is-guide");
   el.admin_eyebrow.textContent = "Help and reference";
   el.admin_title.textContent = "User Guide";
@@ -4630,13 +4808,96 @@ function showGuideSurface(articleId = state.selectedGuideArticleId, { historyMod
   updateApplicationRoute("guide", "", historyMode);
 }
 
+function notificationMatchesCurrentView(notification) {
+  if (state.notificationFilter === "unread" && notification.read) return false;
+  if (state.notificationFilter === "invitations" && notification.type !== "project_invitation") return false;
+  if (state.notificationFilter === "system" && notification.type === "project_invitation") return false;
+  const query = state.notificationQuery.toLocaleLowerCase();
+  return !query || `${notification.project_name} ${notification.inviter_name} ${notification.role_label} ${notification.status}`.toLocaleLowerCase().includes(query);
+}
+
+function renderNotificationPageList(list) {
+  list.replaceChildren();
+  const visible = state.notifications.filter(notificationMatchesCurrentView);
+  if (!visible.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state ui-panel notification-page-empty";
+    empty.textContent = state.notificationsLoaded ? "No notifications match this view." : "Loading notifications…";
+    list.append(empty);
+  } else visible.forEach((notification) => list.append(notificationRow(notification)));
+}
+
+function renderNotificationsSurface() {
+  state.components.notificationFilters?.destroy?.();
+  state.components.notificationFilters = null;
+  state.components.notificationSearch?.destroy?.();
+  state.components.notificationSearch = null;
+  el.admin_list.replaceChildren();
+  const list = document.createElement("section");
+  list.className = "notification-page-list";
+  list.setAttribute("aria-label", "Notification history");
+  const controls = document.createElement("section");
+  controls.className = "notification-page-controls";
+  const searchHost = document.createElement("div");
+  searchHost.className = "notification-page-search";
+  const search = state.factories.createSearchField({
+    classPrefix: "ui-search",
+    placeholder: "Search notifications",
+    clearText: "Clear",
+    inputClass: "ui-input",
+    onChange(value) { state.notificationQuery = value.trim(); renderNotificationPageList(list); },
+  });
+  searchHost.append(search.wrap);
+  search.bind({ on(target, eventName, handler) { target.addEventListener(eventName, handler); } });
+  const searchInput = search.wrap.querySelector("input");
+  if (searchInput) searchInput.value = state.notificationQuery;
+  state.components.notificationSearch = search;
+  const filterHost = document.createElement("div");
+  filterHost.className = "notification-page-filters";
+  state.components.notificationFilters = state.factories.createToggleGroup(filterHost, {
+    name: "Notification filter",
+    multi: false,
+    allowNone: false,
+    size: "sm",
+    items: [
+      { id: "all", label: "All", pressed: state.notificationFilter === "all" },
+      { id: "unread", label: "Unread", pressed: state.notificationFilter === "unread" },
+      { id: "invitations", label: "Invitations", pressed: state.notificationFilter === "invitations" },
+      { id: "system", label: "System", pressed: state.notificationFilter === "system" },
+    ],
+    onChange(payload) { state.notificationFilter = payload.value || "all"; renderNotificationPageList(list); },
+  });
+  controls.append(searchHost, filterHost);
+  renderNotificationPageList(list);
+  el.admin_list.append(controls, list);
+  el.admin_refresh_button.disabled = state.notificationUnreadCount < 1;
+}
+
+function showNotificationsSurface({ historyMode = "push" } = {}) {
+  state.adminKind = "";
+  setSurface("notifications");
+  el.admin_surface.classList.remove("is-backup-restore", "is-templates", "is-guide");
+  el.admin_surface.classList.add("is-notifications");
+  el.admin_eyebrow.textContent = "Your activity";
+  el.admin_title.textContent = "Notifications";
+  el.admin_refresh_button.hidden = false;
+  el.admin_refresh_button.textContent = "Mark all read";
+  state.components.backupGrid?.destroy?.();
+  state.components.backupGrid = null;
+  state.components.adminTabs?.destroy?.();
+  state.components.adminTabs = null;
+  renderNotificationsSurface();
+  updateApplicationRoute("notifications", "", historyMode);
+  if (!state.realtimeSocket) void connectRealtime(state.generation);
+}
+
 async function showAdminSurface(kind, { historyMode = "push" } = {}) {
   const settingsSurface = ["templates", "delivery-health", "backup-restore"].includes(kind);
   if (settingsSurface ? !capability("admin.settings", isAdministrator()) : !capability(`admin.${kind}`)) return;
   closeRealtime(); clearTimeout(state.pollingTimer); state.adminKind = kind; setSurface(kind);
   el.admin_surface.classList.toggle("is-backup-restore", kind === "backup-restore");
   el.admin_surface.classList.toggle("is-templates", kind === "templates");
-  el.admin_surface.classList.remove("is-guide");
+  el.admin_surface.classList.remove("is-guide", "is-notifications");
   el.admin_eyebrow.textContent = "Global administration";
   updateApplicationRoute(kind, "", historyMode);
   state.components.backupGrid?.destroy?.();
@@ -4644,6 +4905,7 @@ async function showAdminSurface(kind, { historyMode = "push" } = {}) {
   state.components.adminTabs?.destroy();
   state.components.adminTabs = null;
   el.admin_refresh_button.hidden = ["templates", "backup-restore"].includes(kind);
+  el.admin_refresh_button.textContent = "Refresh";
   el.admin_title.textContent = kind === "delivery-health" ? "Delivery health" : (kind === "backup-restore" ? "Backup / Restore" : kind[0].toUpperCase() + kind.slice(1));
   if (kind === "backup-restore") {
     void loadBackupRestoreSurface();
@@ -6079,6 +6341,7 @@ async function loadExpanded() {
   if (!state.projects.length) {
     showApplication();
     if (requestedRoute.surface === "guide") showGuideSurface(requestedRoute.articleId, { historyMode: "replace" });
+    else if (requestedRoute.surface === "notifications") showNotificationsSurface({ historyMode: "replace" });
     else showWorkspaceSurface({ historyMode: "replace" });
     void connectRealtime(state.generation);
     return;
@@ -6091,6 +6354,8 @@ async function loadExpanded() {
     await switchProject(requestedProject.id, { initial: true, historyMode: "replace" });
   } else if (requestedRoute.surface === "guide") {
     showGuideSurface(requestedRoute.articleId, { historyMode: "replace" });
+  } else if (requestedRoute.surface === "notifications") {
+    showNotificationsSurface({ historyMode: "replace" });
   } else if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
       && (["templates", "delivery-health", "backup-restore"].includes(requestedRoute.surface)
         ? capability("admin.settings", isAdministrator()) : capability(`admin.${requestedRoute.surface}`))) {
@@ -6539,7 +6804,10 @@ async function bootstrap() {
   });
   renderTaskSortControl();
   el.task_refresh_trigger.addEventListener("click", () => void refreshTasksFromAction());
-  el.admin_refresh_button.addEventListener("click", () => void showAdminSurface(state.adminKind, { historyMode: "none" }));
+  el.admin_refresh_button.addEventListener("click", () => {
+    if (state.surface === "notifications") void markAllNotificationsRead();
+    else void showAdminSurface(state.adminKind, { historyMode: "none" });
+  });
   document.addEventListener("visibilitychange", scheduleForegroundParticipantRefresh);
   addEventListener("focus", scheduleForegroundParticipantRefresh);
   matchMedia(WORKSPACE_MOBILE_QUERY).addEventListener("change", mountNavbar);
@@ -6553,6 +6821,8 @@ async function bootstrap() {
       void switchProject(routeProject.id, { initial: true, historyMode: "none" }).catch(handleLoadError);
     } else if (route.surface === "guide") {
       showGuideSurface(route.articleId, { historyMode: "none" });
+    } else if (route.surface === "notifications") {
+      showNotificationsSurface({ historyMode: "none" });
     } else if (["users", "agents", "audit", "templates", "delivery-health", "backup-restore"].includes(route.surface)
         && (["templates", "delivery-health", "backup-restore"].includes(route.surface)
           ? capability("admin.settings", isAdministrator()) : capability(`admin.${route.surface}`))) {
