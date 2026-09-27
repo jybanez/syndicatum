@@ -286,6 +286,14 @@ class ProjectRepository
             $where[] = 'm.sender_participant_id IN (' . implode(', ', array_fill(0, count($senderIds), '?')) . ')';
             array_push($parameters, ...array_values($senderIds));
         }
+        if (!empty($filters['message_kind'])) {
+            $messageKind = trim((string) $filters['message_kind']);
+            if (!in_array($messageKind, ['participant', 'system'], true)) {
+                throw new InvalidArgumentException('message_kind must be participant or system.');
+            }
+            $where[] = 'm.message_kind = ?';
+            $parameters[] = $messageKind;
+        }
         if (!empty($filters['severity'])) {
             $where[] = 'm.severity = ?';
             $parameters[] = MessageSeverity::normalize($filters['severity']);

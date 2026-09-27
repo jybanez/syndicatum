@@ -100,7 +100,7 @@ const state = {
   projectView: "timeline",
   aiIconPackAvailable: false,
   timelineDefaultCollapsed: false,
-  filters: { primary: "all", q: "", sender: [], from: "", to: "" },
+  filters: { primary: "all", kind: "all", q: "", sender: [], from: "", to: "" },
   draft: { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
   newestCursor: "",
@@ -133,7 +133,7 @@ const el = Object.fromEntries([
   "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
   "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-search-mount", "task-filter-trigger", "task-filter-icon", "task-filter-count", "task-filter-popover-content", "task-status-filter", "task-sort-trigger", "task-sort-icon", "task-refresh-trigger", "task-refresh-icon", "new-task-trigger", "new-task-icon",
   "participant-search", "new-message-trigger", "new-message-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
-  "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
+  "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
   "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-host",
   "project-view-switch", "show-timeline", "show-responsibility", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
@@ -1647,6 +1647,7 @@ function renderFilters() {
   const selectedSenderCount = state.filters.sender.length;
   const activeCount = [
     state.filters.primary !== "all",
+    state.filters.kind !== "all",
     Boolean(state.filters.from),
     Boolean(state.filters.to),
   ].filter(Boolean).length + selectedSenderCount;
@@ -2074,6 +2075,7 @@ function messageQuery({ before = "", after = "", order = "desc" } = {}) {
   if (after) params.set("after", after);
   if (state.filters.q) params.set("q", state.filters.q);
   if (state.filters.sender.length) params.set(state.mode === "legacy" ? "participant" : "sender", state.filters.sender.join(","));
+  if (state.mode === "expanded" && state.filters.kind !== "all") params.set("message_kind", state.filters.kind);
   if (state.filters.from) params.set("from", state.filters.from);
   if (state.filters.to) params.set("to", state.filters.to);
   if (state.filters.primary === "addressed") {
@@ -6508,6 +6510,7 @@ function closeRealtime() {
 function messageMatchesFilters(message) {
   const ownId = id(state.project?.current_participant?.id);
   if (state.filters.sender.length && !state.filters.sender.includes(message.sender.id)) return false;
+  if (state.filters.kind !== "all" && message.message_kind !== state.filters.kind) return false;
   if (state.filters.q && !message.body.toLocaleLowerCase().includes(state.filters.q.toLocaleLowerCase())) return false;
   const day = localDateKey(message.created_at);
   if (state.filters.from && day < state.filters.from) return false;
@@ -6791,6 +6794,14 @@ async function bootstrap() {
     ],
     onChange(payload) { state.filters.primary = payload.value || "all"; void reloadForFilters(); },
   });
+  state.components.messageKindFilter = state.factories.createToggleGroup(el.message_kind_filter, {
+    name: "Message type", multi: false, allowNone: false, size: "sm", items: [
+      { id: "all", label: "All", pressed: true },
+      { id: "participant", label: "People & agents" },
+      { id: "system", label: "System" },
+    ],
+    onChange(payload) { state.filters.kind = payload.value || "all"; void reloadForFilters(); },
+  });
   state.components.filterPopover = state.factories.createPopover(el.filter_popover_trigger, {
     placement: "bottom-end",
     panelRole: "dialog",
@@ -6807,9 +6818,10 @@ async function bootstrap() {
   el.date_from.addEventListener("change", () => { state.filters.from = el.date_from.value; void reloadForFilters(); });
   el.date_to.addEventListener("change", () => { state.filters.to = el.date_to.value; void reloadForFilters(); });
   el.clear_filters.addEventListener("click", () => {
-    state.filters = { ...state.filters, primary: "all", sender: [], from: "", to: "" };
+    state.filters = { ...state.filters, primary: "all", kind: "all", sender: [], from: "", to: "" };
     el.date_from.value = ""; el.date_to.value = "";
     state.components.primaryFilter.setPressed("all", true);
+    state.components.messageKindFilter.setPressed("all", true);
     state.components.senderSelect?.setValue([]);
     void reloadForFilters();
   });

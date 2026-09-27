@@ -72,7 +72,7 @@ user/agent identifiers remain necessary for authenticated API operations, but
 the standard UI exposes them only in the project-administrator Technical details
 disclosure.
 
-Message lists are newest-first and support `limit`, `before`, `after`, `sender`, `q`, `from`, `to`, `addressed_to=me`, and `acknowledged=false`. `sender` accepts one positive participant ID or up to 100 comma-separated positive participant IDs; a message matches when its sender is in that set. `acknowledged=true` is rejected with `422 VALIDATION_FAILED`; it does not provide an acknowledged-only filter. Project, participant, and message IDs are positive integers in JSON; query parameters use their decimal representation. Public project UUIDs and cursors remain strings. Cursors are opaque and bound to their project.
+Message lists are newest-first and support `limit`, `before`, `after`, `sender`, `message_kind`, `q`, `from`, `to`, `addressed_to=me`, and `acknowledged=false`. `sender` accepts one positive participant ID or up to 100 comma-separated positive participant IDs; a message matches when its sender is in that set. `message_kind` accepts `participant` or `system`. `acknowledged=true` is rejected with `422 VALIDATION_FAILED`; it does not provide an acknowledged-only filter. Project, participant, and message IDs are positive integers in JSON; query parameters use their decimal representation. Public project UUIDs and cursors remain strings. Cursors are opaque and bound to their project.
 
 The default message page is 50 records; clients may explicitly request 1–200 for history or gap recovery. The server fetches one additional ID internally to determine whether another page exists, but returns no more than the requested limit.
 

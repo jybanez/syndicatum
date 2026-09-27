@@ -581,6 +581,12 @@ try {
             && strpos($source, 'state.filters.sender.join(",")') !== false
             && strpos($source, 'selectedSenderCount') !== false,
             'Sender filtering must use the canonical Helper multi-select and count every selected sender on the filter action.');
+        $suite->true(strpos($index, 'id="message-kind-filter"') !== false
+            && strpos($source, 'state.components.messageKindFilter = state.factories.createToggleGroup') !== false
+            && strpos($source, '{ id: "participant", label: "People & agents" }') !== false
+            && strpos($source, '{ id: "system", label: "System" }') !== false
+            && strpos($source, 'params.set("message_kind", state.filters.kind)') !== false,
+            'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_BUNDLE_REV = "0.21.209";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');

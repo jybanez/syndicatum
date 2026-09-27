@@ -86,6 +86,10 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                         <div id="primary-filter"></div>
                                     </div>
                                     <div class="timeline-filter-section">
+                                        <span class="timeline-filter-label">Message type</span>
+                                        <div id="message-kind-filter"></div>
+                                    </div>
+                                    <div class="timeline-filter-section">
                                         <span class="timeline-filter-label">Sender</span>
                                         <div id="sender-filter" class="sender-filter"></div>
                                     </div>
