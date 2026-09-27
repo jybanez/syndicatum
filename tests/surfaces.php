@@ -298,6 +298,9 @@ try {
         $suite->true(strpos($sessionApi, 'registerForActivation') !== false
             && strpos($sessionApi, "Api::json(['data' => \$result], 202);") !== false,
             'Public native registration must create a pending activation without a session.');
+        $suite->true(strpos($sessionApi, '} catch (PDOException $exception) {') !== false
+            && strpos($sessionApi, "'message' => 'Unable to process the registration or sign-in request.'") !== false,
+            'Database failures must not be mislabeled as invalid sign-in credentials.');
         $suite->true(strpos($activationApi, 'activateRegistration') !== false
             && strpos($activationApi, 'AuthService::setSessionCookies($result[\'session\'])') !== false,
             'Activation must create the native session only after the token is confirmed.');

@@ -73,6 +73,8 @@ try {
     Api::json(['error' => true, 'code' => 'method_not_allowed', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET, POST, DELETE']);
 } catch (InvalidArgumentException $exception) {
     Api::json(['error' => true, 'code' => 'validation_failed', 'message' => $exception->getMessage()], 422);
+} catch (PDOException $exception) {
+    Api::json(['error' => true, 'code' => 'server_error', 'message' => 'Unable to process the registration or sign-in request.'], 500);
 } catch (RuntimeException $exception) {
     $code = $exception->getMessage();
     if ($code === 'RATE_LIMITED') {
