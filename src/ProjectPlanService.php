@@ -72,7 +72,7 @@ class ProjectPlanService
         );
         $statement->execute([
             $this->uuid(), $projectId, $title, $this->optionalText($input, 'description'), $status,
-            $this->optionalDate(isset($input['target_at']) ? $input['target_at'] : null, 'Target date'),
+            $this->optionalDay(isset($input['target_at']) ? $input['target_at'] : null, 'Target date'),
             $this->position($input), (int) $access['participant_id'], $now, $now,
         ]);
         return $this->milestone($projectId, (int) $this->pdo->lastInsertId());
@@ -86,7 +86,7 @@ class ProjectPlanService
         $values = [
             $this->title($input, 'Milestone title'), $this->optionalText($input, 'description'),
             $this->requiredChoice($input, 'status', $this->milestoneStatuses, 'milestone status'),
-            $this->optionalDate(isset($input['target_at']) ? $input['target_at'] : null, 'Target date'),
+            $this->optionalDay(isset($input['target_at']) ? $input['target_at'] : null, 'Target date'),
             $this->position($input), Db::now(), (int) $id, (int) $access['project_id'], (int) $current['version'],
         ];
         $statement = $this->pdo->prepare(
@@ -213,6 +213,7 @@ class ProjectPlanService
     private function requiredChoice(array $input, $key, array $choices, $label) { $value = isset($input[$key]) ? (string) $input[$key] : ''; $this->choice($value, $choices, $label); return $value; }
     private function choice($value, array $choices, $label) { if (!in_array($value, $choices, true)) { throw new InvalidArgumentException('Select a valid ' . $label . '.'); } }
     private function optionalText(array $input, $key) { return !isset($input[$key]) || trim((string) $input[$key]) === '' ? null : trim((string) $input[$key]); }
+    private function optionalDay($value, $label) { if ($value === null || trim((string) $value) === '') { return null; } $date = DateTimeImmutable::createFromFormat('!Y-m-d', substr(trim((string) $value), 0, 10)); if (!$date || $date->format('Y-m-d') !== substr(trim((string) $value), 0, 10)) { throw new InvalidArgumentException($label . ' must be a valid date.'); } return $date->format('Y-m-d 00:00:00'); }
     private function optionalDate($value, $label) { if ($value === null || trim((string) $value) === '') { return null; } $time = strtotime((string) $value); if ($time === false) { throw new InvalidArgumentException($label . ' must be a valid date and time.'); } return date('Y-m-d H:i:s', $time); }
     private function position(array $input) { $value = isset($input['position']) && $input['position'] !== '' ? (int) $input['position'] : 0; if ($value < 0) { throw new InvalidArgumentException('Position cannot be negative.'); } return $value; }
     private function optionalUrl($value) { $value = trim((string) $value); if ($value === '') { return null; } if (mb_strlen($value) > 2048 || filter_var($value, FILTER_VALIDATE_URL) === false || !in_array(strtolower((string) parse_url($value, PHP_URL_SCHEME)), ['http', 'https'], true)) { throw new InvalidArgumentException('Artifact URL must be a valid HTTP or HTTPS URL.'); } return $value; }
