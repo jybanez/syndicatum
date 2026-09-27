@@ -167,23 +167,27 @@ try {
         }
     });
 
-    $test('authenticated event creates one immutable addressed FYI system message idempotently', function () use ($pdo, $eventService, $integration, &$activeSecret, $ownerParticipantId, $same) {
+    $test('authenticated event creates one immutable addressed FYI system message idempotently', function () use ($pdo, $eventService, $integration, &$activeSecret, $ownerParticipantId, $access, $same) {
         $payload = json_encode([
             'event_type' => 'alert', 'severity' => 'warning', 'title' => 'Build requires attention',
             'message' => 'The external build reported a failed quality gate.',
             'source' => ['event_id' => 'build-1042', 'resource_type' => 'build', 'resource_id' => '1042'],
+            'provider_detail' => ['run_id' => 1042, 'labels' => ['ci', 'release']],
         ], JSON_UNESCAPED_SLASHES);
         $first = $eventService->ingest($integration['public_id'], $activeSecret, $payload, 'delivery-1042');
         $same(false, $first['duplicate']);
         $duplicate = $eventService->ingest($integration['public_id'], $activeSecret, $payload, 'delivery-1042');
         $same(true, $duplicate['duplicate']); $same($first['message_id'], $duplicate['message_id']);
         $same(1, (int) $pdo->query('SELECT COUNT(*) FROM integration_event_receipts')->fetchColumn());
-        $message = $pdo->query('SELECT message_kind, severity, event_type, sender_participant_id, action_requested, body FROM messages WHERE id = '
+        $message = $pdo->query('SELECT message_kind, severity, event_type, event_data_json, sender_participant_id, action_requested, body FROM messages WHERE id = '
             . (int) $first['message_id'])->fetch(PDO::FETCH_ASSOC);
         $same('system', $message['message_kind']); $same('warning', $message['severity']);
         $same('integration.alert', $message['event_type']); $same($integration['participant_id'], (int) $message['sender_participant_id']);
         $same(0, (int) $message['action_requested']);
         $same(true, strpos($message['body'], 'Build requires attention') === 0);
+        $same(json_decode($payload, true), json_decode($message['event_data_json'], true)['payload']);
+        $canonical = (new ProjectRepository($pdo))->message($access, $first['message_id']);
+        $same(json_decode($payload, true), $canonical['system_event']['data']['payload']);
         $addressees = $pdo->query('SELECT participant_id, reason FROM message_addressees WHERE message_id = '
             . (int) $first['message_id'])->fetchAll(PDO::FETCH_ASSOC);
         $same([['participant_id' => $ownerParticipantId, 'reason' => 'direct']], array_map(function ($row) {

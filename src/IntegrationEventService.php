@@ -183,6 +183,7 @@ class IntegrationEventService
                 'source' => $event['source'],
                 'payload_sha256' => $payloadHash,
                 'payload_bytes' => $payloadBytes,
+                'payload' => $payload,
             ];
             $access = ['project_id' => $identity['project_id'], 'participant_id' => $identity['participant_id']];
             $notificationParticipantIds = $this->notificationParticipantIds(

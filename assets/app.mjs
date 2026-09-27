@@ -1840,8 +1840,8 @@ function messageContextMenu(message) {
     { id: "message-info", label: "Message Info", icon: "status.info" },
     { id: "copy-message", label: "Copy", icon: "actions.copy", disabled: Boolean(message.deleted_at) },
   ];
-  if (hasIntegrationMessageData(message)) items.splice(1, 0,
-    { id: "message-data", label: "Show message data", icon: "actions.view" });
+  if (hasIntegrationEventPayload(message)) items.splice(1, 0,
+    { id: "event-payload", label: "Show event payload", icon: "actions.view" });
   const linkedTasks = messageLinkedTasks(message.id);
   const systemTaskId = message.message_kind === "system" && message.system_event?.data?.subject_type === "task"
     ? id(message.system_event.data.task_id) : "";
@@ -1900,29 +1900,25 @@ function openMessageInfo(message) {
   modal.open();
 }
 
-function hasIntegrationMessageData(message) {
+function hasIntegrationEventPayload(message) {
   return message.message_kind === "system"
     && message.sender?.kind === "integration"
-    && message.system_event?.data
-    && typeof message.system_event.data === "object"
-    && !Array.isArray(message.system_event.data);
+    && message.system_event?.data?.payload
+    && typeof message.system_event.data.payload === "object"
+    && !Array.isArray(message.system_event.data.payload);
 }
 
-function openMessageData(message) {
-  if (!hasIntegrationMessageData(message)) return;
+function openEventPayload(message) {
+  if (!hasIntegrationEventPayload(message)) return;
   const content = document.createElement("div");
   content.className = "message-data-content";
   const inspectorHost = document.createElement("div");
   content.append(inspectorHost);
-  const data = {
-    event_type: message.system_event.type,
-    ...message.system_event.data,
-  };
-  const inspector = state.factories.createDataInspector(inspectorHost, data, {
-    ariaLabel: `Structured data for message #${message.id}`,
+  const inspector = state.factories.createDataInspector(inspectorHost, message.system_event.data.payload, {
+    ariaLabel: `External event payload for message #${message.id}`,
   });
   const modal = state.factories.createActionModal({
-    title: `Message data #${message.id}`,
+    title: `Event payload #${message.id}`,
     size: "lg",
     className: "message-data-modal",
     content,
@@ -2038,8 +2034,8 @@ function renderTimeline(mode = "replace", changed = state.messages) {
         openMessageInfo(message);
         return;
       }
-      if (action.id === "message-data") {
-        openMessageData(message);
+      if (action.id === "event-payload") {
+        openEventPayload(message);
         return;
       }
       if (action.id === "copy-message") {
