@@ -8,7 +8,7 @@ final class EmailTemplateRenderer
             throw new InvalidArgumentException('Unknown email template.');
         }
 
-        $required = ['installation_name', 'project_name', 'inviter_name', 'role_label', 'expires_at', 'invitation_url', 'invitation_token'];
+        $required = ['project_name', 'inviter_name', 'role_label', 'expires_at', 'invitation_url', 'invitation_token'];
         foreach ($required as $key) {
             if (!array_key_exists($key, $data) || trim((string) $data[$key]) === '') {
                 throw new InvalidArgumentException('Email template data is incomplete: ' . $key . '.');
@@ -20,17 +20,20 @@ final class EmailTemplateRenderer
         $templateData['expires_at'] = $this->humanDateTime($data['expires_at']);
 
         $text = <<<'TEXT'
-{{inviter_name}} invited you to join {{project_name}} in {{installation_name}} as {{role_label}}.
+You’ve been invited to join {{project_name}}.
+
+Invited by: {{inviter_name}}
+Your role: {{role_label}}
 
 View invitation:
 {{invitation_url}}
 
-If the invitation link will not open, sign in to {{installation_name}} and use this invitation token:
+If the invitation link will not open, use this invitation token:
 {{invitation_token}}
 
 This invitation expires {{expires_at}}.
 
-Check the inviter and installation before continuing. If you were not expecting this invitation, you can ignore this email. Keep the invitation link and token private.
+Check the invitation details before continuing. If you were not expecting this invitation, you can ignore this email. Keep the invitation link and token private.
 TEXT;
         $html = <<<'HTML'
 <!doctype html>
@@ -67,16 +70,12 @@ TEXT;
 
               <div style="margin:0 0 8px;color:#2563eb;font-size:12px;line-height:17px;font-weight:bold;letter-spacing:1.3px">PROJECT INVITATION</div>
               <h1 style="margin:0 0 14px;color:#172033;font-size:27px;line-height:33px;font-weight:bold">{{project_name}}</h1>
-              <p style="margin:0 0 20px;color:#39445a;font-size:16px;line-height:25px">You’ve been invited to join this project in Syndicatum.</p>
+              <p style="margin:0 0 20px;color:#39445a;font-size:16px;line-height:25px">You’ve been invited to join {{project_name}}.</p>
 
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 24px;background:#f5f7fb;border-top:1px solid #e2e7f0;border-bottom:1px solid #e2e7f0">
                 <tr>
                   <td class="detail-label" width="120" style="width:120px;padding:13px 16px;color:#5c6880;font-size:14px;line-height:21px;border-bottom:1px solid #e2e7f0;vertical-align:top">Invited by</td>
                   <td class="detail-value" style="padding:13px 16px;color:#172033;font-size:16px;line-height:23px;font-weight:bold;border-bottom:1px solid #e2e7f0;vertical-align:top;word-break:break-word">{{inviter_name}}</td>
-                </tr>
-                <tr>
-                  <td class="detail-label" width="120" style="width:120px;padding:13px 16px;color:#5c6880;font-size:14px;line-height:21px;border-bottom:1px solid #e2e7f0;vertical-align:top">Installation</td>
-                  <td class="detail-value" style="padding:13px 16px;color:#172033;font-size:16px;line-height:23px;font-weight:bold;border-bottom:1px solid #e2e7f0;vertical-align:top;word-break:break-word">{{installation_name}}</td>
                 </tr>
                 <tr>
                   <td class="detail-label" width="120" style="width:120px;padding:13px 16px;color:#5c6880;font-size:14px;line-height:21px;vertical-align:top">Your role</td>
@@ -94,12 +93,12 @@ TEXT;
 
               <div style="margin:0;padding:14px 16px;background:#f8fafc;border-left:3px solid #2563eb;color:#4d5970;font-size:14px;line-height:21px">
                 <strong style="color:#172033">Expires {{expires_at}}.</strong><br>
-                Check the inviter and installation before continuing. If this was unexpected, you can ignore this email. Keep the invitation link and token private.
+                Check the invitation details before continuing. If this was unexpected, you can ignore this email. Keep the invitation link and token private.
               </div>
 
               <div style="margin:25px 0 0;padding:20px 0 0;border-top:1px solid #dce3ef;color:#5c6880;font-size:14px;line-height:21px;word-break:break-word">
                 <a href="{{invitation_url}}" style="color:#2563eb;text-decoration:underline">Open invitation link</a><br>
-                If the link will not open, sign in to {{installation_name}} and use this invitation token:
+                If the link will not open, use this invitation token:
                 <div style="margin-top:8px;padding:8px 10px;background:#eef1f6;color:#39445a;font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:19px;word-break:break-all">{{invitation_token}}</div>
               </div>
             </td>
@@ -113,7 +112,7 @@ HTML;
 
         return [
             'template' => $template,
-            'template_version' => 3,
+            'template_version' => 4,
             'subject' => 'Invitation to ' . (string) $data['project_name'],
             'text' => $this->replace($text, $templateData, false),
             'html' => $this->replace($html, $templateData, true),

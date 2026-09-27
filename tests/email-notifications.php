@@ -25,16 +25,20 @@ try {
 
     $test('project invitation template produces plain text and escaped HTML', function () use ($assert, $data) {
         $message = (new EmailTemplateRenderer())->render('project_invitation', $data);
-        $assert($message['template_version'] === 3, 'Project invitation template version was not advanced.');
+        $assert($message['template_version'] === 4, 'Project invitation template version was not advanced.');
         $assert(strpos($message['text'], '<Pilot & Review>') !== false, 'Plain-text project name is missing.');
         $assert(strpos($message['html'], '&lt;Pilot &amp; Review&gt;') !== false, 'HTML template data was not escaped.');
         $assert(strpos($message['html'], 'PROJECT INVITATION') !== false, 'Project-brief heading is missing.');
-        $assert(strpos($message['html'], 'Invited by') !== false && strpos($message['html'], 'Installation') !== false && strpos($message['html'], 'Your role') !== false, 'Project-brief details are incomplete.');
+        $assert(strpos($message['html'], 'You’ve been invited to join &lt;Pilot &amp; Review&gt;.') !== false, 'Project-specific invitation wording is missing.');
+        $assert(strpos($message['html'], 'Invited by') !== false && strpos($message['html'], 'Your role') !== false, 'Project-brief details are incomplete.');
+        $assert(strpos($message['html'], 'Installation') === false && strpos($message['html'], 'installation_name') === false, 'Technical installation wording remains in HTML.');
         $assert(strpos($message['html'], '>View invitation</a>') !== false, 'Primary invitation action is missing.');
         $assert(substr_count($message['html'], 'href="https://syndicatum.example/#invitation=test-token"') === 2, 'Invitation URL was changed or is not used by both actions.');
         $assert(strpos($message['html'], 'src="https://syndicatum.example/assets/brand/png/color/syndicatum-128.png"') !== false, 'Official raster brand asset is missing.');
         $assert(strpos($message['html'], 'width="48" height="48" alt=""') !== false, 'Brand asset dimensions or text fallback are missing.');
+        $assert(strpos($message['text'], "You’ve been invited to join <Pilot & Review>.\n\nInvited by: Test Administrator\nYour role: Member") !== false, 'Plain-text invitation summary is incomplete.');
         $assert(strpos($message['text'], "View invitation:\nhttps://syndicatum.example/#invitation=test-token") !== false, 'Plain-text invitation action is incomplete.');
+        $assert(stripos($message['text'], 'installation') === false, 'Technical installation wording remains in plain text.');
         $assert(strpos($message['text'], 'Keep the invitation link and token private.') !== false, 'Plain-text privacy guidance is missing.');
         $assert(strpos($message['html'], 'Expires October 3, 2026 at 12:00 PM UTC.') !== false, 'Human-friendly HTML expiry is missing.');
         $assert(strpos($message['text'], 'This invitation expires October 3, 2026 at 12:00 PM UTC.') !== false, 'Human-friendly plain-text expiry is missing.');
@@ -101,7 +105,7 @@ try {
         $contents = file_get_contents($captures[0]);
         $preview = file_get_contents($previews[0]);
         $assert(strpos($contents, 'X-Syndicatum-Transport: development-capture') !== false, 'Transport metadata is missing.');
-        $assert(strpos($contents, 'X-Syndicatum-Template: project_invitation; version=3') !== false, 'Template version metadata is missing.');
+        $assert(strpos($contents, 'X-Syndicatum-Template: project_invitation; version=4') !== false, 'Template version metadata is missing.');
         $assert(strpos($contents, 'Content-Type: multipart/alternative') !== false, 'Email capture is not multipart.');
         $assert(strpos($contents, 'Content-Type: multipart/related') !== false, 'Email capture does not group HTML and inline assets.');
         $assert(strpos($contents, 'Content-Type: image/png; name="syndicatum-128.png"') !== false, 'Inline brand image MIME part is missing.');

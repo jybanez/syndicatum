@@ -23,7 +23,7 @@ remain outside the repository and public web root with restricted access.
 
 The invitation template uses the approved **Project brief** design: a compact
 Syndicatum brand row, the project name as the primary heading, labeled
-inviter/installation/role details, one **View invitation** action, explicit
+inviter and role details, one **View invitation** action, explicit
 expiry and privacy guidance, and direct-link/token fallbacks. The HTML uses a
 conservative table layout and inline essential styles, with the packaged
 128 px color mark displayed at 48 px. The plain-text alternative carries the
@@ -78,7 +78,6 @@ Email is not an AI-agent activation channel. Codex, ChatGPT, Gemini, and webhook
 
 Project-work email should contain only the minimum context needed to decide whether to return:
 
-- installation name;
 - project name;
 - sender or assigner;
 - concise notification reason;
