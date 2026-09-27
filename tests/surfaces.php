@@ -273,6 +273,8 @@ try {
         $suite->true(strpos($source, 'id: "signout", label: "Logout"') !== false, 'Logout must follow the legal action group.');
         $suite->true(strpos($source, 'el.public_policy_links.hidden = state.mode === "expanded";') !== false, 'Bottom legal links must be hidden after sign-in.');
         $suite->true(strpos($source, 'name: "public_origin"') !== false && strpos($source, '"general.public_origin": values.public_origin') !== false, 'System Settings must expose the canonical public Syndicatum origin.');
+        $suite->true(strpos($source, 'name: "default_timezone"') !== false && strpos($source, '"general.default_timezone": values.default_timezone') !== false, 'System Settings must expose the global IANA timezone default.');
+        $suite->true(strpos($source, 'includeSystemDefault: true') !== false && strpos($source, 'timezone: values.timezone || null') !== false, 'Profile editing must expose a personal timezone override and system-default option.');
         $suite->true(strpos($privacy, "\$legalPageTitle = 'Privacy Policy';") !== false, 'The public privacy page is missing.');
         $suite->true(strpos($privacy, 'openid') !== false && strpos($privacy, 'Google Drive') !== false, 'The privacy page must disclose the limited Google sign-in data scope.');
         $suite->true(strpos($terms, "\$legalPageTitle = 'Terms of Service';") !== false, 'The public terms page is missing.');
@@ -1456,6 +1458,7 @@ try {
             'password_hash' => 'not-a-password-hash',
             'system_roles' => ['administrator'],
             'display_name' => 'Updated Project Member',
+            'timezone' => 'Asia/Manila',
         ]);
         $suite->same(401, $anonymous['status']);
         $suite->same(401, $agent['status']);
@@ -1463,10 +1466,13 @@ try {
         $suite->same(200, $updated['status'], $updated['raw']);
         $suite->same($memberId, $updated['body']['data']['user']['id']);
         $suite->same('Updated Project Member', $updated['body']['data']['user']['display_name']);
-        $row = $pdo->query('SELECT normalized_email, password_hash, display_name, avatar_url FROM users WHERE id = ' . $memberId)->fetch();
+        $suite->same('Asia/Manila', $updated['body']['data']['user']['timezone']);
+        $suite->same('Asia/Manila', $updated['body']['data']['user']['effective_timezone']);
+        $row = $pdo->query('SELECT normalized_email, password_hash, display_name, avatar_url, timezone FROM users WHERE id = ' . $memberId)->fetch();
         $suite->same('member@surfaces.test', $row['normalized_email']);
         $suite->same($beforeHash, $row['password_hash']);
         $suite->same(null, $row['avatar_url']);
+        $suite->same('Asia/Manila', $row['timezone']);
         $suite->same($adminBefore, $pdo->query('SELECT display_name FROM users WHERE id = ' . $adminId)->fetchColumn());
         $roles = $pdo->query('SELECT COUNT(*) FROM user_system_roles ur JOIN system_roles r ON r.id = ur.role_id WHERE ur.user_id = ' . $memberId . " AND r.code = 'administrator'")->fetchColumn();
         $suite->same(0, (int) $roles);

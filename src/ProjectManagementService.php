@@ -9,6 +9,7 @@ require_once __DIR__ . '/MessageOutbox.php';
 require_once __DIR__ . '/ProjectTemplateService.php';
 require_once __DIR__ . '/EmailNotificationService.php';
 require_once __DIR__ . '/SystemMessageService.php';
+require_once __DIR__ . '/TimezoneService.php';
 
 class ProjectManagementService
 {
@@ -257,18 +258,27 @@ class ProjectManagementService
             return ['status' => 'configuration_required', 'transport' => 'development'];
         }
         $statement = $this->pdo->prepare(
-            'SELECT p.name AS project_name, u.display_name AS inviter_name
-             FROM projects p JOIN users u ON u.id = ? WHERE p.id = ? LIMIT 1'
+            "SELECT p.name AS project_name, inviter.display_name AS inviter_name,
+                    recipient.display_name AS recipient_name, recipient.timezone AS recipient_timezone
+             FROM projects p
+             JOIN users inviter ON inviter.id = ?
+             LEFT JOIN users recipient ON recipient.normalized_email = ?
+                 AND recipient.status = 'active' AND recipient.deleted_at IS NULL
+             WHERE p.id = ? LIMIT 1"
         );
-        $statement->execute([(int) $actorUserId, (int) $projectId]);
+        $statement->execute([(int) $actorUserId, $email, (int) $projectId]);
         $context = $statement->fetch();
         if (!$context) { return ['status' => 'configuration_required', 'transport' => 'development']; }
         $origin = rtrim((string) $this->settings->get('general.public_origin'), '/');
         if ($origin === '') { return ['status' => 'configuration_required', 'transport' => 'development']; }
         $roleLabels = ['admin' => 'Administrator', 'viewer' => 'Viewer', 'member' => 'Member'];
+        $timezone = TimezoneService::resolve(
+            isset($context['recipient_timezone']) ? $context['recipient_timezone'] : null,
+            $this->settings->get('general.default_timezone')
+        );
         try {
             $delivery = (new EmailNotificationService())->sendProjectInvitation([
-                'to_name' => $email,
+                'to_name' => !empty($context['recipient_name']) ? $context['recipient_name'] : $email,
                 'to_email' => $email,
                 'from_name' => (string) $this->settings->get('mail.sender_name'),
                 'from_email' => $senderAddress,
@@ -279,6 +289,7 @@ class ProjectManagementService
                 'inviter_name' => (string) $context['inviter_name'],
                 'role_label' => $roleLabels[$role],
                 'expires_at' => $expires . ' UTC',
+                'timezone' => $timezone,
                 'invitation_url' => $origin . '/#invitation=' . rawurlencode($token),
                 'invitation_token' => $token,
             ]);

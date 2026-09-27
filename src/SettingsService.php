@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/TimezoneService.php';
 
 class SettingsService
 {
@@ -16,6 +17,7 @@ class SettingsService
         return [
             'general.installation_name' => ['section' => 'general', 'type' => 'string', 'default' => 'Syndicatum', 'max' => 120],
             'general.public_origin' => ['section' => 'general', 'type' => 'origin', 'default' => ''],
+            'general.default_timezone' => ['section' => 'general', 'type' => 'timezone', 'default' => 'UTC'],
             'general.support_url' => ['section' => 'general', 'type' => 'url', 'default' => ''],
             'messaging.max_message_bytes' => ['section' => 'messaging', 'type' => 'integer', 'default' => 24000, 'min' => 1024, 'max' => 1048576],
             'messaging.max_reply_depth' => ['section' => 'messaging', 'type' => 'integer', 'default' => 12, 'min' => 1, 'max' => 100],
@@ -237,6 +239,13 @@ class SettingsService
             return $value;
         }
         $value = trim((string) $value);
+        if ($definition['type'] === 'timezone') {
+            try {
+                return TimezoneService::normalize($value);
+            } catch (InvalidArgumentException $exception) {
+                throw new InvalidArgumentException($key . ' must be a valid IANA timezone identifier.');
+            }
+        }
         if ($definition['type'] === 'path') {
             $isWindowsDrive = preg_match('/\A[A-Za-z]:[\\\\\/]/', $value) === 1;
             $isUnc = preg_match('/\A\\\\\\\\[^\\\\\/]+[\\\\\/][^\\\\\/]+/', $value) === 1;

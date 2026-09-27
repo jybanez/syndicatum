@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/TimezoneService.php';
+
 final class EmailTemplateRenderer
 {
     public function render($template, array $data)
@@ -8,7 +10,7 @@ final class EmailTemplateRenderer
             throw new InvalidArgumentException('Unknown email template.');
         }
 
-        $required = ['project_name', 'inviter_name', 'role_label', 'expires_at', 'invitation_url', 'invitation_token'];
+        $required = ['project_name', 'inviter_name', 'role_label', 'expires_at', 'timezone', 'invitation_url', 'invitation_token'];
         foreach ($required as $key) {
             if (!array_key_exists($key, $data) || trim((string) $data[$key]) === '') {
                 throw new InvalidArgumentException('Email template data is incomplete: ' . $key . '.');
@@ -17,7 +19,7 @@ final class EmailTemplateRenderer
 
         $templateData = $data;
         $templateData['brand_logo_url'] = $this->brandLogoUrl($data['invitation_url']);
-        $templateData['expires_at'] = $this->humanDateTime($data['expires_at']);
+        $templateData['expires_at'] = TimezoneService::formatUtc($data['expires_at'], $data['timezone']);
 
         $text = <<<'TEXT'
 You’ve been invited to join {{project_name}}.
@@ -112,7 +114,7 @@ HTML;
 
         return [
             'template' => $template,
-            'template_version' => 4,
+            'template_version' => 5,
             'subject' => 'Invitation to ' . (string) $data['project_name'],
             'text' => $this->replace($text, $templateData, false),
             'html' => $this->replace($html, $templateData, true),
@@ -131,16 +133,6 @@ HTML;
         if (isset($parts['port'])) { $origin .= ':' . (int) $parts['port']; }
         $applicationPath = isset($parts['path']) ? rtrim((string) $parts['path'], '/') : '';
         return $origin . $applicationPath . '/assets/brand/png/color/syndicatum-128.png';
-    }
-
-    private function humanDateTime($value)
-    {
-        try {
-            $dateTime = new DateTimeImmutable((string) $value);
-        } catch (Exception $exception) {
-            throw new InvalidArgumentException('Email template expiry date is invalid.');
-        }
-        return $dateTime->format('F j, Y \\a\\t g:i A T');
     }
 
     private function replace($template, array $data, $escape)
