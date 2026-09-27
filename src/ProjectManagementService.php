@@ -303,16 +303,7 @@ class ProjectManagementService
 
     public function acceptInvitation($userId, $token)
     {
-        $token = trim((string) $token);
-        $statement = $this->pdo->prepare(
-            "SELECT i.*, u.normalized_email FROM project_invitations i JOIN users u ON u.id = ?
-             WHERE i.token_hash = ? AND i.status = 'pending' AND i.expires_at > ? LIMIT 1"
-        );
-        $statement->execute([(int) $userId, hash('sha256', $token), Db::now()]);
-        $invitation = $statement->fetch();
-        if (!$invitation || strtolower((string) $invitation['normalized_email']) !== strtolower($invitation['invited_email'])) {
-            throw new RuntimeException('INVITATION_NOT_FOUND');
-        }
+        $invitation = $this->pendingInvitationForUser($userId, $token);
         $this->pdo->beginTransaction();
         try {
             $this->ensureMembershipAndParticipant((int) $invitation['project_id'], (int) $userId, $invitation['role']);
@@ -323,6 +314,44 @@ class ProjectManagementService
             $this->pdo->commit();
             return $this->project((int) $invitation['project_id']);
         } catch (Exception $exception) { $this->rollback(); throw $exception; }
+    }
+
+    public function previewInvitation($userId, $token)
+    {
+        $invitation = $this->pendingInvitationForUser($userId, $token);
+        $statement = $this->pdo->prepare(
+            'SELECT p.name AS project_name, inviter.display_name AS inviter_name
+             FROM projects p
+             JOIN users inviter ON inviter.id = ?
+             WHERE p.id = ? LIMIT 1'
+        );
+        $statement->execute([(int) $invitation['invited_by_user_id'], (int) $invitation['project_id']]);
+        $details = $statement->fetch();
+        if (!$details) { throw new RuntimeException('INVITATION_NOT_FOUND'); }
+        $roleLabels = ['admin' => 'Administrator', 'viewer' => 'Viewer', 'member' => 'Member'];
+        return [
+            'project_name' => (string) $details['project_name'],
+            'inviter_name' => (string) $details['inviter_name'],
+            'role' => (string) $invitation['role'],
+            'role_label' => isset($roleLabels[$invitation['role']]) ? $roleLabels[$invitation['role']] : ucfirst((string) $invitation['role']),
+            'expires_at' => (string) $invitation['expires_at'],
+        ];
+    }
+
+    private function pendingInvitationForUser($userId, $token)
+    {
+        $token = trim((string) $token);
+        if ($token === '') { throw new RuntimeException('INVITATION_NOT_FOUND'); }
+        $statement = $this->pdo->prepare(
+            "SELECT i.*, u.normalized_email FROM project_invitations i JOIN users u ON u.id = ?
+             WHERE i.token_hash = ? AND i.status = 'pending' AND i.expires_at > ? LIMIT 1"
+        );
+        $statement->execute([(int) $userId, hash('sha256', $token), Db::now()]);
+        $invitation = $statement->fetch();
+        if (!$invitation || strtolower((string) $invitation['normalized_email']) !== strtolower($invitation['invited_email'])) {
+            throw new RuntimeException('INVITATION_NOT_FOUND');
+        }
+        return $invitation;
     }
 
     public function updateMember($projectId, $actorUserId, $memberUserId, $role, $remove = false)

@@ -278,8 +278,18 @@ try {
         $suite->same(2, count($captures));
         $capturedContents = implode("\n", array_map('file_get_contents', $captures));
         $suite->truthy(strpos($capturedContents, '#invitation=') !== false, 'Captured invitation link is missing.');
+        $suite->truthy(strpos($capturedContents, 'Review invitation') !== false, 'Captured invitation must describe a review action.');
         $suite->truthy(strpos($capturedContents, '(Asia/Manila)') !== false, 'Existing recipient timezone was not used.');
         $suite->truthy(strpos($capturedContents, '(America/New_York)') !== false, 'System default timezone was not used for a new invitee.');
+        $preview = $management->previewInvitation($member['id'], $invitation['invitation_token']);
+        $suite->same('Shared Product', $preview['project_name']);
+        $suite->same('Member', $preview['role_label']);
+        $statusStatement = $pdo->prepare('SELECT status FROM project_invitations WHERE id = ?');
+        $statusStatement->execute([$invitation['id']]);
+        $suite->same('pending', $statusStatement->fetchColumn());
+        $membershipStatement = $pdo->prepare("SELECT COUNT(*) FROM project_members WHERE project_id = ? AND user_id = ? AND status = 'active'");
+        $membershipStatement->execute([$project['id'], $member['id']]);
+        $suite->same(0, (int) $membershipStatement->fetchColumn());
         $accepted = $management->acceptInvitation($member['id'], $invitation['invitation_token']);
         $suite->same($project['id'], $accepted['id']);
         $statement = $pdo->prepare("SELECT COUNT(*) FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human' AND status = 'active'");
