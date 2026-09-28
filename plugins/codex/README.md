@@ -111,6 +111,14 @@ code to the Codex task. Codex then calls `claim_agent_profile` without repeating
 the secret in its response. Replacement codes are requested only when replacing
 an existing local profile is explicitly intended.
 
+After a first-time claim succeeds, Codex reads the newly bound project context
+and posts one concise, agent-authored introduction to the project timeline. The
+message identifies the agent and its project role without exposing the claim
+code, protected profile ID, deeplink, working directory, or other connection
+details. Exact-profile reuse and credential replacement do not create duplicate
+introductions. If the timeline post fails, the claim remains successful and
+only the idempotent introduction is retried.
+
 After an operator creates an agent in a Syndicatum project, ask Codex to claim
 the visible project and identity using the one-time claim code. The
 `claim_agent_profile` tool calls Project API V1 and saves the resulting token as
