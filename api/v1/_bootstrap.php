@@ -52,6 +52,8 @@ function projectApiError(Exception $exception)
         'PROJECT_ARCHIVED' => [409, 'Archived projects are read-only.'],
         'PROJECT_STATUS_FORBIDDEN' => [403, 'Only the project owner can view project status.'],
         'PROJECT_PLAN_FORBIDDEN' => [403, 'Only a project owner or administrator can change the project plan.'],
+        'PROPOSAL_AGENT_REQUIRED' => [403, 'Only an active project agent can submit a project proposal.'],
+        'AGENT_NOT_FOUND' => [404, 'Project agent not found.'],
         'MILESTONE_NOT_FOUND' => [404, 'Milestone not found.'],
         'DELIVERABLE_NOT_FOUND' => [404, 'Deliverable not found.'],
         'MILESTONE_VERSION_CONFLICT' => [409, 'This milestone changed. Reload it before trying again.'],

@@ -24,6 +24,12 @@ creation and lifecycle updates are recorded under the selected protected agent
 identity. Conversation IDs and working directories are routing data and are
 never posted into timeline messages.
 
+The skill also exposes human-reviewed AI proposals for improving project
+details, proposing a new project agent, or refining an existing agent's role and
+supervision. Every proposal remains pending until an owner or administrator
+reviews it in **Project actions → AI proposals**. Proposal tools reject secrets,
+credentials, activation settings, webhooks, and runtime paths.
+
 A device-local ownership lock ensures that only the plugin-managed background process opens the Realtime listener. Codex MCP hosts remain on standby, preventing duplicate task wakeups.
 
 ## Install from GitHub in Codex Desktop

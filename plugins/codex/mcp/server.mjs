@@ -104,6 +104,24 @@ const tools = [
     inputSchema: { type: "object", required: ["profile_id", "task_id", "version"], properties: { profile_id: profileIdProperty(), task_id: { type: ["integer", "string"] }, version: { type: ["integer", "string"] }, status: { type: "string", enum: ["open", "in_progress", "in_review", "blocked", "completed", "cancelled"] }, blocked_reason: { type: "string" }, completion_summary: { type: "string" }, note: { type: "string" } }, additionalProperties: false },
   },
   {
+    name: "syndicatum_propose_project_details",
+    description: "Submit suggested project name, description, or operating-instruction improvements for human owner or administrator review. This never changes the project automatically.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty(), name: { type: "string", minLength: 1, maxLength: 160 }, description: { type: "string", maxLength: 10000 }, instructions: { type: "string", maxLength: 50000 }, rationale: { type: "string", maxLength: 4000 } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_propose_agent_setup",
+    description: "Suggest a new project agent profile for human owner or administrator review. Credentials, activation, scopes, webhooks, and runtime paths are not accepted.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "display_name"], properties: { profile_id: profileIdProperty(), display_name: { type: "string", minLength: 1, maxLength: 120 }, provider: { type: "string", maxLength: 120 }, runtime_name: { type: "string", maxLength: 160 }, role_title: { type: "string", maxLength: 120 }, role_summary: { type: "string", maxLength: 4000 }, role_instructions: { type: "string", maxLength: 20000 }, supervising_participant_id: { type: ["integer", "string", "null"] }, rationale: { type: "string", maxLength: 4000 } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_propose_agent_profile_update",
+    description: "Suggest changes to an existing project agent's non-secret role or profile fields for human owner or administrator review. This never changes the agent automatically.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "target_agent_id"], properties: { profile_id: profileIdProperty(), target_agent_id: { type: ["integer", "string"] }, display_name: { type: "string", minLength: 1, maxLength: 120 }, provider: { type: "string", maxLength: 120 }, runtime_name: { type: "string", maxLength: 160 }, role_title: { type: "string", maxLength: 120 }, role_summary: { type: "string", maxLength: 4000 }, role_instructions: { type: "string", maxLength: 20000 }, supervising_participant_id: { type: ["integer", "string", "null"] }, rationale: { type: "string", maxLength: 4000 } }, additionalProperties: false },
+  },
+  {
     name: "syndicatum_post_message",
     description: "Post, reply, mention, directly address, or broadcast as one explicitly selected Syndicatum agent profile.",
     annotations: remoteWriteAnnotations,
@@ -215,6 +233,9 @@ async function callTool(name, args) {
   if (name === "syndicatum_get_task") return textResult(await timeline.task(args.profile_id, args.task_id));
   if (name === "syndicatum_create_task") return textResult(await timeline.createTask(args.profile_id, args));
   if (name === "syndicatum_update_task") return textResult(await timeline.updateTask(args.profile_id, args.task_id, args));
+  if (name === "syndicatum_propose_project_details") return textResult(await timeline.proposeProjectDetails(args.profile_id, args));
+  if (name === "syndicatum_propose_agent_setup") return textResult(await timeline.proposeAgentSetup(args.profile_id, args));
+  if (name === "syndicatum_propose_agent_profile_update") return textResult(await timeline.proposeAgentProfileUpdate(args.profile_id, args));
   if (name === "syndicatum_post_message") return textResult(await timeline.post(args.profile_id, args));
   if (name === "syndicatum_acknowledge_message") return textResult(await timeline.acknowledge(args.profile_id, args.message_id));
   if (name === "connector_begin_login") return textResult(await runtime.beginLogin({ syndicatumUrl: args.syndicatum_url, deviceName: args.device_name }));

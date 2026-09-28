@@ -97,8 +97,14 @@ Propose an existing profile update:
 
 The MCP response returns the proposal ID, normalized payload, status, version, proposer, and timestamps. It never returns a claim code or another secret.
 
+The Codex plugin exposes the same operations through protected profile-bound
+tools named `syndicatum_propose_project_details`,
+`syndicatum_propose_agent_setup`, and
+`syndicatum_propose_agent_profile_update`. Each call requires the exact
+`profile_id`; the plugin supplies its protected bearer credential internally.
+
 ## API and persistence
 
-Human review uses `GET /api/v1/project-change-proposals.php?project_id=…` and an authenticated, CSRF-protected `PATCH` to the same endpoint. Only active project owners and administrators can list or review proposals.
+Agents submit with bearer-authenticated `POST /api/v1/project-change-proposals.php?project_id=…`. Human review uses `GET` and an authenticated, CSRF-protected `PATCH` to the same endpoint. Only active project owners and administrators can list or review proposals.
 
 Proposals are stored in `project_change_proposals`. The table is durable application data and is included in the canonical backup policy. Audit events are recorded as `project.change_proposal_created`, `project.change_proposal_approved`, or `project.change_proposal_rejected`.

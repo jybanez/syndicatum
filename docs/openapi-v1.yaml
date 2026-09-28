@@ -201,6 +201,23 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Task version conflict or invalid lifecycle transition }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-change-proposals.php:
+    post:
+      summary: Submit a human-reviewed project or project-agent improvement proposal
+      description: Active project agents may submit proposals. The proposal remains pending until a human owner or administrator reviews it; this operation never applies the change.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectChangeProposalCreate' }
+      responses:
+        '201': { description: Durable pending proposal }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-plan.php:
     get:
       summary: Read project milestones, deliverables, and task-backed progress
@@ -1151,6 +1168,28 @@ components:
         blocked_reason: { type: string, nullable: true }
         completion_summary: { type: string, nullable: true }
         note: { type: string, nullable: true }
+    ProjectChangeProposalCreate:
+      type: object
+      required: [proposal_type]
+      additionalProperties: false
+      description: >-
+        A non-secret suggestion stored for human review. project_details requires
+        at least one project field; agent_setup requires display_name;
+        agent_profile_update requires target_agent_id and at least one profile field.
+      properties:
+        proposal_type: { type: string, enum: [project_details, agent_setup, agent_profile_update] }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 10000 }
+        instructions: { type: string, maxLength: 50000 }
+        target_agent_id: { type: integer, minimum: 1 }
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        provider: { type: string, maxLength: 120 }
+        runtime_name: { type: string, maxLength: 160 }
+        role_title: { type: string, maxLength: 120 }
+        role_summary: { type: string, maxLength: 4000 }
+        role_instructions: { type: string, maxLength: 20000 }
+        supervising_participant_id: { type: integer, minimum: 1, nullable: true }
+        rationale: { type: string, maxLength: 4000 }
     AgentActivationBinding:
       type: object
       required: [project_id, agent_id, enabled]

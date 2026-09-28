@@ -102,6 +102,36 @@ export class ProfileTimelineClient {
     return { profile: publicAgentProfile(profile), task: result.data ?? result };
   }
 
+  async proposeProjectDetails(profileId, input = {}) {
+    return this.propose(profileId, "project_details", copyDefined(input, ["name", "description", "instructions", "rationale"]));
+  }
+
+  async proposeAgentSetup(profileId, input = {}) {
+    const displayName = String(input.display_name || "").trim();
+    if (!displayName) throw new Error("An agent display name is required.");
+    const payload = copyDefined(input, ["provider", "runtime_name", "role_title", "role_summary", "role_instructions", "rationale"]);
+    payload.display_name = displayName;
+    if (input.supervising_participant_id !== undefined) payload.supervising_participant_id = nullablePositiveId(input.supervising_participant_id, "supervising participant");
+    return this.propose(profileId, "agent_setup", payload);
+  }
+
+  async proposeAgentProfileUpdate(profileId, input = {}) {
+    const payload = copyDefined(input, ["display_name", "provider", "runtime_name", "role_title", "role_summary", "role_instructions", "rationale"]);
+    payload.target_agent_id = Number(positiveId(input.target_agent_id, "target agent"));
+    if (input.supervising_participant_id !== undefined) payload.supervising_participant_id = nullablePositiveId(input.supervising_participant_id, "supervising participant");
+    return this.propose(profileId, "agent_profile_update", payload);
+  }
+
+  async propose(profileId, proposalType, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const payload = { ...input, proposal_type: proposalType };
+    const result = await client.request(`/api/v1/project-change-proposals.php?project_id=${encodeURIComponent(profile.project_id)}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return { profile: publicAgentProfile(profile), proposal: result.data ?? result };
+  }
+
   async post(profileId, input = {}) {
     const { profile, client } = await this.context(profileId);
     const body = String(input.body || "").trim();
@@ -140,6 +170,14 @@ function positiveId(value, label) {
 function numericIds(values) {
   if (!Array.isArray(values)) return [];
   return [...new Set(values.map(value => Number(positiveId(value, "participant"))))];
+}
+
+function nullablePositiveId(value, label) {
+  return value === null || value === "" ? null : Number(positiveId(value, label));
+}
+
+function copyDefined(input, keys) {
+  return Object.fromEntries(keys.filter(key => input[key] !== undefined).map(key => [key, input[key]]));
 }
 
 function clamp(value, minimum, maximum, fallback) {
