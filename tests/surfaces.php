@@ -1366,6 +1366,9 @@ try {
         $suite->true($modal !== false && $open !== false && $busy !== false && $firstRequest !== false, 'The agent editor must use the canonical form modal loading state.');
         $suite->true($modal < $open && $open < $busy && $busy < $firstRequest, 'The form modal must open and enter busy state before the first agent-detail request.');
         $suite->true(strpos($editor, 'editModal.setFormError(`Unable to load agent configuration.') !== false, 'Loading failures must remain visible in the form modal.');
+        $suite->true(strpos($editor, 'values.provider === "codex" && !credential.has_active_token') !== false
+            && strpos($editor, 'confirmAgentClaimGeneration(agentId, credential, null, values.provider)') !== false,
+            'Saving an unclaimed Codex profile must offer a fresh one-time claim code after the save succeeds.');
     });
 
     $suite->test('Agent forms expose Gemini browser companion configuration', function () use ($suite, $root) {
