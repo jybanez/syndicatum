@@ -603,8 +603,14 @@ try {
         $suite->true(strpos($source, 'state.components.projectViewTabs = state.factories.createTabs') !== false
             && strpos($source, 'variant: "attached"') !== false
             && strpos($source, 'id: "timeline"') !== false
-            && strpos($source, 'id: "responsibility"') !== false,
-            'Timeline and Responsibility Inbox must be rendered by the attached Helper tabs variant.');
+            && strpos($source, 'id: "responsibility"') !== false
+            && strpos($source, 'id: "proposals"') !== false
+            && strpos($source, 'label: "AI Proposals"') !== false,
+            'Timeline, Responsibility Inbox, and authorized AI proposals must use the attached Helper tabs variant.');
+        $suite->true(strpos($source, 'proposal.status === "pending" ? "Review" : "View details"') !== false
+            && strpos($source, 'openProjectProposalDetails(proposal)') !== false
+            && strpos($source, 'openProjectChangeProposalsModal') === false,
+            'Proposal rows must open one focused review/details modal instead of a modal-based list.');
         $suite->true(strpos($source, 'state.components.projectViewTabs?.setActive?.(state.projectView, false);') !== false,
             'Programmatic project changes must keep the canonical tabs synchronized without duplicate change events.');
         $suite->true(strpos($styles, '.project-view-switch .ui-button') === false,

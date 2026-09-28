@@ -102,6 +102,11 @@ const state = {
   tasks: [],
   projectPlan: { milestones: [], deliverables: [], can_manage: false },
   projectPlanLoaded: false,
+  projectProposals: [],
+  projectProposalsLoaded: false,
+  projectProposalsLoading: false,
+  projectProposalsError: "",
+  projectProposalsAbortController: null,
   templates: [],
   templateCategories: [],
   selectedTemplateId: "",
@@ -1053,7 +1058,7 @@ function renderProjectHeader() {
   const hasProject = Boolean(selectedProjectId());
   el.project_view_switch.hidden = !hasProject || state.mode !== "expanded";
   el.project_title.textContent = project.name || (state.mode === "legacy" ? "PBB Coordination" : "Select a project");
-  el.new_message_trigger.hidden = !hasProject || state.mode !== "expanded" || !can("messages.write") || state.projectView === "responsibility";
+  el.new_message_trigger.hidden = !hasProject || state.mode !== "expanded" || !can("messages.write") || state.projectView !== "timeline";
   state.components.projectActions?.destroy?.();
   state.components.projectActions = null;
   const actions = [];
@@ -1082,7 +1087,7 @@ function renderProjectHeader() {
         if (item.id === "status") openProjectStatusModal();
         if (item.id === "plan") openProjectPlanModal();
         if (item.id === "info") openProjectInfoModal();
-        if (item.id === "proposals") openProjectChangeProposalsModal();
+        if (item.id === "proposals") showProjectView("proposals");
         if (item.id === "edit") openEditProjectModal();
         if (item.id === "toggle-team") setTeamVisible(!state.teamVisible);
       },
@@ -2836,7 +2841,9 @@ function projectProposalFieldLabel(field) {
     || field.replaceAll("_", " ").replace(/^./, (value) => value.toUpperCase());
 }
 
-function openProjectProposalDecision(proposal, reload) {
+function openProjectProposalDetails(proposal) {
+  if (state.components.projectProposalDetailsModal?.getState?.().open) return;
+  const pending = proposal.status === "pending";
   const content = projectInfoElement("div", "project-proposal-decision");
   content.append(projectInfoElement("p", "project-proposal-rationale", proposal.rationale || "No rationale was supplied."));
   const details = projectInfoElement("dl", "project-proposal-fields");
@@ -2846,13 +2853,37 @@ function openProjectProposalDecision(proposal, reload) {
     details.append(row);
   });
   content.append(details);
-  const note = document.createElement("textarea");
-  note.className = "ui-input project-proposal-review-note";
-  note.rows = 3;
-  note.maxLength = 4000;
-  note.placeholder = "Optional review note";
-  note.setAttribute("aria-label", "Review note");
-  content.append(note);
+  if (!pending) {
+    const review = projectInfoElement("dl", "project-proposal-fields");
+    const reviewer = projectInfoElement("div", "project-proposal-field");
+    reviewer.append(projectInfoElement("dt", "", "Decision"), projectInfoElement("dd", "", proposal.status === "approved" ? "Approved" : "Rejected"));
+    review.append(reviewer);
+    if (proposal.reviewer_name) {
+      const reviewedBy = projectInfoElement("div", "project-proposal-field");
+      reviewedBy.append(projectInfoElement("dt", "", "Reviewed by"), projectInfoElement("dd", "", proposal.reviewer_name));
+      review.append(reviewedBy);
+    }
+    if (proposal.reviewed_at) {
+      const reviewedAt = projectInfoElement("div", "project-proposal-field");
+      reviewedAt.append(projectInfoElement("dt", "", "Reviewed"), projectInfoElement("dd", "", formatDate(proposal.reviewed_at)));
+      review.append(reviewedAt);
+    }
+    if (proposal.review_note) {
+      const reviewNote = projectInfoElement("div", "project-proposal-field");
+      reviewNote.append(projectInfoElement("dt", "", "Review note"), projectInfoElement("dd", "", proposal.review_note));
+      review.append(reviewNote);
+    }
+    content.append(review);
+  }
+  const note = pending ? document.createElement("textarea") : null;
+  if (note) {
+    note.className = "ui-input project-proposal-review-note";
+    note.rows = 3;
+    note.maxLength = 4000;
+    note.placeholder = "Optional review note";
+    note.setAttribute("aria-label", "Review note");
+    content.append(note);
+  }
   let modal;
   const decide = async (decision) => {
     modal.setBusy(true, { message: decision === "approve" ? "Applying proposal…" : "Rejecting proposal…" });
@@ -2863,9 +2894,10 @@ function openProjectProposalDecision(proposal, reload) {
       modal.setBusy(false);
       await modal.close({ reason: decision });
       state.components.toast.success(decision === "approve" ? "Proposal approved and applied." : "Proposal rejected.");
-      await reload();
       if (decision === "approve" && selectedProjectId() === id(proposal.project_id)) {
         await switchProject(proposal.project_id, { initial: true, historyMode: "replace" });
+      } else {
+        await loadProjectChangeProposals({ force: true });
       }
     } catch (error) {
       modal.setBusy(false);
@@ -2874,79 +2906,103 @@ function openProjectProposalDecision(proposal, reload) {
     return false;
   };
   modal = state.factories.createActionModal({
-    title: `Review ${projectProposalLabel(proposal.proposal_type).toLowerCase()}`,
+    title: pending ? `Review ${projectProposalLabel(proposal.proposal_type).toLowerCase()}` : `${projectProposalLabel(proposal.proposal_type)} details`,
     size: "md",
     content,
-    actions: [
+    actions: pending ? [
       { id: "cancel", label: "Cancel" },
       { id: "reject", label: "Reject", variant: "danger", closeOnClick: false, onClick: () => decide("reject") },
       { id: "approve", label: "Approve and apply", variant: "primary", closeOnClick: false, onClick: () => decide("approve") },
-    ],
+    ] : [{ id: "close", label: "Close", variant: "primary" }],
+    onClose() {
+      if (state.components.projectProposalDetailsModal === modal) state.components.projectProposalDetailsModal = null;
+    },
   });
+  state.components.projectProposalDetailsModal = modal;
   modal.open();
 }
 
-function openProjectChangeProposalsModal() {
-  if (state.components.projectChangeProposals?.getState?.().open) return;
-  const projectId = selectedProjectId();
-  const abortController = new AbortController();
-  const content = projectInfoElement("div", "project-proposals-content");
-  content.append(projectInfoElement("p", "", "Loading agent proposals…"));
-  let dismissed = false;
-  let modal;
-  const load = async () => {
-    content.replaceChildren(projectInfoElement("p", "", "Loading agent proposals…"));
-    modal.setActions([{ id: "close", label: "Close" }]);
-    modal.setBusy(true, { message: "Loading proposals…", cancelBusy: { label: "Close", onCancel: () => modal.close({ reason: "cancelled" }) } });
-    try {
-      const proposals = unwrap(await request(`${API.projectChangeProposals}?${new URLSearchParams({ project_id: projectId })}`, { signal: abortController.signal })) || [];
-      if (dismissed || selectedProjectId() !== projectId) return;
-      modal.setBusy(false);
-      content.replaceChildren();
-      if (!proposals.length) {
-        content.append(projectInfoElement("div", "empty-state", "No agent proposals have been submitted for this project."));
-        return;
-      }
-      proposals.forEach((proposal) => {
-        const card = projectInfoElement("article", `project-proposal-card is-${proposal.status}`);
-        const header = projectInfoElement("header", "project-proposal-card-header");
-        const heading = projectInfoElement("span", "project-proposal-card-heading");
-        heading.append(projectInfoElement("strong", "", projectProposalLabel(proposal.proposal_type)),
-          projectInfoElement("span", "", `Proposed by ${proposal.proposer?.display_name || "an agent"}`));
-        const badge = projectInfoElement("span", `ui-badge project-proposal-status is-${proposal.status}`, proposal.status);
-        header.append(heading, badge);
-        card.append(header);
-        if (proposal.target_agent_name) card.append(projectInfoElement("p", "project-proposal-target", `Target: ${proposal.target_agent_name}`));
-        card.append(projectInfoElement("p", "project-proposal-summary", proposal.rationale || "No rationale supplied."));
-        const footer = projectInfoElement("footer", "project-proposal-card-footer");
-        footer.append(projectInfoElement("span", "", formatDate(proposal.created_at)));
-        if (proposal.status === "pending") {
-          const review = projectInfoElement("button", "ui-button ui-button-sm", "Review");
-          review.type = "button";
-          review.addEventListener("click", () => openProjectProposalDecision(proposal, load));
-          footer.append(review);
-        } else if (proposal.reviewer_name) {
-          footer.append(projectInfoElement("span", "", `Reviewed by ${proposal.reviewer_name}`));
-        }
-        card.append(footer);
-        content.append(card);
-      });
-    } catch (error) {
-      if (dismissed || error.name === "AbortError") return;
-      modal.setBusy(false);
-      const failure = projectInfoElement("div", "ui-alert ui-alert-danger", `Unable to load proposals. ${error.message}`);
-      failure.setAttribute("role", "alert");
-      content.replaceChildren(failure);
-      modal.setActions([{ id: "close", label: "Close" }, { id: "retry", label: "Retry", variant: "primary", closeOnClick: false, onClick: () => { void load(); return false; } }]);
+function renderProjectChangeProposals() {
+  const content = state.components.projectProposalsHost;
+  if (!content) return;
+  content.replaceChildren();
+  if (state.projectProposalsLoading) {
+    content.append(projectInfoElement("p", "project-proposals-status", "Loading agent proposals…"));
+    content.setAttribute("aria-busy", "true");
+    return;
+  }
+  content.removeAttribute("aria-busy");
+  if (state.projectProposalsError) {
+    const failure = projectInfoElement("div", "ui-alert ui-alert-danger", `Unable to load proposals. ${state.projectProposalsError}`);
+    failure.setAttribute("role", "alert");
+    const retry = projectInfoElement("button", "ui-button ui-button-sm", "Retry");
+    retry.type = "button";
+    retry.addEventListener("click", () => void loadProjectChangeProposals({ force: true }));
+    content.append(failure, retry);
+    return;
+  }
+  if (!state.projectProposalsLoaded) {
+    content.append(projectInfoElement("p", "project-proposals-status", "Open this tab to load agent proposals."));
+    return;
+  }
+  if (!state.projectProposals.length) {
+    content.append(projectInfoElement("div", "empty-state", "No agent proposals have been submitted for this project."));
+    return;
+  }
+  state.projectProposals.forEach((proposal) => {
+    const card = projectInfoElement("article", `project-proposal-card is-${proposal.status}`);
+    const header = projectInfoElement("header", "project-proposal-card-header");
+    const heading = projectInfoElement("span", "project-proposal-card-heading");
+    heading.append(projectInfoElement("strong", "", projectProposalLabel(proposal.proposal_type)),
+      projectInfoElement("span", "", `Proposed by ${proposal.proposer?.display_name || "an agent"}`));
+    const badge = projectInfoElement("span", `ui-badge project-proposal-status is-${proposal.status}`, proposal.status);
+    header.append(heading, badge);
+    card.append(header);
+    if (proposal.target_agent_name) card.append(projectInfoElement("p", "project-proposal-target", `Target: ${proposal.target_agent_name}`));
+    card.append(projectInfoElement("p", "project-proposal-summary", proposal.rationale || "No rationale supplied."));
+    const footer = projectInfoElement("footer", "project-proposal-card-footer");
+    const metadata = projectInfoElement("span", "project-proposal-card-metadata");
+    metadata.append(projectInfoElement("span", "", formatDate(proposal.created_at)));
+    if (proposal.status !== "pending" && proposal.reviewer_name) {
+      metadata.append(projectInfoElement("span", "", `Reviewed by ${proposal.reviewer_name}`));
     }
-  };
-  modal = state.factories.createActionModal({
-    title: "AI project proposals", size: "lg", content, actions: [{ id: "close", label: "Close" }],
-    onClose() { dismissed = true; abortController.abort(); if (state.components.projectChangeProposals === modal) state.components.projectChangeProposals = null; },
+    const action = projectInfoElement("button", "ui-button ui-button-sm", proposal.status === "pending" ? "Review" : "View details");
+    action.type = "button";
+    action.addEventListener("click", () => openProjectProposalDetails(proposal));
+    footer.append(metadata, action);
+    card.append(footer);
+    content.append(card);
   });
-  state.components.projectChangeProposals = modal;
-  modal.open();
-  void load();
+}
+
+async function loadProjectChangeProposals({ force = false } = {}) {
+  if (!can("project.manage") && !can("project.admin")) return;
+  const projectId = selectedProjectId();
+  if (!projectId || state.projectProposalsLoading || (!force && state.projectProposalsLoaded)) return;
+  state.projectProposalsAbortController?.abort();
+  const controller = new AbortController();
+  const generation = state.generation;
+  state.projectProposalsAbortController = controller;
+  state.projectProposalsLoading = true;
+  state.projectProposalsError = "";
+  renderProjectChangeProposals();
+  try {
+    const proposals = unwrap(await request(`${API.projectChangeProposals}?${new URLSearchParams({ project_id: projectId })}`, { signal: controller.signal })) || [];
+    if (controller.signal.aborted || generation !== state.generation || projectId !== selectedProjectId()) return;
+    state.projectProposals = proposals;
+    state.projectProposalsLoaded = true;
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    state.projectProposals = [];
+    state.projectProposalsLoaded = false;
+    state.projectProposalsError = error.message || "The request could not be completed.";
+  } finally {
+    if (state.projectProposalsAbortController === controller) state.projectProposalsAbortController = null;
+    if (!controller.signal.aborted && generation === state.generation && projectId === selectedProjectId()) {
+      state.projectProposalsLoading = false;
+      renderProjectChangeProposals();
+    }
+  }
 }
 
 function openProjectInfoModal() {
@@ -6175,6 +6231,12 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.tasks = [];
   state.projectPlan = { milestones: [], deliverables: [], can_manage: false };
   state.projectPlanLoaded = false;
+  state.projectProposalsAbortController?.abort();
+  state.projectProposalsAbortController = null;
+  state.projectProposals = [];
+  state.projectProposalsLoaded = false;
+  state.projectProposalsLoading = false;
+  state.projectProposalsError = "";
   state.projectView = "timeline";
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
@@ -6224,6 +6286,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   const currentParticipantId = id(context.current_participant_id || context.current_participant?.id || state.project.participant_id);
   state.project.current_participant = state.participants.find((participant) => participant.id === currentParticipantId)
     || (context.current_participant ? participantFrom(context.current_participant, "human") : null);
+  mountProjectViewTabs();
   state.filters.sender = [];
   setSurface("project");
   setMobilePanel("timeline");
@@ -6552,28 +6615,44 @@ async function acknowledgeMessage(message) {
 
 function mountProjectViewTabs() {
   state.components.projectViewTabs?.destroy?.();
+  state.components.projectProposalsHost = null;
+  const tabs = [
+    {
+      id: "timeline",
+      label: "Timeline",
+      render(host) {
+        host.classList.add("project-view-tabpanel", "is-timeline");
+        host.append(el.composer_shell, el.timeline_filter_bar, el.timeline_notice, el.timeline_scroll);
+      },
+    },
+    {
+      id: "responsibility",
+      label: "Responsibility Inbox",
+      render(host) {
+        host.classList.add("project-view-tabpanel", "is-responsibility");
+        host.append(el.responsibility_host);
+      },
+    },
+  ];
+  if (selectedProjectId() && (can("project.manage") || can("project.admin"))) {
+    tabs.push({
+      id: "proposals",
+      label: "AI Proposals",
+      render(host) {
+        host.classList.add("project-view-tabpanel", "is-proposals");
+        const content = projectInfoElement("section", "project-proposals-content");
+        content.setAttribute("aria-label", "AI project proposals");
+        host.append(content);
+        state.components.projectProposalsHost = content;
+        renderProjectChangeProposals();
+      },
+    });
+  }
   state.components.projectViewTabs = state.factories.createTabs(el.project_view_switch, {
     ariaLabel: "Project view",
     variant: "attached",
     activeId: state.projectView,
-    tabs: [
-      {
-        id: "timeline",
-        label: "Timeline",
-        render(host) {
-          host.classList.add("project-view-tabpanel", "is-timeline");
-          host.append(el.composer_shell, el.timeline_filter_bar, el.timeline_notice, el.timeline_scroll);
-        },
-      },
-      {
-        id: "responsibility",
-        label: "Responsibility Inbox",
-        render(host) {
-          host.classList.add("project-view-tabpanel", "is-responsibility");
-          host.append(el.responsibility_host);
-        },
-      },
-    ],
+    tabs,
     onChange(_tab, tabId) {
       showProjectView(tabId);
     },
@@ -6582,17 +6661,20 @@ function mountProjectViewTabs() {
 
 function showProjectView(view) {
   if (state.mode !== "expanded" || !["workspace", "project"].includes(state.surface) || !selectedProjectId()) return;
-  state.projectView = view === "responsibility" ? "responsibility" : "timeline";
+  const proposalsAllowed = can("project.manage") || can("project.admin");
+  state.projectView = view === "responsibility" ? "responsibility" : view === "proposals" && proposalsAllowed ? "proposals" : "timeline";
   const inbox = state.projectView === "responsibility";
+  const proposals = state.projectView === "proposals";
   if (state.components.projectViewTabs?.getActiveId?.() !== state.projectView) {
     state.components.projectViewTabs?.setActive?.(state.projectView, false);
   }
-  el.new_message_trigger.hidden = inbox || !can("messages.write");
-  el.timeline_filter_bar.hidden = inbox;
-  el.timeline_notice.hidden = inbox || !el.timeline_notice.textContent;
-  el.timeline_scroll.hidden = inbox;
+  el.new_message_trigger.hidden = inbox || proposals || !can("messages.write");
+  el.timeline_filter_bar.hidden = inbox || proposals;
+  el.timeline_notice.hidden = inbox || proposals || !el.timeline_notice.textContent;
+  el.timeline_scroll.hidden = inbox || proposals;
   el.responsibility_host.hidden = !inbox;
-  if (!inbox && state.components.timeline) renderTimeline();
+  if (!inbox && !proposals && state.components.timeline) renderTimeline();
+  if (proposals) void loadProjectChangeProposals();
   if (inbox && !state.components.responsibilityInbox) {
     state.components.responsibilityInbox = createResponsibilityInbox(el.responsibility_host, {
       participants: () => state.participants,

@@ -6,7 +6,7 @@ Syndicatum agents can help improve project details and agent setup without recei
 - `propose_agent_setup` suggests a new project-scoped agent profile.
 - `propose_agent_profile_update` suggests changes to an existing agent profile or supervisor assignment.
 
-Every tool creates a durable, auditable proposal with `pending` status. A human project owner or administrator reviews it from **Project actions → AI proposals** and explicitly chooses **Approve and apply** or **Reject**. Approval and the underlying project change are committed in one database transaction.
+Every tool creates a durable, auditable proposal with `pending` status. A human project owner or administrator opens the timeline column's **AI Proposals** tab (or uses **Project actions → AI proposals** as a shortcut), chooses **Review**, and explicitly selects **Approve and apply** or **Reject**. Approval and the underlying project change are committed in one database transaction.
 
 ## What agents can and cannot propose
 
@@ -26,7 +26,7 @@ Proposal payloads do not accept credentials, API keys, tokens, scopes, webhook U
 1. The agent reads the project bootstrap and relevant participants.
 2. The agent submits one focused proposal with a concise rationale.
 3. Syndicatum records the proposing project participant, payload, timestamps, and version.
-4. An owner or administrator opens **AI proposals**, reviews every proposed field, and optionally adds a review note.
+4. An owner or administrator opens the **AI Proposals** tab, chooses **Review**, reviews every proposed field, and optionally adds a review note.
 5. On approval, Syndicatum revalidates the current project state and applies the change. On rejection, no project or agent data changes.
 6. The proposal records the reviewer and final status for later audit and backup/restore.
 
