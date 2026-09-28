@@ -37,6 +37,7 @@
     "oauth_refresh_tokens": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "pinned_messages": {"backup_policy": "durable"},
     "project_agents": {"backup_policy": "durable"},
+    "project_change_proposals": {"backup_policy": "durable"},
     "project_deliverables": {"backup_policy": "durable"},
     "project_invitations": {"backup_policy": "durable"},
     "project_members": {"backup_policy": "durable"},

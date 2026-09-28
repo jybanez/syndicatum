@@ -359,3 +359,6 @@ numeric project ID. Authorized legacy numeric routes are canonicalized to the
 UUID route after project discovery. The UUID is an anti-enumeration and privacy
 measure, not an authorization credential; every project request still requires
 the normal membership or agent-scope check.
+## AI-assisted project setup proposals
+
+Project owners and administrators can review durable agent suggestions from **Project actions → AI proposals**. The MCP proposal workflow, security boundary, and examples are documented in [mcp-project-setup-proposals.md](mcp-project-setup-proposals.md).

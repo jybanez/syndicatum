@@ -183,16 +183,17 @@ class ProjectManagementService
         $contextChanged = $description !== (string) $access['description']
             || $instructions !== (string) $access['instructions'];
         $now = Db::now();
-        $this->pdo->beginTransaction();
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
             $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?,
                 context_version = context_version + ?, status = ?, archived_at = ?, updated_at = ? WHERE id = ?');
             $statement->execute([$name, $description, $instructions, $contextChanged ? 1 : 0,
                 $status, $status === 'archived' ? $now : null, $now, (int) $projectId]);
             $this->auth->audit((int) $userId, 'project.updated', 'project', (string) ((int) $projectId), ['status' => $status]);
-            $this->pdo->commit();
+            if ($ownsTransaction) { $this->pdo->commit(); }
             return $this->project($projectId);
-        } catch (Exception $exception) { $this->rollback(); throw $exception; }
+        } catch (Exception $exception) { if ($ownsTransaction) { $this->rollback(); } throw $exception; }
     }
 
     public function transferProject($projectId, $ownerUserId, $newOwnerUserId)
@@ -559,7 +560,8 @@ class ProjectManagementService
             || $role['role_summary'] !== $agent['role_summary']
             || $role['role_instructions'] !== $agent['role_instructions']
             || $supervisorId !== ($agent['supervising_participant_id'] === null ? null : (int) $agent['supervising_participant_id']);
-        $this->pdo->beginTransaction();
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
             $this->pdo->prepare('UPDATE project_agents SET display_name = ?, role_title = ?, role_summary = ?,
                 role_instructions = ?, supervising_participant_id = ?, role_version = role_version + ?,
@@ -575,8 +577,8 @@ class ProjectManagementService
             $this->auth->audit((int) $actorUserId, 'project.agent_updated', 'agent', (string) ((int) $agentId),
                 ['project_id' => (int) $projectId, 'role_changed' => $roleChanged,
                     'supervising_participant_id' => $supervisorId]);
-            $this->pdo->commit();
-        } catch (Exception $exception) { $this->rollback(); throw $exception; }
+            if ($ownsTransaction) { $this->pdo->commit(); }
+        } catch (Exception $exception) { if ($ownsTransaction) { $this->rollback(); } throw $exception; }
         if ($avatarUrl !== $agent['avatar_url']) { (new AvatarService())->deleteIfLocal($agent['avatar_url']); }
         return ['project_id' => (int) $projectId, 'agent_id' => (int) $agentId, 'display_name' => $displayName,
             'provider' => $provider === '' ? null : $provider, 'runtime_name' => $runtimeName === '' ? null : $runtimeName,

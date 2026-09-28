@@ -6,6 +6,7 @@ require_once __DIR__ . '/src/ChatGptOAuthService.php';
 require_once __DIR__ . '/src/McpServiceTokenService.php';
 require_once __DIR__ . '/src/ProjectRepository.php';
 require_once __DIR__ . '/src/ProjectTaskService.php';
+require_once __DIR__ . '/src/ProjectChangeProposalService.php';
 require_once __DIR__ . '/src/DiscussionBindingIntentService.php';
 require_once __DIR__ . '/src/RateLimiter.php';
 
@@ -68,10 +69,13 @@ try {
         'list_participants' => 'participants:read', 'list_messages' => 'messages:read',
         'list_tasks' => 'messages:read', 'get_task' => 'messages:read', 'create_task' => 'messages:write', 'update_task' => 'messages:write',
         'get_message' => 'messages:read', 'post_message' => 'messages:write',
+        'propose_project_details' => 'messages:write', 'propose_agent_setup' => 'messages:write',
+        'propose_agent_profile_update' => 'messages:write',
         'acknowledge_message' => 'messages:acknowledge'];
     if (!isset($scopeMap[$name])) { throw new InvalidArgumentException('Unknown tool.'); }
     if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope', $oauth); }
-    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'acknowledge_message', 'create_task', 'update_task'];
+    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'acknowledge_message', 'create_task', 'update_task',
+        'propose_project_details', 'propose_agent_setup', 'propose_agent_profile_update'];
     (new RateLimiter($pdo))->hit(
         'mcp.' . $name,
         hash('sha256', $bearer),
@@ -170,6 +174,12 @@ try {
             if (array_key_exists($field, $args)) { $input[$field] = $args[$field]; }
         }
         $value = (new ProjectTaskService($pdo))->update($access, mcpPositiveId($args, 'task_id'), $input);
+    } elseif ($name === 'propose_project_details') {
+        $value = (new ProjectChangeProposalService($pdo))->proposeProjectDetails($access, $args);
+    } elseif ($name === 'propose_agent_setup') {
+        $value = (new ProjectChangeProposalService($pdo))->proposeAgentSetup($access, $args);
+    } elseif ($name === 'propose_agent_profile_update') {
+        $value = (new ProjectChangeProposalService($pdo))->proposeAgentProfileUpdate($access, $args);
     } elseif ($name === 'get_message') {
         $value = mcpMessage($repository->message($access, mcpPositiveId($args, 'message_id')));
     } elseif ($name === 'post_message') {
@@ -192,7 +202,8 @@ try {
         'BINDING_REQUIRES_OAUTH', 'DISCUSSION_BINDING_REQUIRED', 'MESSAGE_NOT_FOUND', 'PROJECT_WRITE_FORBIDDEN',
         'INTERACTIVE_CONTEXT_NOT_FOUND', 'INTERACTIVE_CONTEXT_AMBIGUOUS',
         'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', 'IDEMPOTENCY_KEY_CONFLICT', 'PROJECT_ARCHIVED', 'RATE_LIMITED',
-        'TASK_NOT_FOUND', 'TASK_WRITE_FORBIDDEN', 'TASK_VERSION_CONFLICT', 'TASK_INVALID_TRANSITION'];
+        'TASK_NOT_FOUND', 'TASK_WRITE_FORBIDDEN', 'TASK_VERSION_CONFLICT', 'TASK_INVALID_TRANSITION',
+        'PROPOSAL_AGENT_REQUIRED', 'PROPOSAL_NOT_FOUND', 'PROPOSAL_VERSION_CONFLICT', 'AGENT_NOT_FOUND'];
     mcpToolError($id, in_array($e->getMessage(), $known, true) ? $e->getMessage() : 'The Syndicatum operation could not be completed.');
 }
 
@@ -239,6 +250,26 @@ function mcpTools()
                 'status' => ['type' => 'string', 'enum' => ['open','in_progress','in_review','blocked','completed','cancelled']],
                 'blocked_reason' => ['type' => 'string'], 'completion_summary' => ['type' => 'string'], 'note' => ['type' => 'string']],
             ['task_id', 'version'], $write),
+        $tool('propose_project_details', 'Propose project detail changes', 'Submit suggested project name, description, or operating instructions for human owner or administrator review. This never changes the project automatically.',
+            $binding + ['name' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 160],
+                'description' => ['type' => 'string', 'maxLength' => 10000],
+                'instructions' => ['type' => 'string', 'maxLength' => 50000],
+                'rationale' => ['type' => 'string', 'maxLength' => 4000]], [], $write),
+        $tool('propose_agent_setup', 'Propose a project agent', 'Submit a proposed project agent profile for human owner or administrator review. Credentials, activation, scopes, webhooks, and working directories cannot be proposed and remain owner-controlled.',
+            $binding + ['display_name' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 120],
+                'provider' => ['type' => 'string', 'maxLength' => 120], 'runtime_name' => ['type' => 'string', 'maxLength' => 160],
+                'role_title' => ['type' => 'string', 'maxLength' => 120], 'role_summary' => ['type' => 'string', 'maxLength' => 4000],
+                'role_instructions' => ['type' => 'string', 'maxLength' => 20000],
+                'supervising_participant_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
+                'rationale' => ['type' => 'string', 'maxLength' => 4000]], ['display_name'], $write),
+        $tool('propose_agent_profile_update', 'Propose an agent profile update', 'Submit suggested profile or supervision changes for an existing project agent. A human owner or administrator must approve before anything changes.',
+            $binding + ['target_agent_id' => ['type' => 'integer', 'minimum' => 1],
+                'display_name' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 120],
+                'provider' => ['type' => 'string', 'maxLength' => 120], 'runtime_name' => ['type' => 'string', 'maxLength' => 160],
+                'role_title' => ['type' => 'string', 'maxLength' => 120], 'role_summary' => ['type' => 'string', 'maxLength' => 4000],
+                'role_instructions' => ['type' => 'string', 'maxLength' => 20000],
+                'supervising_participant_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
+                'rationale' => ['type' => 'string', 'maxLength' => 4000]], ['target_agent_id'], $write),
         $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent. Addressees indicate expected responders, not visibility.',
             $binding + ['body' => ['type' => 'string', 'minLength' => 1], 'direct_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'mention_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]], 'broadcast' => ['type' => 'boolean'],
