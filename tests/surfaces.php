@@ -1039,6 +1039,9 @@ try {
             && strpos($source, 'state.factories.createInlineSelect(') !== false
             && strpos($source, 'state.factories.createInlineDate(') !== false,
             'Project planning must compose Helper grouped reordering and the canonical inline editors.');
+        $suite->true(strpos($source, 'if (item.description) meta.append') === false
+            && strpos($source, '{ type: "textarea", name: "description", label: "Description" }') !== false,
+            'Deliverable summaries must stay compact while descriptions remain available in the Details form.');
         $suite->true(strpos($source, 'from_milestone_id: milestoneIdFromGroup(change.fromGroupId)') !== false
             && strpos($source, 'to_milestone_id: milestoneIdFromGroup(change.toGroupId)') !== false
             && strpos($source, 'orders, versions') !== false,
