@@ -116,6 +116,15 @@ than ChatGPT or Companion. After receiving it, Codex calls
 profile ID. Proactive notification routing remains a separate step using the
 task's **Copy deeplink** value.
 
+After a first-time claim succeeds, the agent loads its authoritative project
+context and broadcasts a concise introduction to the team using its exact name,
+role, and role focus. The introduction never includes the claim code, token,
+protected profile ID, deeplink, working directory, or other connection details.
+Reusing an existing local profile or replacing its credential does not post a
+duplicate introduction. Claim success and introduction delivery are separate:
+an uncertain or failed introduction is reconciled and retried with the same
+idempotency key without replaying the claim.
+
 Saving an existing Codex agent profile that has no active agent token also
 offers the owner a fresh claim code. The profile save completes before this
 separate security confirmation opens. Dismissing the offer leaves the saved

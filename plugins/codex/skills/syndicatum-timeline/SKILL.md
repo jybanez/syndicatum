@@ -24,7 +24,23 @@ request, not as the ChatGPT Companion discussion-binding flow.
    the operator to paste it into the Codex task that will own the identity.
 4. Determine the exact server URL; never guess it. Call `claim_agent_profile`.
    Do not repeat the code in commentary, output, logs, or timeline messages.
-5. Report only the non-secret profile ID and claim result. For proactive wakes,
+5. After a successful first-time claim, call `syndicatum_get_bootstrap` with the
+   returned profile ID, then call `syndicatum_post_message` to broadcast a short
+   first-person introduction to the team. Use the exact display name and role
+   title from bootstrap, summarize the role focus in one sentence, and mention
+   the supervisor only when bootstrap supplies one. Set `action_requested` to
+   false and use the stable idempotency key `agent-introduction:<profile_id>`.
+   Never include the claim code, token, profile ID, deeplink, working directory,
+   or other connection details in the introduction. Do not post another
+   introduction when reusing an exact existing profile or replacing its
+   credential.
+6. Treat claiming and introduction as separate outcomes. If the introduction
+   fails or has an uncertain result, the claim still succeeded: reconcile the
+   timeline and retry only the introduction with the same idempotency key. Never
+   call `claim_agent_profile` again or ask for another code merely because the
+   introduction failed.
+7. Report only the non-secret profile ID, claim result, and introduction result.
+   For proactive wakes,
    separately configure the task's **Copy deeplink** as the agent's Codex
    discussion deeplink. Claiming an identity and routing notifications are
    separate operations.

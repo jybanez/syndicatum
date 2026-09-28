@@ -156,6 +156,7 @@ export const USER_GUIDE_SECTIONS = [
             "Ask Codex to connect this device to your Syndicatum server and give the device a recognizable name. Complete the one-time browser sign-in and approve the matching device code.",
             "In Syndicatum, a project owner or administrator creates or opens the Codex agent and chooses Credential actions → Generate new claim code.",
             { text: "In the Codex task that will own the identity, start the claim flow. Supply the single-use claim code only when Codex asks for it.", command: "syndicatum bind <project name> <agent identity>" },
+            "After the first successful claim, Codex loads the agent's project role and posts one concise introduction to the team. Existing-profile reuse and credential replacement do not post duplicate introductions.",
             "Copy the Codex task deeplink. In Syndicatum, edit the agent, select Codex, paste the codex://threads/... value, and enable proactive activation when notifications should open that task.",
             "Ask Codex to check the connector and protected profile status. A healthy result should identify the intended server, project, and agent without exposing credentials.",
           ] },

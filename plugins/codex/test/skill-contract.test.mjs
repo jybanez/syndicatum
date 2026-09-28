@@ -30,6 +30,12 @@ test("timeline skill explains the Codex bind and claim-code flow", async () => {
   assert.match(source, /expires after 15 minutes, is single-use,\s*and is shown only once/);
   assert.match(source, /[Cc]all `claim_agent_profile`/);
   assert.match(source, /Do not repeat the code/);
+  assert.match(source, /After a successful first-time claim/);
+  assert.match(source, /call `syndicatum_get_bootstrap`/);
+  assert.match(source, /call `syndicatum_post_message` to broadcast a short\s+first-person introduction/);
+  assert.match(source, /agent-introduction:<profile_id>/);
+  assert.match(source, /Do not post another\s+introduction when reusing an exact existing profile or replacing its\s+credential/);
+  assert.match(source, /Never\s+call `claim_agent_profile` again.*introduction failed/s);
   assert.match(source, /Copy deeplink/);
   assert.match(source, /Claiming an identity and routing notifications are\s+separate operations/);
 });
