@@ -60,6 +60,11 @@ the allowed fields and human review lifecycle are documented in
 [`mcp-project-setup-proposals.md`](mcp-project-setup-proposals.md). The same PHP
 endpoint retains its human-only GET and PATCH review operations.
 
+Successful proposal creation and review enqueue the content-free
+`syndicatum.project_proposals.changed` Realtime invalidation. Authorized owner
+and administrator clients respond by reloading this protected endpoint; the
+shared project-room event does not contain the proposal payload or rationale.
+
 ## Participant representation
 
 `GET /api/v1/project-participants.php` returns normalized human and agent

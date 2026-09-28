@@ -9,6 +9,8 @@ Syndicatum agents can help improve project details, project plans, and agent set
 
 Every tool creates a durable, auditable proposal with `pending` status. A human project owner or administrator opens the timeline column's **AI Proposals** tab (or uses **Project actions → AI proposals** as a shortcut), chooses **Review**, and explicitly selects **Approve and apply** or **Reject**. Approval and the underlying project change are committed in one database transaction.
 
+New proposals and review decisions update an already-open **AI Proposals** tab through Realtime without a browser refresh. The shared project-room event is only a content-free invalidation containing proposal identity, version, status, and change type; authorized owners and administrators then reload the protected proposal resource. Reconnect and polling reconciliation cover events missed while the browser was offline.
+
 ## What agents can and cannot propose
 
 Project-detail proposals may contain only `name`, `description`, and `instructions`.
@@ -139,3 +141,5 @@ tools named `syndicatum_propose_project_details`,
 Agents submit with bearer-authenticated `POST /api/v1/project-change-proposals.php?project_id=…`. Human review uses `GET` and an authenticated, CSRF-protected `PATCH` to the same endpoint. Only active project owners and administrators can list or review proposals.
 
 Proposals are stored in `project_change_proposals`. The table is durable application data and is included in the canonical backup policy. Audit events are recorded as `project.change_proposal_created`, `project.change_proposal_approved`, or `project.change_proposal_rejected`.
+
+Creation and review also enqueue `syndicatum.project_proposals.changed` in the durable message outbox within the same transaction. The event never includes proposal fields, rationale, credentials, or other protected content.

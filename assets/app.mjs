@@ -107,6 +107,8 @@ const state = {
   projectProposalsLoading: false,
   projectProposalsError: "",
   projectProposalsAbortController: null,
+  projectProposalsRealtimeTimer: null,
+  projectProposalsRealtimePending: false,
   templates: [],
   templateCategories: [],
   selectedTemplateId: "",
@@ -3032,17 +3034,18 @@ function renderProjectChangeProposals() {
   });
 }
 
-async function loadProjectChangeProposals({ force = false } = {}) {
+async function loadProjectChangeProposals({ force = false, background = false } = {}) {
   if (!can("project.manage") && !can("project.admin")) return;
   const projectId = selectedProjectId();
   if (!projectId || state.projectProposalsLoading || (!force && state.projectProposalsLoaded)) return;
+  const scrollTop = background ? Number(state.components.projectProposalsHost?.scrollTop || 0) : null;
   state.projectProposalsAbortController?.abort();
   const controller = new AbortController();
   const generation = state.generation;
   state.projectProposalsAbortController = controller;
   state.projectProposalsLoading = true;
   state.projectProposalsError = "";
-  renderProjectChangeProposals();
+  if (!background) renderProjectChangeProposals();
   try {
     const proposals = unwrap(await request(`${API.projectChangeProposals}?${new URLSearchParams({ project_id: projectId })}`, { signal: controller.signal })) || [];
     if (controller.signal.aborted || generation !== state.generation || projectId !== selectedProjectId()) return;
@@ -3058,8 +3061,31 @@ async function loadProjectChangeProposals({ force = false } = {}) {
     if (!controller.signal.aborted && generation === state.generation && projectId === selectedProjectId()) {
       state.projectProposalsLoading = false;
       renderProjectChangeProposals();
+      if (scrollTop !== null && state.components.projectProposalsHost) {
+        state.components.projectProposalsHost.scrollTop = scrollTop;
+      }
+      if (state.projectProposalsRealtimePending) scheduleProjectProposalRealtimeRefresh(generation);
     }
   }
+}
+
+function scheduleProjectProposalRealtimeRefresh(projectGeneration = state.generation) {
+  if (!can("project.manage") && !can("project.admin")) return;
+  state.projectProposalsLoaded = false;
+  state.projectProposalsRealtimePending = true;
+  clearTimeout(state.projectProposalsRealtimeTimer);
+  state.projectProposalsRealtimeTimer = setTimeout(() => {
+    state.projectProposalsRealtimeTimer = null;
+    if (projectGeneration !== state.generation || !selectedProjectId()) {
+      state.projectProposalsRealtimePending = false;
+      return;
+    }
+    if (state.projectProposalsLoading) return;
+    state.projectProposalsRealtimePending = false;
+    if (state.projectView === "proposals") {
+      void loadProjectChangeProposals({ force: true, background: true }).catch(handleLoadError);
+    }
+  }, 75);
 }
 
 function openProjectInfoModal() {
@@ -6300,6 +6326,9 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.projectProposalsLoaded = false;
   state.projectProposalsLoading = false;
   state.projectProposalsError = "";
+  clearTimeout(state.projectProposalsRealtimeTimer);
+  state.projectProposalsRealtimeTimer = null;
+  state.projectProposalsRealtimePending = false;
   state.projectView = "timeline";
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
@@ -7376,6 +7405,9 @@ function closeRealtime() {
   state.realtimeRetryTimer = null;
   clearTimeout(state.taskReconciliationTimer);
   state.taskReconciliationTimer = null;
+  clearTimeout(state.projectProposalsRealtimeTimer);
+  state.projectProposalsRealtimeTimer = null;
+  state.projectProposalsRealtimePending = false;
   state.realtimeRetryCount = 0;
   const socket = state.realtimeSocket;
   state.realtimeSocket = null;
@@ -7484,6 +7516,9 @@ async function connectRealtime(projectGeneration = state.generation) {
         void loadNotifications();
         if (state.project && joinedRooms.has(admission.room)) {
           void Promise.all([loadMessages("newer", projectGeneration), loadTasks(projectGeneration)]).catch(handleLoadError);
+          if (state.projectProposalsLoaded || state.projectView === "proposals") {
+            scheduleProjectProposalRealtimeRefresh(projectGeneration);
+          }
           scheduleTaskReconciliation(projectGeneration);
         }
         return;
@@ -7515,6 +7550,10 @@ async function connectRealtime(projectGeneration = state.generation) {
       if (envelope?.phase === "event" && envelope.type === "syndicatum.task.updated") {
         if (envelope.payload?.task) receiveRealtimeTask(envelope.payload.task);
         else void loadTasks(projectGeneration).catch(handleLoadError);
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.project_proposals.changed") {
+        scheduleProjectProposalRealtimeRefresh(projectGeneration);
       }
     };
     client = new sdk.RealtimeSocketClient({
@@ -7580,7 +7619,14 @@ function startPolling() {
   clearTimeout(state.taskReconciliationTimer);
   state.taskReconciliationTimer = null;
   const tick = async () => {
-    try { await Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()]); } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
+    try {
+      const refreshes = [Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()])];
+      if ((state.projectProposalsLoaded || state.projectView === "proposals")
+          && (can("project.manage") || can("project.admin"))) {
+        refreshes.push(loadProjectChangeProposals({ force: true, background: true }));
+      }
+      await Promise.all(refreshes);
+    } catch (_error) { el.status_badge.textContent = "Reconnect needed"; }
     finally { state.pollingTimer = setTimeout(tick, 15000); }
   };
   state.pollingTimer = setTimeout(tick, 15000);

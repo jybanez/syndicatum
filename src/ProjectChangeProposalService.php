@@ -4,6 +4,7 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/ProjectManagementService.php';
 require_once __DIR__ . '/ProjectPlanService.php';
+require_once __DIR__ . '/MessageOutbox.php';
 
 class ProjectChangeProposalService
 {
@@ -11,6 +12,7 @@ class ProjectChangeProposalService
     private $auth;
     private $management;
     private $plan;
+    private $outbox;
 
     public function __construct(PDO $pdo)
     {
@@ -18,6 +20,7 @@ class ProjectChangeProposalService
         $this->auth = new AuthService($pdo);
         $this->management = new ProjectManagementService($pdo);
         $this->plan = new ProjectPlanService($pdo);
+        $this->outbox = new MessageOutbox($pdo);
     }
 
     public function proposeProjectDetails(array $access, array $input)
@@ -175,8 +178,11 @@ class ProjectChangeProposalService
             if ($update->rowCount() !== 1) { throw new RuntimeException('PROPOSAL_VERSION_CONFLICT'); }
             $this->auth->audit((int) $userId, 'project.change_proposal_' . $status, 'project_change_proposal', (string) $proposalId,
                 ['project_id' => (int) $projectId, 'proposal_type' => $proposal['proposal_type'], 'applied_agent_id' => $appliedAgentId]);
+            $reviewed = $this->proposal($proposalId);
+            $this->outbox->enqueueProjectProposalsChanged((int) $projectId, $proposalId,
+                (int) $reviewed['version'], (string) $reviewed['status'], $status);
             $this->pdo->commit();
-            return $this->proposal($proposalId);
+            return $reviewed;
         } catch (Exception $exception) {
             if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $exception;
@@ -198,17 +204,27 @@ class ProjectChangeProposalService
         $project = $this->pdo->prepare("SELECT status FROM projects WHERE id = ?");
         $project->execute([$projectId]);
         if ($project->fetchColumn() !== 'active') { throw new RuntimeException('PROJECT_ARCHIVED'); }
-        $now = Db::now();
-        $statement = $this->pdo->prepare("INSERT INTO project_change_proposals
-            (public_id, project_id, proposal_type, target_agent_id, proposed_by_participant_id, payload_json, rationale, base_plan_fingerprint, status, version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)");
-        $statement->execute([Db::uuidV4(), $projectId, $type, $targetAgentId, $participantId,
-            json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $rationale === '' ? null : $rationale,
-            $basePlanFingerprint, $now, $now]);
-        $id = (int) $this->pdo->lastInsertId();
-        $this->auth->audit(null, 'project.change_proposal_created', 'project_change_proposal', (string) $id,
-            ['project_id' => $projectId, 'participant_id' => $participantId, 'proposal_type' => $type]);
-        return $this->proposal($id);
+        $this->pdo->beginTransaction();
+        try {
+            $now = Db::now();
+            $statement = $this->pdo->prepare("INSERT INTO project_change_proposals
+                (public_id, project_id, proposal_type, target_agent_id, proposed_by_participant_id, payload_json, rationale, base_plan_fingerprint, status, version, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)");
+            $statement->execute([Db::uuidV4(), $projectId, $type, $targetAgentId, $participantId,
+                json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $rationale === '' ? null : $rationale,
+                $basePlanFingerprint, $now, $now]);
+            $id = (int) $this->pdo->lastInsertId();
+            $this->auth->audit(null, 'project.change_proposal_created', 'project_change_proposal', (string) $id,
+                ['project_id' => $projectId, 'participant_id' => $participantId, 'proposal_type' => $type]);
+            $proposal = $this->proposal($id);
+            $this->outbox->enqueueProjectProposalsChanged($projectId, $id, (int) $proposal['version'],
+                (string) $proposal['status'], 'created');
+            $this->pdo->commit();
+            return $proposal;
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
     }
 
     private function agentPayload(array $input, $requireName)

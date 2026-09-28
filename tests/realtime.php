@@ -361,6 +361,18 @@ try {
         $suite->same('agent_created', $payload['change']);
         $suite->same(3, $payload['project_id']);
     });
+
+    $suite->test('outbox stores proposal invalidations without proposal content', function () use ($suite, $pdo) {
+        $event = (new MessageOutbox($pdo))->enqueueProjectProposalsChanged(3, 41, 2, 'approved', 'approved');
+        $payload = json_decode($event['payload_json'], true);
+        $suite->same(MessageOutbox::EVENT_PROJECT_PROPOSALS_CHANGED, $event['event_type']);
+        $suite->same(null, $event['message_id']);
+        $suite->same(41, $payload['proposal_id']);
+        $suite->same(2, $payload['version']);
+        $suite->same('approved', $payload['status']);
+        $suite->same(false, array_key_exists('payload', $payload));
+        $suite->same(false, array_key_exists('rationale', $payload));
+    });
 } catch (PDOException $exception) {
     echo 'SKIP  outbox database test: ' . $exception->getMessage() . "\n";
 } finally {

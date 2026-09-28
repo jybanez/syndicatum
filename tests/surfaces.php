@@ -449,6 +449,12 @@ try {
         $suite->true(strpos($source, 'function receiveRealtimeTask(source)') !== false
             && strpos($source, 'receiveRealtimeTask(envelope.payload.task)') !== false,
             'Realtime task snapshots must update the task rail without a list request.');
+        $suite->true(strpos($source, 'envelope.type === "syndicatum.project_proposals.changed"') !== false
+            && strpos($source, 'scheduleProjectProposalRealtimeRefresh(projectGeneration);') !== false,
+            'Realtime proposal changes must invalidate and reconcile the AI Proposals tab.');
+        $suite->true(strpos($source, 'loadProjectChangeProposals({ force: true, background: true })') !== false
+            && strpos($source, 'state.components.projectProposalsHost.scrollTop = scrollTop;') !== false,
+            'Realtime proposal reconciliation must preserve the visible proposal list and its scroll position while loading.');
         $suite->true(strpos($source, 'receiveRealtimeTask(created)') !== false
             && strpos($source, 'receiveRealtimeTask(updated)') !== false,
             'HTTP task results must share the version-aware upsert path with Realtime events.');
