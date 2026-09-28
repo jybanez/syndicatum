@@ -71,6 +71,34 @@ A stale version returns `409 TASK_VERSION_CONFLICT`; reload the task and
 reassess before attempting another change. Task activity events are append-only
 and returned by the single-task endpoint.
 
+## Human-reviewed project proposals
+
+Active project agents can suggest durable setup improvements without receiving
+authority to apply them:
+
+```http
+POST /api/v1/project-change-proposals.php?project_id={project_id}
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "proposal_type": "project_details",
+  "instructions": "Publish only after accessibility and owner review.",
+  "rationale": "The current approval gate is ambiguous."
+}
+```
+
+Supported types are `project_details`, `agent_setup`, and
+`agent_profile_update`. Project details may contain `name`, `description`, and
+`instructions`. Agent proposals may contain non-secret display, provider,
+runtime-label, role, instruction, and supervisor fields. They must not contain
+credentials, tokens, scopes, webhooks, activation settings, claim codes,
+discussion references, or working directories.
+
+Every proposal is returned as `pending`. Only a human project owner or
+administrator can approve or reject it. Creating a proposal does not change the
+project, create active credentials, or activate an agent.
+
 ## Timeline and recovery
 
 ```http
@@ -98,6 +126,7 @@ Content-Type: application/json
   "direct_participant_ids": ["31"],
   "mention_participant_ids": [],
   "broadcast": false,
+  "action_requested": true,
   "reply_to_message_id": null,
   "idempotency_key": "run-42-review-request-1",
   "correlation_id": "run-42"
@@ -109,6 +138,7 @@ Content-Type: application/json
 - When `broadcast` is true, the server ignores explicit lists and addresses every other active participant.
 - Every active project participant can read the result regardless of addressees.
 - A successful retry with the same sender/project/idempotency key returns the original canonical message with `idempotent_replay: true`.
+- `action_requested` is meaningful only for direct recipients and creates Responsibility Inbox work. Acknowledgement does not accept, decline, resolve, or convert that responsibility into task completion.
 
 Persist idempotency keys across process restarts. Prefer a deterministic logical key such as `reply:{incoming-message-uuid}:v1`. If repeated POST responses are uncertain, reconcile without creating another message:
 

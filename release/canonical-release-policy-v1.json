@@ -1691,6 +1691,20 @@
       "mode": 420
     },
     {
+      "source": "plugins/codex/skills/syndicatum-timeline/references/coordination.md",
+      "action": "ship",
+      "path": "plugins/codex/skills/syndicatum-timeline/references/coordination.md",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
+      "source": "plugins/codex/skills/syndicatum-timeline/references/project-proposals.md",
+      "action": "ship",
+      "path": "plugins/codex/skills/syndicatum-timeline/references/project-proposals.md",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
       "source": "plugins/codex/test/authorization-listener.test.mjs",
       "action": "exclude",
       "path": "",

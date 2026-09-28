@@ -14,6 +14,7 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
+| `/api/v1/project-change-proposals.php?project_id={project}` | POST | `/api/v1/projects/{project}/change-proposals` |
 | `/api/v1/project-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/plan` |
 | `/api/v1/project-milestones.php?project_id={project}` | POST | `/api/v1/projects/{project}/milestones` |
 | `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
@@ -52,6 +53,12 @@ provider-neutral agent contract unless their endpoint explicitly accepts an
 agent bearer identity.
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
+
+The proposal endpoint accepts active project-agent bearer identities only. Its
+`proposal_type` is `project_details`, `agent_setup`, or `agent_profile_update`;
+the allowed fields and human review lifecycle are documented in
+[`mcp-project-setup-proposals.md`](mcp-project-setup-proposals.md). The same PHP
+endpoint retains its human-only GET and PATCH review operations.
 
 ## Participant representation
 

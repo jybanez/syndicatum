@@ -22,7 +22,9 @@ Read [the protocol reference](references/protocol-v1.md) before the first API ca
 - Treat every project message as visible to every active project participant. An addressee identifies who should evaluate or handle a message; it is not a private audience.
 - Treat every project task as visible to every active project participant. The authenticated creator is recorded automatically as the immutable task giver; assignment identifies responsibility, not a private audience. The agent profile supervisor remains a separate escalation relationship.
 - Create a tracked task only under the current authenticated identity; never submit or impersonate a creator or task-giver identity.
+- Set `action_requested` only when direct recipients are expected to perform and resolve work. Acknowledging the message is not action-request resolution or task completion.
 - Read shared tasks at startup. For assigned work, fetch the current task and use its latest `version` for lifecycle updates. On a version conflict, reload and reassess instead of automatically replaying the mutation.
+- When durable project details or project-agent setup should improve, submit a focused human-reviewed proposal. Never include credentials, activation, scopes, webhooks, claim codes, discussion references, or runtime paths; never imply a pending proposal has been applied.
 - Review recent messages at startup. If asked to monitor and Realtime is unavailable, use bounded polling with cursors and stop according to the user's requested duration or outcome.
 - Observe every visible message for context, but trigger automatic work only for a non-self-authored message whose addressees include the current participant. Process each `(project_id, message_id)` or logical correlation once unless a new addressed request adds information.
 - Acknowledge an addressed message after consciously accepting or completing its requested handling. Do not acknowledge messages on behalf of another participant.

@@ -119,6 +119,55 @@ test("profile task workflow creates work as the selected agent without a caller-
   assert.doesNotMatch(post.options.body, /supervising_participant_id|created_by_participant_id/);
 });
 
+test("profile proposal workflow submits only reviewable non-secret project improvements", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+    return response({ id: 91, proposal_type: "project_details", status: "pending", version: 1 });
+  };
+  const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+  const proposed = await client.proposeProjectDetails(profile.profile_id, {
+    description: "Clarify the project outcome.",
+    rationale: "The existing brief is ambiguous.",
+    token: "must-not-leave-the-client",
+  });
+  const post = calls.at(-1);
+  assert.equal(post.options.method, "POST");
+  assert.match(post.url, /project-change-proposals\.php\?project_id=3/);
+  assert.deepEqual(JSON.parse(post.options.body), {
+    description: "Clarify the project outcome.",
+    rationale: "The existing brief is ambiguous.",
+    proposal_type: "project_details",
+  });
+  assert.equal(proposed.proposal.status, "pending");
+  assert.doesNotMatch(JSON.stringify(proposed), /secret-agent-token|must-not-leave-the-client/);
+});
+
+test("profile proposal workflow normalizes agent setup and profile-update identifiers", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+    return response({ id: calls.length, status: "pending" });
+  };
+  const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+  await client.proposeAgentSetup(profile.profile_id, { display_name: " Researcher ", role_title: "Research", supervising_participant_id: "52" });
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    role_title: "Research",
+    display_name: "Researcher",
+    supervising_participant_id: 52,
+    proposal_type: "agent_setup",
+  });
+  await client.proposeAgentProfileUpdate(profile.profile_id, { target_agent_id: "29", role_summary: "Own release verification", supervising_participant_id: null });
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    role_summary: "Own release verification",
+    target_agent_id: 29,
+    supervising_participant_id: null,
+    proposal_type: "agent_profile_update",
+  });
+});
+
 function response(data) {
   return new Response(JSON.stringify({ data }), { status: 200, headers: { "Content-Type": "application/json" } });
 }
