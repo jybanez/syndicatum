@@ -69,13 +69,13 @@ try {
         'list_participants' => 'participants:read', 'list_messages' => 'messages:read',
         'list_tasks' => 'messages:read', 'get_task' => 'messages:read', 'create_task' => 'messages:write', 'update_task' => 'messages:write',
         'get_message' => 'messages:read', 'post_message' => 'messages:write',
-        'propose_project_details' => 'messages:write', 'propose_agent_setup' => 'messages:write',
+        'propose_project_details' => 'messages:write', 'propose_project_plan' => 'messages:write', 'propose_agent_setup' => 'messages:write',
         'propose_agent_profile_update' => 'messages:write',
         'acknowledge_message' => 'messages:acknowledge'];
     if (!isset($scopeMap[$name])) { throw new InvalidArgumentException('Unknown tool.'); }
     if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope', $oauth); }
     $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'acknowledge_message', 'create_task', 'update_task',
-        'propose_project_details', 'propose_agent_setup', 'propose_agent_profile_update'];
+        'propose_project_details', 'propose_project_plan', 'propose_agent_setup', 'propose_agent_profile_update'];
     (new RateLimiter($pdo))->hit(
         'mcp.' . $name,
         hash('sha256', $bearer),
@@ -176,6 +176,8 @@ try {
         $value = (new ProjectTaskService($pdo))->update($access, mcpPositiveId($args, 'task_id'), $input);
     } elseif ($name === 'propose_project_details') {
         $value = (new ProjectChangeProposalService($pdo))->proposeProjectDetails($access, $args);
+    } elseif ($name === 'propose_project_plan') {
+        $value = (new ProjectChangeProposalService($pdo))->proposeProjectPlan($access, $args);
     } elseif ($name === 'propose_agent_setup') {
         $value = (new ProjectChangeProposalService($pdo))->proposeAgentSetup($access, $args);
     } elseif ($name === 'propose_agent_profile_update') {
@@ -218,6 +220,18 @@ function mcpTools()
             'inputSchema' => ['type' => 'object', 'properties' => (object) $properties, 'required' => $required, 'additionalProperties' => false],
             'annotations' => $annotations, 'securitySchemes' => $oauth, '_meta' => ['securitySchemes' => $oauth]];
     };
+    $planDeliverableSchema = ['type' => 'object', 'required' => ['title'], 'additionalProperties' => false, 'properties' => [
+        'title' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 180],
+        'description' => ['type' => 'string', 'maxLength' => 10000],
+        'due_date' => ['type' => 'string', 'format' => 'date'],
+        'owner_participant_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
+    ]];
+    $planMilestoneSchema = ['type' => 'object', 'required' => ['title'], 'additionalProperties' => false, 'properties' => [
+        'title' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 180],
+        'description' => ['type' => 'string', 'maxLength' => 10000],
+        'target_date' => ['type' => 'string', 'format' => 'date'],
+        'deliverables' => ['type' => 'array', 'maxItems' => 20, 'items' => $planDeliverableSchema],
+    ]];
     return [
         $tool('diagnose_connection', 'Diagnose Syndicatum connection', 'Check MCP connectivity and this discussion binding. Without a valid binding_context_id, report Project: Unknown, Agent Identity: Unknown, and Discussion Binding: Required. With the context returned by a completed prepare_discussion_binding flow, report Discussion Binding: Successful.',
             ['binding_context_id' => ['type' => 'string', 'description' => 'Opaque context returned by prepare_discussion_binding for this discussion.']], [], $read),
@@ -255,6 +269,12 @@ function mcpTools()
                 'description' => ['type' => 'string', 'maxLength' => 10000],
                 'instructions' => ['type' => 'string', 'maxLength' => 50000],
                 'rationale' => ['type' => 'string', 'maxLength' => 4000]], [], $write),
+        $tool('propose_project_plan', 'Propose milestones and deliverables', 'Submit a bounded, create-only milestone and deliverable hierarchy for human owner or administrator review. Approval applies the hierarchy atomically; this tool never changes the project automatically.',
+            $binding + [
+                'milestones' => ['type' => 'array', 'maxItems' => 10, 'items' => $planMilestoneSchema],
+                'standalone_deliverables' => ['type' => 'array', 'maxItems' => 20, 'items' => $planDeliverableSchema],
+                'rationale' => ['type' => 'string', 'maxLength' => 4000],
+            ], [], $write),
         $tool('propose_agent_setup', 'Propose a project agent', 'Submit a proposed project agent profile for human owner or administrator review. Credentials, activation, scopes, webhooks, and working directories cannot be proposed and remain owner-controlled.',
             $binding + ['display_name' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 120],
                 'provider' => ['type' => 'string', 'maxLength' => 120], 'runtime_name' => ['type' => 'string', 'maxLength' => 160],

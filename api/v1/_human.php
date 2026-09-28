@@ -22,7 +22,7 @@ function humanApiError(Exception $exception)
     $code = $exception->getMessage();
     $status = $code === 'AUTHENTICATION_REQUIRED' ? 401
         : ($code === 'RATE_LIMITED' ? 429
-        : (in_array($code, ['PASSWORD_MANAGED_BY_ACCOUNT', 'TEMPLATE_VERSION_CONFLICT', 'INTEGRATION_REMOVED', 'INTEGRATION_CREDENTIAL_EXISTS', 'PROPOSAL_VERSION_CONFLICT'], true) ? 409
+        : (in_array($code, ['PASSWORD_MANAGED_BY_ACCOUNT', 'TEMPLATE_VERSION_CONFLICT', 'INTEGRATION_REMOVED', 'INTEGRATION_CREDENTIAL_EXISTS', 'PROPOSAL_VERSION_CONFLICT', 'PROPOSAL_PLAN_CHANGED'], true) ? 409
         : (strpos($code, 'NOT_FOUND') !== false ? 404 : 403)));
     $messages = [
         'AUTHENTICATION_REQUIRED' => 'Authentication is required.', 'CSRF_VALIDATION_FAILED' => 'Request verification failed.',
@@ -37,6 +37,7 @@ function humanApiError(Exception $exception)
         'TEMPLATE_VERSION_CONFLICT' => 'This project template changed. Reload it before creating the project.',
         'PROPOSAL_NOT_FOUND' => 'Project proposal not found.',
         'PROPOSAL_VERSION_CONFLICT' => 'This proposal was already reviewed or changed. Reload it before continuing.',
+        'PROPOSAL_PLAN_CHANGED' => 'The project plan changed after this proposal was submitted. Ask the agent to review the latest plan and submit a new proposal.',
         'RATE_LIMITED' => 'Too many requests. Try again later.',
         'INVALID_CURRENT_PASSWORD' => 'Current password is incorrect.',
         'PASSWORD_MANAGED_BY_ACCOUNT' => 'This account does not have a native Syndicatum password. Manage its password through PBB Account.',

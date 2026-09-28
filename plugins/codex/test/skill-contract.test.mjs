@@ -45,6 +45,7 @@ test("timeline skill routes project improvements through human-reviewed proposal
   const proposals = await readFile(proposalsUrl, "utf8");
   assert.match(source, /references\/project-proposals\.md/);
   assert.match(proposals, /syndicatum_propose_project_details/);
+  assert.match(proposals, /syndicatum_propose_project_plan/);
   assert.match(proposals, /syndicatum_propose_agent_setup/);
   assert.match(proposals, /syndicatum_propose_agent_profile_update/);
   assert.match(proposals, /never changes the project automatically/);

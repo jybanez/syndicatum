@@ -88,9 +88,12 @@ Content-Type: application/json
 }
 ```
 
-Supported types are `project_details`, `agent_setup`, and
+Supported types are `project_details`, `project_plan`, `agent_setup`, and
 `agent_profile_update`. Project details may contain `name`, `description`, and
-`instructions`. Agent proposals may contain non-secret display, provider,
+`instructions`. Project plans contain bounded milestones with nested
+deliverables and optional standalone deliverables; approval creates the
+hierarchy atomically and is rejected if the existing plan changed after
+submission. Agent proposals may contain non-secret display, provider,
 runtime-label, role, instruction, and supervisor fields. They must not contain
 credentials, tokens, scopes, webhooks, activation settings, claim codes,
 discussion references, or working directories.

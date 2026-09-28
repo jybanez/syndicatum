@@ -69,11 +69,11 @@ export const USER_GUIDE_SECTIONS = [
       {
         id: "ai-project-proposals",
         title: "Review AI project proposals",
-        summary: "Let project agents suggest better project details or agent roles while humans retain approval authority.",
-        keywords: ["AI", "MCP", "proposal", "project details", "agent setup", "role", "approve"],
+        summary: "Let project agents suggest better project details, milestone plans, or agent roles while humans retain approval authority.",
+        keywords: ["AI", "MCP", "proposal", "project details", "milestone", "deliverable", "agent setup", "role", "approve"],
         blocks: [
           { type: "steps", items: [
-            "An authorized project agent submits a focused project-detail, new-agent, or agent-profile proposal through MCP.",
+            "An authorized project agent submits a focused project-detail, milestone-and-deliverable plan, new-agent, or agent-profile proposal through MCP.",
             "As a project owner or administrator, open the AI Proposals tab in the timeline column. The project menu shortcut opens the same tab.",
             "Choose Review for a pending proposal, inspect the rationale, target agent when applicable, and every proposed field, then add an optional review note.",
             "Choose Approve and apply to commit the reviewed change, or Reject to preserve the current setup.",
@@ -81,6 +81,7 @@ export const USER_GUIDE_SECTIONS = [
           ] },
           { type: "list", items: [
             "Use project-detail proposals when an agent can clarify an incomplete brief after reading milestones and discussions.",
+            "Use project-plan proposals when an agent can turn broad outcomes into a bounded hierarchy of milestones and deliverables. Approval creates the hierarchy atomically but does not create tasks.",
             "Use new-agent proposals when a growing plan needs a specialist, such as an accessibility reviewer or release coordinator.",
             "Use profile-update proposals when an existing agent's actual responsibilities or supervisor have changed.",
           ] },

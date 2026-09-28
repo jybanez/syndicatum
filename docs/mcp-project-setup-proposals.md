@@ -1,8 +1,9 @@
 # MCP project and agent setup proposals
 
-Syndicatum agents can help improve project details and agent setup without receiving authority to change project governance directly. The MCP exposes three proposal tools:
+Syndicatum agents can help improve project details, project plans, and agent setup without receiving authority to change project governance directly. The MCP exposes four proposal tools:
 
 - `propose_project_details` suggests a project name, description, or operating instructions.
+- `propose_project_plan` suggests a bounded, create-only milestone and deliverable hierarchy.
 - `propose_agent_setup` suggests a new project-scoped agent profile.
 - `propose_agent_profile_update` suggests changes to an existing agent profile or supervisor assignment.
 
@@ -11,6 +12,8 @@ Every tool creates a durable, auditable proposal with `pending` status. A human 
 ## What agents can and cannot propose
 
 Project-detail proposals may contain only `name`, `description`, and `instructions`.
+
+Project-plan proposals may contain up to 10 milestones, up to 20 deliverables per milestone, up to 20 standalone deliverables, and no more than 50 deliverables in total. Each milestone can include a title, description, and date-only target. Each deliverable can include a title, description, date-only due date, and an optional active project participant as owner. Approval creates every milestone and deliverable in one transaction; it never creates tasks automatically. If the project plan changes after submission, approval is rejected so the agent can review the latest plan and submit a fresh proposal.
 
 Agent proposals may contain only:
 
@@ -45,6 +48,12 @@ A project begins with one general coordinator. New deliverables introduce access
 ### Rebalance an existing agent's responsibility
 
 During a launch, an agent notices that the “Content assistant” is now handling final publication checks. It proposes a role-title and role-instruction update, optionally changing the supervisor to the release manager. The owner sees the target agent and every changed field before applying the update.
+
+### Turn a broad objective into an outcome plan
+
+An owner asks an executive-assistant agent to help organize an SEO project. After reading the project brief and current plan, the agent proposes a “Technical SEO baseline” milestone with crawl-audit and remediation-plan deliverables, followed by a “Content and authority plan” milestone with topic-map and editorial-roadmap deliverables. The owner reviews the hierarchy as one proposal before any records are created. Tasks can then be distributed across specialists while remaining linked to the agreed deliverables.
+
+The same pattern works for an event-poster project: a “Creative approval” milestone can contain copy, visual design, accessibility review, and print-ready artwork deliverables. Multiple participants may later receive separate tasks contributing to each deliverable.
 
 ### Standardize setup across similar projects
 
@@ -81,6 +90,27 @@ Propose a new project agent:
 }
 ```
 
+Propose milestones and deliverables:
+
+```json
+{
+  "name": "propose_project_plan",
+  "arguments": {
+    "milestones": [
+      {
+        "title": "Technical SEO baseline",
+        "target_date": "2030-10-15",
+        "deliverables": [
+          { "title": "Crawl and indexation audit", "due_date": "2030-10-10" },
+          { "title": "Prioritized remediation plan" }
+        ]
+      }
+    ],
+    "rationale": "The project needs measurable outcome checkpoints before tasks are assigned."
+  }
+}
+```
+
 Propose an existing profile update:
 
 ```json
@@ -99,6 +129,7 @@ The MCP response returns the proposal ID, normalized payload, status, version, p
 
 The Codex plugin exposes the same operations through protected profile-bound
 tools named `syndicatum_propose_project_details`,
+`syndicatum_propose_project_plan`,
 `syndicatum_propose_agent_setup`, and
 `syndicatum_propose_agent_profile_update`. Each call requires the exact
 `profile_id`; the plugin supplies its protected bearer credential internally.

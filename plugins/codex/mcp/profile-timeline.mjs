@@ -106,6 +106,10 @@ export class ProfileTimelineClient {
     return this.propose(profileId, "project_details", copyDefined(input, ["name", "description", "instructions", "rationale"]));
   }
 
+  async proposeProjectPlan(profileId, input = {}) {
+    return this.propose(profileId, "project_plan", copyDefined(input, ["milestones", "standalone_deliverables", "rationale"]));
+  }
+
   async proposeAgentSetup(profileId, input = {}) {
     const displayName = String(input.display_name || "").trim();
     if (!displayName) throw new Error("An agent display name is required.");

@@ -8,6 +8,8 @@ human owner should review. A proposal is not a command: it is stored as
 
 - `syndicatum_propose_project_details` suggests a project name, description, or
   operating instructions.
+- `syndicatum_propose_project_plan` suggests a bounded, create-only hierarchy of
+  milestones and deliverables. Approval applies the hierarchy atomically.
 - `syndicatum_propose_agent_setup` suggests a new project-scoped agent profile.
 - `syndicatum_propose_agent_profile_update` suggests non-secret changes to an
   existing agent's profile, role, instructions, or supervisor.
@@ -35,6 +37,9 @@ workflows.
 - A planning agent discovers that an event-poster project brief omits its
   audience, approval gates, or success criteria. It proposes clearer project
   description or instructions.
+- An executive-assistant agent turns a broad SEO objective into reviewable
+  milestones such as a technical baseline and content strategy, with concrete
+  audit, remediation-plan, and editorial-roadmap deliverables beneath them.
 - Milestones introduce accessibility or print-production work. An agent proposes
   a dedicated reviewer with a narrow role and a human supervisor.
 - An existing content agent repeatedly owns release checks. An agent proposes a
@@ -52,6 +57,25 @@ Project improvement:
   "profile_id": "exact-profile-id",
   "instructions": "Publish client-facing artwork only after accessibility and owner review.",
   "rationale": "The milestone names an approval step but not the required review gates."
+}
+```
+
+Project plan:
+
+```json
+{
+  "profile_id": "exact-profile-id",
+  "milestones": [
+    {
+      "title": "Technical SEO baseline",
+      "target_date": "2030-10-15",
+      "deliverables": [
+        { "title": "Crawl and indexation audit" },
+        { "title": "Prioritized remediation plan" }
+      ]
+    }
+  ],
+  "rationale": "The project needs outcome checkpoints before task assignment."
 }
 ```
 

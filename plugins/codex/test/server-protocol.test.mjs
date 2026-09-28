@@ -50,6 +50,7 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     "syndicatum_create_task",
     "syndicatum_update_task",
     "syndicatum_propose_project_details",
+    "syndicatum_propose_project_plan",
     "syndicatum_propose_agent_setup",
     "syndicatum_propose_agent_profile_update",
     "syndicatum_post_message",
@@ -76,6 +77,7 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     openWorldHint: true,
   });
   assert.match(discoveredTools.find(tool => tool.name === "syndicatum_propose_project_details")?.description || "", /human owner or administrator review/i);
+  assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_propose_project_plan")?.inputSchema?.properties?.milestones?.maxItems, 10);
   assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_propose_agent_setup")?.inputSchema?.properties?.api_key, undefined);
   assert.equal(discoveredTools.find(tool => tool.name === "claim_agent_profile")?.annotations?.destructiveHint, true);
   child.kill(); await once(child, "close");
