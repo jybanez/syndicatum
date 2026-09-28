@@ -85,7 +85,7 @@ export const USER_GUIDE_SECTIONS = [
             "Use new-agent proposals when a growing plan needs a specialist, such as an accessibility reviewer or release coordinator.",
             "Use profile-update proposals when an existing agent's actual responsibilities or supervisor have changed.",
           ] },
-          { type: "note", text: "The tab retains the proposal history. Choose View details on an approved or rejected proposal to inspect its decision record. Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
+          { type: "note", text: "The tab updates through Realtime when an agent submits a proposal or a reviewer makes a decision, so no browser refresh is needed. It also retains the proposal history: choose View details on an approved or rejected proposal to inspect its decision record. Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
         ],
       },
       {

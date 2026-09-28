@@ -44,11 +44,27 @@ try {
         $same(1, count($list)); $same('Planning Agent', $list[0]['proposer']['display_name']);
     });
 
+    $test('proposal creation emits a content-free Realtime invalidation', function () use ($same, $details, $pdo) {
+        $query = $pdo->prepare('SELECT event_type, payload_json FROM message_events_outbox WHERE event_type = ? ORDER BY id DESC LIMIT 1');
+        $query->execute([MessageOutbox::EVENT_PROJECT_PROPOSALS_CHANGED]);
+        $event = $query->fetch(PDO::FETCH_ASSOC);
+        $same(MessageOutbox::EVENT_PROJECT_PROPOSALS_CHANGED, $event['event_type']);
+        $payload = json_decode($event['payload_json'], true);
+        $same((int) $details['id'], (int) $payload['proposal_id']);
+        $same('pending', $payload['status']);
+        $same(false, array_key_exists('payload', $payload));
+        $same(false, array_key_exists('rationale', $payload));
+    });
+
     $test('approval atomically applies project details and records the reviewer', function () use ($same, $details, $service, $project, $owner, $pdo) {
         $reviewed = $service->review($project['id'], $owner['id'], $details['id'], $details['version'], 'approve', 'Approved for clarity.');
         $same('approved', $reviewed['status']); $same('Proposal Owner', $reviewed['reviewer_name']);
         $query = $pdo->prepare('SELECT description FROM projects WHERE id = ?'); $query->execute([$project['id']]);
         $same('A reviewed project description.', $query->fetchColumn());
+        $eventQuery = $pdo->prepare('SELECT payload_json FROM message_events_outbox WHERE event_type = ? ORDER BY id DESC LIMIT 1');
+        $eventQuery->execute([MessageOutbox::EVENT_PROJECT_PROPOSALS_CHANGED]);
+        $eventPayload = json_decode($eventQuery->fetchColumn(), true);
+        $same('approved', $eventPayload['status']); $same(2, (int) $eventPayload['version']);
         try { $service->review($project['id'], $owner['id'], $details['id'], $details['version'], 'approve'); }
         catch (RuntimeException $error) { $same('PROPOSAL_VERSION_CONFLICT', $error->getMessage()); return; }
         throw new RuntimeException('Expected stale proposal review rejection.');
