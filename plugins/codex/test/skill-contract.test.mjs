@@ -46,6 +46,10 @@ test("timeline skill routes project improvements through human-reviewed proposal
   assert.match(source, /references\/project-proposals\.md/);
   assert.match(proposals, /syndicatum_propose_project_details/);
   assert.match(proposals, /syndicatum_propose_project_plan/);
+  assert.match(source, /must use\s+`syndicatum_propose_project_plan`/);
+  assert.match(proposals, /Do not paste the plan into `syndicatum_post_message`/);
+  assert.match(proposals, /must not replace the proposal/);
+  assert.match(proposals, /Do not downgrade the\s+request into a normal message/);
   assert.match(proposals, /syndicatum_propose_agent_setup/);
   assert.match(proposals, /syndicatum_propose_agent_profile_update/);
   assert.match(proposals, /never changes the project automatically/);
