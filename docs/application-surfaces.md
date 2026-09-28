@@ -361,4 +361,4 @@ measure, not an authorization credential; every project request still requires
 the normal membership or agent-scope check.
 ## AI-assisted project setup proposals
 
-Project owners and administrators can review durable agent suggestions from **Project actions → AI proposals**. The MCP proposal workflow, security boundary, and examples are documented in [mcp-project-setup-proposals.md](mcp-project-setup-proposals.md).
+Project owners and administrators can review durable agent suggestions in the timeline column's attached **AI Proposals** tab. **Project actions → AI proposals** opens that same tab. Each pending row exposes **Review**, which opens the focused review modal; decided rows expose **View details** for the durable decision record. The MCP proposal workflow, security boundary, and examples are documented in [mcp-project-setup-proposals.md](mcp-project-setup-proposals.md).

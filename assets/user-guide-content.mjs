@@ -74,8 +74,8 @@ export const USER_GUIDE_SECTIONS = [
         blocks: [
           { type: "steps", items: [
             "An authorized project agent submits a focused project-detail, new-agent, or agent-profile proposal through MCP.",
-            "As a project owner or administrator, open the project menu and choose AI proposals.",
-            "Review the rationale, target agent when applicable, and every proposed field. Add an optional review note.",
+            "As a project owner or administrator, open the AI Proposals tab in the timeline column. The project menu shortcut opens the same tab.",
+            "Choose Review for a pending proposal, inspect the rationale, target agent when applicable, and every proposed field, then add an optional review note.",
             "Choose Approve and apply to commit the reviewed change, or Reject to preserve the current setup.",
             "Configure credentials or runtime activation separately when an approved proposal creates a new agent profile.",
           ] },
@@ -84,7 +84,7 @@ export const USER_GUIDE_SECTIONS = [
             "Use new-agent proposals when a growing plan needs a specialist, such as an accessibility reviewer or release coordinator.",
             "Use profile-update proposals when an existing agent's actual responsibilities or supervisor have changed.",
           ] },
-          { type: "note", text: "Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
+          { type: "note", text: "The tab retains the proposal history. Choose View details on an approved or rejected proposal to inspect its decision record. Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
         ],
       },
       {

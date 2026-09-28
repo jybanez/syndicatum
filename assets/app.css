@@ -1132,12 +1132,15 @@ button, input, textarea { font: inherit; }
   .notification-row { grid-template-columns: 24px minmax(0, 1fr); }
   .notification-row-actions { justify-content: flex-start; }
 }
-.project-proposals-content { display: grid; gap: 10px; }
+.project-view-switch .ui-tabpanel.is-proposals { background: transparent; }
+.project-proposals-content { display: grid; flex: 1 1 auto; gap: 10px; align-content: start; min-width: 0; min-height: 0; overflow: auto; padding: 12px 3px 16px; }
+.project-proposals-status { margin: 0; padding: 18px 12px; color: var(--ui-text-muted); }
 .project-proposal-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface-raised, var(--ui-surface)); }
 .project-proposal-card.is-pending { border-left: 3px solid var(--ui-accent); }
 .project-proposal-card-header, .project-proposal-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .project-proposal-card-heading { display: grid; gap: 2px; }
 .project-proposal-card-heading > span, .project-proposal-card-footer, .project-proposal-target { color: var(--ui-text-muted); font-size: .82rem; }
+.project-proposal-card-metadata { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
 .project-proposal-summary { margin: 0; white-space: pre-wrap; }
 .project-proposal-status { text-transform: capitalize; }
 .project-proposal-status.is-approved { color: var(--ui-success); }
