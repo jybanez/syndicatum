@@ -3,18 +3,21 @@
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/ProjectManagementService.php';
+require_once __DIR__ . '/ProjectPlanService.php';
 
 class ProjectChangeProposalService
 {
     private $pdo;
     private $auth;
     private $management;
+    private $plan;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
         $this->auth = new AuthService($pdo);
         $this->management = new ProjectManagementService($pdo);
+        $this->plan = new ProjectPlanService($pdo);
     }
 
     public function proposeProjectDetails(array $access, array $input)
@@ -42,6 +45,44 @@ class ProjectChangeProposalService
         $this->assertNoSensitiveFields($input);
         $payload = $this->agentPayload($input, true);
         return $this->create($access, 'agent_setup', null, $payload, $input['rationale'] ?? '');
+    }
+
+    public function proposeProjectPlan(array $access, array $input)
+    {
+        $this->assertNoSensitiveFields($input);
+        $milestones = isset($input['milestones']) && is_array($input['milestones']) ? $input['milestones'] : [];
+        $standalone = isset($input['standalone_deliverables']) && is_array($input['standalone_deliverables'])
+            ? $input['standalone_deliverables'] : [];
+        if (count($milestones) > 10) { throw new InvalidArgumentException('A project plan proposal may contain at most 10 milestones.'); }
+        $payload = ['milestones' => []];
+        $deliverableCount = 0;
+        foreach ($milestones as $index => $milestone) {
+            if (!is_array($milestone)) { throw new InvalidArgumentException('Each proposed milestone must be an object.'); }
+            $deliverables = isset($milestone['deliverables']) && is_array($milestone['deliverables']) ? $milestone['deliverables'] : [];
+            if (count($deliverables) > 20) { throw new InvalidArgumentException('A milestone may contain at most 20 proposed deliverables.'); }
+            $normalized = $this->planMilestone($milestone, $index);
+            $normalized['deliverables'] = [];
+            foreach ($deliverables as $deliverableIndex => $deliverable) {
+                if (!is_array($deliverable)) { throw new InvalidArgumentException('Each proposed deliverable must be an object.'); }
+                $normalized['deliverables'][] = $this->planDeliverable($deliverable, $deliverableIndex);
+                $deliverableCount++;
+            }
+            $payload['milestones'][] = $normalized;
+        }
+        if (count($standalone) > 20) { throw new InvalidArgumentException('A project plan may contain at most 20 standalone deliverables.'); }
+        if ($standalone) {
+            $payload['standalone_deliverables'] = [];
+            foreach ($standalone as $index => $deliverable) {
+                if (!is_array($deliverable)) { throw new InvalidArgumentException('Each proposed deliverable must be an object.'); }
+                $payload['standalone_deliverables'][] = $this->planDeliverable($deliverable, $index);
+                $deliverableCount++;
+            }
+        }
+        if (!$payload['milestones'] && $deliverableCount === 0) {
+            throw new InvalidArgumentException('Propose at least one milestone or deliverable.');
+        }
+        if ($deliverableCount > 50) { throw new InvalidArgumentException('A project plan proposal may contain at most 50 deliverables.'); }
+        return $this->create($access, 'project_plan', null, $payload, $input['rationale'] ?? '', $this->planFingerprint((int) $access['project_id']));
     }
 
     public function proposeAgentProfileUpdate(array $access, array $input)
@@ -108,6 +149,11 @@ class ProjectChangeProposalService
                 if (!is_array($payload)) { throw new RuntimeException('PROPOSAL_PAYLOAD_INVALID'); }
                 if ($proposal['proposal_type'] === 'project_details') {
                     $this->management->updateProject($projectId, $userId, $payload);
+                } elseif ($proposal['proposal_type'] === 'project_plan') {
+                    if (!hash_equals((string) $proposal['base_plan_fingerprint'], $this->planFingerprint((int) $projectId))) {
+                        throw new RuntimeException('PROPOSAL_PLAN_CHANGED');
+                    }
+                    $this->applyProjectPlan($projectId, $userId, $payload);
                 } elseif ($proposal['proposal_type'] === 'agent_setup') {
                     $created = $this->management->createAgent($projectId, $userId, $payload);
                     $appliedAgentId = (int) $created['agent_id'];
@@ -137,7 +183,7 @@ class ProjectChangeProposalService
         }
     }
 
-    private function create(array $access, $type, $targetAgentId, array $payload, $rationale)
+    private function create(array $access, $type, $targetAgentId, array $payload, $rationale, $basePlanFingerprint = null)
     {
         $projectId = (int) ($access['project_id'] ?? 0);
         $participantId = (int) ($access['participant_id'] ?? 0);
@@ -154,10 +200,11 @@ class ProjectChangeProposalService
         if ($project->fetchColumn() !== 'active') { throw new RuntimeException('PROJECT_ARCHIVED'); }
         $now = Db::now();
         $statement = $this->pdo->prepare("INSERT INTO project_change_proposals
-            (public_id, project_id, proposal_type, target_agent_id, proposed_by_participant_id, payload_json, rationale, status, version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)");
+            (public_id, project_id, proposal_type, target_agent_id, proposed_by_participant_id, payload_json, rationale, base_plan_fingerprint, status, version, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)");
         $statement->execute([Db::uuidV4(), $projectId, $type, $targetAgentId, $participantId,
-            json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $rationale === '' ? null : $rationale, $now, $now]);
+            json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $rationale === '' ? null : $rationale,
+            $basePlanFingerprint, $now, $now]);
         $id = (int) $this->pdo->lastInsertId();
         $this->auth->audit(null, 'project.change_proposal_created', 'project_change_proposal', (string) $id,
             ['project_id' => $projectId, 'participant_id' => $participantId, 'proposal_type' => $type]);
@@ -187,6 +234,110 @@ class ProjectChangeProposalService
             }
         }
         return $payload;
+    }
+
+    private function planMilestone(array $input, $position)
+    {
+        $title = $this->planTitle($input, 'Milestone title');
+        $description = $this->planOptionalText($input, 'description', 10000, 'Milestone description');
+        $target = $this->planOptionalDay($input['target_date'] ?? ($input['target_at'] ?? null), 'Milestone target date');
+        return array_filter(['title' => $title, 'description' => $description, 'target_date' => $target,
+            'position' => (int) $position], function ($value) { return $value !== null; });
+    }
+
+    private function planDeliverable(array $input, $position)
+    {
+        $title = $this->planTitle($input, 'Deliverable title');
+        $description = $this->planOptionalText($input, 'description', 10000, 'Deliverable description');
+        $due = $this->planOptionalDay($input['due_date'] ?? ($input['due_at'] ?? null), 'Deliverable due date');
+        $owner = null;
+        if (array_key_exists('owner_participant_id', $input) && $input['owner_participant_id'] !== null && $input['owner_participant_id'] !== '') {
+            if (!preg_match('/^[1-9][0-9]*$/', (string) $input['owner_participant_id'])) {
+                throw new InvalidArgumentException('Deliverable owner participant must be a positive integer or null.');
+            }
+            $owner = (int) $input['owner_participant_id'];
+        }
+        return array_filter(['title' => $title, 'description' => $description, 'due_date' => $due,
+            'owner_participant_id' => $owner, 'position' => (int) $position], function ($value) { return $value !== null; });
+    }
+
+    private function applyProjectPlan($projectId, $userId, array $payload)
+    {
+        $access = $this->reviewerPlanAccess($projectId, $userId);
+        foreach (($payload['milestones'] ?? []) as $milestone) {
+            $created = $this->plan->createMilestone($access, [
+                'title' => $milestone['title'], 'description' => $milestone['description'] ?? null,
+                'status' => 'planned', 'target_at' => $milestone['target_date'] ?? null,
+                'position' => $milestone['position'] ?? 0,
+            ]);
+            foreach (($milestone['deliverables'] ?? []) as $deliverable) {
+                $this->plan->createDeliverable($access, [
+                    'milestone_id' => $created['id'], 'title' => $deliverable['title'],
+                    'description' => $deliverable['description'] ?? null, 'status' => 'planned',
+                    'owner_participant_id' => $deliverable['owner_participant_id'] ?? null,
+                    'due_at' => $deliverable['due_date'] ?? null, 'position' => $deliverable['position'] ?? 0,
+                ]);
+            }
+        }
+        foreach (($payload['standalone_deliverables'] ?? []) as $deliverable) {
+            $this->plan->createDeliverable($access, [
+                'milestone_id' => null, 'title' => $deliverable['title'],
+                'description' => $deliverable['description'] ?? null, 'status' => 'planned',
+                'owner_participant_id' => $deliverable['owner_participant_id'] ?? null,
+                'due_at' => $deliverable['due_date'] ?? null, 'position' => $deliverable['position'] ?? 0,
+            ]);
+        }
+    }
+
+    private function reviewerPlanAccess($projectId, $userId)
+    {
+        $statement = $this->pdo->prepare("SELECT pp.id AS participant_id, pm.role, p.status AS project_status
+            FROM projects p JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ? AND pm.status = 'active'
+            JOIN project_participants pp ON pp.project_id = p.id AND pp.user_id = ? AND pp.kind = 'human' AND pp.status = 'active'
+            WHERE p.id = ? LIMIT 1");
+        $statement->execute([(int) $userId, (int) $userId, (int) $projectId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new RuntimeException('PROJECT_NOT_FOUND'); }
+        return ['project_id' => (int) $projectId, 'participant_id' => (int) $row['participant_id'],
+            'project_status' => $row['project_status'], 'role' => $row['role'], 'identity' => ['kind' => 'human']];
+    }
+
+    private function planFingerprint($projectId)
+    {
+        $parts = [];
+        foreach ([
+            ['project_milestones', 'SELECT id, version, position FROM project_milestones WHERE project_id = ? ORDER BY id'],
+            ['project_deliverables', 'SELECT id, version, milestone_id, position FROM project_deliverables WHERE project_id = ? ORDER BY id'],
+        ] as $definition) {
+            $statement = $this->pdo->prepare($definition[1]);
+            $statement->execute([(int) $projectId]);
+            $parts[$definition[0]] = $statement->fetchAll(PDO::FETCH_ASSOC);
+        }
+        return hash('sha256', json_encode($parts, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function planTitle(array $input, $label)
+    {
+        $value = trim((string) ($input['title'] ?? ''));
+        if ($value === '' || mb_strlen($value) > 180) { throw new InvalidArgumentException($label . ' is required and must not exceed 180 characters.'); }
+        return $value;
+    }
+
+    private function planOptionalText(array $input, $field, $limit, $label)
+    {
+        if (!array_key_exists($field, $input) || trim((string) $input[$field]) === '') { return null; }
+        $value = trim((string) $input[$field]);
+        if (mb_strlen($value) > $limit) { throw new InvalidArgumentException($label . ' must not exceed ' . number_format($limit) . ' characters.'); }
+        return $value;
+    }
+
+    private function planOptionalDay($value, $label)
+    {
+        $value = trim((string) $value);
+        if ($value === '') { return null; }
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if (!$date || $date->format('Y-m-d') !== $value) { throw new InvalidArgumentException($label . ' must use YYYY-MM-DD.'); }
+        return $value;
     }
 
     private function copyFields(array $input, array $allowed)

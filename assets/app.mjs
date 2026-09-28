@@ -2831,7 +2831,7 @@ function openEditProjectModal() {
 }
 
 function projectProposalLabel(type) {
-  return ({ project_details: "Project details", agent_setup: "New agent setup", agent_profile_update: "Agent profile update" })[type] || "Project change";
+  return ({ project_details: "Project details", project_plan: "Milestones & deliverables", agent_setup: "New agent setup", agent_profile_update: "Agent profile update" })[type] || "Project change";
 }
 
 function projectProposalFieldLabel(field) {
@@ -2841,18 +2841,75 @@ function projectProposalFieldLabel(field) {
     || field.replaceAll("_", " ").replace(/^./, (value) => value.toUpperCase());
 }
 
+function projectProposalParticipantName(participantId) {
+  if (!participantId) return "Unassigned";
+  return state.participants.find((participant) => id(participant.id) === id(participantId))?.display_name
+    || `Participant #${participantId}`;
+}
+
+function renderProjectPlanProposalDetails(payload = {}) {
+  const plan = projectInfoElement("div", "project-proposal-plan");
+  const milestones = Array.isArray(payload.milestones) ? payload.milestones : [];
+  milestones.forEach((milestone) => {
+    const section = projectInfoElement("section", "project-proposal-plan-milestone");
+    const header = projectInfoElement("header", "project-proposal-plan-heading");
+    const copy = projectInfoElement("span", "");
+    copy.append(projectInfoElement("strong", "", milestone.title || "Untitled milestone"));
+    if (milestone.description) copy.append(projectInfoElement("p", "", milestone.description));
+    header.append(copy);
+    if (milestone.target_date) header.append(projectInfoElement("span", "project-proposal-plan-date", `Target ${milestone.target_date}`));
+    section.append(header);
+    const deliverables = projectInfoElement("div", "project-proposal-plan-deliverables");
+    (Array.isArray(milestone.deliverables) ? milestone.deliverables : []).forEach((deliverable) => {
+      const item = projectInfoElement("article", "project-proposal-plan-deliverable");
+      const itemCopy = projectInfoElement("span", "");
+      itemCopy.append(projectInfoElement("strong", "", deliverable.title || "Untitled deliverable"));
+      if (deliverable.description) itemCopy.append(projectInfoElement("p", "", deliverable.description));
+      const meta = [deliverable.due_date ? `Due ${deliverable.due_date}` : "", deliverable.owner_participant_id ? `Owner: ${projectProposalParticipantName(deliverable.owner_participant_id)}` : ""].filter(Boolean);
+      item.append(itemCopy);
+      if (meta.length) item.append(projectInfoElement("span", "project-proposal-plan-meta", meta.join(" · ")));
+      deliverables.append(item);
+    });
+    if (!deliverables.childElementCount) deliverables.append(projectInfoElement("p", "project-proposal-plan-empty", "No deliverables proposed for this milestone."));
+    section.append(deliverables);
+    plan.append(section);
+  });
+  const standalone = Array.isArray(payload.standalone_deliverables) ? payload.standalone_deliverables : [];
+  if (standalone.length) {
+    const section = projectInfoElement("section", "project-proposal-plan-milestone");
+    section.append(projectInfoElement("strong", "", "Standalone deliverables"));
+    const list = projectInfoElement("div", "project-proposal-plan-deliverables");
+    standalone.forEach((deliverable) => {
+      const item = projectInfoElement("article", "project-proposal-plan-deliverable");
+      const itemCopy = projectInfoElement("span", "");
+      itemCopy.append(projectInfoElement("strong", "", deliverable.title || "Untitled deliverable"));
+      if (deliverable.description) itemCopy.append(projectInfoElement("p", "", deliverable.description));
+      item.append(itemCopy);
+      const meta = [deliverable.due_date ? `Due ${deliverable.due_date}` : "", deliverable.owner_participant_id ? `Owner: ${projectProposalParticipantName(deliverable.owner_participant_id)}` : ""].filter(Boolean);
+      if (meta.length) item.append(projectInfoElement("span", "project-proposal-plan-meta", meta.join(" · ")));
+      list.append(item);
+    });
+    section.append(list); plan.append(section);
+  }
+  return plan;
+}
+
 function openProjectProposalDetails(proposal) {
   if (state.components.projectProposalDetailsModal?.getState?.().open) return;
   const pending = proposal.status === "pending";
   const content = projectInfoElement("div", "project-proposal-decision");
   content.append(projectInfoElement("p", "project-proposal-rationale", proposal.rationale || "No rationale was supplied."));
-  const details = projectInfoElement("dl", "project-proposal-fields");
-  Object.entries(proposal.payload || {}).forEach(([field, value]) => {
-    const row = projectInfoElement("div", "project-proposal-field");
-    row.append(projectInfoElement("dt", "", projectProposalFieldLabel(field)), projectInfoElement("dd", "", value === null ? "None" : String(value)));
-    details.append(row);
-  });
-  content.append(details);
+  if (proposal.proposal_type === "project_plan") {
+    content.append(renderProjectPlanProposalDetails(proposal.payload || {}));
+  } else {
+    const details = projectInfoElement("dl", "project-proposal-fields");
+    Object.entries(proposal.payload || {}).forEach(([field, value]) => {
+      const row = projectInfoElement("div", "project-proposal-field");
+      row.append(projectInfoElement("dt", "", projectProposalFieldLabel(field)), projectInfoElement("dd", "", value === null ? "None" : String(value)));
+      details.append(row);
+    });
+    content.append(details);
+  }
   if (!pending) {
     const review = projectInfoElement("dl", "project-proposal-fields");
     const reviewer = projectInfoElement("div", "project-proposal-field");
@@ -2907,7 +2964,7 @@ function openProjectProposalDetails(proposal) {
   };
   modal = state.factories.createActionModal({
     title: pending ? `Review ${projectProposalLabel(proposal.proposal_type).toLowerCase()}` : `${projectProposalLabel(proposal.proposal_type)} details`,
-    size: "md",
+    size: proposal.proposal_type === "project_plan" ? "lg" : "md",
     content,
     actions: pending ? [
       { id: "cancel", label: "Cancel" },

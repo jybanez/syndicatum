@@ -5,6 +5,7 @@ require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/ProjectChangeProposalService.php';
+require_once dirname(__DIR__) . '/src/ProjectPlanService.php';
 require_once dirname(__DIR__) . '/src/PostBaselineMigrator.php';
 require_once dirname(__DIR__) . '/src/BaselineMetadata.php';
 
@@ -31,6 +32,10 @@ try {
     $agentAccess = ['project_id' => (int) $project['id'], 'participant_id' => (int) $participant->fetchColumn(),
         'project_status' => 'active', 'role' => 'agent', 'identity' => ['kind' => 'agent', 'agent' => ['authenticated_agent_id' => $sourceAgent['agent_id']]]];
     $service = new ProjectChangeProposalService($pdo);
+    $ownerParticipant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
+    $ownerParticipant->execute([$project['id'], $owner['id']]);
+    $ownerAccess = ['project_id' => (int) $project['id'], 'participant_id' => (int) $ownerParticipant->fetchColumn(),
+        'project_status' => 'active', 'role' => 'owner', 'identity' => ['kind' => 'human']];
 
     $details = $service->proposeProjectDetails($agentAccess, ['description' => 'A reviewed project description.', 'rationale' => 'The original brief is incomplete.']);
     $test('agents submit durable pending project proposals', function () use ($same, $details, $service, $project, $owner) {
@@ -66,6 +71,56 @@ try {
         $same('rejected', $reviewed['status']);
         $query = $pdo->prepare('SELECT role_title FROM project_agents WHERE project_id = ? AND agent_id = ?');
         $query->execute([$project['id'], $sourceAgent['agent_id']]); $same(null, $query->fetchColumn());
+    });
+
+    $plan = $service->proposeProjectPlan($agentAccess, [
+        'milestones' => [[
+            'title' => 'Technical SEO baseline', 'description' => 'Establish the measurable starting point.',
+            'target_date' => '2030-10-15',
+            'deliverables' => [[
+                'title' => 'Crawl and indexation audit', 'due_date' => '2030-10-10',
+                'owner_participant_id' => $agentAccess['participant_id'],
+            ], ['title' => 'Prioritized remediation plan']],
+        ]],
+        'standalone_deliverables' => [['title' => 'SEO measurement brief']],
+        'rationale' => 'The project needs outcome checkpoints before tasks are assigned.',
+    ]);
+    $test('project-plan approval atomically creates nested milestones and deliverables', function () use ($same, $plan, $service, $project, $owner, $pdo) {
+        $same('project_plan', $plan['proposal_type']); $same('pending', $plan['status']);
+        $same(1, count($plan['payload']['milestones']));
+        $same(2, count($plan['payload']['milestones'][0]['deliverables']));
+        $reviewed = $service->review($project['id'], $owner['id'], $plan['id'], $plan['version'], 'approve');
+        $same('approved', $reviewed['status']);
+        $milestones = $pdo->prepare('SELECT title, status, target_at FROM project_milestones WHERE project_id = ? ORDER BY position, id');
+        $milestones->execute([$project['id']]); $rows = $milestones->fetchAll(PDO::FETCH_ASSOC);
+        $same(1, count($rows)); $same('Technical SEO baseline', $rows[0]['title']); $same('planned', $rows[0]['status']);
+        $same('2030-10-15 00:00:00', $rows[0]['target_at']);
+        $deliverables = $pdo->prepare('SELECT title, milestone_id, status FROM project_deliverables WHERE project_id = ? ORDER BY milestone_id IS NULL, position, id');
+        $deliverables->execute([$project['id']]); $outputs = $deliverables->fetchAll(PDO::FETCH_ASSOC);
+        $same(3, count($outputs)); $same('Crawl and indexation audit', $outputs[0]['title']);
+        $same('planned', $outputs[0]['status']); $same(null, $outputs[2]['milestone_id']);
+    });
+
+    $stalePlan = $service->proposeProjectPlan($agentAccess, ['milestones' => [['title' => 'Content authority']]]);
+    (new ProjectPlanService($pdo))->createMilestone($ownerAccess, ['title' => 'Owner-added checkpoint']);
+    $test('project-plan approval rejects a stale plan without partial writes', function () use ($same, $stalePlan, $service, $project, $owner, $pdo) {
+        $before = (int) $pdo->query('SELECT COUNT(*) FROM project_milestones')->fetchColumn();
+        try { $service->review($project['id'], $owner['id'], $stalePlan['id'], $stalePlan['version'], 'approve'); }
+        catch (RuntimeException $error) {
+            $same('PROPOSAL_PLAN_CHANGED', $error->getMessage());
+            $same($before, (int) $pdo->query('SELECT COUNT(*) FROM project_milestones')->fetchColumn());
+            return;
+        }
+        throw new RuntimeException('Expected stale project plan rejection.');
+    });
+
+    $test('project-plan proposals enforce bounded create-only input', function () use ($service, $agentAccess) {
+        try { $service->proposeProjectPlan($agentAccess, ['milestones' => array_fill(0, 11, ['title' => 'Too many'])]); }
+        catch (InvalidArgumentException $error) {
+            if (strpos($error->getMessage(), 'at most 10 milestones') === false) { throw $error; }
+            return;
+        }
+        throw new RuntimeException('Expected oversized project plan rejection.');
     });
 
     $test('human and credential-shaped submissions are rejected', function () use ($same, $service, $agentAccess) {

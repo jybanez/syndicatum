@@ -17,6 +17,8 @@ if ($method === 'POST') {
         $service = new ProjectChangeProposalService($pdo);
         if ($type === 'project_details') {
             $proposal = $service->proposeProjectDetails($access, $body);
+        } elseif ($type === 'project_plan') {
+            $proposal = $service->proposeProjectPlan($access, $body);
         } elseif ($type === 'agent_setup') {
             $proposal = $service->proposeAgentSetup($access, $body);
         } elseif ($type === 'agent_profile_update') {

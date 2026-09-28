@@ -110,6 +110,55 @@ const tools = [
     inputSchema: { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty(), name: { type: "string", minLength: 1, maxLength: 160 }, description: { type: "string", maxLength: 10000 }, instructions: { type: "string", maxLength: 50000 }, rationale: { type: "string", maxLength: 4000 } }, additionalProperties: false },
   },
   {
+    name: "syndicatum_propose_project_plan",
+    description: "Submit a bounded, create-only hierarchy of milestones and deliverables for human owner or administrator review. Approval applies it atomically; this never changes the project automatically.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: {
+      type: "object",
+      required: ["profile_id"],
+      additionalProperties: false,
+      properties: {
+        profile_id: profileIdProperty(),
+        milestones: {
+          type: "array", maxItems: 10,
+          items: {
+            type: "object", required: ["title"], additionalProperties: false,
+            properties: {
+              title: { type: "string", minLength: 1, maxLength: 180 },
+              description: { type: "string", maxLength: 10000 },
+              target_date: { type: "string", format: "date" },
+              deliverables: {
+                type: "array", maxItems: 20,
+                items: {
+                  type: "object", required: ["title"], additionalProperties: false,
+                  properties: {
+                    title: { type: "string", minLength: 1, maxLength: 180 },
+                    description: { type: "string", maxLength: 10000 },
+                    due_date: { type: "string", format: "date" },
+                    owner_participant_id: { type: ["integer", "string", "null"] },
+                  },
+                },
+              },
+            },
+          },
+        },
+        standalone_deliverables: {
+          type: "array", maxItems: 20,
+          items: {
+            type: "object", required: ["title"], additionalProperties: false,
+            properties: {
+              title: { type: "string", minLength: 1, maxLength: 180 },
+              description: { type: "string", maxLength: 10000 },
+              due_date: { type: "string", format: "date" },
+              owner_participant_id: { type: ["integer", "string", "null"] },
+            },
+          },
+        },
+        rationale: { type: "string", maxLength: 4000 },
+      },
+    },
+  },
+  {
     name: "syndicatum_propose_agent_setup",
     description: "Suggest a new project agent profile for human owner or administrator review. Credentials, activation, scopes, webhooks, and runtime paths are not accepted.",
     annotations: remoteWriteAnnotations,
@@ -234,6 +283,7 @@ async function callTool(name, args) {
   if (name === "syndicatum_create_task") return textResult(await timeline.createTask(args.profile_id, args));
   if (name === "syndicatum_update_task") return textResult(await timeline.updateTask(args.profile_id, args.task_id, args));
   if (name === "syndicatum_propose_project_details") return textResult(await timeline.proposeProjectDetails(args.profile_id, args));
+  if (name === "syndicatum_propose_project_plan") return textResult(await timeline.proposeProjectPlan(args.profile_id, args));
   if (name === "syndicatum_propose_agent_setup") return textResult(await timeline.proposeAgentSetup(args.profile_id, args));
   if (name === "syndicatum_propose_agent_profile_update") return textResult(await timeline.proposeAgentProfileUpdate(args.profile_id, args));
   if (name === "syndicatum_post_message") return textResult(await timeline.post(args.profile_id, args));

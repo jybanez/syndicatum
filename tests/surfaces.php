@@ -1406,15 +1406,18 @@ try {
         $activation = file_get_contents($root . '/src/ResponsesApiActivationService.php');
         $ui = file_get_contents($root . '/assets/app.mjs');
         $docs = file_get_contents($root . '/docs/mcp-project-setup-proposals.md');
-        foreach (['propose_project_details', 'propose_agent_setup', 'propose_agent_profile_update'] as $tool) {
+        foreach (['propose_project_details', 'propose_project_plan', 'propose_agent_setup', 'propose_agent_profile_update'] as $tool) {
             $suite->true(strpos($source, "'" . $tool . "'") !== false, $tool . ' must be exposed through MCP.');
             $suite->true(strpos($activation, "'" . $tool . "'") !== false, $tool . ' must be available to Responses agents.');
         }
         $suite->true(strpos($ui, 'AI project proposals') !== false && strpos($ui, 'Approve and apply') !== false,
             'Project administrators need a visible proposal review workflow.');
+        $suite->true(strpos($ui, 'renderProjectPlanProposalDetails') !== false,
+            'Milestone and deliverable proposals need a hierarchical review preview.');
         $suite->true(strpos($docs, 'Refine an incomplete project brief') !== false
             && strpos($docs, 'Add a specialist when the plan grows') !== false
-            && strpos($docs, 'Rebalance an existing agent') !== false,
+            && strpos($docs, 'Rebalance an existing agent') !== false
+            && strpos($docs, 'Turn a broad objective into an outcome plan') !== false,
             'Proposal documentation must include practical scenarios.');
         $suite->true(strpos($docs, 'credentials, API keys, tokens, scopes, webhook URLs') !== false,
             'Proposal documentation must state the credential boundary.');

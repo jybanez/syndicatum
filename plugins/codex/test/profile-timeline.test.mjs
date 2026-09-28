@@ -144,6 +144,25 @@ test("profile proposal workflow submits only reviewable non-secret project impro
   assert.doesNotMatch(JSON.stringify(proposed), /secret-agent-token|must-not-leave-the-client/);
 });
 
+test("profile proposal workflow submits a bounded nested project plan for review", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+    return response({ id: 92, proposal_type: "project_plan", status: "pending", version: 1 });
+  };
+  const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+  const milestones = [{ title: "Technical baseline", target_date: "2030-10-15", deliverables: [{ title: "Crawl audit" }] }];
+  const proposed = await client.proposeProjectPlan(profile.profile_id, {
+    milestones, rationale: "Create outcome checkpoints.", token: "must-not-leave-the-client",
+  });
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    milestones, rationale: "Create outcome checkpoints.", proposal_type: "project_plan",
+  });
+  assert.equal(proposed.proposal.proposal_type, "project_plan");
+  assert.doesNotMatch(calls.at(-1).options.body, /must-not-leave-the-client/);
+});
+
 test("profile proposal workflow normalizes agent setup and profile-update identifiers", async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {
