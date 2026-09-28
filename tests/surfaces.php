@@ -669,7 +669,8 @@ try {
             && strpos($source, 'params.set("message_kind", state.filters.kind)') !== false,
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.209";') !== false,
+            && strpos($loader, 'const UI_TIMELINE_REV = "0.21.212";') !== false
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.212";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -831,20 +832,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.209 retains native theme integration, attached tabs, and the integration icon family', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.212 retains native theme integration, timeline stability, attached tabs, and the integration icon family', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.209') !== false,
-                'Every Helper entry point must use the canonical 0.21.209 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.212') !== false,
+                'Every Helper entry point must use the canonical 0.21.212 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.209') !== false,
-                $surface . ' must use the matching canonical 0.21.209 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.212') !== false,
+                $surface . ' must use the matching canonical 0.21.212 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -864,6 +865,17 @@ try {
             'The Helper bundle must expose the native timeline context-menu implementation.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
+        $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
+            'The Helper timeline must anchor virtual rows to the scroll content origin rather than the bordered viewport box.');
+        $suite->same('db656cbe31e4a46cf9d8014c70e8b557294cd1611af152bf50e47b6f3dbe196e',
+            hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
+            'The vendored Helper JavaScript must match upstream commit 271cf3a exactly.');
+        $suite->same('dc96cb32247fa27e9af8fced358f2d75841cbbe1d856e7ea59af2731f3e5d595',
+            hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
+            'The vendored Helper stylesheet must match upstream commit 271cf3a exactly.');
+        $suite->same('5b9b52ae7dd4c7d216fcdde6a36ed925cf3d6a61c598baacb5dc390145acc75b',
+            hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
+            'The vendored Helper loader must match upstream commit 271cf3a exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
