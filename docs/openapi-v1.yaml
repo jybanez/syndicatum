@@ -271,6 +271,17 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Deliverable version conflict }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-plan-order.php:
+    patch:
+      summary: Atomically reorder milestones or move and reorder deliverables
+      description: Requires an owner or administrator. Milestone changes submit the complete milestone order and exact versions. Deliverable changes submit source and destination membership, complete affected orders, and exact affected versions. A conflict never applies a partial order.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200': { description: Authoritative project plan after the atomic reorder }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Project-plan order or optimistic-version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-status-summary.php:
     get:
       summary: Read owner-only headline project status aggregates

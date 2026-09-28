@@ -20,6 +20,7 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
 | `/api/v1/project-deliverables.php?project_id={project}` | POST | `/api/v1/projects/{project}/deliverables` |
 | `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}` |
+| `/api/v1/project-plan-order.php?project_id={project}` | PATCH | `/api/v1/projects/{project}/plan/order` |
 | `/api/v1/project-status-summary.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/summary` |
 | `/api/v1/project-status-task-progress.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/task-progress` |
 | `/api/v1/project-status-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/plan` |

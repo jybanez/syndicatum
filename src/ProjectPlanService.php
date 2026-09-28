@@ -147,6 +147,122 @@ class ProjectPlanService
         return $this->deliverable($projectId, (int) $id);
     }
 
+    public function reorder(array $access, array $input)
+    {
+        $this->requireManager($access);
+        $kind = isset($input['kind']) ? (string) $input['kind'] : '';
+        if ($kind === 'milestones') { return $this->reorderMilestones($access, $input); }
+        if ($kind === 'deliverables') { return $this->reorderDeliverables($access, $input); }
+        throw new InvalidArgumentException('Choose a valid project-plan reorder kind.');
+    }
+
+    private function reorderMilestones(array $access, array $input)
+    {
+        $projectId = (int) $access['project_id'];
+        $orderedIds = $this->idList(isset($input['ordered_ids']) ? $input['ordered_ids'] : null, 'Milestone order');
+        $versions = $this->versionMap(isset($input['versions']) ? $input['versions'] : null, 'Milestone versions');
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare('SELECT id, version FROM project_milestones WHERE project_id = ? ORDER BY id FOR UPDATE');
+            $statement->execute([$projectId]);
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+            $currentIds = array_map(function ($row) { return (int) $row['id']; }, $rows);
+            $this->requireSameIds($currentIds, $orderedIds, 'Milestone order');
+            $this->requireVersions($rows, $versions);
+            $update = $this->pdo->prepare('UPDATE project_milestones SET position = ?, version = version + 1, updated_at = ? WHERE project_id = ? AND id = ? AND version = ?');
+            $now = Db::now();
+            $byId = [];
+            foreach ($rows as $row) { $byId[(int) $row['id']] = (int) $row['version']; }
+            foreach ($orderedIds as $position => $id) {
+                $update->execute([(int) $position, $now, $projectId, $id, $byId[$id]]);
+                if ($update->rowCount() !== 1) { throw new RuntimeException('PROJECT_PLAN_REORDER_CONFLICT'); }
+            }
+            $this->pdo->commit();
+        } catch (Exception $error) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $error;
+        }
+        return $this->plan($access);
+    }
+
+    private function reorderDeliverables(array $access, array $input)
+    {
+        $projectId = (int) $access['project_id'];
+        $movedId = isset($input['moved_id']) ? (int) $input['moved_id'] : 0;
+        if ($movedId < 1) { throw new InvalidArgumentException('A moved deliverable is required.'); }
+        $fromMilestoneId = $this->nullableId(isset($input['from_milestone_id']) ? $input['from_milestone_id'] : null, 'Source milestone');
+        $toMilestoneId = $this->nullableId(isset($input['to_milestone_id']) ? $input['to_milestone_id'] : null, 'Destination milestone');
+        $orders = isset($input['orders']) ? $input['orders'] : null;
+        if (!is_array($orders) || count($orders) < 1 || count($orders) > 2) {
+            throw new InvalidArgumentException('Deliverable orders must include each affected milestone exactly once.');
+        }
+        $submitted = [];
+        foreach ($orders as $order) {
+            if (!is_array($order) || !array_key_exists('milestone_id', $order)) { throw new InvalidArgumentException('Each deliverable order requires a milestone.'); }
+            $milestoneId = $this->nullableId($order['milestone_id'], 'Deliverable-order milestone');
+            $key = $milestoneId === null ? 'standalone' : (string) $milestoneId;
+            if (isset($submitted[$key])) { throw new InvalidArgumentException('Each affected milestone may appear only once.'); }
+            $submitted[$key] = ['milestone_id' => $milestoneId, 'ordered_ids' => $this->idList(isset($order['ordered_ids']) ? $order['ordered_ids'] : null, 'Deliverable order')];
+        }
+        $affected = [];
+        foreach ([$fromMilestoneId, $toMilestoneId] as $milestoneId) { $affected[$milestoneId === null ? 'standalone' : (string) $milestoneId] = $milestoneId; }
+        $submittedKeys = array_keys($submitted);
+        $affectedKeys = array_keys($affected);
+        sort($submittedKeys, SORT_STRING);
+        sort($affectedKeys, SORT_STRING);
+        if ($submittedKeys !== $affectedKeys) {
+            throw new InvalidArgumentException('Deliverable orders must match the affected source and destination milestones.');
+        }
+        $versions = $this->versionMap(isset($input['versions']) ? $input['versions'] : null, 'Deliverable versions');
+
+        $this->pdo->beginTransaction();
+        try {
+            if ($toMilestoneId !== null) {
+                $milestone = $this->pdo->prepare('SELECT id FROM project_milestones WHERE project_id = ? AND id = ? FOR UPDATE');
+                $milestone->execute([$projectId, $toMilestoneId]);
+                if (!$milestone->fetchColumn()) { throw new InvalidArgumentException('Select a destination milestone from this project.'); }
+            }
+            $statement = $this->pdo->prepare('SELECT id, milestone_id, version FROM project_deliverables WHERE project_id = ? ORDER BY id FOR UPDATE');
+            $statement->execute([$projectId]);
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+            $byId = [];
+            $currentByGroup = [];
+            foreach ($rows as $row) {
+                $id = (int) $row['id'];
+                $milestoneId = $row['milestone_id'] === null ? null : (int) $row['milestone_id'];
+                $key = $milestoneId === null ? 'standalone' : (string) $milestoneId;
+                $row['id'] = $id; $row['milestone_id'] = $milestoneId; $row['version'] = (int) $row['version'];
+                $byId[$id] = $row; $currentByGroup[$key][] = $id;
+            }
+            if (!isset($byId[$movedId]) || $byId[$movedId]['milestone_id'] !== $fromMilestoneId) { throw new RuntimeException('PROJECT_PLAN_REORDER_CONFLICT'); }
+            $expectedIds = [];
+            foreach ($affected as $key => $milestoneId) {
+                $expected = isset($currentByGroup[$key]) ? $currentByGroup[$key] : [];
+                if ($fromMilestoneId !== $toMilestoneId && $milestoneId === $fromMilestoneId) { $expected = array_values(array_diff($expected, [$movedId])); }
+                if ($fromMilestoneId !== $toMilestoneId && $milestoneId === $toMilestoneId) { $expected[] = $movedId; }
+                $this->requireSameIds($expected, $submitted[$key]['ordered_ids'], 'Deliverable order');
+                $expectedIds = array_merge($expectedIds, $expected);
+            }
+            if (count($expectedIds) !== count(array_unique($expectedIds))) { throw new InvalidArgumentException('A deliverable may appear only once across affected orders.'); }
+            $affectedRows = [];
+            foreach (array_unique($expectedIds) as $id) { $affectedRows[] = $byId[$id]; }
+            $this->requireVersions($affectedRows, $versions);
+            $update = $this->pdo->prepare('UPDATE project_deliverables SET milestone_id = ?, position = ?, version = version + 1, updated_at = ? WHERE project_id = ? AND id = ? AND version = ?');
+            $now = Db::now();
+            foreach ($submitted as $order) {
+                foreach ($order['ordered_ids'] as $position => $id) {
+                    $update->execute([$order['milestone_id'], (int) $position, $now, $projectId, $id, $byId[$id]['version']]);
+                    if ($update->rowCount() !== 1) { throw new RuntimeException('PROJECT_PLAN_REORDER_CONFLICT'); }
+                }
+            }
+            $this->pdo->commit();
+        } catch (Exception $error) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $error;
+        }
+        return $this->plan($access);
+    }
+
     private function milestone($projectId, $id)
     {
         $statement = $this->pdo->prepare(
@@ -209,6 +325,11 @@ class ProjectPlanService
     }
     private function isManager(array $access) { return $access['identity']['kind'] === 'human' && in_array($access['role'], ['owner', 'admin'], true); }
     private function requireVersion(array $input, $current, $error) { if (!isset($input['version']) || (int) $input['version'] !== (int) $current) { throw new RuntimeException($error); } }
+    private function nullableId($value, $label) { if ($value === null || $value === '') { return null; } if (!is_numeric($value) || (int) $value < 1) { throw new InvalidArgumentException($label . ' must be a valid identifier.'); } return (int) $value; }
+    private function idList($value, $label) { if (!is_array($value)) { throw new InvalidArgumentException($label . ' must be a list.'); } $ids = []; foreach ($value as $id) { if (!is_numeric($id) || (int) $id < 1) { throw new InvalidArgumentException($label . ' contains an invalid identifier.'); } $ids[] = (int) $id; } if (count($ids) !== count(array_unique($ids))) { throw new InvalidArgumentException($label . ' contains a duplicate identifier.'); } return $ids; }
+    private function versionMap($value, $label) { if (!is_array($value)) { throw new InvalidArgumentException($label . ' are required.'); } $versions = []; foreach ($value as $id => $version) { if (!is_numeric($id) || (int) $id < 1 || !is_numeric($version) || (int) $version < 1) { throw new InvalidArgumentException($label . ' contain an invalid value.'); } $versions[(int) $id] = (int) $version; } return $versions; }
+    private function requireSameIds(array $expected, array $submitted, $label) { $left = $expected; $right = $submitted; sort($left, SORT_NUMERIC); sort($right, SORT_NUMERIC); if ($left !== $right) { throw new RuntimeException('PROJECT_PLAN_REORDER_CONFLICT'); } }
+    private function requireVersions(array $rows, array $versions) { $expected = []; foreach ($rows as $row) { $id = (int) $row['id']; $expected[$id] = (int) $row['version']; if (!isset($versions[$id]) || $versions[$id] !== $expected[$id]) { throw new RuntimeException('PROJECT_PLAN_REORDER_CONFLICT'); } } ksort($expected); $submitted = $versions; ksort($submitted); if (array_keys($expected) !== array_keys($submitted)) { throw new RuntimeException('PROJECT_PLAN_REORDER_CONFLICT'); } }
     private function title(array $input, $label) { $value = trim(isset($input['title']) ? (string) $input['title'] : ''); if ($value === '' || mb_strlen($value) > 180) { throw new InvalidArgumentException($label . ' is required and must not exceed 180 characters.'); } return $value; }
     private function requiredChoice(array $input, $key, array $choices, $label) { $value = isset($input[$key]) ? (string) $input[$key] : ''; $this->choice($value, $choices, $label); return $value; }
     private function choice($value, array $choices, $label) { if (!in_array($value, $choices, true)) { throw new InvalidArgumentException('Select a valid ' . $label . '.'); } }

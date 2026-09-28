@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.212";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.214";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928230000";
@@ -34,6 +34,7 @@ const API = {
   projectMilestone: "api/v1/project-milestone.php",
   projectDeliverables: "api/v1/project-deliverables.php",
   projectDeliverable: "api/v1/project-deliverable.php",
+  projectPlanOrder: "api/v1/project-plan-order.php",
   projectChangeProposals: "api/v1/project-change-proposals.php",
   projectStatusSummary: "api/v1/project-status-summary.php",
   projectStatusTaskProgress: "api/v1/project-status-task-progress.php",
@@ -3240,6 +3241,19 @@ function projectPlanParticipantOptions() {
     .map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind === "agent" ? "AI agent" : "person"}` }))];
 }
 
+const PROJECT_PLAN_MILESTONE_STATUSES = [
+  { id: "planned", label: "Planned" }, { id: "in_progress", label: "In progress" },
+  { id: "at_risk", label: "At risk" }, { id: "completed", label: "Completed" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
+const PROJECT_PLAN_DELIVERABLE_STATUSES = [
+  { id: "planned", label: "Planned" }, { id: "in_progress", label: "In progress" },
+  { id: "in_review", label: "In review" }, { id: "approved", label: "Approved" },
+  { id: "completed", label: "Completed" }, { id: "blocked", label: "Blocked" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
 function openMilestoneForm(item = null, onSaved = null) {
   const editing = Boolean(item);
   const modal = state.factories.createFormModal({
@@ -3248,17 +3262,13 @@ function openMilestoneForm(item = null, onSaved = null) {
     submitLabel: editing ? "Save milestone" : "Add milestone",
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
-      target_at: projectPlanDayValue(item?.target_at), position: item?.position || 0,
+      target_at: projectPlanDayValue(item?.target_at),
     },
     rows: [
       [modalTextField("title", "Milestone title", { required: true, maxlength: 180 })],
       [{ type: "textarea", name: "description", label: "Description" }],
-      [{ type: "select", name: "status", label: "Status", required: true, options: [
-        { value: "planned", label: "Planned" }, { value: "in_progress", label: "In progress" },
-        { value: "at_risk", label: "At risk" }, { value: "completed", label: "Completed" },
-        { value: "cancelled", label: "Cancelled" },
-      ] }, { type: "ui.datepicker", name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true, placeholder: "Optional" }],
-      [modalTextField("position", "Display order")],
+      [{ type: "select", name: "status", label: "Status", required: true, options: PROJECT_PLAN_MILESTONE_STATUSES.map(({ id, label }) => ({ value: id, label })) },
+        { type: "ui.datepicker", name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true, placeholder: "Optional" }],
     ],
     async onSubmit(values, context) {
       try {
@@ -3268,7 +3278,8 @@ function openMilestoneForm(item = null, onSaved = null) {
           method: editing ? "PATCH" : "POST", headers: csrfHeaders(), body: JSON.stringify({
             title: String(values.title || "").trim(), description: String(values.description || "").trim() || null,
             status: values.status || "planned", target_at: values.target_at || null,
-            position: Number(values.position || 0), ...(editing ? { version: item.version } : {}),
+            position: editing ? Number(item.position || 0) : Math.max(-1, ...(state.projectPlan?.milestones || []).map((candidate) => Number(candidate.position || 0))) + 1,
+            ...(editing ? { version: item.version } : {}),
           }),
         });
         state.components.toast.success(editing ? "Milestone updated." : "Milestone added.");
@@ -3288,21 +3299,16 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
       milestone_id: id(item?.milestone_id || presetMilestoneId), owner_participant_id: id(item?.owner_participant_id),
-      due_at: projectPlanDateValue(item?.due_at), artifact_url: item?.artifact_url || "", position: item?.position || 0,
+      due_at: projectPlanDateValue(item?.due_at), artifact_url: item?.artifact_url || "",
     },
     rows: [
       [modalTextField("title", "Deliverable title", { required: true, maxlength: 180 })],
       [{ type: "textarea", name: "description", label: "Description" }],
       [{ type: "select", name: "milestone_id", label: "Milestone", options: projectPlanMilestoneOptions() },
         { type: "select", name: "owner_participant_id", label: "Accountable owner", options: projectPlanParticipantOptions() }],
-      [{ type: "select", name: "status", label: "Status", required: true, options: [
-        { value: "planned", label: "Planned" }, { value: "in_progress", label: "In progress" },
-        { value: "in_review", label: "In review" }, { value: "approved", label: "Approved" },
-        { value: "completed", label: "Completed" }, { value: "blocked", label: "Blocked" },
-        { value: "cancelled", label: "Cancelled" },
-      ] }, { type: "ui.datepicker", name: "due_at", label: "Due date", showTime: true, timePrecision: "minute", valueMode: "wall-clock", closeOnSelect: false, placeholder: "Optional" }],
-      [modalTextField("artifact_url", "Final artifact URL", { maxlength: 2048, placeholder: "Optional HTTPS link" }),
-        modalTextField("position", "Display order")],
+      [{ type: "select", name: "status", label: "Status", required: true, options: PROJECT_PLAN_DELIVERABLE_STATUSES.map(({ id, label }) => ({ value: id, label })) },
+        { type: "ui.datepicker", name: "due_at", label: "Due date", showTime: true, timePrecision: "minute", valueMode: "wall-clock", closeOnSelect: false, placeholder: "Optional" }],
+      [modalTextField("artifact_url", "Final artifact URL", { maxlength: 2048, placeholder: "Optional HTTPS link" })],
     ],
     async onSubmit(values, context) {
       try {
@@ -3313,7 +3319,9 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
             title: String(values.title || "").trim(), description: String(values.description || "").trim() || null,
             milestone_id: values.milestone_id || null, owner_participant_id: values.owner_participant_id || null,
             status: values.status || "planned", due_at: values.due_at || null,
-            artifact_url: String(values.artifact_url || "").trim() || null, position: Number(values.position || 0),
+            artifact_url: String(values.artifact_url || "").trim() || null,
+            position: editing ? Number(item.position || 0) : Math.max(-1, ...(state.projectPlan?.deliverables || [])
+              .filter((candidate) => id(candidate.milestone_id) === id(values.milestone_id)).map((candidate) => Number(candidate.position || 0))) + 1,
             ...(editing ? { version: item.version } : {}),
           }),
         });
@@ -3329,14 +3337,201 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
 function openProjectPlanModal() {
   if (!selectedProjectId() || state.components.projectPlanModal?.getState?.().open) return;
   const projectId = selectedProjectId();
-  const abortController = new AbortController();
   const content = projectInfoElement("div", "project-plan-content");
   content.append(projectInfoElement("p", "project-plan-loading", "Loading milestones and deliverables…"));
   let modal = null;
+  let board = null;
+  let readController = null;
+  let currentPlan = null;
+  let disposed = false;
+  let persistencePending = false;
+
+  const milestoneGroupId = (value) => value == null || value === "" ? "standalone" : `milestone:${value}`;
+  const milestoneIdFromGroup = (value) => String(value) === "standalone" ? null : Number(String(value).replace(/^milestone:/, ""));
+  const milestoneById = (value) => currentPlan?.milestones?.find((item) => Number(item.id) === Number(value));
+  const deliverableById = (value) => currentPlan?.deliverables?.find((item) => Number(item.id) === Number(value));
+  const hasActiveDraft = () => Boolean(content.querySelector('[data-inline-active="true"]'));
+  const replaceRecord = (collection, record) => {
+    currentPlan[collection] = (currentPlan[collection] || []).map((item) => Number(item.id) === Number(record.id) ? record : item);
+    state.projectPlan = currentPlan;
+  };
+  const milestonePayload = (item, changes = {}) => ({
+    title: item.title, description: item.description, status: item.status, target_at: projectPlanDayValue(item.target_at) || null,
+    position: Number(item.position || 0), version: item.version, ...changes,
+  });
+  const deliverablePayload = (item, changes = {}) => ({
+    title: item.title, description: item.description, milestone_id: item.milestone_id,
+    owner_participant_id: item.owner_participant_id, status: item.status, due_at: item.due_at,
+    artifact_url: item.artifact_url, position: Number(item.position || 0), version: item.version, ...changes,
+  });
+  const patchMilestone = async (itemId, changes) => {
+    const item = milestoneById(itemId);
+    if (!item) throw new Error("This milestone is no longer available. Reopen the project plan and try again.");
+    try {
+      const updated = unwrap(await request(`${API.projectMilestone}?${new URLSearchParams({ project_id: projectId, id: item.id })}`, {
+        method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(milestonePayload(item, changes)),
+      }));
+      replaceRecord("milestones", updated);
+      return updated;
+    } catch (error) {
+      if (!error.status || error.status >= 500) markUnknownInlineOutcome();
+      throw error;
+    }
+  };
+  const patchDeliverable = async (itemId, changes) => {
+    const item = deliverableById(itemId);
+    if (!item) throw new Error("This deliverable is no longer available. Reopen the project plan and try again.");
+    try {
+      const updated = unwrap(await request(`${API.projectDeliverable}?${new URLSearchParams({ project_id: projectId, id: item.id })}`, {
+        method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(deliverablePayload(item, changes)),
+      }));
+      replaceRecord("deliverables", updated);
+      return updated;
+    } catch (error) {
+      if (!error.status || error.status >= 500) markUnknownInlineOutcome();
+      throw error;
+    }
+  };
+  const groupsFromPlan = (plan) => {
+    const groups = (plan.milestones || []).map((milestone) => ({
+      id: milestoneGroupId(milestone.id), label: milestone.title, milestone,
+      items: (plan.deliverables || []).filter((item) => Number(item.milestone_id) === Number(milestone.id)).map((item) => ({ ...item, label: item.title })),
+    }));
+    groups.push({
+      id: "standalone", label: "Standalone deliverables", disabled: !plan.can_manage,
+      milestone: null, items: (plan.deliverables || []).filter((item) => item.milestone_id == null).map((item) => ({ ...item, label: item.title })),
+    });
+    return groups;
+  };
+  const setFeedback = (message = "", kind = "status", action = null) => {
+    let feedback = content.querySelector(".project-plan-feedback");
+    if (!feedback) {
+      feedback = projectInfoElement("div", "project-plan-feedback");
+      content.querySelector(".project-plan-board-host")?.before(feedback);
+    }
+    feedback.replaceChildren();
+    feedback.hidden = !message;
+    feedback.classList.toggle("is-error", kind === "error");
+    feedback.setAttribute("role", kind === "error" ? "alert" : "status");
+    if (message) feedback.append(projectInfoElement("span", "", message));
+    if (action) feedback.append(action);
+  };
+  const markUnknownInlineOutcome = () => {
+    persistencePending = true;
+    board?.setInteractionLocked(true);
+    const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile saved value"); reconcileButton.type = "button";
+    reconcileButton.addEventListener("click", () => { void reconcile(); });
+    setFeedback("The field save outcome is unknown. Reconcile with the server before editing or moving anything else.", "error", reconcileButton);
+  };
+  const inlineCell = (host, className = "") => {
+    const cell = projectInfoElement("div", `project-plan-inline-cell ${className}`.trim());
+    host.append(cell);
+    return cell;
+  };
+  const textValidator = (label) => (value) => {
+    if (String(value || "") !== String(value || "").trim()) return `${label} — remove leading or trailing spaces.`;
+    return "";
+  };
+  const renderGroupHeader = (host, group) => {
+    const cleanups = [];
+    const layout = projectInfoElement("div", "project-plan-group-header");
+    host.append(layout);
+    if (!group.milestone) {
+      const copy = projectInfoElement("span", "project-plan-standalone-copy");
+      copy.append(projectInfoElement("strong", "", "Standalone deliverables"), projectInfoElement("span", "", "Outputs not assigned to a milestone"));
+      layout.append(copy);
+      return () => {};
+    }
+    const milestoneId = group.milestone.id;
+    const titleHost = inlineCell(layout, "is-title");
+    const statusHost = inlineCell(layout);
+    const dateHost = inlineCell(layout);
+    const title = state.factories.createInlineText(titleHost, {
+      label: "Milestone title", value: group.milestone.title, required: true, maxLength: 180,
+      readOnly: !currentPlan.can_manage, validate: textValidator("Milestone title"),
+      async onSave(value) {
+        const updated = await patchMilestone(milestoneId, { title: value });
+        board?.setGroupLabel?.(milestoneGroupId(milestoneId), updated.title);
+      },
+    });
+    const status = state.factories.createInlineSelect(statusHost, {
+      label: "Milestone status", value: group.milestone.status, required: true, searchable: false,
+      readOnly: !currentPlan.can_manage, items: PROJECT_PLAN_MILESTONE_STATUSES,
+      onSave: async (value) => { await patchMilestone(milestoneId, { status: value }); },
+    });
+    const target = state.factories.createInlineDate(dateHost, {
+      label: "Target date", value: projectPlanDayValue(group.milestone.target_at) || null,
+      placeholder: "No target date", showTime: false, valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+      onSave: async (value) => { await patchMilestone(milestoneId, { target_at: value || null }); },
+    });
+    cleanups.push(title, status, target);
+    const meta = projectInfoElement("span", "project-plan-group-meta", `${group.milestone.ready_deliverable_count}/${group.milestone.deliverable_count} ready`);
+    const actions = projectInfoElement("span", "project-plan-row-actions");
+    if (currentPlan.can_manage) {
+      const add = projectInfoElement("button", "ui-button ui-button-sm", "Add deliverable");
+      const details = projectInfoElement("button", "ui-button ui-button-sm", "Details");
+      add.type = details.type = "button";
+      add.addEventListener("click", () => openDeliverableForm(null, milestoneId, load));
+      details.addEventListener("click", () => openMilestoneForm(milestoneById(milestoneId), load));
+      actions.append(add, details);
+    }
+    layout.append(meta, actions);
+    return () => cleanups.forEach((component) => component.destroy());
+  };
+  const renderItem = (host, item) => {
+    const cleanups = [];
+    const row = projectInfoElement("article", `project-plan-row is-${item.status}`);
+    host.append(row);
+    const titleHost = inlineCell(row, "is-title");
+    const statusHost = inlineCell(row);
+    const dateHost = inlineCell(row);
+    const ownerHost = inlineCell(row);
+    const title = state.factories.createInlineText(titleHost, {
+      label: "Deliverable title", value: item.title, required: true, maxLength: 180,
+      readOnly: !currentPlan.can_manage, validate: textValidator("Deliverable title"),
+      async onSave(value) {
+        const updated = await patchDeliverable(item.id, { title: value });
+        board?.setItemLabel?.(item.id, updated.title);
+      },
+    });
+    const status = state.factories.createInlineSelect(statusHost, {
+      label: "Deliverable status", value: item.status, required: true, searchable: false,
+      readOnly: !currentPlan.can_manage, items: PROJECT_PLAN_DELIVERABLE_STATUSES,
+      onSave: async (value) => {
+        await patchDeliverable(item.id, { status: value });
+        row.className = `project-plan-row is-${value}`;
+      },
+    });
+    const due = state.factories.createInlineDate(dateHost, {
+      label: "Due date", value: projectPlanDateValue(item.due_at) || null, placeholder: "No due date",
+      showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+      onSave: async (value) => { await patchDeliverable(item.id, { due_at: value || null }); },
+    });
+    const owner = state.factories.createInlineSelect(ownerHost, {
+      label: "Accountable owner", value: id(item.owner_participant_id), placeholder: "Unassigned",
+      readOnly: !currentPlan.can_manage, items: projectPlanParticipantOptions().map(({ value, label }) => ({ id: value, label })),
+      onSave: async (value) => { await patchDeliverable(item.id, { owner_participant_id: value || null }); },
+    });
+    cleanups.push(title, status, due, owner);
+    const meta = projectInfoElement("div", "project-plan-row-meta");
+    meta.append(projectInfoElement("span", "", `${item.completed_task_count}/${item.eligible_task_count} tasks complete`));
+    if (item.description) meta.append(projectInfoElement("span", "", item.description));
+    const actions = projectInfoElement("span", "project-plan-row-actions");
+    if (item.artifact_url) {
+      const artifact = document.createElement("a"); artifact.className = "ui-button ui-button-sm"; artifact.href = item.artifact_url;
+      artifact.target = "_blank"; artifact.rel = "noopener noreferrer"; artifact.textContent = "Open artifact"; actions.append(artifact);
+    }
+    if (currentPlan.can_manage) {
+      const details = projectInfoElement("button", "ui-button ui-button-sm", "Details"); details.type = "button";
+      details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load)); actions.append(details);
+    }
+    row.append(meta, actions);
+    return () => cleanups.forEach((component) => component.destroy());
+  };
   const render = (plan) => {
-    content.replaceChildren();
+    board?.destroy(); board = null; content.replaceChildren();
     const toolbar = projectInfoElement("div", "project-plan-toolbar");
-    toolbar.append(projectInfoElement("p", "", "Milestones organize major checkpoints. Deliverables capture the concrete outputs produced by linked tasks."));
+    toolbar.append(projectInfoElement("p", "", "Drag milestones to reorder them. Drag deliverables within or between milestones. Select a field to edit it inline."));
     if (plan.can_manage) {
       const actions = projectInfoElement("span", "project-plan-toolbar-actions");
       const addMilestone = projectInfoElement("button", "ui-button ui-button-sm", "Add milestone");
@@ -3347,60 +3542,83 @@ function openProjectPlanModal() {
       actions.append(addMilestone, addDeliverable); toolbar.append(actions);
     }
     content.append(toolbar);
-    const groups = [...(plan.milestones || []).map((milestone) => ({ milestone, items: [] })), { milestone: null, items: [] }];
-    const groupById = new Map(groups.filter((group) => group.milestone).map((group) => [String(group.milestone.id), group]));
-    (plan.deliverables || []).forEach((item) => (groupById.get(String(item.milestone_id)) || groups[groups.length - 1]).items.push(item));
-    const visibleGroups = groups.filter((group) => group.milestone || group.items.length);
-    if (!visibleGroups.length) {
-      content.append(projectInfoElement("div", "project-plan-empty", "No milestones or deliverables yet. Start with a milestone for an important checkpoint, or add a standalone deliverable."));
-      return;
-    }
-    visibleGroups.forEach((group) => {
-      const section = projectInfoElement("section", "project-plan-milestone");
-      const heading = projectInfoElement("header", "project-plan-milestone-header");
-      const copy = projectInfoElement("span", "project-plan-milestone-copy");
-      if (group.milestone) {
-        copy.append(projectInfoElement("strong", "", group.milestone.title), projectInfoElement("span", "", `${projectPlanStatusLabel(group.milestone.status)}${group.milestone.target_at ? ` · ${formatDate(group.milestone.target_at)}` : ""} · ${group.milestone.ready_deliverable_count}/${group.milestone.deliverable_count} ready`));
-        if (plan.can_manage) {
-          const edit = projectInfoElement("button", "ui-button ui-button-sm", "Edit"); edit.type = "button";
-          edit.addEventListener("click", () => openMilestoneForm(group.milestone, load)); heading.append(copy, edit);
-        } else heading.append(copy);
-      } else {
-        copy.append(projectInfoElement("strong", "", "Standalone deliverables"), projectInfoElement("span", "", "Outputs not assigned to a milestone"));
-        heading.append(copy);
-      }
-      section.append(heading);
-      const list = projectInfoElement("div", "project-plan-deliverables");
-      if (!group.items.length) list.append(projectInfoElement("p", "project-status-empty", "No deliverables in this milestone."));
-      group.items.forEach((item) => {
-        const card = projectInfoElement("article", `project-plan-deliverable is-${item.status}`);
-        const cardCopy = projectInfoElement("span", "project-plan-deliverable-copy");
-        cardCopy.append(projectInfoElement("strong", "", item.title), projectInfoElement("span", "", `${projectPlanStatusLabel(item.status)} · ${item.completed_task_count}/${item.eligible_task_count} tasks complete${item.owner_display_name ? ` · ${item.owner_display_name}` : ""}`));
-        if (item.description) cardCopy.append(projectInfoElement("p", "", item.description));
-        const cardActions = projectInfoElement("span", "project-plan-deliverable-actions");
-        if (item.artifact_url) {
-          const artifact = document.createElement("a"); artifact.className = "ui-button ui-button-sm"; artifact.href = item.artifact_url; artifact.target = "_blank"; artifact.rel = "noopener noreferrer"; artifact.textContent = "Open artifact"; cardActions.append(artifact);
-        }
-        if (plan.can_manage) {
-          const edit = projectInfoElement("button", "ui-button ui-button-sm", "Edit"); edit.type = "button";
-          edit.addEventListener("click", () => openDeliverableForm(item, item.milestone_id, load)); cardActions.append(edit);
-        }
-        card.append(cardCopy, cardActions); list.append(card);
-      });
-      if (plan.can_manage && group.milestone) {
-        const add = projectInfoElement("button", "project-plan-inline-add", "Add deliverable to this milestone"); add.type = "button";
-        add.addEventListener("click", () => openDeliverableForm(null, group.milestone.id, load)); list.append(add);
-      }
-      section.append(list); content.append(section);
+    const feedback = projectInfoElement("div", "project-plan-feedback"); feedback.hidden = true; content.append(feedback);
+    const boardHost = projectInfoElement("div", "project-plan-board-host"); content.append(boardHost);
+    board = state.factories.createReorderGroups(boardHost, groupsFromPlan(plan), {
+      reorderGroups: Boolean(plan.can_manage), readOnly: !plan.can_manage,
+      emptyText: "No deliverables in this milestone.", renderGroupHeader, renderItem,
+      isGroupLocked: (group) => group.id === "standalone" || persistencePending || hasActiveDraft(),
+      isItemLocked: () => persistencePending || hasActiveDraft(),
+      onGroupReorder: (change) => { void persistMilestoneOrder(change); },
+      onReorder: (change) => { void persistDeliverableOrder(change); },
     });
+  };
+  const reconcile = async () => {
+    setFeedback("Reconciling the saved project plan…");
+    try {
+      const plan = unwrap(await request(`${API.projectPlan}?${new URLSearchParams({ project_id: projectId })}`)) || {};
+      if (disposed || selectedProjectId() !== projectId) return;
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+      board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+      setFeedback("Project plan reconciled.");
+    } catch (error) {
+      const retry = projectInfoElement("button", "ui-button ui-button-sm", "Retry reconciliation"); retry.type = "button";
+      retry.addEventListener("click", () => { void reconcile(); });
+      setFeedback(`The saved order is still unknown. ${error.message}`, "error", retry);
+    }
+  };
+  const persistOrder = async (body, before) => {
+    if (persistencePending || disposed) return;
+    persistencePending = true; board?.setInteractionLocked(true); setFeedback("Saving project-plan order…");
+    try {
+      const plan = unwrap(await request(`${API.projectPlanOrder}?${new URLSearchParams({ project_id: projectId })}`, {
+        method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(body),
+      })) || {};
+      if (disposed) return;
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+      board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+      setFeedback("Project-plan order saved.");
+    } catch (error) {
+      if (disposed) return;
+      const definite = Boolean(error.status && error.status < 500);
+      if (definite) {
+        currentPlan = before; state.projectPlan = before; board?.update(groupsFromPlan(before));
+        persistencePending = false; board?.setInteractionLocked(false);
+        setFeedback(`The order was not saved. ${error.message}`, "error");
+        return;
+      }
+      const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile saved order"); reconcileButton.type = "button";
+      reconcileButton.addEventListener("click", () => { void reconcile(); });
+      setFeedback("The save outcome is unknown. Reconcile with the server before making another change.", "error", reconcileButton);
+    }
+  };
+  const persistMilestoneOrder = async (change) => {
+    const before = structuredClone(currentPlan);
+    const orderedIds = change.orderedGroupIds.filter((groupId) => groupId !== "standalone").map(milestoneIdFromGroup);
+    const versions = Object.fromEntries((currentPlan.milestones || []).map((item) => [item.id, item.version]));
+    await persistOrder({ kind: "milestones", ordered_ids: orderedIds, versions }, before);
+  };
+  const persistDeliverableOrder = async (change) => {
+    const before = structuredClone(currentPlan);
+    const affectedIds = [...new Set(Object.values(change.orderedIdsByGroup).flat().map(Number))];
+    const versions = Object.fromEntries(affectedIds.map((itemId) => [itemId, deliverableById(itemId)?.version]));
+    const orders = Object.entries(change.orderedIdsByGroup).map(([groupId, orderedIds]) => ({
+      milestone_id: milestoneIdFromGroup(groupId), ordered_ids: orderedIds.map(Number),
+    }));
+    await persistOrder({
+      kind: "deliverables", moved_id: Number(change.itemId),
+      from_milestone_id: milestoneIdFromGroup(change.fromGroupId), to_milestone_id: milestoneIdFromGroup(change.toGroupId),
+      orders, versions,
+    }, before);
   };
   const load = async () => {
     if (!modal.getState().open) return;
+    readController?.abort(); readController = new AbortController();
     modal.setBusy(true, { message: "Loading project plan…", cancelBusy: { label: "Close", onCancel: () => modal.close({ reason: "cancelled" }) } });
     try {
-      const plan = unwrap(await request(`${API.projectPlan}?${new URLSearchParams({ project_id: projectId })}`, { signal: abortController.signal })) || {};
+      const plan = unwrap(await request(`${API.projectPlan}?${new URLSearchParams({ project_id: projectId })}`, { signal: readController.signal })) || {};
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
-      state.projectPlan = plan; state.projectPlanLoaded = true; render(plan); modal.setBusy(false);
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true; render(plan); modal.setBusy(false);
     } catch (error) {
       if (error.name === "AbortError" || !modal.getState().open) return;
       modal.setBusy(false); content.replaceChildren();
@@ -3412,7 +3630,7 @@ function openProjectPlanModal() {
   modal = state.factories.createActionModal({
     title: "Project plan", size: "xl", className: "project-plan-modal", content,
     actions: [{ id: "close", label: "Close", variant: "primary" }],
-    onClose() { abortController.abort(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
+    onClose() { disposed = true; readController?.abort(); board?.destroy(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
   });
   state.components.projectPlanModal = modal; modal.open(); void load();
 }
@@ -7634,7 +7852,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -7675,6 +7893,10 @@ async function bootstrap() {
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
     createSplitter: await uiLoader.get("ui.splitter", options),
     createNavigationStack: await uiLoader.get("ui.navigation.stack", options),
+    createReorderGroups: await uiLoader.get("ui.reorder.groups", options),
+    createInlineText: await uiLoader.get("ui.inline.text", options),
+    createInlineSelect: await uiLoader.get("ui.inline.select", options),
+    createInlineDate: await uiLoader.get("ui.inline.date", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   mountProjectViewTabs();

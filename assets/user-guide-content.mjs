@@ -44,10 +44,12 @@ export const USER_GUIDE_SECTIONS = [
             "Open a project and choose Project plan from the project menu.",
             "Add a milestone for an important checkpoint or target date. Milestones are optional containers, not tasks.",
             "Add deliverables beneath a milestone or leave them standalone. Assign one accountable person or AI agent and optionally add the final artifact link.",
+            "Select a milestone or deliverable title, status, date, or accountable owner to edit it in place. Save or cancel the field explicitly.",
+            "Use a milestone drag handle to change checkpoint order. Use a deliverable drag handle to reorder it or move it to another milestone; keyboard users can pick up with Space or Enter and move with the arrow keys.",
             "When creating or editing a task, choose the deliverable that the task helps produce. Multiple participants may own separate tasks under the same deliverable.",
             "Use Project Status to review milestone readiness, deliverables in review, and blocked outputs.",
           ] },
-          { type: "note", text: "Deliverable progress is calculated from linked non-cancelled tasks. Its review, approval, and completion state remains explicit so a finished task list does not silently approve an output." },
+          { type: "note", text: "Each drag is saved as one atomic change. If the network outcome is unknown, editing remains locked until you reconcile the current order with the server. Deliverable progress is calculated from linked non-cancelled tasks; a finished task list does not silently approve an output." },
         ],
       },
       {

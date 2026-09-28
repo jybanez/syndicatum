@@ -133,6 +133,13 @@ deliverables beneath optional milestones. Project owners and administrators can
 create or edit both entities; other participants have a read-only view. A
 deliverable has one accountable person or AI agent, may carry a final artifact
 URL, and derives its completion percentage from its linked non-cancelled tasks.
+Owners and administrators edit titles, statuses, dates, and accountable owners
+in place with the canonical Helper inline components. They can reorder milestones
+or drag a deliverable within or between milestones with the canonical grouped
+reorder component. Every drop is one authorized transaction carrying complete
+affected orders and optimistic versions. Definite failures restore the previous
+order; uncertain outcomes keep plan mutations locked until an explicit GET
+reconciles the authoritative order, and mutations are never replayed automatically.
 Tasks may remain standalone, preserving existing projects and workflows. Project
 Status includes a separately loaded Milestones & deliverables readiness section.
 
@@ -267,6 +274,7 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-milestone.php` | PATCH | Owner/admin version-checked milestone update |
 | `/api/v1/project-deliverables.php` | POST | Owner/admin standalone or milestone-bound deliverable creation |
 | `/api/v1/project-deliverable.php` | PATCH | Owner/admin version-checked deliverable update |
+| `/api/v1/project-plan-order.php` | PATCH | Owner/admin atomic milestone reorder or deliverable membership-and-order move |
 | `/api/v1/project-status-summary.php` | GET | Owner-only headline task, active-team, and message-sequence aggregates |
 | `/api/v1/project-status-task-progress.php` | GET | Owner-only task counts by status and completion percentage |
 | `/api/v1/project-status-plan.php` | GET | Owner-only bounded milestone and deliverable readiness aggregates plus at most three milestone summaries |

@@ -345,23 +345,37 @@ button, input, textarea { font: inherit; }
 .project-plan-loading { margin: 0; color: var(--app-muted); }
 .project-plan-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .project-plan-toolbar p { margin: 0; color: var(--app-muted); }
-.project-plan-toolbar-actions, .project-plan-deliverable-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; }
+.project-plan-toolbar-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; }
 .project-plan-empty { padding: 22px; color: var(--app-muted); text-align: center; border: 1px dashed var(--app-border); border-radius: 10px; }
-.project-plan-milestone { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--app-border); border-radius: 10px; background: rgba(14, 29, 49, .5); }
-.project-plan-milestone-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.project-plan-milestone-copy, .project-plan-deliverable-copy { min-width: 0; display: grid; gap: 2px; }
-.project-plan-milestone-copy strong { font-size: 16px; }
-.project-plan-milestone-copy span, .project-plan-deliverable-copy span { color: var(--app-muted); font-size: 12px; }
-.project-plan-deliverables { display: grid; gap: 7px; }
-.project-plan-deliverable { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid rgba(73, 93, 129, .42); border-left: 3px solid var(--task-status-open); border-radius: 8px; background: rgba(19, 37, 61, .48); }
-.project-plan-deliverable.is-in_progress { border-left-color: var(--task-status-in-progress); }
-.project-plan-deliverable.is-in_review { border-left-color: var(--task-status-in-review); }
-.project-plan-deliverable.is-approved, .project-plan-deliverable.is-completed { border-left-color: var(--task-status-completed); }
-.project-plan-deliverable.is-blocked { border-left-color: var(--task-status-blocked); }
-.project-plan-deliverable.is-cancelled { opacity: .65; border-left-color: var(--task-status-cancelled); }
-.project-plan-deliverable-copy p { margin: 2px 0 0; color: var(--app-text); font-size: 12px; }
-.project-plan-inline-add { justify-self: start; padding: 3px 0; color: var(--app-accent); cursor: pointer; border: 0; background: transparent; }
-.project-plan-inline-add:hover { text-decoration: underline; }
+.project-plan-feedback { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; color: var(--app-muted); border: 1px solid var(--app-border); border-radius: 8px; background: rgba(14, 29, 49, .5); }
+.project-plan-feedback[hidden] { display: none; }
+.project-plan-feedback.is-error { color: #ffd1cc; border-color: rgba(218, 83, 83, .48); background: rgba(92, 31, 39, .3); }
+.project-plan-board-host { min-width: 0; }
+.project-plan-board-host .ui-reorder-groups { display: grid; gap: 10px; }
+.project-plan-board-host .ui-reorder-group { min-width: 0; background: rgba(14, 29, 49, .5); }
+.project-plan-board-host .ui-reorder-group-content,
+.project-plan-board-host .ui-reorder-content { min-width: 0; width: 100%; }
+.project-plan-group-header,
+.project-plan-row { display: grid; grid-template-columns: minmax(170px, 1.4fr) minmax(110px, .65fr) minmax(135px, .78fr) minmax(140px, .9fr) minmax(120px, .72fr) auto; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.project-plan-group-header { padding: 2px 0; }
+.project-plan-row { box-sizing: border-box; padding: 2px 0 2px 4px; border-left: 3px solid var(--task-status-open); }
+.project-plan-row.is-in_progress { border-left-color: var(--task-status-in-progress); }
+.project-plan-row.is-in_review { border-left-color: var(--task-status-in-review); }
+.project-plan-row.is-approved, .project-plan-row.is-completed { border-left-color: var(--task-status-completed); }
+.project-plan-row.is-blocked { border-left-color: var(--task-status-blocked); }
+.project-plan-row.is-cancelled { opacity: .65; border-left-color: var(--task-status-cancelled); }
+.project-plan-inline-cell { min-width: 0; }
+.project-plan-inline-cell .ui-inline,
+.project-plan-inline-cell .ui-inline-view { box-sizing: border-box; width: 100%; min-width: 0; }
+.project-plan-inline-cell.is-title .ui-inline-view { font-weight: 700; }
+.project-plan-group-meta,
+.project-plan-row-meta { color: var(--app-muted); font-size: 12px; }
+.project-plan-group-meta { grid-column: 4 / 6; }
+.project-plan-row-meta { display: grid; gap: 2px; min-width: 120px; }
+.project-plan-row-meta span { overflow-wrap: anywhere; }
+.project-plan-row-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.project-plan-standalone-copy { display: grid; grid-column: 1 / 6; gap: 2px; }
+.project-plan-standalone-copy span { color: var(--app-muted); font-size: 12px; }
 .project-plan-status-stats { min-width: 0; }
 .project-status-milestone-list { display: grid; gap: 5px; margin-top: 10px; }
 .project-status-milestone-item { padding: 7px 9px; color: var(--app-muted); font-size: 12px; border: 1px solid rgba(73, 93, 129, .35); border-radius: 7px; }
@@ -850,7 +864,12 @@ button, input, textarea { font: inherit; }
   .project-status-section { padding: 11px; }
   .project-status-activity-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-status-attention-item { align-items: flex-start; }
-  .project-plan-toolbar, .project-plan-deliverable { align-items: flex-start; flex-direction: column; }
+  .project-plan-toolbar { align-items: flex-start; flex-direction: column; }
+  .project-plan-group-header, .project-plan-row { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .project-plan-standalone-copy, .project-plan-group-meta { grid-column: 1; }
+  .project-plan-group-meta, .project-plan-row-meta { min-width: 0; }
+  .project-plan-row-actions { justify-content: flex-start; }
+  .project-plan-feedback { align-items: flex-start; flex-direction: column; }
   .public-policy-links {
     left: 12px;
     right: 12px;

@@ -66,6 +66,67 @@ try {
         throw new RuntimeException('Expected stale deliverable rejection.');
     });
 
+    $test('planning reorder is atomic, complete, and version checked', function () use ($plan, $access, $same) {
+        $secondMilestone = $plan->createMilestone($access, ['title' => 'Production']);
+        $thirdMilestone = $plan->createMilestone($access, ['title' => 'Release']);
+        $plan->createDeliverable($access, ['title' => 'Production proof', 'milestone_id' => $secondMilestone['id']]);
+        $plan->createDeliverable($access, ['title' => 'Standalone brief']);
+        $current = $plan->plan($access);
+        $milestoneIds = array_map(function ($row) { return $row['id']; }, $current['milestones']);
+        $milestoneVersions = [];
+        foreach ($current['milestones'] as $row) { $milestoneVersions[$row['id']] = $row['version']; }
+        $reversed = array_reverse($milestoneIds);
+        $ordered = $plan->reorder($access, ['kind' => 'milestones', 'ordered_ids' => $reversed, 'versions' => $milestoneVersions]);
+        $same($reversed, array_map(function ($row) { return $row['id']; }, $ordered['milestones']));
+        $orderedVersions = [];
+        foreach ($ordered['milestones'] as $row) { $orderedVersions[$row['id']] = $row['version']; }
+        $incompleteMilestonesRejected = false;
+        try { $plan->reorder($access, ['kind' => 'milestones', 'ordered_ids' => array_slice($reversed, 0, -1), 'versions' => $orderedVersions]); }
+        catch (RuntimeException $error) {
+            $incompleteMilestonesRejected = true;
+            $same('PROJECT_PLAN_REORDER_CONFLICT', $error->getMessage());
+            $same($reversed, array_map(function ($row) { return $row['id']; }, $plan->plan($access)['milestones']));
+        }
+        if (!$incompleteMilestonesRejected) { throw new RuntimeException('Expected incomplete milestone order rejection.'); }
+
+        $sourceId = $milestoneIds[0]; $destinationId = $secondMilestone['id'];
+        $moved = null; $sourceOrder = []; $destinationOrder = [];
+        foreach ($ordered['deliverables'] as $row) {
+            if ($row['milestone_id'] === $sourceId && $moved === null) { $moved = $row; continue; }
+            if ($row['milestone_id'] === $sourceId) { $sourceOrder[] = $row['id']; }
+            if ($row['milestone_id'] === $destinationId) { $destinationOrder[] = $row['id']; }
+        }
+        $destinationOrder[] = $moved['id'];
+        $versions = [];
+        foreach ($ordered['deliverables'] as $row) {
+            if ($row['milestone_id'] === $sourceId || $row['milestone_id'] === $destinationId) { $versions[$row['id']] = $row['version']; }
+        }
+        $request = ['kind' => 'deliverables', 'moved_id' => $moved['id'], 'from_milestone_id' => $sourceId, 'to_milestone_id' => $destinationId,
+            'orders' => [['milestone_id' => $sourceId, 'ordered_ids' => $sourceOrder], ['milestone_id' => $destinationId, 'ordered_ids' => $destinationOrder]], 'versions' => $versions];
+        $movedPlan = $plan->reorder($access, $request);
+        $movedRow = null;
+        foreach ($movedPlan['deliverables'] as $row) { if ($row['id'] === $moved['id']) { $movedRow = $row; break; } }
+        $same($destinationId, $movedRow['milestone_id']);
+        $same(count($destinationOrder) - 1, $movedRow['position']);
+        $freshDestination = [];
+        $freshVersions = [];
+        foreach ($movedPlan['deliverables'] as $row) {
+            if ($row['milestone_id'] === $destinationId) { $freshDestination[] = $row['id']; $freshVersions[$row['id']] = $row['version']; }
+        }
+        $incompleteDeliverablesRejected = false;
+        try { $plan->reorder($access, ['kind' => 'deliverables', 'moved_id' => $moved['id'], 'from_milestone_id' => $destinationId, 'to_milestone_id' => $destinationId,
+            'orders' => [['milestone_id' => $destinationId, 'ordered_ids' => array_slice($freshDestination, 0, -1)]], 'versions' => $freshVersions]); }
+        catch (RuntimeException $error) {
+            $incompleteDeliverablesRejected = true;
+            $same('PROJECT_PLAN_REORDER_CONFLICT', $error->getMessage());
+            $same($freshDestination, array_values(array_map(function ($row) { return $row['id']; }, array_filter($plan->plan($access)['deliverables'], function ($row) use ($destinationId) { return $row['milestone_id'] === $destinationId; }))));
+        }
+        if (!$incompleteDeliverablesRejected) { throw new RuntimeException('Expected incomplete deliverable order rejection.'); }
+        try { $plan->reorder($access, $request); }
+        catch (RuntimeException $error) { $same('PROJECT_PLAN_REORDER_CONFLICT', $error->getMessage()); return; }
+        throw new RuntimeException('Expected stale reorder rejection.');
+    });
+
     $test('non-manager participants can read but cannot change the plan', function () use ($plan, $access, $same) {
         $viewer = $access; $viewer['role'] = 'member';
         $same(false, $plan->plan($viewer)['can_manage']);

@@ -670,7 +670,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.212";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.212";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.214";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -832,20 +832,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.212 retains native theme integration, timeline stability, attached tabs, and the integration icon family', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.214 retains native theme integration, planning components, timeline stability, attached tabs, and the integration icon family', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.212') !== false,
-                'Every Helper entry point must use the canonical 0.21.212 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.214') !== false,
+                'Every Helper entry point must use the canonical 0.21.214 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.212') !== false,
-                $surface . ' must use the matching canonical 0.21.212 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.214') !== false,
+                $surface . ' must use the matching canonical 0.21.214 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -863,19 +863,24 @@ try {
         $suite->true(strpos($bundleJs, 'onContextMenuAction') !== false
             && strpos($bundleJs, 'ui-timeline-menu-trigger') !== false,
             'The Helper bundle must expose the native timeline context-menu implementation.');
+        $suite->true(strpos($bundleJs, 'setGroupLabel') !== false
+            && strpos($bundleJs, 'setItemLabel') !== false
+            && strpos($bundleJs, 'setInteractionLocked') !== false
+            && strpos($bundleJs, 'onGroupReorder') !== false,
+            'The Helper bundle must expose movable editable groups and non-rebuilding persistence locks.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
             'The Helper timeline must anchor virtual rows to the scroll content origin rather than the bordered viewport box.');
-        $suite->same('db656cbe31e4a46cf9d8014c70e8b557294cd1611af152bf50e47b6f3dbe196e',
+        $suite->same('3ce08c57b38645ee8f49211839b9733403e028860c9967d2b447b302f1af7689',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match upstream commit 271cf3a exactly.');
-        $suite->same('dc96cb32247fa27e9af8fced358f2d75841cbbe1d856e7ea59af2731f3e5d595',
+            'The vendored Helper JavaScript must match upstream commit 4b2d388 exactly.');
+        $suite->same('a018b09c3b5539bbbfda7f1132c5273d61bf2f8310a7c6ec2e0f0b3cd770ff82',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match upstream commit 271cf3a exactly.');
-        $suite->same('5b9b52ae7dd4c7d216fcdde6a36ed925cf3d6a61c598baacb5dc390145acc75b',
+            'The vendored Helper stylesheet must match upstream commit 4b2d388 exactly.');
+        $suite->same('aaceab74ec36758b304693a9774ddcc9eff4b82878771575ccdd33e1b68bfdba',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match upstream commit 271cf3a exactly.');
+            'The vendored Helper loader must match upstream commit 4b2d388 exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -1011,6 +1016,8 @@ try {
 
     $suite->test('project planning distinguishes milestones, deliverables, and linked tasks', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
+        $service = file_get_contents($root . '/src/ProjectPlanService.php');
+        $orderApi = file_get_contents($root . '/api/v1/project-plan-order.php');
         $suite->true(strpos($source, 'label: "Project plan"') !== false
             && strpos($source, 'title: "Project plan"') !== false
             && strpos($source, 'message: "Loading project plan…"') !== false,
@@ -1027,6 +1034,27 @@ try {
         $suite->true(strpos($source, 'name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true') !== false
             && strpos($source, 'target_at: projectPlanDayValue(item?.target_at)') !== false,
             'Milestone target dates must use the canonical date-only picker without exposing time controls.');
+        $suite->true(strpos($source, 'state.factories.createReorderGroups(boardHost') !== false
+            && strpos($source, 'state.factories.createInlineText(') !== false
+            && strpos($source, 'state.factories.createInlineSelect(') !== false
+            && strpos($source, 'state.factories.createInlineDate(') !== false,
+            'Project planning must compose Helper grouped reordering and the canonical inline editors.');
+        $suite->true(strpos($source, 'from_milestone_id: milestoneIdFromGroup(change.fromGroupId)') !== false
+            && strpos($source, 'to_milestone_id: milestoneIdFromGroup(change.toGroupId)') !== false
+            && strpos($source, 'orders, versions') !== false,
+            'Moving a deliverable must submit both affected complete orders and optimistic versions in one request.');
+        $suite->true(strpos($source, 'The save outcome is unknown. Reconcile with the server before making another change.') !== false
+            && strpos($source, 'board?.setInteractionLocked(true)') !== false
+            && strpos($source, 'Reconcile saved order') !== false,
+            'Unknown reorder outcomes must remain write-locked until an explicit read-only reconciliation.');
+        $suite->true(strpos($source, 'The field save outcome is unknown. Reconcile with the server before editing or moving anything else.') !== false
+            && strpos($source, 'Reconcile saved value') !== false,
+            'Unknown inline-save outcomes must gate further edits and moves until an explicit read-only reconciliation.');
+        $suite->true(strpos($service, 'function reorderMilestones') !== false
+            && strpos($service, 'function reorderDeliverables') !== false
+            && strpos($service, 'FOR UPDATE') !== false
+            && strpos($orderApi, "projectApiRequireMethod(['PATCH'])") !== false,
+            'The project-plan reorder endpoint must authorize and atomically version-check milestone and deliverable moves.');
         $suite->true(strpos($source, 'message: "Loading deliverables…"') !== false
             && strpos($source, 'modal.setRows(taskFormRows())') !== false
             && strpos($source, 'state.projectPlanLoaded = false') !== false,

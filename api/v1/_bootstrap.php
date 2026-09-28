@@ -58,6 +58,7 @@ function projectApiError(Exception $exception)
         'DELIVERABLE_NOT_FOUND' => [404, 'Deliverable not found.'],
         'MILESTONE_VERSION_CONFLICT' => [409, 'This milestone changed. Reload it before trying again.'],
         'DELIVERABLE_VERSION_CONFLICT' => [409, 'This deliverable changed. Reload it before trying again.'],
+        'PROJECT_PLAN_REORDER_CONFLICT' => [409, 'The project plan changed. Reload it before trying the move again.'],
         'RATE_LIMITED' => [429, 'Too many requests. Try again later.'],
     ];
     if (isset($errors[$code])) {
