@@ -844,6 +844,15 @@ try {
         $suite->same(false, $read['body']['result']['isError']);
         $suite->same($message['id'], $read['body']['result']['structuredContent']['result']['id']);
 
+        $proposal = $call($tokenOne, 'propose_project_details', [
+            'description' => 'Suggested through the remote MCP contract.',
+            'rationale' => 'Exercise the human-reviewed proposal boundary.',
+        ]);
+        $suite->same(200, $proposal['status'], $proposal['raw']);
+        $suite->same(false, $proposal['body']['result']['isError']);
+        $suite->same('pending', $proposal['body']['result']['structuredContent']['result']['status']);
+        $suite->same(1, (int) $pdo->query('SELECT COUNT(*) FROM project_change_proposals WHERE project_id = ' . (int) $projectOne)->fetchColumn());
+
         $foreign = $call($tokenTwo, 'get_message', ['message_id' => $message['id']]);
         $suite->same(200, $foreign['status']);
         $suite->same(true, $foreign['body']['result']['isError']);
@@ -897,6 +906,9 @@ try {
             'get_task' => ['task_id' => 1],
             'create_task' => ['title' => 'Unbound task must not be created'],
             'update_task' => ['task_id' => 1, 'version' => 1, 'status' => 'in_progress'],
+            'propose_project_details' => ['description' => 'Unbound proposal must not be created'],
+            'propose_agent_setup' => ['display_name' => 'Unbound agent proposal'],
+            'propose_agent_profile_update' => ['target_agent_id' => 1, 'role_title' => 'Unbound profile proposal'],
             'post_message' => ['body' => 'Unbound call must not post', 'broadcast' => true],
             'acknowledge_message' => ['message_id' => 1],
         ];

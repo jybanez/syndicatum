@@ -1132,3 +1132,21 @@ button, input, textarea { font: inherit; }
   .notification-row { grid-template-columns: 24px minmax(0, 1fr); }
   .notification-row-actions { justify-content: flex-start; }
 }
+.project-proposals-content { display: grid; gap: 10px; }
+.project-proposal-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface-raised, var(--ui-surface)); }
+.project-proposal-card.is-pending { border-left: 3px solid var(--ui-accent); }
+.project-proposal-card-header, .project-proposal-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.project-proposal-card-heading { display: grid; gap: 2px; }
+.project-proposal-card-heading > span, .project-proposal-card-footer, .project-proposal-target { color: var(--ui-text-muted); font-size: .82rem; }
+.project-proposal-summary { margin: 0; white-space: pre-wrap; }
+.project-proposal-status { text-transform: capitalize; }
+.project-proposal-status.is-approved { color: var(--ui-success); }
+.project-proposal-status.is-rejected { color: var(--ui-danger); }
+.project-proposal-decision { display: grid; gap: 12px; }
+.project-proposal-rationale { margin: 0; color: var(--ui-text-muted); }
+.project-proposal-fields { display: grid; gap: 8px; margin: 0; }
+.project-proposal-field { display: grid; grid-template-columns: minmax(120px, .35fr) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--ui-border); }
+.project-proposal-field dt { color: var(--ui-text-muted); }
+.project-proposal-field dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.project-proposal-review-note { width: 100%; box-sizing: border-box; resize: vertical; }
+@media (max-width: 600px) { .project-proposal-field { grid-template-columns: 1fr; gap: 4px; } }

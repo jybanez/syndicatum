@@ -36,12 +36,13 @@ try {
             'installation_id' => Db::uuidV4(),
             'installed_at' => gmdate('Y-m-d\TH:i:s\Z'),
         ]);
-    if ($result['post_baseline_migration_rows'] !== 21
+    if ($result['post_baseline_migration_rows'] !== 22
         || !Db::columnExists($pdo, 'projects', 'context_version')
         || !Db::columnExists($pdo, 'project_agents', 'role_version')
         || !Db::columnExists($pdo, 'project_agents', 'supervising_participant_id')
         || !Db::tableExists($pdo, 'project_tasks')
         || !Db::tableExists($pdo, 'project_milestones')
+        || !Db::tableExists($pdo, 'project_change_proposals')
         || !Db::tableExists($pdo, 'project_deliverables')
         || !Db::columnExists($pdo, 'project_tasks', 'deliverable_id')
         || !Db::tableExists($pdo, 'project_templates')
@@ -59,7 +60,7 @@ try {
         throw new RuntimeException('Fresh baseline installation did not apply the declared migration suffix.');
     }
     $state = (new InstallationState($pdo))->inspect();
-    if (empty($state['ready']) || $state['identity']['schema_head'] !== '202609280002') {
+    if (empty($state['ready']) || $state['identity']['schema_head'] !== '202609280003') {
         throw new RuntimeException('Post-baseline installation identity is not ready.');
     }
     echo "PASS  fresh baseline applies the declared migration suffix\n";

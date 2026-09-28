@@ -1392,6 +1392,25 @@ try {
         $suite->true(strpos($authorize, 'name="agent"') === false, 'OAuth consent must not select a project agent.');
     });
 
+    $suite->test('MCP project setup help is proposal-only and documented', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/mcp.php');
+        $activation = file_get_contents($root . '/src/ResponsesApiActivationService.php');
+        $ui = file_get_contents($root . '/assets/app.mjs');
+        $docs = file_get_contents($root . '/docs/mcp-project-setup-proposals.md');
+        foreach (['propose_project_details', 'propose_agent_setup', 'propose_agent_profile_update'] as $tool) {
+            $suite->true(strpos($source, "'" . $tool . "'") !== false, $tool . ' must be exposed through MCP.');
+            $suite->true(strpos($activation, "'" . $tool . "'") !== false, $tool . ' must be available to Responses agents.');
+        }
+        $suite->true(strpos($ui, 'AI project proposals') !== false && strpos($ui, 'Approve and apply') !== false,
+            'Project administrators need a visible proposal review workflow.');
+        $suite->true(strpos($docs, 'Refine an incomplete project brief') !== false
+            && strpos($docs, 'Add a specialist when the plan grows') !== false
+            && strpos($docs, 'Rebalance an existing agent') !== false,
+            'Proposal documentation must include practical scenarios.');
+        $suite->true(strpos($docs, 'credentials, API keys, tokens, scopes, webhook URLs') !== false,
+            'Proposal documentation must state the credential boundary.');
+    });
+
     $suite->test('Health identifies a compatible Syndicatum connector server', function () use ($suite, $root) {
         $source = file_get_contents($root . '/api/v1/health.php');
         $suite->true(strpos($source, "'id' => 'syndicatum'") !== false, 'Health must expose the Syndicatum service identity.');

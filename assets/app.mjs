@@ -1,7 +1,7 @@
 import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.209";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928190000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928230000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -34,6 +34,7 @@ const API = {
   projectMilestone: "api/v1/project-milestone.php",
   projectDeliverables: "api/v1/project-deliverables.php",
   projectDeliverable: "api/v1/project-deliverable.php",
+  projectChangeProposals: "api/v1/project-change-proposals.php",
   projectStatusSummary: "api/v1/project-status-summary.php",
   projectStatusTaskProgress: "api/v1/project-status-task-progress.php",
   projectStatusPlan: "api/v1/project-status-plan.php",
@@ -1064,6 +1065,7 @@ function renderProjectHeader() {
   }
   if (hasProject) actions.push({ id: "info", label: "Project Info", icon: helperIconHtml("status.info") });
   if (hasProject && state.mode === "expanded" && (can("project.manage") || can("project.admin"))) {
+    actions.push({ id: "proposals", label: "AI proposals", icon: helperIconHtml("assets.document") });
     actions.push({ id: "edit", label: "Edit project", icon: helperIconHtml("actions.edit") });
   }
   if (hasProject) actions.push({
@@ -1080,6 +1082,7 @@ function renderProjectHeader() {
         if (item.id === "status") openProjectStatusModal();
         if (item.id === "plan") openProjectPlanModal();
         if (item.id === "info") openProjectInfoModal();
+        if (item.id === "proposals") openProjectChangeProposalsModal();
         if (item.id === "edit") openEditProjectModal();
         if (item.id === "toggle-team") setTeamVisible(!state.teamVisible);
       },
@@ -2820,6 +2823,130 @@ function openEditProjectModal() {
     try { const result = unwrap(await request(API.manageProjects, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), ...values }) })); state.project = { ...state.project, ...(result.project || result) }; state.projects = state.projects.map((entry) => entry.id === selectedProjectId() ? { ...entry, ...state.project } : entry); renderWorkspace(); renderProjectHeader(); state.components.toast.success("Project updated."); return true; }
     catch (error) { context.setFormError(error.message); return false; }
   }}).open();
+}
+
+function projectProposalLabel(type) {
+  return ({ project_details: "Project details", agent_setup: "New agent setup", agent_profile_update: "Agent profile update" })[type] || "Project change";
+}
+
+function projectProposalFieldLabel(field) {
+  return ({ name: "Project name", description: "Description", instructions: "Operating instructions",
+    display_name: "Agent name", provider: "Provider", runtime_name: "Runtime name", role_title: "Role title",
+    role_summary: "Role summary", role_instructions: "Role instructions", supervising_participant_id: "Supervisor participant" })[field]
+    || field.replaceAll("_", " ").replace(/^./, (value) => value.toUpperCase());
+}
+
+function openProjectProposalDecision(proposal, reload) {
+  const content = projectInfoElement("div", "project-proposal-decision");
+  content.append(projectInfoElement("p", "project-proposal-rationale", proposal.rationale || "No rationale was supplied."));
+  const details = projectInfoElement("dl", "project-proposal-fields");
+  Object.entries(proposal.payload || {}).forEach(([field, value]) => {
+    const row = projectInfoElement("div", "project-proposal-field");
+    row.append(projectInfoElement("dt", "", projectProposalFieldLabel(field)), projectInfoElement("dd", "", value === null ? "None" : String(value)));
+    details.append(row);
+  });
+  content.append(details);
+  const note = document.createElement("textarea");
+  note.className = "ui-input project-proposal-review-note";
+  note.rows = 3;
+  note.maxLength = 4000;
+  note.placeholder = "Optional review note";
+  note.setAttribute("aria-label", "Review note");
+  content.append(note);
+  let modal;
+  const decide = async (decision) => {
+    modal.setBusy(true, { message: decision === "approve" ? "Applying proposal…" : "Rejecting proposal…" });
+    try {
+      await request(API.projectChangeProposals, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({
+        project_id: proposal.project_id, proposal_id: proposal.id, version: proposal.version, decision, review_note: note.value,
+      }) });
+      modal.setBusy(false);
+      await modal.close({ reason: decision });
+      state.components.toast.success(decision === "approve" ? "Proposal approved and applied." : "Proposal rejected.");
+      await reload();
+      if (decision === "approve" && selectedProjectId() === id(proposal.project_id)) {
+        await switchProject(proposal.project_id, { initial: true, historyMode: "replace" });
+      }
+    } catch (error) {
+      modal.setBusy(false);
+      state.components.toast.error(error.message, { title: "Proposal was not reviewed" });
+    }
+    return false;
+  };
+  modal = state.factories.createActionModal({
+    title: `Review ${projectProposalLabel(proposal.proposal_type).toLowerCase()}`,
+    size: "md",
+    content,
+    actions: [
+      { id: "cancel", label: "Cancel" },
+      { id: "reject", label: "Reject", variant: "danger", closeOnClick: false, onClick: () => decide("reject") },
+      { id: "approve", label: "Approve and apply", variant: "primary", closeOnClick: false, onClick: () => decide("approve") },
+    ],
+  });
+  modal.open();
+}
+
+function openProjectChangeProposalsModal() {
+  if (state.components.projectChangeProposals?.getState?.().open) return;
+  const projectId = selectedProjectId();
+  const abortController = new AbortController();
+  const content = projectInfoElement("div", "project-proposals-content");
+  content.append(projectInfoElement("p", "", "Loading agent proposals…"));
+  let dismissed = false;
+  let modal;
+  const load = async () => {
+    content.replaceChildren(projectInfoElement("p", "", "Loading agent proposals…"));
+    modal.setActions([{ id: "close", label: "Close" }]);
+    modal.setBusy(true, { message: "Loading proposals…", cancelBusy: { label: "Close", onCancel: () => modal.close({ reason: "cancelled" }) } });
+    try {
+      const proposals = unwrap(await request(`${API.projectChangeProposals}?${new URLSearchParams({ project_id: projectId })}`, { signal: abortController.signal })) || [];
+      if (dismissed || selectedProjectId() !== projectId) return;
+      modal.setBusy(false);
+      content.replaceChildren();
+      if (!proposals.length) {
+        content.append(projectInfoElement("div", "empty-state", "No agent proposals have been submitted for this project."));
+        return;
+      }
+      proposals.forEach((proposal) => {
+        const card = projectInfoElement("article", `project-proposal-card is-${proposal.status}`);
+        const header = projectInfoElement("header", "project-proposal-card-header");
+        const heading = projectInfoElement("span", "project-proposal-card-heading");
+        heading.append(projectInfoElement("strong", "", projectProposalLabel(proposal.proposal_type)),
+          projectInfoElement("span", "", `Proposed by ${proposal.proposer?.display_name || "an agent"}`));
+        const badge = projectInfoElement("span", `ui-badge project-proposal-status is-${proposal.status}`, proposal.status);
+        header.append(heading, badge);
+        card.append(header);
+        if (proposal.target_agent_name) card.append(projectInfoElement("p", "project-proposal-target", `Target: ${proposal.target_agent_name}`));
+        card.append(projectInfoElement("p", "project-proposal-summary", proposal.rationale || "No rationale supplied."));
+        const footer = projectInfoElement("footer", "project-proposal-card-footer");
+        footer.append(projectInfoElement("span", "", formatDate(proposal.created_at)));
+        if (proposal.status === "pending") {
+          const review = projectInfoElement("button", "ui-button ui-button-sm", "Review");
+          review.type = "button";
+          review.addEventListener("click", () => openProjectProposalDecision(proposal, load));
+          footer.append(review);
+        } else if (proposal.reviewer_name) {
+          footer.append(projectInfoElement("span", "", `Reviewed by ${proposal.reviewer_name}`));
+        }
+        card.append(footer);
+        content.append(card);
+      });
+    } catch (error) {
+      if (dismissed || error.name === "AbortError") return;
+      modal.setBusy(false);
+      const failure = projectInfoElement("div", "ui-alert ui-alert-danger", `Unable to load proposals. ${error.message}`);
+      failure.setAttribute("role", "alert");
+      content.replaceChildren(failure);
+      modal.setActions([{ id: "close", label: "Close" }, { id: "retry", label: "Retry", variant: "primary", closeOnClick: false, onClick: () => { void load(); return false; } }]);
+    }
+  };
+  modal = state.factories.createActionModal({
+    title: "AI project proposals", size: "lg", content, actions: [{ id: "close", label: "Close" }],
+    onClose() { dismissed = true; abortController.abort(); if (state.components.projectChangeProposals === modal) state.components.projectChangeProposals = null; },
+  });
+  state.components.projectChangeProposals = modal;
+  modal.open();
+  void load();
 }
 
 function openProjectInfoModal() {

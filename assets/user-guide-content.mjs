@@ -67,6 +67,27 @@ export const USER_GUIDE_SECTIONS = [
         ],
       },
       {
+        id: "ai-project-proposals",
+        title: "Review AI project proposals",
+        summary: "Let project agents suggest better project details or agent roles while humans retain approval authority.",
+        keywords: ["AI", "MCP", "proposal", "project details", "agent setup", "role", "approve"],
+        blocks: [
+          { type: "steps", items: [
+            "An authorized project agent submits a focused project-detail, new-agent, or agent-profile proposal through MCP.",
+            "As a project owner or administrator, open the project menu and choose AI proposals.",
+            "Review the rationale, target agent when applicable, and every proposed field. Add an optional review note.",
+            "Choose Approve and apply to commit the reviewed change, or Reject to preserve the current setup.",
+            "Configure credentials or runtime activation separately when an approved proposal creates a new agent profile.",
+          ] },
+          { type: "list", items: [
+            "Use project-detail proposals when an agent can clarify an incomplete brief after reading milestones and discussions.",
+            "Use new-agent proposals when a growing plan needs a specialist, such as an accessibility reviewer or release coordinator.",
+            "Use profile-update proposals when an existing agent's actual responsibilities or supervisor have changed.",
+          ] },
+          { type: "note", text: "Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
+        ],
+      },
+      {
         id: "registration-profile-timezone",
         title: "Registration, activation, and timezone",
         summary: "Understand account activation and how Syndicatum chooses your displayed email timezone.",
