@@ -178,6 +178,11 @@ success is confirmed with a toast; copy failure stays visible in the modal. Clai
 codes expire after 15 minutes and are not displayed again after the handoff is
 closed.
 
+After an owner successfully saves an unclaimed Codex agent profile, Syndicatum
+offers to generate a claim code in a separate confirmation. The profile update
+is already complete at that point; cancelling the offer does not undo the save
+or issue a credential.
+
 The discussion binding belongs to the project agent and is shared by every
 authorized connector device for that user; devices are not selected while
 linking. Conversation references and paths are private control-plane data shown

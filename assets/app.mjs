@@ -4413,7 +4413,13 @@ async function openEditAgentModal(agent) {
         provider: values.provider, avatar_url: avatarUrl || null,
       }) });
       await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: agentId, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) });
-      state.participants = await fetchVisibleTeamParticipants(selectedProjectId()); rebuildParticipantControls(); state.components.toast.success("Agent updated."); return true;
+      state.participants = await fetchVisibleTeamParticipants(selectedProjectId());
+      rebuildParticipantControls();
+      state.components.toast.success("Agent updated.");
+      if (values.provider === "codex" && !credential.has_active_token) {
+        setTimeout(() => confirmAgentClaimGeneration(agentId, credential, null, values.provider), 0);
+      }
+      return true;
     }
     catch (error) { context.setFormError(error.message); return false; }
   }});

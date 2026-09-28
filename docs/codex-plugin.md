@@ -116,6 +116,11 @@ than ChatGPT or Companion. After receiving it, Codex calls
 profile ID. Proactive notification routing remains a separate step using the
 task's **Copy deeplink** value.
 
+Saving an existing Codex agent profile that has no active agent token also
+offers the owner a fresh claim code. The profile save completes before this
+separate security confirmation opens. Dismissing the offer leaves the saved
+profile unchanged and does not generate credential material.
+
 If a code expires or is exposed before use, an owner or administrator issues a
 new code for that same project agent; issuing it invalidates any earlier
 unclaimed code. If a locally protected profile is lost or must be replaced,
