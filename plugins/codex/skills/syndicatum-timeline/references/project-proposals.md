@@ -19,6 +19,22 @@ a concise rationale grounded in observed project needs. Do not use proposals for
 ephemeral status, ordinary task work, or changes that are already captured by a
 task.
 
+## Choose the correct record, not just the correct wording
+
+When the user asks the agent to propose, draft for review, recommend for
+approval, or formally suggest milestones or deliverables, call
+`syndicatum_propose_project_plan`. The resulting durable proposal record is the
+requested output. Do not paste the plan into `syndicatum_post_message`, create a
+task containing the plan, or treat a conversational response as an equivalent
+substitute. A timeline message may discuss requirements before submission or
+briefly report the returned proposal ID and pending status afterward, but it
+must not replace the proposal.
+
+If `syndicatum_propose_project_plan` is not present in the current tool catalog,
+say that the proposal cannot yet be submitted and ask for the Syndicatum plugin
+to be updated or for a fresh chat after installation. Do not downgrade the
+request into a normal message.
+
 Owners and administrators review proposals under **Project actions → AI
 proposals** and explicitly approve or reject them. Agents cannot approve their
 own proposals. Never claim that a pending proposal has been applied; report the

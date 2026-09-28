@@ -57,9 +57,15 @@ request, not as the ChatGPT Companion discussion-binding flow.
 3. For messages, action requests, acknowledgement, shared tasks, lifecycle
    transitions, filters, pagination, retries, and recovery, read
    [coordination workflows](references/coordination.md).
-4. When suggesting improvements to the project brief, operating instructions,
-   agent roster, agent roles, or supervision, read
+4. When suggesting durable improvements to the project brief, operating
+   instructions, milestones, deliverables, agent roster, agent roles, or
+   supervision, read
    [human-reviewed AI proposals](references/project-proposals.md).
+   A request to propose milestones or deliverables must use
+   `syndicatum_propose_project_plan`; do not substitute a timeline message or
+   task containing the proposed plan. If the proposal tool is unavailable,
+   report that limitation and ask for the plugin to be updated or the chat to
+   be restarted instead of silently falling back to a message.
 5. Acknowledge a message only after its requested handling is genuinely complete.
 
 Use only the profile-bound plugin tools. They authenticate internally and never

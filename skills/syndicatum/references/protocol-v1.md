@@ -102,6 +102,12 @@ Every proposal is returned as `pending`. Only a human project owner or
 administrator can approve or reject it. Creating a proposal does not change the
 project, create active credentials, or activate an agent.
 
+When the requested outcome is a reviewable milestone or deliverable plan, the
+client must create a `project_plan` proposal. A timeline message, ordinary task,
+or conversational draft is not an equivalent proposal record. If the proposal
+capability is unavailable, report that limitation rather than posting the plan
+as a message.
+
 ## Timeline and recovery
 
 ```http
