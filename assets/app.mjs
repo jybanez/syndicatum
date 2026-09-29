@@ -3514,7 +3514,9 @@ function openProjectPlanModal() {
     });
     cleanups.push(title, status, due, owner);
     const meta = projectInfoElement("div", "project-plan-row-meta");
-    meta.append(projectInfoElement("span", "", `${item.completed_task_count}/${item.eligible_task_count} tasks complete`));
+    if (Number(item.task_count || 0) > 0) {
+      meta.append(projectInfoElement("span", "", `${item.completed_task_count}/${item.eligible_task_count} tasks complete`));
+    }
     const actions = projectInfoElement("span", "project-plan-row-actions");
     if (item.artifact_url) {
       const artifact = document.createElement("a"); artifact.className = "ui-button ui-button-sm"; artifact.href = item.artifact_url;
