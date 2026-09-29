@@ -387,6 +387,7 @@ button, input, textarea { font: inherit; }
 .project-plan-inline-cell.is-owner-subtext::before { display: inline; flex: 0 0 auto; content: "Owner:"; margin-left: 8px; color: var(--app-muted); font-size: 11px; }
 .project-plan-inline-cell.is-owner-subtext .ui-inline { flex: 1 1 auto; flex-wrap: nowrap; }
 .project-plan-inline-cell.is-owner-subtext .ui-inline-view { display: inline-flex; width: auto; padding: 2px 3px; color: var(--app-muted); font-size: 12px; font-weight: 500; }
+.project-plan-inline-cell.is-date .ui-inline-view { font-size: 14px; font-weight: 400; line-height: 1.35; }
 .project-plan-inline-cell.is-status .ui-inline-view { display: inline-flex; width: auto; min-height: 24px; padding: 3px 9px; border-color: color-mix(in srgb, var(--project-plan-status) 52%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--project-plan-status) 12%, transparent); color: var(--project-plan-status); font-size: 12px; font-weight: 700; }
 .project-plan-group-meta,
 .project-plan-row-meta { color: var(--app-muted); font-size: 12px; }

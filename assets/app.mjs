@@ -3445,7 +3445,7 @@ function openProjectPlanModal() {
   };
   const projectPlanIconAction = (label, icon, tagName = "button") => {
     const control = document.createElement(tagName);
-    control.className = "ui-button ui-button-sm ui-button-icon project-plan-icon-action";
+    control.className = "ui-button ui-button-sm ui-button-icon ui-button-borderless project-plan-icon-action";
     if (tagName === "button") control.type = "button";
     control.setAttribute("aria-label", label);
     control.title = label;
@@ -3482,12 +3482,18 @@ function openProjectPlanModal() {
         layout.className = `project-plan-group-header is-${value}`;
       },
     });
-    const target = state.factories.createInlineDate(dateHost, {
-      label: "Target date", value: projectPlanDayValue(group.milestone.target_at) || null,
-      placeholder: "No target date", showTime: false, valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
-      onSave: async (value) => { await patchMilestone(milestoneId, { target_at: value || null }); },
-    });
-    cleanups.push(title, status, target);
+    const targetValue = projectPlanDayValue(group.milestone.target_at) || null;
+    let target = null;
+    if (targetValue) {
+      target = state.factories.createInlineDate(dateHost, {
+        label: "Target date", value: targetValue, placeholder: "", showTime: false, valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+        onSave: async (value) => {
+          await patchMilestone(milestoneId, { target_at: value || null });
+          if (!value) window.setTimeout(() => { target?.destroy(); dateHost.replaceChildren(); }, 0);
+        },
+      });
+    }
+    cleanups.push(title, status); if (target) cleanups.push(target);
     const meta = projectInfoElement("span", "project-plan-group-meta", `${group.milestone.ready_deliverable_count}/${group.milestone.deliverable_count} ready`);
     const actions = projectInfoElement("span", "project-plan-row-actions");
     if (currentPlan.can_manage) {
@@ -3525,18 +3531,25 @@ function openProjectPlanModal() {
         row.className = `project-plan-row is-${value}`;
       },
     });
-    const due = state.factories.createInlineDate(dateHost, {
-      label: "Due date", value: projectPlanDateValue(item.due_at) || null, placeholder: "No due date",
-      showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
-      onSave: async (value) => { await patchDeliverable(item.id, { due_at: value || null }); },
-    });
+    const dueValue = projectPlanDateValue(item.due_at) || null;
+    let due = null;
+    if (dueValue) {
+      due = state.factories.createInlineDate(dateHost, {
+        label: "Due date", value: dueValue, placeholder: "",
+        showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+        onSave: async (value) => {
+          await patchDeliverable(item.id, { due_at: value || null });
+          if (!value) window.setTimeout(() => { due?.destroy(); dateHost.replaceChildren(); }, 0);
+        },
+      });
+    }
     const ownerHost = inlineCell(titleCell, "is-owner-subtext", "Owner");
     const owner = state.factories.createInlineSelect(ownerHost, {
       label: "Accountable owner", value: id(item.owner_participant_id), placeholder: "Unassigned",
       readOnly: !currentPlan.can_manage, items: projectPlanParticipantOptions().map(({ value, label }) => ({ id: value, label })),
       onSave: async (value) => { await patchDeliverable(item.id, { owner_participant_id: value || null }); },
     });
-    cleanups.push(title, status, due, owner);
+    cleanups.push(title, status, owner); if (due) cleanups.push(due);
     const meta = projectInfoElement("div", "project-plan-row-meta");
     if (Number(item.task_count || 0) > 0) {
       meta.append(projectInfoElement("span", "", `${item.completed_task_count}/${item.eligible_task_count} tasks complete`));

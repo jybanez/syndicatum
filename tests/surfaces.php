@@ -1056,8 +1056,15 @@ try {
         $suite->true(strpos($source, 'projectPlanIconAction("Add deliverable", "actions.add")') !== false
             && strpos($source, 'projectPlanIconAction("Edit milestone details", "actions.edit")') !== false
             && strpos($source, 'projectPlanIconAction("Edit deliverable details", "actions.edit")') !== false
+            && strpos($source, 'ui-button-borderless project-plan-icon-action') !== false
             && strpos($styles, '.project-plan-icon-action') !== false,
-            'Row-level project-plan actions must use compact accessible icon controls.');
+            'Row-level project-plan actions must use compact accessible borderless icon controls.');
+        $suite->true(strpos($source, 'if (targetValue)') !== false
+            && strpos($source, 'if (dueValue)') !== false
+            && strpos($source, 'placeholder: "No target date"') === false
+            && strpos($source, 'placeholder: "No due date"') === false
+            && strpos($styles, '.project-plan-inline-cell.is-date .ui-inline-view { font-size: 14px; font-weight: 400; line-height: 1.35; }') !== false,
+            'Project-plan dates must use regular typography and omit empty target or due-date controls.');
         $suite->true(strpos($source, 'from_milestone_id: milestoneIdFromGroup(change.fromGroupId)') !== false
             && strpos($source, 'to_milestone_id: milestoneIdFromGroup(change.toGroupId)') !== false
             && strpos($source, 'orders, versions') !== false,
