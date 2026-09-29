@@ -1051,6 +1051,8 @@ try {
         $suite->true(strpos($source, 'inlineCell(titleCell, "is-owner-subtext", "Owner")') !== false
             && strpos($styles, '.project-plan-inline-cell.is-owner-subtext .ui-inline-view') !== false,
             'Deliverable owners must remain inline-editable as toned-down metadata beneath the deliverable title.');
+        $suite->true(strpos($styles, '.project-plan-inline-cell.is-title .ui-inline-field input { font-size: 14px; font-weight: 700; line-height: 1.35; }') !== false,
+            'Milestone and deliverable titles must use the regular body size with bold emphasis in view and edit modes.');
         $suite->true(strpos($source, 'projectPlanIconAction("Add deliverable", "actions.add")') !== false
             && strpos($source, 'projectPlanIconAction("Edit milestone details", "actions.edit")') !== false
             && strpos($source, 'projectPlanIconAction("Edit deliverable details", "actions.edit")') !== false

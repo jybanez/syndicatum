@@ -381,7 +381,8 @@ button, input, textarea { font: inherit; }
 .project-plan-title-cell { display: grid; gap: 0; min-width: 0; }
 .project-plan-inline-cell .ui-inline,
 .project-plan-inline-cell .ui-inline-view { box-sizing: border-box; width: 100%; min-width: 0; }
-.project-plan-inline-cell.is-title .ui-inline-view { font-weight: 700; }
+.project-plan-inline-cell.is-title .ui-inline-view,
+.project-plan-inline-cell.is-title .ui-inline-field input { font-size: 14px; font-weight: 700; line-height: 1.35; }
 .project-plan-inline-cell.is-owner-subtext { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--app-muted); }
 .project-plan-inline-cell.is-owner-subtext::before { display: inline; flex: 0 0 auto; content: "Owner:"; margin-left: 8px; color: var(--app-muted); font-size: 11px; }
 .project-plan-inline-cell.is-owner-subtext .ui-inline { flex: 1 1 auto; flex-wrap: nowrap; }
