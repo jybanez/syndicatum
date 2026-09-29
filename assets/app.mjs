@@ -6481,6 +6481,7 @@ function taskDetailContent(task) {
   const content = document.createElement("div"); content.className = "task-detail";
   const markdownViews = [];
   let activityTimeline = null;
+  let taskTabs = null;
   const markdown = (source, className, options = {}) => {
     const host = document.createElement("div"); host.className = className;
     markdownViews.push(state.factories.createMarkdownView(host, {
@@ -6492,6 +6493,8 @@ function taskDetailContent(task) {
   content.destroyMarkdownViews = () => {
     activityTimeline?.destroy();
     activityTimeline = null;
+    taskTabs?.destroy();
+    taskTabs = null;
     markdownViews.splice(0).forEach((view) => view.destroy());
   };
   const hero = document.createElement("section"); hero.className = "task-detail-hero";
@@ -6500,31 +6503,41 @@ function taskDetailContent(task) {
   [[taskStatusLabel(task.status), `is-${task.status}`], [`${task.priority} priority`, "is-priority"]].forEach(([label, className]) => {
     const chip = document.createElement("span"); chip.className = `task-detail-chip ${className}`; chip.textContent = label; chips.append(chip);
   });
-  const description = markdown(task.description, "task-detail-description", { emptyText: "No description provided." });
-  hero.append(title, chips, description); content.append(hero);
+  hero.append(title, chips);
 
-  const addDetailSection = (headingText, rows) => {
+  const overview = document.createElement("div"); overview.className = "task-detail-tab-panel task-detail-overview";
+  const descriptionSection = document.createElement("section"); descriptionSection.className = "task-detail-section ui-panel task-detail-description-section";
+  const descriptionHeading = document.createElement("h3"); descriptionHeading.textContent = "Description";
+  const description = markdown(task.description, "task-detail-description", { emptyText: "No description provided." });
+  descriptionSection.append(descriptionHeading, description); overview.append(descriptionSection);
+  const overviewGrid = document.createElement("div"); overviewGrid.className = "task-detail-overview-grid"; overview.append(overviewGrid);
+
+  const addDetailSection = (target, headingText, rows) => {
     const section = document.createElement("section"); section.className = "task-detail-section ui-panel";
     const heading = document.createElement("h3"); heading.textContent = headingText;
     const details = document.createElement("dl"); details.className = "task-detail-list";
     rows.forEach(([label, value]) => { const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd"); dd.textContent = value; details.append(dt, dd); });
-    section.append(heading, details); content.append(section);
+    section.append(heading, details); target.append(section);
   };
-  addDetailSection("Responsibility", [
+  addDetailSection(overviewGrid, "Responsibility", [
     ["Assigned to", task.assignee_display_name || "Unassigned"],
     ["Task giver", task.creator_display_name || "Unknown"],
     ["Deliverable", task.deliverable_title || "Not linked"],
   ]);
-  addDetailSection("Schedule", [
+  addDetailSection(overviewGrid, "Schedule", [
     ["Due", task.due_at ? formatDate(task.due_at) : "No due date"],
     ["Created", formatDate(task.created_at)],
     ["Updated", formatDate(task.updated_at)],
   ]);
+  if (task.blocked_reason) { const blocked = document.createElement("p"); blocked.className = "task-blocked-reason"; blocked.textContent = `Blocked: ${task.blocked_reason}`; overview.append(blocked); }
+
+  const requirements = document.createElement("div"); requirements.className = "task-detail-tab-panel task-detail-requirements";
+  let hasRequirements = false;
   if (task.acceptance_criteria) {
     const criteriaSection = document.createElement("section"); criteriaSection.className = "task-detail-section ui-panel";
     const heading = document.createElement("h3"); heading.textContent = "Acceptance criteria";
     const criteria = markdown(task.acceptance_criteria, "task-detail-markdown");
-    criteriaSection.append(heading, criteria); content.append(criteriaSection);
+    criteriaSection.append(heading, criteria); requirements.append(criteriaSection); hasRequirements = true;
   }
   if (task.source_message_id) {
     const sourceSection = document.createElement("section"); sourceSection.className = "task-detail-section ui-panel";
@@ -6533,12 +6546,12 @@ function taskDetailContent(task) {
     const open = document.createElement("button"); open.type = "button"; open.className = "ui-button ui-button-borderless";
     open.textContent = "View source message";
     open.addEventListener("click", () => void openResponsibilityMessage(task.source_message_id));
-    sourceSection.append(heading, sourceDescription, open); content.append(sourceSection);
+    sourceSection.append(heading, sourceDescription, open); requirements.append(sourceSection); hasRequirements = true;
   }
-  if (task.blocked_reason) { const blocked = document.createElement("p"); blocked.className = "task-blocked-reason"; blocked.textContent = `Blocked: ${task.blocked_reason}`; content.append(blocked); }
+  if (!hasRequirements) { const empty = document.createElement("p"); empty.className = "task-detail-empty"; empty.textContent = "No acceptance criteria or source message."; requirements.append(empty); }
+
   const events = Array.isArray(task.events) ? task.events : [];
-  const activitySection = document.createElement("section"); activitySection.className = "task-detail-section ui-panel";
-  const activityHeading = document.createElement("h3"); activityHeading.textContent = "Activity";
+  const activityPanel = document.createElement("div"); activityPanel.className = "task-detail-tab-panel task-detail-activity-panel";
   const activity = document.createElement("div"); activity.className = "task-detail-activity";
   const activityItems = events.map((event) => {
     const eventLabel = event.event_type === "status_changed"
@@ -6577,7 +6590,20 @@ function taskDetailContent(task) {
       };
     },
   });
-  activitySection.append(activityHeading, activity); content.append(activitySection);
+  activityPanel.append(activity);
+
+  const tabsHost = document.createElement("div"); tabsHost.className = "task-detail-tabs";
+  content.append(hero, tabsHost);
+  taskTabs = state.factories.createTabs(tabsHost, {
+    ariaLabel: "Task details sections",
+    variant: "attached",
+    activeId: "overview",
+    tabs: [
+      { id: "overview", label: "Overview", content: overview },
+      { id: "requirements", label: "Requirements", content: requirements },
+      { id: "activity", label: "Activity", content: activityPanel },
+    ],
+  });
   return content;
 }
 

@@ -552,6 +552,10 @@ button, input, textarea { font: inherit; }
 .task-card.is-in_review { border-color: rgba(244, 190, 74, .55); }
 .task-detail { display: grid; gap: 14px; }
 .task-detail-hero { display: grid; gap: 10px; }
+.task-detail-tabs { min-width: 0; }
+.task-detail-tabs > .ui-tabs.is-attached > .ui-tabpanel { background: transparent; padding: 14px 0 0; }
+.task-detail-tab-panel { display: grid; gap: 12px; min-width: 0; }
+.task-detail-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .task-detail-title { margin: 0; color: var(--app-text); font-size: 19px; line-height: 1.35; overflow-wrap: anywhere; }
 .task-detail-description, .task-detail-section p { margin: 0; color: var(--app-muted); line-height: 1.55; white-space: pre-wrap; }
 .task-detail-description.ui-markdown .ui-markdown-content,
@@ -569,6 +573,7 @@ button, input, textarea { font: inherit; }
 .task-detail-list { display: grid; grid-template-columns: minmax(90px, max-content) minmax(0, 1fr); gap: 7px 14px; margin: 0; font-size: 13px; }
 .task-detail-list dt { color: var(--app-muted); }
 .task-detail-list dd { margin: 0; color: var(--app-text); overflow-wrap: anywhere; }
+.task-detail-empty { margin: 0; padding: 12px 2px; color: var(--app-muted); }
 .task-detail-activity { min-width: 0; }
 .task-detail-activity .ui-timeline-viewport { height: auto; overflow: visible; scrollbar-gutter: auto; }
 .task-detail-activity .ui-timeline-list { gap: 8px; }
@@ -578,6 +583,9 @@ button, input, textarea { font: inherit; }
 .task-detail-activity .ui-timeline-time { color: var(--app-muted); font-size: 11px; }
 .task-detail-activity .ui-timeline-custom-content { margin-top: 2px; }
 .task-detail-activity .task-detail-markdown { font-size: 12px; }
+@media (max-width: 760px) {
+  .task-detail-overview-grid { grid-template-columns: 1fr; }
+}
 .project-messages-column { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 4px; box-sizing: border-box; }
 .project-messages-column > .timeline-project-overview { grid-row: 1; }
 .project-messages-column > .project-view-switch { grid-row: 2; }

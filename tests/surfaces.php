@@ -1424,14 +1424,19 @@ try {
         $suite->true(strpos($source, 'const taskGiver = id(task.created_by_participant_id) === current;') !== false
             && strpos($source, 'if (taskGiver) actions.unshift({ id: "edit"') !== false,
             'Only the authenticated task giver may see the task-definition edit action.');
-        $suite->true(strpos($source, 'addDetailSection("Responsibility"') !== false
-            && strpos($source, 'addDetailSection("Schedule"') !== false
-            && strpos($source, 'activityHeading.textContent = "Activity"') !== false
+        $suite->true(strpos($source, 'addDetailSection(overviewGrid, "Responsibility"') !== false
+            && strpos($source, 'addDetailSection(overviewGrid, "Schedule"') !== false
             && strpos($source, 'state.factories.createTimeline(activity, activityItems, {') !== false
             && strpos($source, 'ariaLabel: "Task activity"') !== false
             && strpos($source, 'enableVirtualization: false') !== false
-            && strpos($source, 'activityTimeline?.destroy();') !== false,
-            'Task details must organize responsibility, schedule, and criteria while rendering activity with the canonical lifecycle-safe timeline.');
+            && strpos($source, 'state.factories.createTabs(tabsHost, {') !== false
+            && strpos($source, 'ariaLabel: "Task details sections"') !== false
+            && strpos($source, '{ id: "overview", label: "Overview", content: overview }') !== false
+            && strpos($source, '{ id: "requirements", label: "Requirements", content: requirements }') !== false
+            && strpos($source, '{ id: "activity", label: "Activity", content: activityPanel }') !== false
+            && strpos($source, 'activityTimeline?.destroy();') !== false
+            && strpos($source, 'taskTabs?.destroy();') !== false,
+            'Task details must use canonical tabs for overview, requirements, and lifecycle-safe activity timeline content.');
     });
 
     $suite->test('Agent profiles foreground project assignment and responsibilities', function () use ($suite, $root) {
