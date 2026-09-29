@@ -1414,6 +1414,8 @@ try {
             'Only the project rail spacing should be compacted; administration lists retain their established rhythm.');
         $suite->true(strpos($source, 'modal.setBusy(true, { message: "Loading task details..." })') !== false,
             'Task detail modals must open before loading and expose a busy state.');
+        $suite->true(strpos($source, 'title: "Task details", size: "full"') !== false,
+            'Task details must use Helper\'s largest responsive modal size for long authored content.');
         $suite->true(strpos($source, 'modal.setActions(taskActions(task, modal));') !== false
             && strpos($source, 'detailContent = taskDetailContent(task);') !== false
             && strpos($source, 'modal.setContent(detailContent);') !== false

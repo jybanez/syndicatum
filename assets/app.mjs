@@ -6590,7 +6590,7 @@ async function openTaskDetails(taskId) {
   const abortController = new AbortController();
   const loading = document.createElement("p"); loading.textContent = "Loading task details...";
   modal = state.factories.createActionModal({
-    title: "Task details", size: "md", content: loading, actions: [{ id: "close", label: "Close" }],
+    title: "Task details", size: "full", content: loading, actions: [{ id: "close", label: "Close" }],
     onClose() { abortController.abort(); detailContent?.destroyMarkdownViews?.(); },
   });
   modal.open();
