@@ -3443,6 +3443,15 @@ function openProjectPlanModal() {
     if (String(value || "") !== String(value || "").trim()) return `${label} — remove leading or trailing spaces.`;
     return "";
   };
+  const projectPlanIconAction = (label, icon, tagName = "button") => {
+    const control = document.createElement(tagName);
+    control.className = "ui-button ui-button-sm ui-button-icon project-plan-icon-action";
+    if (tagName === "button") control.type = "button";
+    control.setAttribute("aria-label", label);
+    control.title = label;
+    control.innerHTML = helperIconHtml(icon, 17);
+    return control;
+  };
   const renderGroupHeader = (host, group) => {
     const cleanups = [];
     const layout = projectInfoElement("div", `project-plan-group-header${group.milestone ? ` is-${group.milestone.status}` : ""}`);
@@ -3482,9 +3491,8 @@ function openProjectPlanModal() {
     const meta = projectInfoElement("span", "project-plan-group-meta", `${group.milestone.ready_deliverable_count}/${group.milestone.deliverable_count} ready`);
     const actions = projectInfoElement("span", "project-plan-row-actions");
     if (currentPlan.can_manage) {
-      const add = projectInfoElement("button", "ui-button ui-button-sm", "Add deliverable");
-      const details = projectInfoElement("button", "ui-button ui-button-sm", "Details");
-      add.type = details.type = "button";
+      const add = projectPlanIconAction("Add deliverable", "actions.add");
+      const details = projectPlanIconAction("Edit milestone details", "actions.edit");
       add.addEventListener("click", () => openDeliverableForm(null, milestoneId, load));
       details.addEventListener("click", () => openMilestoneForm(milestoneById(milestoneId), load));
       actions.append(add, details);
@@ -3533,11 +3541,11 @@ function openProjectPlanModal() {
     }
     const actions = projectInfoElement("span", "project-plan-row-actions");
     if (item.artifact_url) {
-      const artifact = document.createElement("a"); artifact.className = "ui-button ui-button-sm"; artifact.href = item.artifact_url;
-      artifact.target = "_blank"; artifact.rel = "noopener noreferrer"; artifact.textContent = "Open artifact"; actions.append(artifact);
+      const artifact = projectPlanIconAction("Open deliverable artifact", "assets.document", "a"); artifact.href = item.artifact_url;
+      artifact.target = "_blank"; artifact.rel = "noopener noreferrer"; actions.append(artifact);
     }
     if (currentPlan.can_manage) {
-      const details = projectInfoElement("button", "ui-button ui-button-sm", "Details"); details.type = "button";
+      const details = projectPlanIconAction("Edit deliverable details", "actions.edit");
       details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load)); actions.append(details);
     }
     row.append(meta, actions);
