@@ -670,7 +670,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.212";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.216";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.217";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -832,20 +832,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.216 retains native theme integration, planning components, grouped form selects, and the integration icon family', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.217 retains planning contracts and adds the canonical safe Markdown view', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.216') !== false,
-                'Every Helper entry point must use the canonical 0.21.216 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.217') !== false,
+                'Every Helper entry point must use the canonical 0.21.217 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.216') !== false,
-                $surface . ' must use the matching canonical 0.21.216 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.217') !== false,
+                $surface . ' must use the matching canonical 0.21.217 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -871,19 +871,28 @@ try {
         $suite->true(strpos($bundleJs, 'optgroup') !== false
             && strpos($bundleJs, 'actionsPlacement') !== false,
             'The Helper bundle must include native grouped form selects and responsive inline action placement.');
+        $suite->true(strpos($bundleJs, 'createMarkdownView') !== false
+            && strpos($bundleCss, '.ui-markdown-content') !== false
+            && strpos($app, 'createMarkdownView: await uiLoader.get("ui.markdown", options)') !== false,
+            'Authored content must use the canonical sanitized Helper Markdown component.');
+        $suite->true(strpos($app, 'markdown: String(current.body || ""), profile: "full"') !== false
+            && strpos($app, 'const description = markdown(task.description') !== false
+            && strpos($app, 'markdown(task.acceptance_criteria') !== false
+            && strpos($app, 'destroyMarkdownViews') !== false,
+            'Timeline messages and task detail descriptions must render through Helper Markdown with lifecycle cleanup.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
             'The Helper timeline must anchor virtual rows to the scroll content origin rather than the bordered viewport box.');
-        $suite->same('21c80d044c3f1d50d5cbd446e9fcde22f7dd9e400cbed4e863feed2b02645800',
+        $suite->same('386444d3aeb01c79fcec2819d9c63aca91f59a3b1bb79f2c713e80921db7da08',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match upstream commit 7e29edd exactly.');
-        $suite->same('a66dcd5247b3c1cca2508a39451cfc73293efb1745c6fda8edd66df9d22941aa',
+            'The vendored Helper JavaScript must match upstream commit 766df8c exactly.');
+        $suite->same('3d6cc2d1a709996e823529e97d207e6f63a17f06a8199850f7bf56ee0ed21da3',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match upstream commit 7e29edd exactly.');
-        $suite->same('daa53c9d0e6804c02ce2ce035c347049202ba964ddff614931d1f4cd28fd9c5a',
+            'The vendored Helper stylesheet must match upstream commit 766df8c exactly.');
+        $suite->same('fe22fe40e6282f401b42e982a9f928a25925a156739bbabb274fd0e875c10775',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match upstream commit 7e29edd exactly.');
+            'The vendored Helper loader must match upstream commit 766df8c exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -1406,7 +1415,8 @@ try {
         $suite->true(strpos($source, 'modal.setBusy(true, { message: "Loading task details..." })') !== false,
             'Task detail modals must open before loading and expose a busy state.');
         $suite->true(strpos($source, 'modal.setActions(taskActions(task, modal));') !== false
-            && strpos($source, 'modal.setContent(taskDetailContent(task));') !== false
+            && strpos($source, 'detailContent = taskDetailContent(task);') !== false
+            && strpos($source, 'modal.setContent(detailContent);') !== false
             && strpos($source, 'loading.replaceWith(taskDetailContent(task));') === false,
             'Task details must update through the canonical modal API after actions rerender the modal.');
         $suite->true(strpos($source, 'const taskGiver = id(task.created_by_participant_id) === current;') !== false

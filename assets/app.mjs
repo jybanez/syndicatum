@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.216";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.217";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928230000";
@@ -1783,11 +1783,14 @@ function canAcknowledgeMessage(message) {
 function mountMessageCard(host, item) {
   let renderedMessage = null;
   let renderedContentKey = null;
+  let markdownView = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
     renderedMessage = current;
     renderedContentKey = nextItem.contentKey;
+    markdownView?.destroy();
+    markdownView = null;
     host.replaceChildren();
     const details = document.createElement("div");
     details.className = "message-card-details";
@@ -1809,10 +1812,13 @@ function mountMessageCard(host, item) {
       severity.setAttribute("aria-label", `Message severity: ${severityLabel}`);
       details.appendChild(severity);
     }
-    const body = document.createElement("p");
+    const body = document.createElement("div");
     body.className = "message-card-body";
     if (current.deleted_at) body.textContent = "This message was removed.";
-    else appendLinkedText(body, current.body);
+    else markdownView = state.factories.createMarkdownView(body, {
+      markdown: String(current.body || ""), profile: "full", headingOffset: 2,
+      linkTarget: "_blank", emptyText: "Empty message",
+    });
     details.appendChild(body);
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
@@ -1853,7 +1859,7 @@ function mountMessageCard(host, item) {
     host.appendChild(details);
   }
   paint(item);
-  return { update: paint };
+  return { update: paint, destroy() { markdownView?.destroy(); markdownView = null; } };
 }
 
 function actionButton(label, handler) {
@@ -6473,13 +6479,25 @@ function openEditTaskModal(task) {
 
 function taskDetailContent(task) {
   const content = document.createElement("div"); content.className = "task-detail";
+  const markdownViews = [];
+  const markdown = (source, className, options = {}) => {
+    const host = document.createElement("div"); host.className = className;
+    markdownViews.push(state.factories.createMarkdownView(host, {
+      markdown: String(source || ""), profile: "full", headingOffset: 2,
+      linkTarget: "_blank", ...options,
+    }));
+    return host;
+  };
+  content.destroyMarkdownViews = () => {
+    markdownViews.splice(0).forEach((view) => view.destroy());
+  };
   const hero = document.createElement("section"); hero.className = "task-detail-hero";
   const title = document.createElement("h2"); title.className = "task-detail-title"; title.textContent = task.title;
   const chips = document.createElement("div"); chips.className = "task-detail-chips";
   [[taskStatusLabel(task.status), `is-${task.status}`], [`${task.priority} priority`, "is-priority"]].forEach(([label, className]) => {
     const chip = document.createElement("span"); chip.className = `task-detail-chip ${className}`; chip.textContent = label; chips.append(chip);
   });
-  const description = document.createElement("p"); description.className = "task-detail-description"; description.textContent = task.description || "No description provided.";
+  const description = markdown(task.description, "task-detail-description", { emptyText: "No description provided." });
   hero.append(title, chips, description); content.append(hero);
 
   const addDetailSection = (headingText, rows) => {
@@ -6502,7 +6520,7 @@ function taskDetailContent(task) {
   if (task.acceptance_criteria) {
     const criteriaSection = document.createElement("section"); criteriaSection.className = "task-detail-section ui-panel";
     const heading = document.createElement("h3"); heading.textContent = "Acceptance criteria";
-    const criteria = document.createElement("p"); criteria.textContent = task.acceptance_criteria;
+    const criteria = markdown(task.acceptance_criteria, "task-detail-markdown");
     criteriaSection.append(heading, criteria); content.append(criteriaSection);
   }
   if (task.source_message_id) {
@@ -6528,7 +6546,7 @@ function taskDetailContent(task) {
     const summary = document.createElement("strong"); summary.textContent = eventLabel;
     const meta = document.createElement("span"); meta.textContent = `${event.actor_display_name || "Unknown participant"} · ${formatDate(event.created_at)}`;
     item.append(summary, meta);
-    if (event.body) { const note = document.createElement("p"); note.textContent = event.body; item.append(note); }
+    if (event.body) item.append(markdown(event.body, "task-detail-markdown task-detail-activity-note", { headingOffset: 3 }));
     activity.append(item);
   });
   activitySection.append(activityHeading, activity); content.append(activitySection);
@@ -6568,17 +6586,24 @@ function taskActions(task, modal) {
 
 async function openTaskDetails(taskId) {
   let modal;
+  let detailContent = null;
+  const abortController = new AbortController();
   const loading = document.createElement("p"); loading.textContent = "Loading task details...";
-  modal = state.factories.createActionModal({ title: "Task details", size: "md", content: loading, actions: [{ id: "close", label: "Close" }] });
+  modal = state.factories.createActionModal({
+    title: "Task details", size: "md", content: loading, actions: [{ id: "close", label: "Close" }],
+    onClose() { abortController.abort(); detailContent?.destroyMarkdownViews?.(); },
+  });
   modal.open();
   modal.setBusy(true, { message: "Loading task details..." });
   try {
-    const task = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: taskId, include: "events" })}`));
+    const task = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: taskId, include: "events" })}`, { signal: abortController.signal }));
     if (!modal.getState().open) return;
     modal.setActions(taskActions(task, modal));
-    modal.setContent(taskDetailContent(task));
+    detailContent = taskDetailContent(task);
+    modal.setContent(detailContent);
     modal.setBusy(false);
   } catch (error) {
+    if (error.name === "AbortError" || !modal.getState().open) return;
     modal.setBusy(false);
     loading.textContent = `Unable to load task details. ${error.message}`;
   }
@@ -7910,7 +7935,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -7955,6 +7980,7 @@ async function bootstrap() {
     createInlineText: await uiLoader.get("ui.inline.text", options),
     createInlineSelect: await uiLoader.get("ui.inline.select", options),
     createInlineDate: await uiLoader.get("ui.inline.date", options),
+    createMarkdownView: await uiLoader.get("ui.markdown", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   mountProjectViewTabs();
