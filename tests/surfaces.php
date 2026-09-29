@@ -1435,7 +1435,9 @@ try {
             && strpos($source, '{ id: "requirements", label: "Requirements", content: requirements }') !== false
             && strpos($source, '{ id: "activity", label: "Activity", content: activityPanel }') !== false
             && strpos($source, 'activityTimeline?.destroy();') !== false
-            && strpos($source, 'taskTabs?.destroy();') !== false,
+            && strpos($source, 'taskTabs?.destroy();') !== false
+            && strpos($styles, '.task-detail { display: grid; align-content: start; gap: 14px; }') !== false
+            && strpos($styles, '.task-detail-activity .task-detail-markdown { font-size: 12px; }') === false,
             'Task details must use canonical tabs for overview, requirements, and lifecycle-safe activity timeline content.');
     });
 
