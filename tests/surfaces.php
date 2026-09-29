@@ -670,7 +670,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.212";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.214";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.216";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -832,20 +832,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.214 retains native theme integration, planning components, timeline stability, attached tabs, and the integration icon family', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.216 retains native theme integration, planning components, grouped form selects, and the integration icon family', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.214') !== false,
-                'Every Helper entry point must use the canonical 0.21.214 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.216') !== false,
+                'Every Helper entry point must use the canonical 0.21.216 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.214') !== false,
-                $surface . ' must use the matching canonical 0.21.214 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.216') !== false,
+                $surface . ' must use the matching canonical 0.21.216 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -868,19 +868,22 @@ try {
             && strpos($bundleJs, 'setInteractionLocked') !== false
             && strpos($bundleJs, 'onGroupReorder') !== false,
             'The Helper bundle must expose movable editable groups and non-rebuilding persistence locks.');
+        $suite->true(strpos($bundleJs, 'optgroup') !== false
+            && strpos($bundleJs, 'actionsPlacement') !== false,
+            'The Helper bundle must include native grouped form selects and responsive inline action placement.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
             'The Helper timeline must anchor virtual rows to the scroll content origin rather than the bordered viewport box.');
-        $suite->same('3ce08c57b38645ee8f49211839b9733403e028860c9967d2b447b302f1af7689',
+        $suite->same('21c80d044c3f1d50d5cbd446e9fcde22f7dd9e400cbed4e863feed2b02645800',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match upstream commit 4b2d388 exactly.');
-        $suite->same('a018b09c3b5539bbbfda7f1132c5273d61bf2f8310a7c6ec2e0f0b3cd770ff82',
+            'The vendored Helper JavaScript must match upstream commit 7e29edd exactly.');
+        $suite->same('a66dcd5247b3c1cca2508a39451cfc73293efb1745c6fda8edd66df9d22941aa',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match upstream commit 4b2d388 exactly.');
-        $suite->same('aaceab74ec36758b304693a9774ddcc9eff4b82878771575ccdd33e1b68bfdba',
+            'The vendored Helper stylesheet must match upstream commit 7e29edd exactly.');
+        $suite->same('daa53c9d0e6804c02ce2ce035c347049202ba964ddff614931d1f4cd28fd9c5a',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match upstream commit 4b2d388 exactly.');
+            'The vendored Helper loader must match upstream commit 7e29edd exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -1085,6 +1088,13 @@ try {
             && strpos($source, 'modal.setRows(taskFormRows())') !== false
             && strpos($source, 'state.projectPlanLoaded = false') !== false,
             'Task forms must open before lazily loading deliverable choices instead of expanding every project-selection request.');
+        $suite->true(strpos($source, 'function taskDeliverableOptions()') !== false
+            && strpos($source, 'options.push({ label: milestone.title, options: children })') !== false
+            && strpos($source, 'options.push({ label: "Standalone deliverables", options: standalone })') !== false
+            && strpos($source, 'const deliverables = taskDeliverableOptions();') !== false,
+            'Task deliverable choices must use native grouped select options ordered by milestone, with a standalone fallback group.');
+        $suite->true(substr_count($source, 'actionsPlacement: "overlay"') >= 7,
+            'Project-plan inline editors must use overlay actions so editing controls do not reflow the planning columns.');
         $suite->true(strpos($source, 'projectStatusSection("Milestones & deliverables"') !== false
             && strpos($source, 'API.projectStatusPlan') !== false
             && strpos($source, 'loadPlanOverview()') !== false,

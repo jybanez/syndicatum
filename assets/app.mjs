@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.214";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.216";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928230000";
@@ -3468,7 +3468,7 @@ function openProjectPlanModal() {
     const dateHost = inlineCell(layout, "is-date", "Target");
     const title = state.factories.createInlineText(titleHost, {
       label: "Milestone title", value: group.milestone.title, required: true, maxLength: 180,
-      readOnly: !currentPlan.can_manage, validate: textValidator("Milestone title"),
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", validate: textValidator("Milestone title"),
       async onSave(value) {
         const updated = await patchMilestone(milestoneId, { title: value });
         board?.setGroupLabel?.(milestoneGroupId(milestoneId), updated.title);
@@ -3476,7 +3476,7 @@ function openProjectPlanModal() {
     });
     const status = state.factories.createInlineSelect(statusHost, {
       label: "Milestone status", value: group.milestone.status, required: true, searchable: false,
-      readOnly: !currentPlan.can_manage, items: PROJECT_PLAN_MILESTONE_STATUSES,
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", items: PROJECT_PLAN_MILESTONE_STATUSES,
       onSave: async (value) => {
         await patchMilestone(milestoneId, { status: value });
         layout.className = `project-plan-group-header is-${value}`;
@@ -3487,6 +3487,7 @@ function openProjectPlanModal() {
     if (targetValue) {
       target = state.factories.createInlineDate(dateHost, {
         label: "Target date", value: targetValue, placeholder: "", showTime: false, valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+        actionsPlacement: "overlay",
         onSave: async (value) => {
           await patchMilestone(milestoneId, { target_at: value || null });
           if (!value) window.setTimeout(() => { target?.destroy(); dateHost.replaceChildren(); }, 0);
@@ -3517,7 +3518,7 @@ function openProjectPlanModal() {
     const dateHost = inlineCell(row, "is-date", "Due");
     const title = state.factories.createInlineText(titleHost, {
       label: "Deliverable title", value: item.title, required: true, maxLength: 180,
-      readOnly: !currentPlan.can_manage, validate: textValidator("Deliverable title"),
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", validate: textValidator("Deliverable title"),
       async onSave(value) {
         const updated = await patchDeliverable(item.id, { title: value });
         board?.setItemLabel?.(item.id, updated.title);
@@ -3525,7 +3526,7 @@ function openProjectPlanModal() {
     });
     const status = state.factories.createInlineSelect(statusHost, {
       label: "Deliverable status", value: item.status, required: true, searchable: false,
-      readOnly: !currentPlan.can_manage, items: PROJECT_PLAN_DELIVERABLE_STATUSES,
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", items: PROJECT_PLAN_DELIVERABLE_STATUSES,
       onSave: async (value) => {
         await patchDeliverable(item.id, { status: value });
         row.className = `project-plan-row is-${value}`;
@@ -3536,7 +3537,7 @@ function openProjectPlanModal() {
     if (dueValue) {
       due = state.factories.createInlineDate(dateHost, {
         label: "Due date", value: dueValue, placeholder: "",
-        showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+        showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage, actionsPlacement: "overlay",
         onSave: async (value) => {
           await patchDeliverable(item.id, { due_at: value || null });
           if (!value) window.setTimeout(() => { due?.destroy(); dateHost.replaceChildren(); }, 0);
@@ -3546,7 +3547,7 @@ function openProjectPlanModal() {
     const ownerHost = inlineCell(titleCell, "is-owner-subtext", "Owner");
     const owner = state.factories.createInlineSelect(ownerHost, {
       label: "Accountable owner", value: id(item.owner_participant_id), placeholder: "Unassigned",
-      readOnly: !currentPlan.can_manage, items: projectPlanParticipantOptions().map(({ value, label }) => ({ id: value, label })),
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", items: projectPlanParticipantOptions().map(({ value, label }) => ({ id: value, label })),
       onSave: async (value) => { await patchDeliverable(item.id, { owner_participant_id: value || null }); },
     });
     cleanups.push(title, status, owner); if (due) cleanups.push(due);
@@ -6351,6 +6352,26 @@ function taskParticipantOptions(includeEmpty = true) {
   ];
 }
 
+function taskDeliverableOptions() {
+  const available = (state.projectPlan?.deliverables || [])
+    .filter((deliverable) => deliverable.status !== "cancelled");
+  const options = [{ value: "", label: "No deliverable" }];
+  const groupedIds = new Set();
+  (state.projectPlan?.milestones || []).forEach((milestone) => {
+    const children = available
+      .filter((deliverable) => id(deliverable.milestone_id) === id(milestone.id))
+      .map((deliverable) => ({ value: deliverable.id, label: deliverable.title }));
+    if (!children.length) return;
+    children.forEach((option) => groupedIds.add(id(option.value)));
+    options.push({ label: milestone.title, options: children });
+  });
+  const standalone = available
+    .filter((deliverable) => !groupedIds.has(id(deliverable.id)))
+    .map((deliverable) => ({ value: deliverable.id, label: deliverable.title }));
+  if (standalone.length) options.push({ label: "Standalone deliverables", options: standalone });
+  return options;
+}
+
 function normalizeTaskForm(values) {
   return {
     title: String(values.title || "").trim(),
@@ -6365,12 +6386,7 @@ function normalizeTaskForm(values) {
 
 function taskFormRows() {
   const participants = taskParticipantOptions();
-  const deliverables = [
-    { value: "", label: "No deliverable" },
-    ...(state.projectPlan?.deliverables || [])
-      .filter((deliverable) => deliverable.status !== "cancelled")
-      .map((deliverable) => ({ value: deliverable.id, label: deliverable.title })),
-  ];
+  const deliverables = taskDeliverableOptions();
   return [
     [modalTextField("title", "Task title", { required: true, maxlength: 180 })],
     [{ type: "textarea", name: "description", label: "Description" }, { type: "textarea", name: "acceptance_criteria", label: "Acceptance criteria" }],
