@@ -42,6 +42,15 @@ try {
         $same('2030-10-15 00:00:00', $milestone['target_at']);
     });
 
+    $test('deliverables without linked tasks expose numeric zero progress', function () use ($same, $deliverable) {
+        $same(0, $deliverable['task_count']);
+        $same(0, $deliverable['completed_task_count']);
+        $same(0, $deliverable['cancelled_task_count']);
+        $same(0, $deliverable['blocked_task_count']);
+        $same(0, $deliverable['eligible_task_count']);
+        $same(0, $deliverable['completion_percent']);
+    });
+
     $test('plan groups deliverables under milestones and computes task progress', function () use ($plan, $access, $same, $milestone, $deliverable) {
         $result = $plan->plan($access);
         $same(true, $result['can_manage']); $same(1, count($result['milestones'])); $same(1, count($result['deliverables']));

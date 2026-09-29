@@ -309,8 +309,14 @@ class ProjectPlanService
 
     private function normalizeDeliverable(array $row)
     {
-        foreach (['id', 'project_id', 'milestone_id', 'owner_participant_id', 'position', 'created_by_participant_id', 'version', 'task_count', 'completed_task_count', 'cancelled_task_count', 'blocked_task_count'] as $field) {
+        foreach (['id', 'project_id', 'position', 'created_by_participant_id', 'version'] as $field) {
+            $row[$field] = (int) $row[$field];
+        }
+        foreach (['milestone_id', 'owner_participant_id'] as $field) {
             $row[$field] = $row[$field] === null ? null : (int) $row[$field];
+        }
+        foreach (['task_count', 'completed_task_count', 'cancelled_task_count', 'blocked_task_count'] as $field) {
+            $row[$field] = (int) ($row[$field] ?? 0);
         }
         $eligible = max(0, $row['task_count'] - $row['cancelled_task_count']);
         $row['eligible_task_count'] = $eligible;
