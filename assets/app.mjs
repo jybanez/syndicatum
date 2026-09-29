@@ -3345,6 +3345,7 @@ function openProjectPlanModal() {
   let currentPlan = null;
   let disposed = false;
   let persistencePending = false;
+  let feedbackTimer = 0;
 
   const milestoneGroupId = (value) => value == null || value === "" ? "standalone" : `milestone:${value}`;
   const milestoneIdFromGroup = (value) => String(value) === "standalone" ? null : Number(String(value).replace(/^milestone:/, ""));
@@ -3404,6 +3405,8 @@ function openProjectPlanModal() {
     return groups;
   };
   const setFeedback = (message = "", kind = "status", action = null) => {
+    if (feedbackTimer) window.clearTimeout(feedbackTimer);
+    feedbackTimer = 0;
     let feedback = content.querySelector(".project-plan-feedback");
     if (!feedback) {
       feedback = projectInfoElement("div", "project-plan-feedback");
@@ -3412,9 +3415,16 @@ function openProjectPlanModal() {
     feedback.replaceChildren();
     feedback.hidden = !message;
     feedback.classList.toggle("is-error", kind === "error");
+    feedback.classList.toggle("is-success", kind === "success");
     feedback.setAttribute("role", kind === "error" ? "alert" : "status");
     if (message) feedback.append(projectInfoElement("span", "", message));
     if (action) feedback.append(action);
+    if (message && kind === "success" && !action) {
+      feedbackTimer = window.setTimeout(() => {
+        feedbackTimer = 0;
+        if (!disposed) feedback.hidden = true;
+      }, 2400);
+    }
   };
   const markUnknownInlineOutcome = () => {
     persistencePending = true;
@@ -3423,8 +3433,9 @@ function openProjectPlanModal() {
     reconcileButton.addEventListener("click", () => { void reconcile(); });
     setFeedback("The field save outcome is unknown. Reconcile with the server before editing or moving anything else.", "error", reconcileButton);
   };
-  const inlineCell = (host, className = "") => {
+  const inlineCell = (host, className = "", mobileLabel = "") => {
     const cell = projectInfoElement("div", `project-plan-inline-cell ${className}`.trim());
+    if (mobileLabel) cell.dataset.label = mobileLabel;
     host.append(cell);
     return cell;
   };
@@ -3434,7 +3445,7 @@ function openProjectPlanModal() {
   };
   const renderGroupHeader = (host, group) => {
     const cleanups = [];
-    const layout = projectInfoElement("div", "project-plan-group-header");
+    const layout = projectInfoElement("div", `project-plan-group-header${group.milestone ? ` is-${group.milestone.status}` : ""}`);
     host.append(layout);
     if (!group.milestone) {
       const copy = projectInfoElement("span", "project-plan-standalone-copy");
@@ -3443,9 +3454,9 @@ function openProjectPlanModal() {
       return () => {};
     }
     const milestoneId = group.milestone.id;
-    const titleHost = inlineCell(layout, "is-title");
-    const statusHost = inlineCell(layout);
-    const dateHost = inlineCell(layout);
+    const titleHost = inlineCell(layout, "is-title", "Milestone");
+    const statusHost = inlineCell(layout, "is-status", "Status");
+    const dateHost = inlineCell(layout, "is-date", "Target");
     const title = state.factories.createInlineText(titleHost, {
       label: "Milestone title", value: group.milestone.title, required: true, maxLength: 180,
       readOnly: !currentPlan.can_manage, validate: textValidator("Milestone title"),
@@ -3457,7 +3468,10 @@ function openProjectPlanModal() {
     const status = state.factories.createInlineSelect(statusHost, {
       label: "Milestone status", value: group.milestone.status, required: true, searchable: false,
       readOnly: !currentPlan.can_manage, items: PROJECT_PLAN_MILESTONE_STATUSES,
-      onSave: async (value) => { await patchMilestone(milestoneId, { status: value }); },
+      onSave: async (value) => {
+        await patchMilestone(milestoneId, { status: value });
+        layout.className = `project-plan-group-header is-${value}`;
+      },
     });
     const target = state.factories.createInlineDate(dateHost, {
       label: "Target date", value: projectPlanDayValue(group.milestone.target_at) || null,
@@ -3482,10 +3496,10 @@ function openProjectPlanModal() {
     const cleanups = [];
     const row = projectInfoElement("article", `project-plan-row is-${item.status}`);
     host.append(row);
-    const titleHost = inlineCell(row, "is-title");
-    const statusHost = inlineCell(row);
-    const dateHost = inlineCell(row);
-    const ownerHost = inlineCell(row);
+    const titleHost = inlineCell(row, "is-title", "Deliverable");
+    const statusHost = inlineCell(row, "is-status", "Status");
+    const dateHost = inlineCell(row, "is-date", "Due");
+    const ownerHost = inlineCell(row, "is-owner", "Owner");
     const title = state.factories.createInlineText(titleHost, {
       label: "Deliverable title", value: item.title, required: true, maxLength: 180,
       readOnly: !currentPlan.can_manage, validate: textValidator("Deliverable title"),
@@ -3532,7 +3546,7 @@ function openProjectPlanModal() {
   const render = (plan) => {
     board?.destroy(); board = null; content.replaceChildren();
     const toolbar = projectInfoElement("div", "project-plan-toolbar");
-    toolbar.append(projectInfoElement("p", "", "Drag milestones to reorder them. Drag deliverables within or between milestones. Select a field to edit it inline."));
+    toolbar.append(projectInfoElement("p", "", "Select a field to edit. Use the drag handles to reorder milestones or move deliverables."));
     if (plan.can_manage) {
       const actions = projectInfoElement("span", "project-plan-toolbar-actions");
       const addMilestone = projectInfoElement("button", "ui-button ui-button-sm", "Add milestone");
@@ -3544,6 +3558,10 @@ function openProjectPlanModal() {
     }
     content.append(toolbar);
     const feedback = projectInfoElement("div", "project-plan-feedback"); feedback.hidden = true; content.append(feedback);
+    const columns = projectInfoElement("div", "project-plan-column-guide");
+    columns.setAttribute("aria-hidden", "true");
+    ["Item", "Status", "Date", "Owner", "Progress", "Actions"].forEach((label) => columns.append(projectInfoElement("span", "", label)));
+    content.append(columns);
     const boardHost = projectInfoElement("div", "project-plan-board-host"); content.append(boardHost);
     board = state.factories.createReorderGroups(boardHost, groupsFromPlan(plan), {
       reorderGroups: Boolean(plan.can_manage), readOnly: !plan.can_manage,
@@ -3561,7 +3579,7 @@ function openProjectPlanModal() {
       if (disposed || selectedProjectId() !== projectId) return;
       currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
       board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
-      setFeedback("Project plan reconciled.");
+      setFeedback("Project plan reconciled.", "success");
     } catch (error) {
       const retry = projectInfoElement("button", "ui-button ui-button-sm", "Retry reconciliation"); retry.type = "button";
       retry.addEventListener("click", () => { void reconcile(); });
@@ -3578,7 +3596,7 @@ function openProjectPlanModal() {
       if (disposed) return;
       currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
       board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
-      setFeedback("Project-plan order saved.");
+      setFeedback("Project-plan order saved.", "success");
     } catch (error) {
       if (disposed) return;
       const definite = Boolean(error.status && error.status < 500);
@@ -3631,7 +3649,7 @@ function openProjectPlanModal() {
   modal = state.factories.createActionModal({
     title: "Project plan", size: "xl", className: "project-plan-modal", content,
     actions: [{ id: "close", label: "Close", variant: "primary" }],
-    onClose() { disposed = true; readController?.abort(); board?.destroy(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
+    onClose() { disposed = true; if (feedbackTimer) window.clearTimeout(feedbackTimer); readController?.abort(); board?.destroy(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
   });
   state.components.projectPlanModal = modal; modal.open(); void load();
 }
