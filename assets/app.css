@@ -569,11 +569,15 @@ button, input, textarea { font: inherit; }
 .task-detail-list { display: grid; grid-template-columns: minmax(90px, max-content) minmax(0, 1fr); gap: 7px 14px; margin: 0; font-size: 13px; }
 .task-detail-list dt { color: var(--app-muted); }
 .task-detail-list dd { margin: 0; color: var(--app-text); overflow-wrap: anywhere; }
-.task-detail-activity { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.task-detail-activity li { display: grid; gap: 3px; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--app-accent) 55%, var(--app-border)); }
-.task-detail-activity strong { color: var(--app-text); font-size: 12px; }
-.task-detail-activity span { color: var(--app-muted); font-size: 11px; }
-.task-detail-activity p { font-size: 12px; }
+.task-detail-activity { min-width: 0; }
+.task-detail-activity .ui-timeline-viewport { height: auto; overflow: visible; scrollbar-gutter: auto; }
+.task-detail-activity .ui-timeline-list { gap: 8px; }
+.task-detail-activity .ui-timeline-item { border: 0; border-radius: 0; background: transparent; padding: 3px 0 9px; }
+.task-detail-activity .ui-timeline-title { color: var(--app-text); font-size: 12px; }
+.task-detail-activity .ui-timeline-subtitle,
+.task-detail-activity .ui-timeline-time { color: var(--app-muted); font-size: 11px; }
+.task-detail-activity .ui-timeline-custom-content { margin-top: 2px; }
+.task-detail-activity .task-detail-markdown { font-size: 12px; }
 .project-messages-column { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 4px; box-sizing: border-box; }
 .project-messages-column > .timeline-project-overview { grid-row: 1; }
 .project-messages-column > .project-view-switch { grid-row: 2; }

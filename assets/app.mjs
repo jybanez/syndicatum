@@ -6480,6 +6480,7 @@ function openEditTaskModal(task) {
 function taskDetailContent(task) {
   const content = document.createElement("div"); content.className = "task-detail";
   const markdownViews = [];
+  let activityTimeline = null;
   const markdown = (source, className, options = {}) => {
     const host = document.createElement("div"); host.className = className;
     markdownViews.push(state.factories.createMarkdownView(host, {
@@ -6489,6 +6490,8 @@ function taskDetailContent(task) {
     return host;
   };
   content.destroyMarkdownViews = () => {
+    activityTimeline?.destroy();
+    activityTimeline = null;
     markdownViews.splice(0).forEach((view) => view.destroy());
   };
   const hero = document.createElement("section"); hero.className = "task-detail-hero";
@@ -6536,18 +6539,43 @@ function taskDetailContent(task) {
   const events = Array.isArray(task.events) ? task.events : [];
   const activitySection = document.createElement("section"); activitySection.className = "task-detail-section ui-panel";
   const activityHeading = document.createElement("h3"); activityHeading.textContent = "Activity";
-  const activity = document.createElement("ol"); activity.className = "task-detail-activity";
-  if (!events.length) { const empty = document.createElement("li"); empty.textContent = "No recorded activity."; activity.append(empty); }
-  events.forEach((event) => {
-    const item = document.createElement("li");
+  const activity = document.createElement("div"); activity.className = "task-detail-activity";
+  const activityItems = events.map((event) => {
     const eventLabel = event.event_type === "status_changed"
       ? `${taskStatusLabel(event.from_status)} → ${taskStatusLabel(event.to_status)}`
       : ({ created: "Task created", assigned: "Assignment updated", updated: "Task updated" })[event.event_type] || event.event_type;
-    const summary = document.createElement("strong"); summary.textContent = eventLabel;
-    const meta = document.createElement("span"); meta.textContent = `${event.actor_display_name || "Unknown participant"} · ${formatDate(event.created_at)}`;
-    item.append(summary, meta);
-    if (event.body) item.append(markdown(event.body, "task-detail-markdown task-detail-activity-note", { headingOffset: 3 }));
-    activity.append(item);
+    const status = event.event_type === "status_changed"
+      ? ({ open: "assigned", in_progress: "en_route", blocked: "requested", in_review: "accepted", completed: "completed", cancelled: "cancelled" })[event.to_status]
+      : ({ created: "assigned", assigned: "accepted", updated: "accepted" })[event.event_type];
+    return {
+      id: `task-event-${event.id}`,
+      title: eventLabel,
+      subtitle: event.actor_display_name || "Unknown participant",
+      timestamp: event.created_at,
+      status,
+      raw: event,
+      contentKey: event.body ? `${event.id}:${event.body}` : "",
+      hasCustomContent: Boolean(event.body),
+    };
+  });
+  activityTimeline = state.factories.createTimeline(activity, activityItems, {
+    ariaLabel: "Task activity",
+    density: "compact",
+    groupByDate: false,
+    collapsible: false,
+    enableVirtualization: false,
+    emptyText: "No recorded activity.",
+    mountItemContent(host, item) {
+      if (!item.raw?.body) return null;
+      host.classList.add("task-detail-markdown", "task-detail-activity-note");
+      const view = state.factories.createMarkdownView(host, {
+        markdown: String(item.raw.body), profile: "full", headingOffset: 3, linkTarget: "_blank",
+      });
+      return {
+        update(nextItem) { view.update({ markdown: String(nextItem.raw?.body || "") }); },
+        destroy() { view.destroy(); },
+      };
+    },
   });
   activitySection.append(activityHeading, activity); content.append(activitySection);
   return content;

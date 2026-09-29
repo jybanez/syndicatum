@@ -1426,8 +1426,12 @@ try {
             'Only the authenticated task giver may see the task-definition edit action.');
         $suite->true(strpos($source, 'addDetailSection("Responsibility"') !== false
             && strpos($source, 'addDetailSection("Schedule"') !== false
-            && strpos($source, 'activityHeading.textContent = "Activity"') !== false,
-            'Task details must organize responsibility, schedule, criteria, and activity into clear sections.');
+            && strpos($source, 'activityHeading.textContent = "Activity"') !== false
+            && strpos($source, 'state.factories.createTimeline(activity, activityItems, {') !== false
+            && strpos($source, 'ariaLabel: "Task activity"') !== false
+            && strpos($source, 'enableVirtualization: false') !== false
+            && strpos($source, 'activityTimeline?.destroy();') !== false,
+            'Task details must organize responsibility, schedule, and criteria while rendering activity with the canonical lifecycle-safe timeline.');
     });
 
     $suite->test('Agent profiles foreground project assignment and responsibilities', function () use ($suite, $root) {
