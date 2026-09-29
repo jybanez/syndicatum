@@ -353,7 +353,7 @@ button, input, textarea { font: inherit; }
 .project-plan-feedback.is-success { color: #bff3d1; border-color: rgba(69, 196, 122, .4); background: rgba(28, 82, 52, .28); }
 .project-plan-column-guide,
 .project-plan-group-header,
-.project-plan-row { display: grid; grid-template-columns: minmax(210px, 1.8fr) minmax(96px, .65fr) minmax(120px, .78fr) minmax(150px, 1.05fr) minmax(84px, .58fr) minmax(80px, auto); align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.project-plan-row { display: grid; grid-template-columns: minmax(300px, 2.2fr) minmax(96px, .65fr) minmax(120px, .78fr) minmax(84px, .58fr) minmax(80px, auto); align-items: center; gap: 8px; min-width: 0; width: 100%; }
 .project-plan-column-guide { box-sizing: border-box; padding: 0 12px 0 40px; color: var(--app-muted); font-size: 11px; font-weight: 700; letter-spacing: .055em; text-transform: uppercase; }
 .project-plan-column-guide span:last-child { text-align: right; }
 .project-plan-board-host { min-width: 0; }
@@ -378,19 +378,24 @@ button, input, textarea { font: inherit; }
 .project-plan-row.is-cancelled { opacity: .65; border-left-color: var(--task-status-cancelled); }
 .project-plan-inline-cell { min-width: 0; }
 .project-plan-inline-cell::before { display: none; }
+.project-plan-title-cell { display: grid; gap: 0; min-width: 0; }
 .project-plan-inline-cell .ui-inline,
 .project-plan-inline-cell .ui-inline-view { box-sizing: border-box; width: 100%; min-width: 0; }
 .project-plan-inline-cell.is-title .ui-inline-view { font-weight: 700; }
+.project-plan-inline-cell.is-owner-subtext { display: flex; align-items: center; gap: 3px; min-width: 0; color: var(--app-muted); }
+.project-plan-inline-cell.is-owner-subtext::before { display: inline; flex: 0 0 auto; content: "Owner:"; margin-left: 8px; color: var(--app-muted); font-size: 11px; }
+.project-plan-inline-cell.is-owner-subtext .ui-inline { flex: 1 1 auto; flex-wrap: nowrap; }
+.project-plan-inline-cell.is-owner-subtext .ui-inline-view { display: inline-flex; width: auto; padding: 2px 3px; color: var(--app-muted); font-size: 12px; font-weight: 500; }
 .project-plan-inline-cell.is-status .ui-inline-view { display: inline-flex; width: auto; min-height: 24px; padding: 3px 9px; border-color: color-mix(in srgb, var(--project-plan-status) 52%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--project-plan-status) 12%, transparent); color: var(--project-plan-status); font-size: 12px; font-weight: 700; }
 .project-plan-group-meta,
 .project-plan-row-meta { color: var(--app-muted); font-size: 12px; }
-.project-plan-group-meta { grid-column: 4 / 6; }
+.project-plan-group-meta { grid-column: 4; }
 .project-plan-row-meta { display: grid; gap: 2px; min-width: 120px; }
 .project-plan-row-meta span { overflow-wrap: anywhere; }
 .project-plan-row-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
 .project-plan-icon-action { width: 34px; min-width: 34px; height: 34px; padding: 0; }
 .project-plan-icon-action .ui-icon { width: 17px; height: 17px; }
-.project-plan-standalone-copy { display: grid; grid-column: 1 / 6; gap: 2px; }
+.project-plan-standalone-copy { display: grid; grid-column: 1 / 5; gap: 2px; }
 .project-plan-standalone-copy span { color: var(--app-muted); font-size: 12px; }
 .project-plan-status-stats { min-width: 0; }
 .project-status-milestone-list { display: grid; gap: 5px; margin-top: 10px; }
@@ -823,7 +828,7 @@ button, input, textarea { font: inherit; }
   .project-plan-column-guide { display: none; }
   .project-plan-group-header,
   .project-plan-row { grid-template-columns: minmax(0, 1fr) minmax(128px, .72fr); align-items: start; }
-  .project-plan-inline-cell.is-title { grid-column: 1 / -1; }
+  .project-plan-inline-cell.is-title, .project-plan-title-cell { grid-column: 1 / -1; }
   .project-plan-inline-cell::before { display: block; margin: 0 0 2px 8px; color: var(--app-muted); font-size: 10px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
   .project-plan-inline-cell::before { content: attr(data-label); }
   .project-plan-group-meta { grid-column: 1; }

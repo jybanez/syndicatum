@@ -1043,11 +1043,14 @@ try {
             && strpos($source, '{ type: "textarea", name: "description", label: "Description" }') !== false
             && strpos($source, 'if (Number(item.task_count || 0) > 0)') !== false,
             'Deliverable summaries must stay compact while descriptions remain available in the Details form.');
-        $suite->true(strpos($source, '["Item", "Status", "Date", "Owner", "Progress", "Actions"]') !== false
+        $suite->true(strpos($source, '["Item", "Status", "Date", "Progress", "Actions"]') !== false
             && strpos($styles, '.project-plan-column-guide') !== false
             && strpos($styles, '.project-plan-inline-cell.is-status .ui-inline-view') !== false
             && strpos($source, 'setFeedback("Project-plan order saved.", "success")') !== false,
             'Project planning must expose an aligned column guide, readable status badges, and transient success feedback.');
+        $suite->true(strpos($source, 'inlineCell(titleCell, "is-owner-subtext", "Owner")') !== false
+            && strpos($styles, '.project-plan-inline-cell.is-owner-subtext .ui-inline-view') !== false,
+            'Deliverable owners must remain inline-editable as toned-down metadata beneath the deliverable title.');
         $suite->true(strpos($source, 'projectPlanIconAction("Add deliverable", "actions.add")') !== false
             && strpos($source, 'projectPlanIconAction("Edit milestone details", "actions.edit")') !== false
             && strpos($source, 'projectPlanIconAction("Edit deliverable details", "actions.edit")') !== false

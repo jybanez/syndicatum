@@ -3504,10 +3504,11 @@ function openProjectPlanModal() {
     const cleanups = [];
     const row = projectInfoElement("article", `project-plan-row is-${item.status}`);
     host.append(row);
-    const titleHost = inlineCell(row, "is-title", "Deliverable");
+    const titleCell = projectInfoElement("div", "project-plan-title-cell");
+    row.append(titleCell);
+    const titleHost = inlineCell(titleCell, "is-title", "Deliverable");
     const statusHost = inlineCell(row, "is-status", "Status");
     const dateHost = inlineCell(row, "is-date", "Due");
-    const ownerHost = inlineCell(row, "is-owner", "Owner");
     const title = state.factories.createInlineText(titleHost, {
       label: "Deliverable title", value: item.title, required: true, maxLength: 180,
       readOnly: !currentPlan.can_manage, validate: textValidator("Deliverable title"),
@@ -3529,6 +3530,7 @@ function openProjectPlanModal() {
       showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
       onSave: async (value) => { await patchDeliverable(item.id, { due_at: value || null }); },
     });
+    const ownerHost = inlineCell(titleCell, "is-owner-subtext", "Owner");
     const owner = state.factories.createInlineSelect(ownerHost, {
       label: "Accountable owner", value: id(item.owner_participant_id), placeholder: "Unassigned",
       readOnly: !currentPlan.can_manage, items: projectPlanParticipantOptions().map(({ value, label }) => ({ id: value, label })),
@@ -3568,7 +3570,7 @@ function openProjectPlanModal() {
     const feedback = projectInfoElement("div", "project-plan-feedback"); feedback.hidden = true; content.append(feedback);
     const columns = projectInfoElement("div", "project-plan-column-guide");
     columns.setAttribute("aria-hidden", "true");
-    ["Item", "Status", "Date", "Owner", "Progress", "Actions"].forEach((label) => columns.append(projectInfoElement("span", "", label)));
+    ["Item", "Status", "Date", "Progress", "Actions"].forEach((label) => columns.append(projectInfoElement("span", "", label)));
     content.append(columns);
     const boardHost = projectInfoElement("div", "project-plan-board-host"); content.append(boardHost);
     board = state.factories.createReorderGroups(boardHost, groupsFromPlan(plan), {
