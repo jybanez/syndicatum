@@ -3112,6 +3112,13 @@
       "mode": 420
     },
     {
+      "source": "api/v1/project-plan-order.php",
+      "action": "ship",
+      "path": "app/api/v1/project-plan-order.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "api/v1/project-milestones.php",
       "action": "ship",
       "path": "app/api/v1/project-milestones.php",

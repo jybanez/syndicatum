@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.212";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.217";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928230000";
@@ -34,6 +34,7 @@ const API = {
   projectMilestone: "api/v1/project-milestone.php",
   projectDeliverables: "api/v1/project-deliverables.php",
   projectDeliverable: "api/v1/project-deliverable.php",
+  projectPlanOrder: "api/v1/project-plan-order.php",
   projectChangeProposals: "api/v1/project-change-proposals.php",
   projectStatusSummary: "api/v1/project-status-summary.php",
   projectStatusTaskProgress: "api/v1/project-status-task-progress.php",
@@ -1782,11 +1783,14 @@ function canAcknowledgeMessage(message) {
 function mountMessageCard(host, item) {
   let renderedMessage = null;
   let renderedContentKey = null;
+  let markdownView = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
     renderedMessage = current;
     renderedContentKey = nextItem.contentKey;
+    markdownView?.destroy();
+    markdownView = null;
     host.replaceChildren();
     const details = document.createElement("div");
     details.className = "message-card-details";
@@ -1808,10 +1812,13 @@ function mountMessageCard(host, item) {
       severity.setAttribute("aria-label", `Message severity: ${severityLabel}`);
       details.appendChild(severity);
     }
-    const body = document.createElement("p");
+    const body = document.createElement("div");
     body.className = "message-card-body";
     if (current.deleted_at) body.textContent = "This message was removed.";
-    else appendLinkedText(body, current.body);
+    else markdownView = state.factories.createMarkdownView(body, {
+      markdown: String(current.body || ""), profile: "full", headingOffset: 2,
+      linkTarget: "_blank", emptyText: "Empty message",
+    });
     details.appendChild(body);
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
@@ -1852,7 +1859,7 @@ function mountMessageCard(host, item) {
     host.appendChild(details);
   }
   paint(item);
-  return { update: paint };
+  return { update: paint, destroy() { markdownView?.destroy(); markdownView = null; } };
 }
 
 function actionButton(label, handler) {
@@ -3240,6 +3247,19 @@ function projectPlanParticipantOptions() {
     .map((participant) => ({ value: participant.id, label: `${participant.display_name} · ${participant.kind === "agent" ? "AI agent" : "person"}` }))];
 }
 
+const PROJECT_PLAN_MILESTONE_STATUSES = [
+  { id: "planned", label: "Planned" }, { id: "in_progress", label: "In progress" },
+  { id: "at_risk", label: "At risk" }, { id: "completed", label: "Completed" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
+const PROJECT_PLAN_DELIVERABLE_STATUSES = [
+  { id: "planned", label: "Planned" }, { id: "in_progress", label: "In progress" },
+  { id: "in_review", label: "In review" }, { id: "approved", label: "Approved" },
+  { id: "completed", label: "Completed" }, { id: "blocked", label: "Blocked" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
 function openMilestoneForm(item = null, onSaved = null) {
   const editing = Boolean(item);
   const modal = state.factories.createFormModal({
@@ -3248,17 +3268,13 @@ function openMilestoneForm(item = null, onSaved = null) {
     submitLabel: editing ? "Save milestone" : "Add milestone",
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
-      target_at: projectPlanDayValue(item?.target_at), position: item?.position || 0,
+      target_at: projectPlanDayValue(item?.target_at),
     },
     rows: [
       [modalTextField("title", "Milestone title", { required: true, maxlength: 180 })],
       [{ type: "textarea", name: "description", label: "Description" }],
-      [{ type: "select", name: "status", label: "Status", required: true, options: [
-        { value: "planned", label: "Planned" }, { value: "in_progress", label: "In progress" },
-        { value: "at_risk", label: "At risk" }, { value: "completed", label: "Completed" },
-        { value: "cancelled", label: "Cancelled" },
-      ] }, { type: "ui.datepicker", name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true, placeholder: "Optional" }],
-      [modalTextField("position", "Display order")],
+      [{ type: "select", name: "status", label: "Status", required: true, options: PROJECT_PLAN_MILESTONE_STATUSES.map(({ id, label }) => ({ value: id, label })) },
+        { type: "ui.datepicker", name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true, placeholder: "Optional" }],
     ],
     async onSubmit(values, context) {
       try {
@@ -3268,7 +3284,8 @@ function openMilestoneForm(item = null, onSaved = null) {
           method: editing ? "PATCH" : "POST", headers: csrfHeaders(), body: JSON.stringify({
             title: String(values.title || "").trim(), description: String(values.description || "").trim() || null,
             status: values.status || "planned", target_at: values.target_at || null,
-            position: Number(values.position || 0), ...(editing ? { version: item.version } : {}),
+            position: editing ? Number(item.position || 0) : Math.max(-1, ...(state.projectPlan?.milestones || []).map((candidate) => Number(candidate.position || 0))) + 1,
+            ...(editing ? { version: item.version } : {}),
           }),
         });
         state.components.toast.success(editing ? "Milestone updated." : "Milestone added.");
@@ -3288,21 +3305,16 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
     initialValues: {
       title: item?.title || "", description: item?.description || "", status: item?.status || "planned",
       milestone_id: id(item?.milestone_id || presetMilestoneId), owner_participant_id: id(item?.owner_participant_id),
-      due_at: projectPlanDateValue(item?.due_at), artifact_url: item?.artifact_url || "", position: item?.position || 0,
+      due_at: projectPlanDateValue(item?.due_at), artifact_url: item?.artifact_url || "",
     },
     rows: [
       [modalTextField("title", "Deliverable title", { required: true, maxlength: 180 })],
       [{ type: "textarea", name: "description", label: "Description" }],
       [{ type: "select", name: "milestone_id", label: "Milestone", options: projectPlanMilestoneOptions() },
         { type: "select", name: "owner_participant_id", label: "Accountable owner", options: projectPlanParticipantOptions() }],
-      [{ type: "select", name: "status", label: "Status", required: true, options: [
-        { value: "planned", label: "Planned" }, { value: "in_progress", label: "In progress" },
-        { value: "in_review", label: "In review" }, { value: "approved", label: "Approved" },
-        { value: "completed", label: "Completed" }, { value: "blocked", label: "Blocked" },
-        { value: "cancelled", label: "Cancelled" },
-      ] }, { type: "ui.datepicker", name: "due_at", label: "Due date", showTime: true, timePrecision: "minute", valueMode: "wall-clock", closeOnSelect: false, placeholder: "Optional" }],
-      [modalTextField("artifact_url", "Final artifact URL", { maxlength: 2048, placeholder: "Optional HTTPS link" }),
-        modalTextField("position", "Display order")],
+      [{ type: "select", name: "status", label: "Status", required: true, options: PROJECT_PLAN_DELIVERABLE_STATUSES.map(({ id, label }) => ({ value: id, label })) },
+        { type: "ui.datepicker", name: "due_at", label: "Due date", showTime: true, timePrecision: "minute", valueMode: "wall-clock", closeOnSelect: false, placeholder: "Optional" }],
+      [modalTextField("artifact_url", "Final artifact URL", { maxlength: 2048, placeholder: "Optional HTTPS link" })],
     ],
     async onSubmit(values, context) {
       try {
@@ -3313,7 +3325,9 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
             title: String(values.title || "").trim(), description: String(values.description || "").trim() || null,
             milestone_id: values.milestone_id || null, owner_participant_id: values.owner_participant_id || null,
             status: values.status || "planned", due_at: values.due_at || null,
-            artifact_url: String(values.artifact_url || "").trim() || null, position: Number(values.position || 0),
+            artifact_url: String(values.artifact_url || "").trim() || null,
+            position: editing ? Number(item.position || 0) : Math.max(-1, ...(state.projectPlan?.deliverables || [])
+              .filter((candidate) => id(candidate.milestone_id) === id(values.milestone_id)).map((candidate) => Number(candidate.position || 0))) + 1,
             ...(editing ? { version: item.version } : {}),
           }),
         });
@@ -3329,14 +3343,240 @@ function openDeliverableForm(item = null, presetMilestoneId = "", onSaved = null
 function openProjectPlanModal() {
   if (!selectedProjectId() || state.components.projectPlanModal?.getState?.().open) return;
   const projectId = selectedProjectId();
-  const abortController = new AbortController();
   const content = projectInfoElement("div", "project-plan-content");
   content.append(projectInfoElement("p", "project-plan-loading", "Loading milestones and deliverables…"));
   let modal = null;
+  let board = null;
+  let readController = null;
+  let currentPlan = null;
+  let disposed = false;
+  let persistencePending = false;
+  let feedbackTimer = 0;
+
+  const milestoneGroupId = (value) => value == null || value === "" ? "standalone" : `milestone:${value}`;
+  const milestoneIdFromGroup = (value) => String(value) === "standalone" ? null : Number(String(value).replace(/^milestone:/, ""));
+  const milestoneById = (value) => currentPlan?.milestones?.find((item) => Number(item.id) === Number(value));
+  const deliverableById = (value) => currentPlan?.deliverables?.find((item) => Number(item.id) === Number(value));
+  const hasActiveDraft = () => Boolean(content.querySelector('[data-inline-active="true"]'));
+  const replaceRecord = (collection, record) => {
+    currentPlan[collection] = (currentPlan[collection] || []).map((item) => Number(item.id) === Number(record.id) ? record : item);
+    state.projectPlan = currentPlan;
+  };
+  const milestonePayload = (item, changes = {}) => ({
+    title: item.title, description: item.description, status: item.status, target_at: projectPlanDayValue(item.target_at) || null,
+    position: Number(item.position || 0), version: item.version, ...changes,
+  });
+  const deliverablePayload = (item, changes = {}) => ({
+    title: item.title, description: item.description, milestone_id: item.milestone_id,
+    owner_participant_id: item.owner_participant_id, status: item.status, due_at: item.due_at,
+    artifact_url: item.artifact_url, position: Number(item.position || 0), version: item.version, ...changes,
+  });
+  const patchMilestone = async (itemId, changes) => {
+    const item = milestoneById(itemId);
+    if (!item) throw new Error("This milestone is no longer available. Reopen the project plan and try again.");
+    try {
+      const updated = unwrap(await request(`${API.projectMilestone}?${new URLSearchParams({ project_id: projectId, id: item.id })}`, {
+        method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(milestonePayload(item, changes)),
+      }));
+      replaceRecord("milestones", updated);
+      return updated;
+    } catch (error) {
+      if (!error.status || error.status >= 500) markUnknownInlineOutcome();
+      throw error;
+    }
+  };
+  const patchDeliverable = async (itemId, changes) => {
+    const item = deliverableById(itemId);
+    if (!item) throw new Error("This deliverable is no longer available. Reopen the project plan and try again.");
+    try {
+      const updated = unwrap(await request(`${API.projectDeliverable}?${new URLSearchParams({ project_id: projectId, id: item.id })}`, {
+        method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(deliverablePayload(item, changes)),
+      }));
+      replaceRecord("deliverables", updated);
+      return updated;
+    } catch (error) {
+      if (!error.status || error.status >= 500) markUnknownInlineOutcome();
+      throw error;
+    }
+  };
+  const groupsFromPlan = (plan) => {
+    const groups = (plan.milestones || []).map((milestone) => ({
+      id: milestoneGroupId(milestone.id), label: milestone.title, milestone,
+      items: (plan.deliverables || []).filter((item) => Number(item.milestone_id) === Number(milestone.id)).map((item) => ({ ...item, label: item.title })),
+    }));
+    groups.push({
+      id: "standalone", label: "Standalone deliverables", disabled: !plan.can_manage,
+      milestone: null, items: (plan.deliverables || []).filter((item) => item.milestone_id == null).map((item) => ({ ...item, label: item.title })),
+    });
+    return groups;
+  };
+  const setFeedback = (message = "", kind = "status", action = null) => {
+    if (feedbackTimer) window.clearTimeout(feedbackTimer);
+    feedbackTimer = 0;
+    let feedback = content.querySelector(".project-plan-feedback");
+    if (!feedback) {
+      feedback = projectInfoElement("div", "project-plan-feedback");
+      content.querySelector(".project-plan-board-host")?.before(feedback);
+    }
+    feedback.replaceChildren();
+    feedback.hidden = !message;
+    feedback.classList.toggle("is-error", kind === "error");
+    feedback.classList.toggle("is-success", kind === "success");
+    feedback.setAttribute("role", kind === "error" ? "alert" : "status");
+    if (message) feedback.append(projectInfoElement("span", "", message));
+    if (action) feedback.append(action);
+    if (message && kind === "success" && !action) {
+      feedbackTimer = window.setTimeout(() => {
+        feedbackTimer = 0;
+        if (!disposed) feedback.hidden = true;
+      }, 2400);
+    }
+  };
+  const markUnknownInlineOutcome = () => {
+    persistencePending = true;
+    board?.setInteractionLocked(true);
+    const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile saved value"); reconcileButton.type = "button";
+    reconcileButton.addEventListener("click", () => { void reconcile(); });
+    setFeedback("The field save outcome is unknown. Reconcile with the server before editing or moving anything else.", "error", reconcileButton);
+  };
+  const inlineCell = (host, className = "", mobileLabel = "") => {
+    const cell = projectInfoElement("div", `project-plan-inline-cell ${className}`.trim());
+    if (mobileLabel) cell.dataset.label = mobileLabel;
+    host.append(cell);
+    return cell;
+  };
+  const textValidator = (label) => (value) => {
+    if (String(value || "") !== String(value || "").trim()) return `${label} — remove leading or trailing spaces.`;
+    return "";
+  };
+  const projectPlanIconAction = (label, icon, tagName = "button") => {
+    const control = document.createElement(tagName);
+    control.className = "ui-button ui-button-sm ui-button-icon ui-button-borderless project-plan-icon-action";
+    if (tagName === "button") control.type = "button";
+    control.setAttribute("aria-label", label);
+    control.title = label;
+    control.innerHTML = helperIconHtml(icon, 17);
+    return control;
+  };
+  const renderGroupHeader = (host, group) => {
+    const cleanups = [];
+    const layout = projectInfoElement("div", `project-plan-group-header${group.milestone ? ` is-${group.milestone.status}` : ""}`);
+    host.append(layout);
+    if (!group.milestone) {
+      const copy = projectInfoElement("span", "project-plan-standalone-copy");
+      copy.append(projectInfoElement("strong", "", "Standalone deliverables"), projectInfoElement("span", "", "Outputs not assigned to a milestone"));
+      layout.append(copy);
+      return () => {};
+    }
+    const milestoneId = group.milestone.id;
+    const titleHost = inlineCell(layout, "is-title", "Milestone");
+    const statusHost = inlineCell(layout, "is-status", "Status");
+    const dateHost = inlineCell(layout, "is-date", "Target");
+    const title = state.factories.createInlineText(titleHost, {
+      label: "Milestone title", value: group.milestone.title, required: true, maxLength: 180,
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", validate: textValidator("Milestone title"),
+      async onSave(value) {
+        const updated = await patchMilestone(milestoneId, { title: value });
+        board?.setGroupLabel?.(milestoneGroupId(milestoneId), updated.title);
+      },
+    });
+    const status = state.factories.createInlineSelect(statusHost, {
+      label: "Milestone status", value: group.milestone.status, required: true, searchable: false,
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", items: PROJECT_PLAN_MILESTONE_STATUSES,
+      onSave: async (value) => {
+        await patchMilestone(milestoneId, { status: value });
+        layout.className = `project-plan-group-header is-${value}`;
+      },
+    });
+    const targetValue = projectPlanDayValue(group.milestone.target_at) || null;
+    let target = null;
+    if (targetValue) {
+      target = state.factories.createInlineDate(dateHost, {
+        label: "Target date", value: targetValue, placeholder: "", showTime: false, valueMode: "wall-clock", readOnly: !currentPlan.can_manage,
+        actionsPlacement: "overlay",
+        onSave: async (value) => {
+          await patchMilestone(milestoneId, { target_at: value || null });
+          if (!value) window.setTimeout(() => { target?.destroy(); dateHost.replaceChildren(); }, 0);
+        },
+      });
+    }
+    cleanups.push(title, status); if (target) cleanups.push(target);
+    const meta = projectInfoElement("span", "project-plan-group-meta", `${group.milestone.ready_deliverable_count}/${group.milestone.deliverable_count} ready`);
+    const actions = projectInfoElement("span", "project-plan-row-actions");
+    if (currentPlan.can_manage) {
+      const add = projectPlanIconAction("Add deliverable", "actions.add");
+      const details = projectPlanIconAction("Edit milestone details", "actions.edit");
+      add.addEventListener("click", () => openDeliverableForm(null, milestoneId, load));
+      details.addEventListener("click", () => openMilestoneForm(milestoneById(milestoneId), load));
+      actions.append(add, details);
+    }
+    layout.append(meta, actions);
+    return () => cleanups.forEach((component) => component.destroy());
+  };
+  const renderItem = (host, item) => {
+    const cleanups = [];
+    const row = projectInfoElement("article", `project-plan-row is-${item.status}`);
+    host.append(row);
+    const titleCell = projectInfoElement("div", "project-plan-title-cell");
+    row.append(titleCell);
+    const titleHost = inlineCell(titleCell, "is-title", "Deliverable");
+    const statusHost = inlineCell(row, "is-status", "Status");
+    const dateHost = inlineCell(row, "is-date", "Due");
+    const title = state.factories.createInlineText(titleHost, {
+      label: "Deliverable title", value: item.title, required: true, maxLength: 180,
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", validate: textValidator("Deliverable title"),
+      async onSave(value) {
+        const updated = await patchDeliverable(item.id, { title: value });
+        board?.setItemLabel?.(item.id, updated.title);
+      },
+    });
+    const status = state.factories.createInlineSelect(statusHost, {
+      label: "Deliverable status", value: item.status, required: true, searchable: false,
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", items: PROJECT_PLAN_DELIVERABLE_STATUSES,
+      onSave: async (value) => {
+        await patchDeliverable(item.id, { status: value });
+        row.className = `project-plan-row is-${value}`;
+      },
+    });
+    const dueValue = projectPlanDateValue(item.due_at) || null;
+    let due = null;
+    if (dueValue) {
+      due = state.factories.createInlineDate(dateHost, {
+        label: "Due date", value: dueValue, placeholder: "",
+        showTime: true, timePrecision: "minute", valueMode: "wall-clock", readOnly: !currentPlan.can_manage, actionsPlacement: "overlay",
+        onSave: async (value) => {
+          await patchDeliverable(item.id, { due_at: value || null });
+          if (!value) window.setTimeout(() => { due?.destroy(); dateHost.replaceChildren(); }, 0);
+        },
+      });
+    }
+    const ownerHost = inlineCell(titleCell, "is-owner-subtext", "Owner");
+    const owner = state.factories.createInlineSelect(ownerHost, {
+      label: "Accountable owner", value: id(item.owner_participant_id), placeholder: "Unassigned",
+      readOnly: !currentPlan.can_manage, actionsPlacement: "overlay", items: projectPlanParticipantOptions().map(({ value, label }) => ({ id: value, label })),
+      onSave: async (value) => { await patchDeliverable(item.id, { owner_participant_id: value || null }); },
+    });
+    cleanups.push(title, status, owner); if (due) cleanups.push(due);
+    const meta = projectInfoElement("div", "project-plan-row-meta");
+    if (Number(item.task_count || 0) > 0) {
+      meta.append(projectInfoElement("span", "", `${item.completed_task_count}/${item.eligible_task_count} tasks complete`));
+    }
+    const actions = projectInfoElement("span", "project-plan-row-actions");
+    if (item.artifact_url) {
+      const artifact = projectPlanIconAction("Open deliverable artifact", "assets.document", "a"); artifact.href = item.artifact_url;
+      artifact.target = "_blank"; artifact.rel = "noopener noreferrer"; actions.append(artifact);
+    }
+    if (currentPlan.can_manage) {
+      const details = projectPlanIconAction("Edit deliverable details", "actions.edit");
+      details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load)); actions.append(details);
+    }
+    row.append(meta, actions);
+    return () => cleanups.forEach((component) => component.destroy());
+  };
   const render = (plan) => {
-    content.replaceChildren();
+    board?.destroy(); board = null; content.replaceChildren();
     const toolbar = projectInfoElement("div", "project-plan-toolbar");
-    toolbar.append(projectInfoElement("p", "", "Milestones organize major checkpoints. Deliverables capture the concrete outputs produced by linked tasks."));
+    toolbar.append(projectInfoElement("p", "", "Select a field to edit. Use the drag handles to reorder milestones or move deliverables."));
     if (plan.can_manage) {
       const actions = projectInfoElement("span", "project-plan-toolbar-actions");
       const addMilestone = projectInfoElement("button", "ui-button ui-button-sm", "Add milestone");
@@ -3347,60 +3587,87 @@ function openProjectPlanModal() {
       actions.append(addMilestone, addDeliverable); toolbar.append(actions);
     }
     content.append(toolbar);
-    const groups = [...(plan.milestones || []).map((milestone) => ({ milestone, items: [] })), { milestone: null, items: [] }];
-    const groupById = new Map(groups.filter((group) => group.milestone).map((group) => [String(group.milestone.id), group]));
-    (plan.deliverables || []).forEach((item) => (groupById.get(String(item.milestone_id)) || groups[groups.length - 1]).items.push(item));
-    const visibleGroups = groups.filter((group) => group.milestone || group.items.length);
-    if (!visibleGroups.length) {
-      content.append(projectInfoElement("div", "project-plan-empty", "No milestones or deliverables yet. Start with a milestone for an important checkpoint, or add a standalone deliverable."));
-      return;
-    }
-    visibleGroups.forEach((group) => {
-      const section = projectInfoElement("section", "project-plan-milestone");
-      const heading = projectInfoElement("header", "project-plan-milestone-header");
-      const copy = projectInfoElement("span", "project-plan-milestone-copy");
-      if (group.milestone) {
-        copy.append(projectInfoElement("strong", "", group.milestone.title), projectInfoElement("span", "", `${projectPlanStatusLabel(group.milestone.status)}${group.milestone.target_at ? ` · ${formatDate(group.milestone.target_at)}` : ""} · ${group.milestone.ready_deliverable_count}/${group.milestone.deliverable_count} ready`));
-        if (plan.can_manage) {
-          const edit = projectInfoElement("button", "ui-button ui-button-sm", "Edit"); edit.type = "button";
-          edit.addEventListener("click", () => openMilestoneForm(group.milestone, load)); heading.append(copy, edit);
-        } else heading.append(copy);
-      } else {
-        copy.append(projectInfoElement("strong", "", "Standalone deliverables"), projectInfoElement("span", "", "Outputs not assigned to a milestone"));
-        heading.append(copy);
-      }
-      section.append(heading);
-      const list = projectInfoElement("div", "project-plan-deliverables");
-      if (!group.items.length) list.append(projectInfoElement("p", "project-status-empty", "No deliverables in this milestone."));
-      group.items.forEach((item) => {
-        const card = projectInfoElement("article", `project-plan-deliverable is-${item.status}`);
-        const cardCopy = projectInfoElement("span", "project-plan-deliverable-copy");
-        cardCopy.append(projectInfoElement("strong", "", item.title), projectInfoElement("span", "", `${projectPlanStatusLabel(item.status)} · ${item.completed_task_count}/${item.eligible_task_count} tasks complete${item.owner_display_name ? ` · ${item.owner_display_name}` : ""}`));
-        if (item.description) cardCopy.append(projectInfoElement("p", "", item.description));
-        const cardActions = projectInfoElement("span", "project-plan-deliverable-actions");
-        if (item.artifact_url) {
-          const artifact = document.createElement("a"); artifact.className = "ui-button ui-button-sm"; artifact.href = item.artifact_url; artifact.target = "_blank"; artifact.rel = "noopener noreferrer"; artifact.textContent = "Open artifact"; cardActions.append(artifact);
-        }
-        if (plan.can_manage) {
-          const edit = projectInfoElement("button", "ui-button ui-button-sm", "Edit"); edit.type = "button";
-          edit.addEventListener("click", () => openDeliverableForm(item, item.milestone_id, load)); cardActions.append(edit);
-        }
-        card.append(cardCopy, cardActions); list.append(card);
-      });
-      if (plan.can_manage && group.milestone) {
-        const add = projectInfoElement("button", "project-plan-inline-add", "Add deliverable to this milestone"); add.type = "button";
-        add.addEventListener("click", () => openDeliverableForm(null, group.milestone.id, load)); list.append(add);
-      }
-      section.append(list); content.append(section);
+    const feedback = projectInfoElement("div", "project-plan-feedback"); feedback.hidden = true; content.append(feedback);
+    const columns = projectInfoElement("div", "project-plan-column-guide");
+    columns.setAttribute("aria-hidden", "true");
+    ["Item", "Status", "Date", "Progress", "Actions"].forEach((label) => columns.append(projectInfoElement("span", "", label)));
+    content.append(columns);
+    const boardHost = projectInfoElement("div", "project-plan-board-host"); content.append(boardHost);
+    board = state.factories.createReorderGroups(boardHost, groupsFromPlan(plan), {
+      reorderGroups: Boolean(plan.can_manage), readOnly: !plan.can_manage,
+      emptyText: "No deliverables in this milestone.", renderGroupHeader, renderItem,
+      isGroupLocked: (group) => group.id === "standalone" || persistencePending || hasActiveDraft(),
+      isItemLocked: () => persistencePending || hasActiveDraft(),
+      onGroupReorder: (change) => { void persistMilestoneOrder(change); },
+      onReorder: (change) => { void persistDeliverableOrder(change); },
     });
+  };
+  const reconcile = async () => {
+    setFeedback("Reconciling the saved project plan…");
+    try {
+      const plan = unwrap(await request(`${API.projectPlan}?${new URLSearchParams({ project_id: projectId })}`)) || {};
+      if (disposed || selectedProjectId() !== projectId) return;
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+      board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+      setFeedback("Project plan reconciled.", "success");
+    } catch (error) {
+      const retry = projectInfoElement("button", "ui-button ui-button-sm", "Retry reconciliation"); retry.type = "button";
+      retry.addEventListener("click", () => { void reconcile(); });
+      setFeedback(`The saved order is still unknown. ${error.message}`, "error", retry);
+    }
+  };
+  const persistOrder = async (body, before) => {
+    if (persistencePending || disposed) return;
+    persistencePending = true; board?.setInteractionLocked(true); setFeedback("Saving project-plan order…");
+    try {
+      const plan = unwrap(await request(`${API.projectPlanOrder}?${new URLSearchParams({ project_id: projectId })}`, {
+        method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(body),
+      })) || {};
+      if (disposed) return;
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+      board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+      setFeedback("Project-plan order saved.", "success");
+    } catch (error) {
+      if (disposed) return;
+      const definite = Boolean(error.status && error.status < 500);
+      if (definite) {
+        currentPlan = before; state.projectPlan = before; board?.update(groupsFromPlan(before));
+        persistencePending = false; board?.setInteractionLocked(false);
+        setFeedback(`The order was not saved. ${error.message}`, "error");
+        return;
+      }
+      const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile saved order"); reconcileButton.type = "button";
+      reconcileButton.addEventListener("click", () => { void reconcile(); });
+      setFeedback("The save outcome is unknown. Reconcile with the server before making another change.", "error", reconcileButton);
+    }
+  };
+  const persistMilestoneOrder = async (change) => {
+    const before = structuredClone(currentPlan);
+    const orderedIds = change.orderedGroupIds.filter((groupId) => groupId !== "standalone").map(milestoneIdFromGroup);
+    const versions = Object.fromEntries((currentPlan.milestones || []).map((item) => [item.id, item.version]));
+    await persistOrder({ kind: "milestones", ordered_ids: orderedIds, versions }, before);
+  };
+  const persistDeliverableOrder = async (change) => {
+    const before = structuredClone(currentPlan);
+    const affectedIds = [...new Set(Object.values(change.orderedIdsByGroup).flat().map(Number))];
+    const versions = Object.fromEntries(affectedIds.map((itemId) => [itemId, deliverableById(itemId)?.version]));
+    const orders = Object.entries(change.orderedIdsByGroup).map(([groupId, orderedIds]) => ({
+      milestone_id: milestoneIdFromGroup(groupId), ordered_ids: orderedIds.map(Number),
+    }));
+    await persistOrder({
+      kind: "deliverables", moved_id: Number(change.itemId),
+      from_milestone_id: milestoneIdFromGroup(change.fromGroupId), to_milestone_id: milestoneIdFromGroup(change.toGroupId),
+      orders, versions,
+    }, before);
   };
   const load = async () => {
     if (!modal.getState().open) return;
+    readController?.abort(); readController = new AbortController();
     modal.setBusy(true, { message: "Loading project plan…", cancelBusy: { label: "Close", onCancel: () => modal.close({ reason: "cancelled" }) } });
     try {
-      const plan = unwrap(await request(`${API.projectPlan}?${new URLSearchParams({ project_id: projectId })}`, { signal: abortController.signal })) || {};
+      const plan = unwrap(await request(`${API.projectPlan}?${new URLSearchParams({ project_id: projectId })}`, { signal: readController.signal })) || {};
       if (!modal.getState().open || selectedProjectId() !== projectId) return;
-      state.projectPlan = plan; state.projectPlanLoaded = true; render(plan); modal.setBusy(false);
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true; render(plan); modal.setBusy(false);
     } catch (error) {
       if (error.name === "AbortError" || !modal.getState().open) return;
       modal.setBusy(false); content.replaceChildren();
@@ -3412,7 +3679,7 @@ function openProjectPlanModal() {
   modal = state.factories.createActionModal({
     title: "Project plan", size: "xl", className: "project-plan-modal", content,
     actions: [{ id: "close", label: "Close", variant: "primary" }],
-    onClose() { abortController.abort(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
+    onClose() { disposed = true; if (feedbackTimer) window.clearTimeout(feedbackTimer); readController?.abort(); board?.destroy(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
   });
   state.components.projectPlanModal = modal; modal.open(); void load();
 }
@@ -6091,6 +6358,26 @@ function taskParticipantOptions(includeEmpty = true) {
   ];
 }
 
+function taskDeliverableOptions() {
+  const available = (state.projectPlan?.deliverables || [])
+    .filter((deliverable) => deliverable.status !== "cancelled");
+  const options = [{ value: "", label: "No deliverable" }];
+  const groupedIds = new Set();
+  (state.projectPlan?.milestones || []).forEach((milestone) => {
+    const children = available
+      .filter((deliverable) => id(deliverable.milestone_id) === id(milestone.id))
+      .map((deliverable) => ({ value: deliverable.id, label: deliverable.title }));
+    if (!children.length) return;
+    children.forEach((option) => groupedIds.add(id(option.value)));
+    options.push({ label: milestone.title, options: children });
+  });
+  const standalone = available
+    .filter((deliverable) => !groupedIds.has(id(deliverable.id)))
+    .map((deliverable) => ({ value: deliverable.id, label: deliverable.title }));
+  if (standalone.length) options.push({ label: "Standalone deliverables", options: standalone });
+  return options;
+}
+
 function normalizeTaskForm(values) {
   return {
     title: String(values.title || "").trim(),
@@ -6105,12 +6392,7 @@ function normalizeTaskForm(values) {
 
 function taskFormRows() {
   const participants = taskParticipantOptions();
-  const deliverables = [
-    { value: "", label: "No deliverable" },
-    ...(state.projectPlan?.deliverables || [])
-      .filter((deliverable) => deliverable.status !== "cancelled")
-      .map((deliverable) => ({ value: deliverable.id, label: deliverable.title })),
-  ];
+  const deliverables = taskDeliverableOptions();
   return [
     [modalTextField("title", "Task title", { required: true, maxlength: 180 })],
     [{ type: "textarea", name: "description", label: "Description" }, { type: "textarea", name: "acceptance_criteria", label: "Acceptance criteria" }],
@@ -6197,37 +6479,65 @@ function openEditTaskModal(task) {
 
 function taskDetailContent(task) {
   const content = document.createElement("div"); content.className = "task-detail";
+  const markdownViews = [];
+  let activityTimeline = null;
+  let taskTabs = null;
+  const markdown = (source, className, options = {}) => {
+    const host = document.createElement("div"); host.className = className;
+    markdownViews.push(state.factories.createMarkdownView(host, {
+      markdown: String(source || ""), profile: "full", headingOffset: 2,
+      linkTarget: "_blank", ...options,
+    }));
+    return host;
+  };
+  content.destroyMarkdownViews = () => {
+    activityTimeline?.destroy();
+    activityTimeline = null;
+    taskTabs?.destroy();
+    taskTabs = null;
+    markdownViews.splice(0).forEach((view) => view.destroy());
+  };
   const hero = document.createElement("section"); hero.className = "task-detail-hero";
   const title = document.createElement("h2"); title.className = "task-detail-title"; title.textContent = task.title;
   const chips = document.createElement("div"); chips.className = "task-detail-chips";
   [[taskStatusLabel(task.status), `is-${task.status}`], [`${task.priority} priority`, "is-priority"]].forEach(([label, className]) => {
     const chip = document.createElement("span"); chip.className = `task-detail-chip ${className}`; chip.textContent = label; chips.append(chip);
   });
-  const description = document.createElement("p"); description.className = "task-detail-description"; description.textContent = task.description || "No description provided.";
-  hero.append(title, chips, description); content.append(hero);
+  hero.append(title, chips);
 
-  const addDetailSection = (headingText, rows) => {
+  const overview = document.createElement("div"); overview.className = "task-detail-tab-panel task-detail-overview";
+  const descriptionSection = document.createElement("section"); descriptionSection.className = "task-detail-section ui-panel task-detail-description-section";
+  const descriptionHeading = document.createElement("h3"); descriptionHeading.textContent = "Description";
+  const description = markdown(task.description, "task-detail-description", { emptyText: "No description provided." });
+  descriptionSection.append(descriptionHeading, description); overview.append(descriptionSection);
+  const overviewGrid = document.createElement("div"); overviewGrid.className = "task-detail-overview-grid"; overview.append(overviewGrid);
+
+  const addDetailSection = (target, headingText, rows) => {
     const section = document.createElement("section"); section.className = "task-detail-section ui-panel";
     const heading = document.createElement("h3"); heading.textContent = headingText;
     const details = document.createElement("dl"); details.className = "task-detail-list";
     rows.forEach(([label, value]) => { const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd"); dd.textContent = value; details.append(dt, dd); });
-    section.append(heading, details); content.append(section);
+    section.append(heading, details); target.append(section);
   };
-  addDetailSection("Responsibility", [
+  addDetailSection(overviewGrid, "Responsibility", [
     ["Assigned to", task.assignee_display_name || "Unassigned"],
     ["Task giver", task.creator_display_name || "Unknown"],
     ["Deliverable", task.deliverable_title || "Not linked"],
   ]);
-  addDetailSection("Schedule", [
+  addDetailSection(overviewGrid, "Schedule", [
     ["Due", task.due_at ? formatDate(task.due_at) : "No due date"],
     ["Created", formatDate(task.created_at)],
     ["Updated", formatDate(task.updated_at)],
   ]);
+  if (task.blocked_reason) { const blocked = document.createElement("p"); blocked.className = "task-blocked-reason"; blocked.textContent = `Blocked: ${task.blocked_reason}`; overview.append(blocked); }
+
+  const requirements = document.createElement("div"); requirements.className = "task-detail-tab-panel task-detail-requirements";
+  let hasRequirements = false;
   if (task.acceptance_criteria) {
     const criteriaSection = document.createElement("section"); criteriaSection.className = "task-detail-section ui-panel";
     const heading = document.createElement("h3"); heading.textContent = "Acceptance criteria";
-    const criteria = document.createElement("p"); criteria.textContent = task.acceptance_criteria;
-    criteriaSection.append(heading, criteria); content.append(criteriaSection);
+    const criteria = markdown(task.acceptance_criteria, "task-detail-markdown");
+    criteriaSection.append(heading, criteria); requirements.append(criteriaSection); hasRequirements = true;
   }
   if (task.source_message_id) {
     const sourceSection = document.createElement("section"); sourceSection.className = "task-detail-section ui-panel";
@@ -6236,26 +6546,64 @@ function taskDetailContent(task) {
     const open = document.createElement("button"); open.type = "button"; open.className = "ui-button ui-button-borderless";
     open.textContent = "View source message";
     open.addEventListener("click", () => void openResponsibilityMessage(task.source_message_id));
-    sourceSection.append(heading, sourceDescription, open); content.append(sourceSection);
+    sourceSection.append(heading, sourceDescription, open); requirements.append(sourceSection); hasRequirements = true;
   }
-  if (task.blocked_reason) { const blocked = document.createElement("p"); blocked.className = "task-blocked-reason"; blocked.textContent = `Blocked: ${task.blocked_reason}`; content.append(blocked); }
+  if (!hasRequirements) { const empty = document.createElement("p"); empty.className = "task-detail-empty"; empty.textContent = "No acceptance criteria or source message."; requirements.append(empty); }
+
   const events = Array.isArray(task.events) ? task.events : [];
-  const activitySection = document.createElement("section"); activitySection.className = "task-detail-section ui-panel";
-  const activityHeading = document.createElement("h3"); activityHeading.textContent = "Activity";
-  const activity = document.createElement("ol"); activity.className = "task-detail-activity";
-  if (!events.length) { const empty = document.createElement("li"); empty.textContent = "No recorded activity."; activity.append(empty); }
-  events.forEach((event) => {
-    const item = document.createElement("li");
+  const activityPanel = document.createElement("div"); activityPanel.className = "task-detail-tab-panel task-detail-activity-panel";
+  const activity = document.createElement("div"); activity.className = "task-detail-activity";
+  const activityItems = events.map((event) => {
     const eventLabel = event.event_type === "status_changed"
       ? `${taskStatusLabel(event.from_status)} → ${taskStatusLabel(event.to_status)}`
       : ({ created: "Task created", assigned: "Assignment updated", updated: "Task updated" })[event.event_type] || event.event_type;
-    const summary = document.createElement("strong"); summary.textContent = eventLabel;
-    const meta = document.createElement("span"); meta.textContent = `${event.actor_display_name || "Unknown participant"} · ${formatDate(event.created_at)}`;
-    item.append(summary, meta);
-    if (event.body) { const note = document.createElement("p"); note.textContent = event.body; item.append(note); }
-    activity.append(item);
+    const status = event.event_type === "status_changed"
+      ? ({ open: "assigned", in_progress: "en_route", blocked: "requested", in_review: "accepted", completed: "completed", cancelled: "cancelled" })[event.to_status]
+      : ({ created: "assigned", assigned: "accepted", updated: "accepted" })[event.event_type];
+    return {
+      id: `task-event-${event.id}`,
+      title: eventLabel,
+      subtitle: event.actor_display_name || "Unknown participant",
+      timestamp: event.created_at,
+      status,
+      raw: event,
+      contentKey: event.body ? `${event.id}:${event.body}` : "",
+      hasCustomContent: Boolean(event.body),
+    };
   });
-  activitySection.append(activityHeading, activity); content.append(activitySection);
+  activityTimeline = state.factories.createTimeline(activity, activityItems, {
+    ariaLabel: "Task activity",
+    density: "compact",
+    groupByDate: false,
+    collapsible: false,
+    enableVirtualization: false,
+    emptyText: "No recorded activity.",
+    mountItemContent(host, item) {
+      if (!item.raw?.body) return null;
+      host.classList.add("task-detail-markdown", "task-detail-activity-note");
+      const view = state.factories.createMarkdownView(host, {
+        markdown: String(item.raw.body), profile: "full", headingOffset: 3, linkTarget: "_blank",
+      });
+      return {
+        update(nextItem) { view.update({ markdown: String(nextItem.raw?.body || "") }); },
+        destroy() { view.destroy(); },
+      };
+    },
+  });
+  activityPanel.append(activity);
+
+  const tabsHost = document.createElement("div"); tabsHost.className = "task-detail-tabs";
+  content.append(hero, tabsHost);
+  taskTabs = state.factories.createTabs(tabsHost, {
+    ariaLabel: "Task details sections",
+    variant: "attached",
+    activeId: "overview",
+    tabs: [
+      { id: "overview", label: "Overview", content: overview },
+      { id: "requirements", label: "Requirements", content: requirements },
+      { id: "activity", label: "Activity", content: activityPanel },
+    ],
+  });
   return content;
 }
 
@@ -6292,17 +6640,24 @@ function taskActions(task, modal) {
 
 async function openTaskDetails(taskId) {
   let modal;
+  let detailContent = null;
+  const abortController = new AbortController();
   const loading = document.createElement("p"); loading.textContent = "Loading task details...";
-  modal = state.factories.createActionModal({ title: "Task details", size: "md", content: loading, actions: [{ id: "close", label: "Close" }] });
+  modal = state.factories.createActionModal({
+    title: "Task details", size: "full", content: loading, actions: [{ id: "close", label: "Close" }],
+    onClose() { abortController.abort(); detailContent?.destroyMarkdownViews?.(); },
+  });
   modal.open();
   modal.setBusy(true, { message: "Loading task details..." });
   try {
-    const task = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: taskId, include: "events" })}`));
+    const task = unwrap(await request(`${API.task}?${new URLSearchParams({ project_id: selectedProjectId(), id: taskId, include: "events" })}`, { signal: abortController.signal }));
     if (!modal.getState().open) return;
     modal.setActions(taskActions(task, modal));
-    modal.setContent(taskDetailContent(task));
+    detailContent = taskDetailContent(task);
+    modal.setContent(detailContent);
     modal.setBusy(false);
   } catch (error) {
+    if (error.name === "AbortError" || !modal.getState().open) return;
     modal.setBusy(false);
     loading.textContent = `Unable to load task details. ${error.message}`;
   }
@@ -7634,7 +7989,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -7675,6 +8030,11 @@ async function bootstrap() {
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
     createSplitter: await uiLoader.get("ui.splitter", options),
     createNavigationStack: await uiLoader.get("ui.navigation.stack", options),
+    createReorderGroups: await uiLoader.get("ui.reorder.groups", options),
+    createInlineText: await uiLoader.get("ui.inline.text", options),
+    createInlineSelect: await uiLoader.get("ui.inline.select", options),
+    createInlineDate: await uiLoader.get("ui.inline.date", options),
+    createMarkdownView: await uiLoader.get("ui.markdown", options),
   };
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   mountProjectViewTabs();

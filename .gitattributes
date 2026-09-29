@@ -3,3 +3,6 @@ Dockerfile text eol=lf
 docker/*.Dockerfile text eol=lf
 compose*.yaml text eol=lf
 tests/fixtures/*.jsonl text eol=lf
+vendor/pbb-helper/dist/helpers.ui.bundle.min.js text eol=lf
+vendor/pbb-helper/dist/helpers.ui.bundle.min.css text eol=lf
+vendor/pbb-helper/js/ui/ui.loader.js text eol=lf

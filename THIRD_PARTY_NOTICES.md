@@ -10,7 +10,7 @@ they are distributed in this repository.
 The runtime subsets listed in [`VENDORED.md`](VENDORED.md) come from:
 
 - [PBB Helper](https://github.com/jybanez/helpers.pbb.ph), pinned to commit
-  `cf52953927f3526965556c4542f8c48218d03aee`; and
+  `766df8c17a129206652c174f4f185700a65ad746`; and
 - [PBB Realtime](https://github.com/jybanez/realtime.pbb.ph), pinned to commit
   `845c60bd27040f85ed0757c56f972c02b345bca9`.
 

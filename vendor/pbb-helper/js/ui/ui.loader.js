@@ -1,7 +1,7 @@
 const UI_TOKENS_CSS = "../../css/ui/ui.tokens.css";
 const UI_COMPONENTS_CSS = "../../css/ui/ui.components.css";
 const INCIDENT_BASE_CSS = "../../css/incident/incident.css";
-const UI_OVERLAY_ROUTING_REV = "0.21.201";
+const UI_OVERLAY_ROUTING_REV = "0.21.215";
 const UI_AUDIO_REV = "0.21.62";
 const UI_ICONS_REV = "0.21.209";
 const UI_FILE_INPUT_REV = "0.21.108";
@@ -10,7 +10,7 @@ const UI_PASSWORD_REV = "0.21.66";
 const UI_PROPERTY_VIEWER_REV = "0.21.1";
 const UI_DATE_REV = "0.21.204";
 const UI_NAV_REV = "0.21.4";
-const UI_POPOVER_REV = "0.21.1";
+const UI_POPOVER_REV = "0.21.215";
 const UI_SELECT_REV = "0.21.1";
 const UI_MEDIA_REV = "0.21.3";
 const UI_PDF_REV = "0.21.1";
@@ -20,7 +20,7 @@ const UI_DEVICE_PRIMER_REV = "0.21.65";
 const UI_GAME_REV = "0.21.112";
 const UI_INSPECTION_REV = "0.21.1";
 const UI_TIMELINE_REV = "0.21.212";
-const UI_BUNDLE_REV = "0.21.212";
+const UI_BUNDLE_REV = "0.21.217";
 const UI_GAME_BUNDLE_REV = "0.21.209";
 const UI_INSPECTION_BUNDLE_REV = "0.21.1";
 const UI_BUNDLE_JS = `../../dist/helpers.ui.bundle.min.js?v=${UI_BUNDLE_REV}`;
@@ -30,27 +30,32 @@ const UI_GAME_BUNDLE_CSS = `../../dist/helpers.game.bundle.min.css?v=${UI_GAME_B
 const UI_INSPECTION_BUNDLE_JS = `../../dist/helpers.inspection.bundle.min.js?v=${UI_INSPECTION_BUNDLE_REV}`;
 
 export const DEFAULT_COMPONENT_REGISTRY = {
+  "ui.markdown": {
+    js: "./ui.markdown.js?v=0.21.217",
+    css: [UI_TOKENS_CSS, "../../css/ui/ui.markdown.css?v=0.21.217"],
+    deps: [], export: "createMarkdownView",
+  },
   "ui.inline.text": {
-    js: "./ui.inline.js?v=0.21.211",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.inline.css?v=0.21.211", "../../css/ui/ui.field.error.css"],
+    js: "./ui.inline.js?v=0.21.215",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.inline.css?v=0.21.215", "../../css/ui/ui.popover.css?v=0.21.215", "../../css/ui/ui.field.error.css"],
     deps: [],
     export: "createInlineText",
   },
   "ui.inline.select": {
-    js: "./ui.inline.js?v=0.21.211",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.inline.css?v=0.21.211", "../../css/ui/ui.field.error.css"],
+    js: "./ui.inline.js?v=0.21.215",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.inline.css?v=0.21.215", "../../css/ui/ui.popover.css?v=0.21.215", "../../css/ui/ui.field.error.css"],
     deps: ["ui.select"],
     export: "createInlineSelect",
   },
   "ui.inline.date": {
-    js: "./ui.inline.js?v=0.21.211",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.inline.css?v=0.21.211", "../../css/ui/ui.field.error.css"],
+    js: "./ui.inline.js?v=0.21.215",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.inline.css?v=0.21.215", "../../css/ui/ui.popover.css?v=0.21.215", "../../css/ui/ui.field.error.css"],
     deps: ["ui.datepicker"],
     export: "createInlineDate",
   },
   "ui.reorder.groups": {
-    js: "./ui.reorder.groups.js?v=0.21.211",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.reorder.groups.css?v=0.21.211"],
+    js: "./ui.reorder.groups.js?v=0.21.214",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.reorder.groups.css?v=0.21.213"],
     deps: [],
     export: "createReorderGroups",
   },
@@ -181,7 +186,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createFieldErrorAdapter",
   },
   "ui.form.modal": {
-    js: "./ui.form.modal.js?v=0.21.201",
+    js: "./ui.form.modal.js?v=0.21.216",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.form.modal.css?v=0.21.200", "../../css/ui/ui.field.error.css?v=0.21.195", "../../css/ui/ui.number.stepper.css", "../../css/ui/ui.select.css", "../../css/ui/ui.tree.select.css", "../../css/ui/ui.password.css", "../../css/ui/ui.calendar.css", "../../css/ui/ui.datepicker.css", "../../css/ui/ui.toggle.css?v=0.21.193"],
     deps: ["ui.action.modal", "ui.number.stepper", "ui.password"],
     export: "createFormModal",
@@ -872,6 +877,7 @@ export const DEFAULT_COMPONENT_GROUPS = {
     "ui.file.uploader",
   ],
   communication: [
+    "ui.markdown",
     "ui.chat.thread",
     "ui.chat.composer",
     "ui.chat.upload.queue",

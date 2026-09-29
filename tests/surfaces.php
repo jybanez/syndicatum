@@ -670,7 +670,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.212";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.212";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.217";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -832,20 +832,20 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.212 retains native theme integration, timeline stability, attached tabs, and the integration icon family', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.217 retains planning contracts and adds the canonical safe Markdown view', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.212') !== false,
-                'Every Helper entry point must use the canonical 0.21.212 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.217') !== false,
+                'Every Helper entry point must use the canonical 0.21.217 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.212') !== false,
-                $surface . ' must use the matching canonical 0.21.212 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.217') !== false,
+                $surface . ' must use the matching canonical 0.21.217 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -863,19 +863,36 @@ try {
         $suite->true(strpos($bundleJs, 'onContextMenuAction') !== false
             && strpos($bundleJs, 'ui-timeline-menu-trigger') !== false,
             'The Helper bundle must expose the native timeline context-menu implementation.');
+        $suite->true(strpos($bundleJs, 'setGroupLabel') !== false
+            && strpos($bundleJs, 'setItemLabel') !== false
+            && strpos($bundleJs, 'setInteractionLocked') !== false
+            && strpos($bundleJs, 'onGroupReorder') !== false,
+            'The Helper bundle must expose movable editable groups and non-rebuilding persistence locks.');
+        $suite->true(strpos($bundleJs, 'optgroup') !== false
+            && strpos($bundleJs, 'actionsPlacement') !== false,
+            'The Helper bundle must include native grouped form selects and responsive inline action placement.');
+        $suite->true(strpos($bundleJs, 'createMarkdownView') !== false
+            && strpos($bundleCss, '.ui-markdown-content') !== false
+            && strpos($app, 'createMarkdownView: await uiLoader.get("ui.markdown", options)') !== false,
+            'Authored content must use the canonical sanitized Helper Markdown component.');
+        $suite->true(strpos($app, 'markdown: String(current.body || ""), profile: "full"') !== false
+            && strpos($app, 'const description = markdown(task.description') !== false
+            && strpos($app, 'markdown(task.acceptance_criteria') !== false
+            && strpos($app, 'destroyMarkdownViews') !== false,
+            'Timeline messages and task detail descriptions must render through Helper Markdown with lifecycle cleanup.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
             'The Helper timeline must anchor virtual rows to the scroll content origin rather than the bordered viewport box.');
-        $suite->same('db656cbe31e4a46cf9d8014c70e8b557294cd1611af152bf50e47b6f3dbe196e',
+        $suite->same('386444d3aeb01c79fcec2819d9c63aca91f59a3b1bb79f2c713e80921db7da08',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match upstream commit 271cf3a exactly.');
-        $suite->same('dc96cb32247fa27e9af8fced358f2d75841cbbe1d856e7ea59af2731f3e5d595',
+            'The vendored Helper JavaScript must match upstream commit 766df8c exactly.');
+        $suite->same('3d6cc2d1a709996e823529e97d207e6f63a17f06a8199850f7bf56ee0ed21da3',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match upstream commit 271cf3a exactly.');
-        $suite->same('5b9b52ae7dd4c7d216fcdde6a36ed925cf3d6a61c598baacb5dc390145acc75b',
+            'The vendored Helper stylesheet must match upstream commit 766df8c exactly.');
+        $suite->same('fe22fe40e6282f401b42e982a9f928a25925a156739bbabb274fd0e875c10775',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match upstream commit 271cf3a exactly.');
+            'The vendored Helper loader must match upstream commit 766df8c exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -1011,6 +1028,8 @@ try {
 
     $suite->test('project planning distinguishes milestones, deliverables, and linked tasks', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
+        $service = file_get_contents($root . '/src/ProjectPlanService.php');
+        $orderApi = file_get_contents($root . '/api/v1/project-plan-order.php');
         $suite->true(strpos($source, 'label: "Project plan"') !== false
             && strpos($source, 'title: "Project plan"') !== false
             && strpos($source, 'message: "Loading project plan…"') !== false,
@@ -1027,10 +1046,64 @@ try {
         $suite->true(strpos($source, 'name: "target_at", label: "Target date", showTime: false, valueMode: "wall-clock", closeOnSelect: true') !== false
             && strpos($source, 'target_at: projectPlanDayValue(item?.target_at)') !== false,
             'Milestone target dates must use the canonical date-only picker without exposing time controls.');
+        $suite->true(strpos($source, 'state.factories.createReorderGroups(boardHost') !== false
+            && strpos($source, 'state.factories.createInlineText(') !== false
+            && strpos($source, 'state.factories.createInlineSelect(') !== false
+            && strpos($source, 'state.factories.createInlineDate(') !== false,
+            'Project planning must compose Helper grouped reordering and the canonical inline editors.');
+        $suite->true(strpos($source, 'if (item.description) meta.append') === false
+            && strpos($source, '{ type: "textarea", name: "description", label: "Description" }') !== false
+            && strpos($source, 'if (Number(item.task_count || 0) > 0)') !== false,
+            'Deliverable summaries must stay compact while descriptions remain available in the Details form.');
+        $suite->true(strpos($source, '["Item", "Status", "Date", "Progress", "Actions"]') !== false
+            && strpos($styles, '.project-plan-column-guide') !== false
+            && strpos($styles, '.project-plan-inline-cell.is-status .ui-inline-view') !== false
+            && strpos($source, 'setFeedback("Project-plan order saved.", "success")') !== false,
+            'Project planning must expose an aligned column guide, readable status badges, and transient success feedback.');
+        $suite->true(strpos($source, 'inlineCell(titleCell, "is-owner-subtext", "Owner")') !== false
+            && strpos($styles, '.project-plan-inline-cell.is-owner-subtext .ui-inline-view') !== false,
+            'Deliverable owners must remain inline-editable as toned-down metadata beneath the deliverable title.');
+        $suite->true(strpos($styles, '.project-plan-inline-cell.is-title .ui-inline-field input { font-size: 14px; font-weight: 700; line-height: 1.35; }') !== false,
+            'Milestone and deliverable titles must use the regular body size with bold emphasis in view and edit modes.');
+        $suite->true(strpos($source, 'projectPlanIconAction("Add deliverable", "actions.add")') !== false
+            && strpos($source, 'projectPlanIconAction("Edit milestone details", "actions.edit")') !== false
+            && strpos($source, 'projectPlanIconAction("Edit deliverable details", "actions.edit")') !== false
+            && strpos($source, 'ui-button-borderless project-plan-icon-action') !== false
+            && strpos($styles, '.project-plan-icon-action') !== false,
+            'Row-level project-plan actions must use compact accessible borderless icon controls.');
+        $suite->true(strpos($source, 'if (targetValue)') !== false
+            && strpos($source, 'if (dueValue)') !== false
+            && strpos($source, 'placeholder: "No target date"') === false
+            && strpos($source, 'placeholder: "No due date"') === false
+            && strpos($styles, '.project-plan-inline-cell.is-date .ui-inline-view { font-size: 14px; font-weight: 400; line-height: 1.35; }') !== false,
+            'Project-plan dates must use regular typography and omit empty target or due-date controls.');
+        $suite->true(strpos($source, 'from_milestone_id: milestoneIdFromGroup(change.fromGroupId)') !== false
+            && strpos($source, 'to_milestone_id: milestoneIdFromGroup(change.toGroupId)') !== false
+            && strpos($source, 'orders, versions') !== false,
+            'Moving a deliverable must submit both affected complete orders and optimistic versions in one request.');
+        $suite->true(strpos($source, 'The save outcome is unknown. Reconcile with the server before making another change.') !== false
+            && strpos($source, 'board?.setInteractionLocked(true)') !== false
+            && strpos($source, 'Reconcile saved order') !== false,
+            'Unknown reorder outcomes must remain write-locked until an explicit read-only reconciliation.');
+        $suite->true(strpos($source, 'The field save outcome is unknown. Reconcile with the server before editing or moving anything else.') !== false
+            && strpos($source, 'Reconcile saved value') !== false,
+            'Unknown inline-save outcomes must gate further edits and moves until an explicit read-only reconciliation.');
+        $suite->true(strpos($service, 'function reorderMilestones') !== false
+            && strpos($service, 'function reorderDeliverables') !== false
+            && strpos($service, 'FOR UPDATE') !== false
+            && strpos($orderApi, "projectApiRequireMethod(['PATCH'])") !== false,
+            'The project-plan reorder endpoint must authorize and atomically version-check milestone and deliverable moves.');
         $suite->true(strpos($source, 'message: "Loading deliverables…"') !== false
             && strpos($source, 'modal.setRows(taskFormRows())') !== false
             && strpos($source, 'state.projectPlanLoaded = false') !== false,
             'Task forms must open before lazily loading deliverable choices instead of expanding every project-selection request.');
+        $suite->true(strpos($source, 'function taskDeliverableOptions()') !== false
+            && strpos($source, 'options.push({ label: milestone.title, options: children })') !== false
+            && strpos($source, 'options.push({ label: "Standalone deliverables", options: standalone })') !== false
+            && strpos($source, 'const deliverables = taskDeliverableOptions();') !== false,
+            'Task deliverable choices must use native grouped select options ordered by milestone, with a standalone fallback group.');
+        $suite->true(substr_count($source, 'actionsPlacement: "overlay"') >= 7,
+            'Project-plan inline editors must use overlay actions so editing controls do not reflow the planning columns.');
         $suite->true(strpos($source, 'projectStatusSection("Milestones & deliverables"') !== false
             && strpos($source, 'API.projectStatusPlan') !== false
             && strpos($source, 'loadPlanOverview()') !== false,
@@ -1341,17 +1414,31 @@ try {
             'Only the project rail spacing should be compacted; administration lists retain their established rhythm.');
         $suite->true(strpos($source, 'modal.setBusy(true, { message: "Loading task details..." })') !== false,
             'Task detail modals must open before loading and expose a busy state.');
+        $suite->true(strpos($source, 'title: "Task details", size: "full"') !== false,
+            'Task details must use Helper\'s largest responsive modal size for long authored content.');
         $suite->true(strpos($source, 'modal.setActions(taskActions(task, modal));') !== false
-            && strpos($source, 'modal.setContent(taskDetailContent(task));') !== false
+            && strpos($source, 'detailContent = taskDetailContent(task);') !== false
+            && strpos($source, 'modal.setContent(detailContent);') !== false
             && strpos($source, 'loading.replaceWith(taskDetailContent(task));') === false,
             'Task details must update through the canonical modal API after actions rerender the modal.');
         $suite->true(strpos($source, 'const taskGiver = id(task.created_by_participant_id) === current;') !== false
             && strpos($source, 'if (taskGiver) actions.unshift({ id: "edit"') !== false,
             'Only the authenticated task giver may see the task-definition edit action.');
-        $suite->true(strpos($source, 'addDetailSection("Responsibility"') !== false
-            && strpos($source, 'addDetailSection("Schedule"') !== false
-            && strpos($source, 'activityHeading.textContent = "Activity"') !== false,
-            'Task details must organize responsibility, schedule, criteria, and activity into clear sections.');
+        $suite->true(strpos($source, 'addDetailSection(overviewGrid, "Responsibility"') !== false
+            && strpos($source, 'addDetailSection(overviewGrid, "Schedule"') !== false
+            && strpos($source, 'state.factories.createTimeline(activity, activityItems, {') !== false
+            && strpos($source, 'ariaLabel: "Task activity"') !== false
+            && strpos($source, 'enableVirtualization: false') !== false
+            && strpos($source, 'state.factories.createTabs(tabsHost, {') !== false
+            && strpos($source, 'ariaLabel: "Task details sections"') !== false
+            && strpos($source, '{ id: "overview", label: "Overview", content: overview }') !== false
+            && strpos($source, '{ id: "requirements", label: "Requirements", content: requirements }') !== false
+            && strpos($source, '{ id: "activity", label: "Activity", content: activityPanel }') !== false
+            && strpos($source, 'activityTimeline?.destroy();') !== false
+            && strpos($source, 'taskTabs?.destroy();') !== false
+            && strpos($styles, '.task-detail { display: grid; align-content: start; gap: 14px; }') !== false
+            && strpos($styles, '.task-detail-activity .task-detail-markdown { font-size: 12px; }') === false,
+            'Task details must use canonical tabs for overview, requirements, and lifecycle-safe activity timeline content.');
     });
 
     $suite->test('Agent profiles foreground project assignment and responsibilities', function () use ($suite, $root) {
