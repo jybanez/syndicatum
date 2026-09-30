@@ -143,6 +143,16 @@ reconciles the authoritative order, and mutations are never replayed automatical
 Tasks may remain standalone, preserving existing projects and workflows. Project
 Status includes a separately loaded Milestones & deliverables readiness section.
 
+An owner or administrator may grant an individual agent **Maintain milestone
+and deliverable progress** in that agent's profile. The permission authorizes
+status-only stewardship through the Project API and agent tools; it does not
+authorize titles, descriptions, owners, dates, hierarchy, or ordering changes.
+Agent updates require an evidence note and the latest optimistic version.
+Completing a milestone is rejected while active deliverables remain unready,
+and approving or completing a deliverable is rejected while linked active tasks
+remain incomplete. Successful updates invalidate open Project plan views through
+Realtime so the owner sees the current state without refreshing the browser.
+
 The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters.
 
 ### Tasks

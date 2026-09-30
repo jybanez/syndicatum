@@ -3676,10 +3676,14 @@ function openProjectPlanModal() {
       const retry = projectInfoElement("button", "ui-button ui-button-sm", "Retry"); retry.type = "button"; retry.addEventListener("click", load); alert.append(retry); content.append(alert);
     }
   };
+  const handleRealtimePlanChange = () => {
+    if (!disposed && modal?.getState?.().open && !persistencePending && !hasActiveDraft()) void load();
+  };
+  window.addEventListener("syndicatum:project-plan-changed", handleRealtimePlanChange);
   modal = state.factories.createActionModal({
     title: "Project plan", size: "xl", className: "project-plan-modal", content,
     actions: [{ id: "close", label: "Close", variant: "primary" }],
-    onClose() { disposed = true; if (feedbackTimer) window.clearTimeout(feedbackTimer); readController?.abort(); board?.destroy(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
+    onClose() { disposed = true; window.removeEventListener("syndicatum:project-plan-changed", handleRealtimePlanChange); if (feedbackTimer) window.clearTimeout(feedbackTimer); readController?.abort(); board?.destroy(); if (state.components.projectPlanModal === modal) state.components.projectPlanModal = null; },
   });
   state.components.projectPlanModal = modal; modal.open(); void load();
 }
@@ -4671,12 +4675,14 @@ async function openAddAgentModal() {
   try {
     providers = await loadDiscussionProviders();
     provider = providers[0];
-    const initialValues = { avatar: null, provider: provider.code, supervising_participant_id: "", activation_enabled: false, responses_model: "gpt-5.6-terra" };
+    const initialValues = { avatar: null, provider: provider.code, supervising_participant_id: "", activation_enabled: false, plan_progress: false, responses_model: "gpt-5.6-terra" };
     modal.update({ initialValues, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true }), modalTextField("role_title", "Role title", { required: true, placeholder: "Commercial Assessor" })],
     [{ type: "textarea", name: "role_summary", label: "Role summary", required: true }, { type: "textarea", name: "role_instructions", label: "Role instructions", help: "Project-scoped responsibilities, boundaries, and escalation guidance." }],
     [{ type: "select", name: "supervising_participant_id", label: "Reports to", options: supervisingParticipantOptions() }],
+    [{ type: "divider" }], [{ type: "text", content: "Project permissions" }],
+    [{ type: "checkbox", name: "plan_progress", label: "Allow this agent to maintain milestone and deliverable progress", help: "Allows status updates with audit notes. It does not allow changing names, owners, ordering, or plan structure." }],
     [{ type: "divider" }], [{ type: "text", content: "Provider connection" }],
     [{ type: "select", name: "provider", label: "Provider", required: true, options: providers.map(item => ({ value: item.code, label: item.display_name })) }],
     [{ type: "checkbox", name: "activation_enabled", label: "Enable proactive agent activation" }],
@@ -4687,7 +4693,7 @@ async function openAddAgentModal() {
     [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
     [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
     ], async onSubmit(values, context) {
-    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); state.participants = await fetchVisibleTeamParticipants(selectedProjectId()); rebuildParticipantControls(); return true; }
+    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, scopes: ["messages:read", "messages:write", "messages:acknowledge", "profile:read", "profile:write", ...(values.plan_progress ? ["plan:progress"] : [])], discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.plan_progress; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); state.participants = await fetchVisibleTeamParticipants(selectedProjectId()); rebuildParticipantControls(); return true; }
     catch (error) { context.setFormError(error.message); return false; }
     }});
     modal.setValues(initialValues);
@@ -4730,12 +4736,15 @@ async function openEditAgentModal(agent) {
     supervising_participant_id: agent.supervisor ? String(agent.supervisor.participant_id) : "",
     provider: provider.code, activation_enabled: Boolean(activation.enabled), discussion_reference: provider.code === "codex" ? (activation.discussion_reference || "") : "", chatgpt_discussion_reference: provider.code === "chatgpt" ? (activation.discussion_reference || "") : "", gemini_discussion_reference: provider.code === "gemini" ? (activation.discussion_reference || "") : "", working_directory: activation.working_directory || "",
     responses_api_key: "", responses_model: activation.responses_model || "gpt-5.6-terra",
+    plan_progress: Array.isArray(credential.scopes) && credential.scopes.includes("plan:progress"),
   };
   editModal.update({ initialValues, rows: [
     [{ type: "avatar", name: "avatar", label: "Agent avatar", accept: "image/jpeg,image/png,image/webp", previewUrl: agent.avatar_url || "", help: "JPEG, PNG, or WebP; up to 2 MB." }],
     [modalTextField("display_name", "Agent display name", { required: true }), modalTextField("role_title", "Role title", { required: true })],
     [{ type: "textarea", name: "role_summary", label: "Role summary", required: true }, { type: "textarea", name: "role_instructions", label: "Role instructions", help: "Project-scoped responsibilities, boundaries, and escalation guidance." }],
     [{ type: "select", name: "supervising_participant_id", label: "Reports to", options: supervisingParticipantOptions(agent) }],
+    [{ type: "divider" }], [{ type: "text", content: "Project permissions" }],
+    [{ type: "checkbox", name: "plan_progress", label: "Allow this agent to maintain milestone and deliverable progress", help: "Allows status updates with audit notes. It does not allow changing names, owners, ordering, or plan structure." }],
     [{ type: "divider" }], [{ type: "text", content: "Agent credentials" }],
     [{ type: "text", className: "agent-credential-status", content: agentCredentialStatusText(credential, provider.code) }],
     [{ type: "text", content: "ChatGPT uses MCP/OAuth for its project identity and device authorization for browser delivery. Claiming the separate direct API credential is optional.", visibleWhen: { provider: "chatgpt" } }],
@@ -4759,6 +4768,7 @@ async function openEditAgentModal(agent) {
         project_id: selectedProjectId(), agent_id: agentId, display_name: values.display_name,
         role_title: values.role_title, role_summary: values.role_summary,
         role_instructions: values.role_instructions,
+        scopes: ["messages:read", "messages:write", "messages:acknowledge", "profile:read", "profile:write", ...(values.plan_progress ? ["plan:progress"] : [])],
         supervising_participant_id: values.supervising_participant_id || null,
         provider: values.provider, avatar_url: avatarUrl || null,
       }) });
@@ -7909,6 +7919,11 @@ async function connectRealtime(projectGeneration = state.generation) {
       }
       if (envelope?.phase === "event" && envelope.type === "syndicatum.project_proposals.changed") {
         scheduleProjectProposalRealtimeRefresh(projectGeneration);
+        return;
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.project_plan.changed") {
+        state.projectPlanLoaded = false;
+        window.dispatchEvent(new CustomEvent("syndicatum:project-plan-changed", { detail: envelope.payload || {} }));
       }
     };
     client = new sdk.RealtimeSocketClient({

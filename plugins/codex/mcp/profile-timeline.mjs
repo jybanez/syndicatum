@@ -72,6 +72,30 @@ export class ProfileTimelineClient {
     return { profile: publicAgentProfile(profile), task: result.data ?? result };
   }
 
+  async projectPlan(profileId) {
+    const { profile, client } = await this.context(profileId);
+    const result = await client.request(`/api/v1/project-plan.php?project_id=${encodeURIComponent(profile.project_id)}`);
+    return { profile: publicAgentProfile(profile), plan: result.data ?? result };
+  }
+
+  async updateMilestoneProgress(profileId, milestoneId, input = {}) {
+    return this.updatePlanProgress(profileId, "milestone", milestoneId, input);
+  }
+
+  async updateDeliverableProgress(profileId, deliverableId, input = {}) {
+    return this.updatePlanProgress(profileId, "deliverable", deliverableId, input);
+  }
+
+  async updatePlanProgress(profileId, kind, subjectId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const id = positiveId(subjectId, kind);
+    const payload = { version: Number(positiveId(input.version, `${kind} version`)), status: String(input.status || "").trim(), note: String(input.note || "").trim() };
+    if (!payload.status) throw new Error(`A ${kind} status is required.`);
+    if (!payload.note) throw new Error("A progress note is required for agent updates.");
+    const result = await client.request(`/api/v1/project-${kind}-progress.php?project_id=${encodeURIComponent(profile.project_id)}&id=${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    return { profile: publicAgentProfile(profile), [kind]: result.data ?? result };
+  }
+
   async createTask(profileId, input = {}) {
     const { profile, client } = await this.context(profileId);
     const title = String(input.title || "").trim();

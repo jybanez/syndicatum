@@ -136,6 +136,35 @@ try {
         throw new RuntimeException('Expected stale reorder rejection.');
     });
 
+    $test('explicit agent plan stewardship is status-only, versioned, audited, and guarded by linked work', function () use ($plan, $access, $same, $pdo, $owner, $project) {
+        $created = (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'], [
+            'display_name' => 'Executive Assistant', 'role_title' => 'Executive Assistant',
+            'role_summary' => 'Maintains project progress.',
+            'scopes' => ['messages:read', 'plan:progress'],
+        ]);
+        $participant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ? AND kind = 'agent'");
+        $participant->execute([$project['id'], $created['agent_id']]);
+        $agentAccess = ['project_id' => (int) $project['id'], 'participant_id' => (int) $participant->fetchColumn(),
+            'project_status' => 'active', 'role' => 'agent',
+            'identity' => ['kind' => 'agent', 'agent' => ['id' => (int) $created['agent_id']]]];
+        $current = $plan->plan($agentAccess);
+        $same(false, $current['can_manage']); $same(true, $current['can_update_progress']);
+        $milestone = null;
+        foreach ($current['milestones'] as $candidate) {
+            if ($candidate['deliverable_count'] > $candidate['ready_deliverable_count']) { $milestone = $candidate; break; }
+        }
+        if ($milestone === null) { throw new RuntimeException('Expected a milestone with unfinished deliverables.'); }
+        $updated = $plan->updateMilestoneProgress($agentAccess, $milestone['id'], [
+            'version' => $milestone['version'], 'status' => 'at_risk', 'note' => 'Task approval remains open.',
+        ]);
+        $same('at_risk', $updated['status']);
+        $event = $pdo->query("SELECT event_type FROM message_events_outbox WHERE event_type = 'syndicatum.project_plan.changed' ORDER BY id DESC LIMIT 1")->fetchColumn();
+        $same('syndicatum.project_plan.changed', $event);
+        try { $plan->updateMilestoneProgress($agentAccess, $milestone['id'], ['version' => $updated['version'], 'status' => 'completed', 'note' => 'Premature completion.']); }
+        catch (RuntimeException $error) { $same('MILESTONE_DELIVERABLES_INCOMPLETE', $error->getMessage()); return; }
+        throw new RuntimeException('Expected incomplete milestone completion rejection.');
+    });
+
     $test('non-manager participants can read but cannot change the plan', function () use ($plan, $access, $same) {
         $viewer = $access; $viewer['role'] = 'member';
         $same(false, $plan->plan($viewer)['can_manage']);

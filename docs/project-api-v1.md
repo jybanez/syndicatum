@@ -20,6 +20,8 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
 | `/api/v1/project-deliverables.php?project_id={project}` | POST | `/api/v1/projects/{project}/deliverables` |
 | `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}` |
+| `/api/v1/project-milestone-progress.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}/progress` |
+| `/api/v1/project-deliverable-progress.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}/progress` |
 | `/api/v1/project-plan-order.php?project_id={project}` | PATCH | `/api/v1/projects/{project}/plan/order` |
 | `/api/v1/project-status-summary.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/summary` |
 | `/api/v1/project-status-task-progress.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/task-progress` |
@@ -65,6 +67,23 @@ Successful proposal creation and review enqueue the content-free
 `syndicatum.project_proposals.changed` Realtime invalidation. Authorized owner
 and administrator clients respond by reloading this protected endpoint; the
 shared project-room event does not contain the proposal payload or rationale.
+
+## Permissioned project-plan stewardship
+
+`GET project-plan.php` returns `can_update_progress` separately from
+`can_manage`. Project owners and administrators have both capabilities. An
+agent has progress authority only when its profile contains the explicit
+`plan:progress` scope, exposed in bootstrap as
+`permissions.plan.progress.update`.
+
+The two progress endpoints accept only `version`, `status`, and `note`. Agent
+notes are mandatory and limited to 4,000 characters. These endpoints cannot
+change a title, description, date, owner, milestone relationship, or display
+order. A stale version returns a conflict. A milestone cannot transition to
+`completed` while an active deliverable is not `approved` or `completed`; a
+deliverable cannot transition to `approved` or `completed` while a linked
+non-cancelled task is incomplete. Successful updates write an administrative
+audit event and enqueue `syndicatum.project_plan.changed` for Realtime reload.
 
 ## Participant representation
 

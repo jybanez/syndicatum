@@ -1,15 +1,18 @@
 <?php
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/MessageOutbox.php';
+require_once __DIR__ . '/AuthService.php';
 
 /** Project milestones, deliverables, and task-backed progress. */
 class ProjectPlanService
 {
     private $pdo;
+    private $outbox;
     private $milestoneStatuses = ['planned', 'in_progress', 'completed', 'at_risk', 'cancelled'];
     private $deliverableStatuses = ['planned', 'in_progress', 'in_review', 'approved', 'completed', 'blocked', 'cancelled'];
 
-    public function __construct(PDO $pdo) { $this->pdo = $pdo; }
+    public function __construct(PDO $pdo) { $this->pdo = $pdo; $this->outbox = new MessageOutbox($pdo); }
 
     public function plan(array $access)
     {
@@ -51,6 +54,7 @@ class ProjectPlanService
         return [
             'project_id' => $projectId,
             'can_manage' => $this->isManager($access),
+            'can_update_progress' => $this->canUpdateProgress($access),
             'milestones' => $milestoneRows,
             'deliverables' => $deliverableRows,
             'generated_at' => Db::now(),
@@ -145,6 +149,56 @@ class ProjectPlanService
         ]);
         if ($statement->rowCount() !== 1) { throw new RuntimeException('DELIVERABLE_VERSION_CONFLICT'); }
         return $this->deliverable($projectId, (int) $id);
+    }
+
+    /** Status-only stewardship surface. It intentionally cannot change plan structure, names, owners, or ordering. */
+    public function updateMilestoneProgress(array $access, $id, array $input)
+    {
+        $this->requireProgressPermission($access);
+        $projectId = (int) $access['project_id'];
+        $this->pdo->beginTransaction();
+        try {
+            $current = $this->milestone($projectId, (int) $id);
+            $this->requireVersion($input, $current['version'], 'MILESTONE_VERSION_CONFLICT');
+            $status = $this->requiredChoice($input, 'status', $this->milestoneStatuses, 'milestone status');
+            $note = $this->progressNote($access, $input, $status === 'at_risk');
+            if ($status === 'completed' && $current['deliverable_count'] > $current['ready_deliverable_count']) {
+                throw new RuntimeException('MILESTONE_DELIVERABLES_INCOMPLETE');
+            }
+            $statement = $this->pdo->prepare('UPDATE project_milestones SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND project_id = ? AND version = ?');
+            $statement->execute([$status, Db::now(), (int) $id, $projectId, (int) $current['version']]);
+            if ($statement->rowCount() !== 1) { throw new RuntimeException('MILESTONE_VERSION_CONFLICT'); }
+            $updated = $this->milestone($projectId, (int) $id);
+            $this->recordProgressAudit($access, 'milestone', $updated, $current['status'], $note);
+            $this->outbox->enqueueProjectPlanChanged($projectId, 'milestone', (int) $id, (int) $updated['version'], 'progress_updated');
+            $this->pdo->commit();
+            return $updated;
+        } catch (Exception $error) { if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); } throw $error; }
+    }
+
+    public function updateDeliverableProgress(array $access, $id, array $input)
+    {
+        $this->requireProgressPermission($access);
+        $projectId = (int) $access['project_id'];
+        $this->pdo->beginTransaction();
+        try {
+            $current = $this->deliverable($projectId, (int) $id);
+            $this->requireVersion($input, $current['version'], 'DELIVERABLE_VERSION_CONFLICT');
+            $status = $this->requiredChoice($input, 'status', $this->deliverableStatuses, 'deliverable status');
+            $note = $this->progressNote($access, $input, $status === 'blocked');
+            if (in_array($status, ['approved', 'completed'], true)
+                && $current['eligible_task_count'] > $current['completed_task_count']) {
+                throw new RuntimeException('DELIVERABLE_TASKS_INCOMPLETE');
+            }
+            $statement = $this->pdo->prepare('UPDATE project_deliverables SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND project_id = ? AND version = ?');
+            $statement->execute([$status, Db::now(), (int) $id, $projectId, (int) $current['version']]);
+            if ($statement->rowCount() !== 1) { throw new RuntimeException('DELIVERABLE_VERSION_CONFLICT'); }
+            $updated = $this->deliverable($projectId, (int) $id);
+            $this->recordProgressAudit($access, 'deliverable', $updated, $current['status'], $note);
+            $this->outbox->enqueueProjectPlanChanged($projectId, 'deliverable', (int) $id, (int) $updated['version'], 'progress_updated');
+            $this->pdo->commit();
+            return $updated;
+        } catch (Exception $error) { if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); } throw $error; }
     }
 
     public function reorder(array $access, array $input)
@@ -328,6 +382,37 @@ class ProjectPlanService
     {
         if (isset($access['project_status']) && $access['project_status'] !== 'active') { throw new RuntimeException('PROJECT_ARCHIVED'); }
         if (!$this->isManager($access)) { throw new RuntimeException('PROJECT_PLAN_FORBIDDEN'); }
+    }
+    private function requireProgressPermission(array $access)
+    {
+        if (isset($access['project_status']) && $access['project_status'] !== 'active') { throw new RuntimeException('PROJECT_ARCHIVED'); }
+        if (!$this->canUpdateProgress($access)) { throw new RuntimeException('PROJECT_PLAN_PROGRESS_FORBIDDEN'); }
+    }
+    private function canUpdateProgress(array $access)
+    {
+        if ($this->isManager($access)) { return true; }
+        if (($access['identity']['kind'] ?? '') !== 'agent') { return false; }
+        $agentId = (int) ($access['identity']['agent']['id'] ?? 0);
+        $statement = $this->pdo->prepare("SELECT COUNT(*) FROM agent_credential_scopes WHERE agent_id = ? AND scope = 'plan:progress'");
+        $statement->execute([$agentId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+    private function progressNote(array $access, array $input, $required)
+    {
+        $note = trim((string) ($input['note'] ?? ''));
+        if (mb_strlen($note) > 4000) { throw new InvalidArgumentException('Progress note must not exceed 4000 characters.'); }
+        if ((($access['identity']['kind'] ?? '') === 'agent' || $required) && $note === '') {
+            throw new InvalidArgumentException('A progress note is required for this status update.');
+        }
+        return $note === '' ? null : $note;
+    }
+    private function recordProgressAudit(array $access, $kind, array $updated, $fromStatus, $note)
+    {
+        $actorUserId = ($access['identity']['kind'] ?? '') === 'human' ? (int) $access['identity']['user']['id'] : null;
+        (new AuthService($this->pdo))->audit($actorUserId, 'project.plan_progress_updated', 'project_' . $kind,
+            (string) $updated['id'], ['project_id' => (int) $access['project_id'],
+                'participant_id' => (int) $access['participant_id'], 'actor_kind' => $access['identity']['kind'],
+                'from_status' => $fromStatus, 'to_status' => $updated['status'], 'note' => $note]);
     }
     private function isManager(array $access) { return $access['identity']['kind'] === 'human' && in_array($access['role'], ['owner', 'admin'], true); }
     private function requireVersion(array $input, $current, $error) { if (!isset($input['version']) || (int) $input['version'] !== (int) $current) { throw new RuntimeException($error); } }

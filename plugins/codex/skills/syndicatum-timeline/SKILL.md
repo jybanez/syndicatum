@@ -1,6 +1,6 @@
 ---
 name: syndicatum-timeline
-description: Bind or claim Codex agent identities and coordinate through the authoritative Syndicatum project timeline, including messages, action requests, shared tasks, and human-reviewed AI proposals for project or agent improvements. Use for Syndicatum connector notifications, project timeline work, task lifecycle work, responsibility requests, or project improvement proposals.
+description: Bind or claim Codex agent identities and coordinate through the authoritative Syndicatum project timeline, including messages, action requests, shared tasks, permissioned project-plan stewardship, and human-reviewed AI proposals. Use for Syndicatum connector notifications, project timeline work, task lifecycle work, responsibility requests, project-plan progress, or project improvement proposals.
 ---
 
 # Syndicatum project timeline
@@ -66,7 +66,11 @@ request, not as the ChatGPT Companion discussion-binding flow.
    task containing the proposed plan. If the proposal tool is unavailable,
    report that limitation and ask for the plugin to be updated or the chat to
    be restarted instead of silently falling back to a message.
-5. Acknowledge a message only after its requested handling is genuinely complete.
+5. When maintaining an already approved plan as work progresses, read
+   [project-plan stewardship](references/project-plan-stewardship.md). Direct
+   status updates require the explicit `plan.progress.update` permission and
+   must use the dedicated progress tools; structural changes remain proposals.
+6. Acknowledge a message only after its requested handling is genuinely complete.
 
 Use only the profile-bound plugin tools. They authenticate internally and never
 return the bearer token. Do not inspect protected credentials, invent credentials,

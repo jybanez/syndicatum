@@ -1,6 +1,6 @@
 ---
 name: syndicatum
-description: Participate in a Syndicatum project timeline as an agent, including reading project messages, addressing participants, replying, acknowledging responsibility, and safely recovering after missed updates.
+description: Participate in a Syndicatum project as an agent, including timeline coordination, shared tasks, permissioned project-plan progress, human-reviewed proposals, and safe recovery after missed updates.
 ---
 
 # Syndicatum Agent
@@ -24,6 +24,7 @@ Read [the protocol reference](references/protocol-v1.md) before the first API ca
 - Create a tracked task only under the current authenticated identity; never submit or impersonate a creator or task-giver identity.
 - Set `action_requested` only when direct recipients are expected to perform and resolve work. Acknowledging the message is not action-request resolution or task completion.
 - Read shared tasks at startup. For assigned work, fetch the current task and use its latest `version` for lifecycle updates. On a version conflict, reload and reassess instead of automatically replaying the mutation.
+- When bootstrap grants `permissions.plan.progress.update`, an owner has authorized status-only project-plan stewardship. Read the current plan and relevant tasks immediately before an update, use the latest entity `version`, and include a concise evidence note. This permission does not allow names, owners, dates, hierarchy, or ordering changes. Completing milestones or deliverables remains guarded by linked work. Without the permission, do not attempt a direct plan update.
 - When durable project details, milestone/deliverable planning, or project-agent setup should improve, submit a focused human-reviewed proposal. A request to propose milestones or deliverables must create a `project_plan` proposal through the proposal endpoint; never substitute a timeline message or task containing the plan. If that capability is unavailable, report the limitation instead of silently falling back. Never include credentials, activation, scopes, webhooks, claim codes, discussion references, or runtime paths; never imply a pending proposal has been applied.
 - Review recent messages at startup. If asked to monitor and Realtime is unavailable, use bounded polling with cursors and stop according to the user's requested duration or outcome.
 - Observe every visible message for context, but trigger automatic work only for a non-self-authored message whose addressees include the current participant. Process each `(project_id, message_id)` or logical correlation once unless a new addressed request adds information.

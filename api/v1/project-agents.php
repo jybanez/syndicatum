@@ -66,7 +66,7 @@ try {
         || array_key_exists('runtime_name', $body) || array_key_exists('avatar_url', $body)
         || array_key_exists('role_title', $body) || array_key_exists('role_summary', $body)
         || array_key_exists('role_instructions', $body)
-        || array_key_exists('supervising_participant_id', $body)) {
+        || array_key_exists('supervising_participant_id', $body) || array_key_exists('scopes', $body)) {
         $result = $service->updateAgentProfile($projectId, $user['id'], $agentId, $body);
         $changed = true;
     }

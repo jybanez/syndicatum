@@ -5,6 +5,7 @@ import test from "node:test";
 const skillUrl = new URL("../skills/syndicatum-timeline/SKILL.md", import.meta.url);
 const coordinationUrl = new URL("../skills/syndicatum-timeline/references/coordination.md", import.meta.url);
 const proposalsUrl = new URL("../skills/syndicatum-timeline/references/project-proposals.md", import.meta.url);
+const stewardshipUrl = new URL("../skills/syndicatum-timeline/references/project-plan-stewardship.md", import.meta.url);
 
 test("timeline skill uses Project API V1 and rejects legacy feed reads", async () => {
   const source = await readFile(skillUrl, "utf8");
@@ -19,6 +20,17 @@ test("timeline skill uses Project API V1 and rejects legacy feed reads", async (
   assert.match(source, /Syndicatum profile ID/);
   assert.doesNotMatch(source, /pbb-chat-token\.local\.json/);
   assert.match(source, /Do not use `\/api\/chat-log\.php` or `\/api\/chat-entries\.php`/);
+});
+
+test("timeline skill keeps direct plan stewardship narrow and permissioned", async () => {
+  const source = await readFile(skillUrl, "utf8");
+  const stewardship = await readFile(stewardshipUrl, "utf8");
+  assert.match(source, /project-plan stewardship/);
+  assert.match(stewardship, /permissions\.plan\.progress\.update/);
+  assert.match(stewardship, /syndicatum_get_project_plan/);
+  assert.match(stewardship, /syndicatum_update_milestone_progress/);
+  assert.match(stewardship, /syndicatum_update_deliverable_progress/);
+  assert.match(stewardship, /structural changes remain proposals/i);
 });
 
 test("timeline skill explains the Codex bind and claim-code flow", async () => {

@@ -10,6 +10,7 @@ class MessageOutbox
     const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
     const EVENT_TASK_UPDATED = 'syndicatum.task.updated';
     const EVENT_PROJECT_PROPOSALS_CHANGED = 'syndicatum.project_proposals.changed';
+    const EVENT_PROJECT_PLAN_CHANGED = 'syndicatum.project_plan.changed';
     const EVENT_NOTIFICATIONS_CHANGED = 'syndicatum.notifications.changed';
     const DEFAULT_MAX_ATTEMPTS = 8;
 
@@ -170,6 +171,20 @@ class MessageOutbox
             $now,
             $now,
         ]);
+        return $this->findById((int) $this->pdo->lastInsertId());
+    }
+
+    public function enqueueProjectPlanChanged($projectId, $subjectType, $subjectId, $version, $change)
+    {
+        $eventUuid = self::uuidV4();
+        $payload = ['event_id' => $eventUuid, 'type' => self::EVENT_PROJECT_PLAN_CHANGED,
+            'project_id' => (int) $projectId, 'subject_type' => trim((string) $subjectType),
+            'subject_id' => (int) $subjectId, 'version' => (int) $version, 'change' => trim((string) $change)];
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payloadJson === false) { throw new RuntimeException('Unable to encode the project-plan outbox event.'); }
+        $now = Db::now();
+        $statement = $this->pdo->prepare('INSERT INTO message_events_outbox (event_uuid, project_id, message_id, event_type, project_sequence, payload_json, attempt_count, available_at, created_at) VALUES (?, ?, NULL, ?, NULL, ?, 0, ?, ?)');
+        $statement->execute([$eventUuid, (int) $projectId, self::EVENT_PROJECT_PLAN_CHANGED, $payloadJson, $now, $now]);
         return $this->findById((int) $this->pdo->lastInsertId());
     }
 

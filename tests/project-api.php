@@ -353,6 +353,7 @@ try {
             'messages.read' => true,
             'messages.write' => true,
             'messages.acknowledge' => true,
+            'plan.progress.update' => true,
             'project.manage' => true,
             'project.admin' => true,
             'members.manage' => true,
@@ -363,6 +364,7 @@ try {
             'messages.read' => true,
             'messages.write' => true,
             'messages.acknowledge' => true,
+            'plan.progress.update' => false,
             'project.manage' => false,
             'project.admin' => false,
             'members.manage' => false,
@@ -381,7 +383,7 @@ try {
             $tools[$tool['name']] = $tool['inputSchema'];
         }
         foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
-            'list_tasks', 'get_task', 'create_task', 'update_task', 'post_message', 'acknowledge_message'] as $name) {
+            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
             $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
         }
@@ -389,6 +391,8 @@ try {
         $suite->same(200, $tools['list_messages']['properties']['limit']['maximum']);
         $suite->same(['title'], $tools['create_task']['required']);
         $suite->same(['task_id', 'version'], $tools['update_task']['required']);
+        $suite->same(['milestone_id', 'version', 'status', 'note'], $tools['update_milestone_progress']['required']);
+        $suite->same(['deliverable_id', 'version', 'status', 'note'], $tools['update_deliverable_progress']['required']);
         $suite->same(['body', 'idempotency_key'], $tools['post_message']['required']);
         $suite->same(['neutral','info','success','warning','error','critical'], $tools['post_message']['properties']['severity']['enum']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');

@@ -453,7 +453,7 @@ class ProjectManagementService
         $now = Db::now();
         $projectKey = 'project-' . (int) $projectId . '-agent-' . substr(hash('sha256', $displayName . $claimCode), 0, 16);
         $scopes = isset($input['scopes']) && is_array($input['scopes']) ? $input['scopes'] : ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write'];
-        $scopes = array_values(array_unique(array_intersect($scopes, ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write'])));
+        $scopes = $this->validatedAgentScopes($scopes);
         if (empty($scopes)) { throw new InvalidArgumentException('At least one valid agent scope is required.'); }
         $claimExpiresAt = date('Y-m-d H:i:s', time() + 900);
         $role = $this->agentRoleValues($input);
@@ -560,6 +560,7 @@ class ProjectManagementService
             || $role['role_summary'] !== $agent['role_summary']
             || $role['role_instructions'] !== $agent['role_instructions']
             || $supervisorId !== ($agent['supervising_participant_id'] === null ? null : (int) $agent['supervising_participant_id']);
+        $scopes = array_key_exists('scopes', $input) ? $this->validatedAgentScopes($input['scopes']) : null;
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
@@ -574,6 +575,11 @@ class ProjectManagementService
                 $this->pdo->prepare('UPDATE chat_agents SET description = ?, updated_at = ? WHERE id = ?')
                     ->execute([$role['role_summary'], Db::now(), (int) $agentId]);
             }
+            if ($scopes !== null) {
+                $this->pdo->prepare('DELETE FROM agent_credential_scopes WHERE agent_id = ?')->execute([(int) $agentId]);
+                $insertScope = $this->pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope, created_at) VALUES (?, ?, ?)');
+                foreach ($scopes as $scope) { $insertScope->execute([(int) $agentId, $scope, Db::now()]); }
+            }
             $this->auth->audit((int) $actorUserId, 'project.agent_updated', 'agent', (string) ((int) $agentId),
                 ['project_id' => (int) $projectId, 'role_changed' => $roleChanged,
                     'supervising_participant_id' => $supervisorId]);
@@ -586,7 +592,16 @@ class ProjectManagementService
             'role_title' => $role['role_title'], 'role_summary' => $role['role_summary'],
             'role_instructions' => $role['role_instructions'],
             'role_version' => (int) $agent['role_version'] + ($roleChanged ? 1 : 0),
-            'supervising_participant_id' => $supervisorId];
+            'supervising_participant_id' => $supervisorId, 'scopes' => $scopes];
+    }
+
+    private function validatedAgentScopes($scopes)
+    {
+        if (!is_array($scopes)) { throw new InvalidArgumentException('Agent permissions must be a list.'); }
+        $allowed = ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write', 'plan:progress'];
+        $scopes = array_values(array_unique(array_intersect($scopes, $allowed)));
+        if (empty($scopes)) { throw new InvalidArgumentException('At least one valid agent permission is required.'); }
+        return $scopes;
     }
 
     public function issueAgentClaim($projectId, $actorUserId, $agentId)
@@ -617,6 +632,8 @@ class ProjectManagementService
         $hasClaimCode = !empty($agent['claim_hash']);
         $claimExpiresAt = empty($agent['claim_expires_at']) ? null : $agent['claim_expires_at'];
         $claimIsActive = $hasClaimCode && ($claimExpiresAt === null || strtotime($claimExpiresAt) > time());
+        $scopeQuery = $this->pdo->prepare('SELECT scope FROM agent_credential_scopes WHERE agent_id = ? ORDER BY scope');
+        $scopeQuery->execute([(int) $agentId]);
 
         return [
             'agent_id' => (int) $agentId,
@@ -624,6 +641,7 @@ class ProjectManagementService
             'claim_status' => $claimIsActive ? 'pending' : ($hasClaimCode ? 'expired' : 'none'),
             'claim_expires_at' => $claimExpiresAt,
             'claimed_at' => empty($agent['claimed_at']) ? null : $agent['claimed_at'],
+            'scopes' => $scopeQuery->fetchAll(PDO::FETCH_COLUMN),
         ];
     }
 

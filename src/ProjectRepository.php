@@ -139,10 +139,13 @@ class ProjectRepository
         $canAcknowledge = $isHuman
             ? true
             : $this->agentHasPermissionScope((int) $access['identity']['agent']['id'], 'messages:acknowledge');
+        $canUpdatePlanProgress = $humanManager || (!$isHuman
+            && $this->agentHasPermissionScope((int) $access['identity']['agent']['id'], 'plan:progress'));
         return [
             'messages.read' => true,
             'messages.write' => $canWrite,
             'messages.acknowledge' => $canAcknowledge,
+            'plan.progress.update' => $canUpdatePlanProgress,
             'project.manage' => $humanManager,
             'project.admin' => $humanManager,
             'members.manage' => $humanManager,

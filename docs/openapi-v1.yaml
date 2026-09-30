@@ -271,6 +271,30 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Deliverable version conflict }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-milestone-progress.php:
+    patch:
+      summary: Apply a permissioned, version-checked milestone status update
+      description: Requires owner/admin authority or the agent plan:progress scope. Accepts only version, status, and note; agents must provide a note.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated milestone }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Version conflict or incomplete deliverables }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-deliverable-progress.php:
+    patch:
+      summary: Apply a permissioned, version-checked deliverable status update
+      description: Requires owner/admin authority or the agent plan:progress scope. Accepts only version, status, and note; agents must provide a note.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated deliverable }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Version conflict or incomplete linked tasks }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-plan-order.php:
     patch:
       summary: Atomically reorder milestones or move and reorder deliverables

@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "0.1.0+codex.20260928103709",
+  "version": "0.1.0+codex.20260930120000",
   "description": "Connect existing Codex conversations to Syndicatum project timelines.",
   "author": {
     "name": "Syndicatum",
@@ -25,6 +25,7 @@
       "Realtime notifications",
       "Protected agent identities",
       "Shared project tasks",
+      "Permissioned project-plan stewardship",
       "Human-reviewed AI proposals",
       "Project timeline"
     ],
