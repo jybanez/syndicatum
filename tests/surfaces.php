@@ -834,6 +834,7 @@ try {
 
     $suite->test('Helper 0.21.217 retains planning contracts and adds the canonical safe Markdown view', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
+        $appCss = file_get_contents($root . '/assets/app.css');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
@@ -880,6 +881,10 @@ try {
             && strpos($app, 'markdown(task.acceptance_criteria') !== false
             && strpos($app, 'destroyMarkdownViews') !== false,
             'Timeline messages and task detail descriptions must render through Helper Markdown with lifecycle cleanup.');
+        $suite->true(strpos($appCss, '.message-card-body { grid-column: 1 / -1; width: 100%; min-width: 0; max-width: 100%;') !== false
+            && strpos($appCss, '.message-card-body.ui-markdown > .ui-markdown,') !== false
+            && strpos($appCss, '.message-card-body.ui-markdown .ui-markdown-content > * { max-width: 100%; overflow-wrap: anywhere; }') !== false,
+            'Timeline Markdown must shrink to its grid track and wrap authored content without overflowing the message card.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
