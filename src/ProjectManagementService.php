@@ -806,7 +806,7 @@ class ProjectManagementService
         return $row;
     }
 
-    private function agentRoleValues(array $input, array $existing = null)
+    private function agentRoleValues(array $input, ?array $existing = null)
     {
         $roleTitle = array_key_exists('role_title', $input) ? trim((string) $input['role_title'])
             : ($existing ? (string) $existing['role_title'] : '');

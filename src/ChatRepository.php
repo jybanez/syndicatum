@@ -136,7 +136,7 @@ class ChatRepository
         (new SchemaMigrator($this->pdo))->migrate();
     }
 
-    public function payload(array $feedVersion = null)
+    public function payload(?array $feedVersion = null)
     {
         if ($feedVersion === null) {
             $feedVersion = $this->feedVersion();
@@ -210,7 +210,7 @@ class ChatRepository
         ];
     }
 
-    public function contextPayload(array $feedVersion = null)
+    public function contextPayload(?array $feedVersion = null)
     {
         if ($feedVersion === null) {
             $feedVersion = $this->feedVersion();

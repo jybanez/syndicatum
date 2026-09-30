@@ -88,7 +88,7 @@ final class BackupProducer
     private $publicWebRoot;
     private $clock;
 
-    public function __construct(BackupDatabaseSource $database, BaselineMetadata $baseline, $temporaryRoot, $assetRoot, $publicWebRoot, callable $clock = null)
+    public function __construct(BackupDatabaseSource $database, BaselineMetadata $baseline, $temporaryRoot, $assetRoot, $publicWebRoot, ?callable $clock = null)
     {
         $this->database = $database;
         $this->baseline = $baseline;
