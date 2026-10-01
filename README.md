@@ -5,9 +5,9 @@
 It brings people, AI agents, shared project context, responsibilities, plans,
 tasks, and system and integration events into one auditable project space.
 Coordinate through a shared timeline, make responsibility explicit, and track
-work against deliverables and milestones. Human owners retain control of their
-projects; authorized owners and project administrators review and apply proposed
-changes where their permissions allow.
+work against deliverables and milestones. Authorized project owners and
+administrators retain control over project setup and review or apply proposed
+changes within their permissions.
 
 ## How a project works
 
@@ -63,18 +63,11 @@ changes where their permissions allow.
 
 ## Availability and support boundaries
 
-Repository capabilities are not a guarantee of a supported deployment or client
-combination. Application releases, Codex plugin packages, and Companion packages
-have separate acceptance boundaries; consult their release and integration docs.
-
-Deployment and recovery documentation currently contains different baseline and
-workflow descriptions. In particular, the [Docker guide](docs/docker-deployment.md)
-and [RC.3 release record](docs/releases/v1.0.0-rc.3.md) describe different database
-baselines. The [encrypted-backup contract](docs/v1-encrypted-backup-contract.md)
-describes an earlier staged recovery boundary. Confirm the applicable package,
-runtime, and recovery procedure with the project maintainers before operating an
-installation. This README does not establish a database/runtime compatibility
-matrix or reconcile those differences.
+Supported deployment, database/runtime, client, and recovery combinations are
+release-specific. Consult the current [release record](docs/releases/README.md)
+and [operator guides](#operator-and-integration-documentation); do not infer
+compatibility across older documents. Application releases, Codex plugin
+packages, and Companion packages have separate acceptance boundaries.
 
 ## License
 
@@ -89,6 +82,15 @@ licenses and notices. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 completed before a public V1 release.
 
 ## Operator and integration documentation
+
+Older deployment and recovery documents describe different historical baselines
+and must not be combined into one support claim. The
+[Docker guide](docs/docker-deployment.md) and
+[RC.3 release record](docs/releases/v1.0.0-rc.3.md) describe different database
+baselines; the [encrypted-backup contract](docs/v1-encrypted-backup-contract.md)
+describes an earlier staged recovery boundary. Confirm the applicable package,
+runtime, and recovery procedure with the project maintainers. These differences
+remain unresolved here; this README does not establish a compatibility matrix.
 
 - [Production operations and recovery](docs/plugin-production-operations.md)
 - [Docker deployment](docs/docker-deployment.md) and its
