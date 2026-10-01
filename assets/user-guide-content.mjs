@@ -466,6 +466,7 @@ export const USER_GUIDE_SECTIONS = [
             ["Backup / Restore", "Create, verify, inspect, and restore protected recovery artifacts."],
             ["Delivery health", "Inspect release and operational readiness signals."],
           ] },
+          { type: "note", text: "Encrypted restore inspection and staging require the production Linux/POSIX runtime and its private owner-only staging directory. Native Windows development environments can create and manage the application, but cannot perform this secure restore workflow directly; use the supported Docker/Linux deployment path." },
         ],
       },
     ],

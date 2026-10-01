@@ -239,6 +239,12 @@ an incident-specific recovery decision.
 
 ## Backup and restore
 
+- Run encrypted restore inspection and staging in the supported Linux/POSIX
+  application runtime. The safety reader verifies process ownership, symlink
+  boundaries, and owner-only directory permissions through POSIX APIs; native
+  Windows hosts therefore cannot execute this secure restore path directly.
+  From Windows, use the documented Docker/Linux deployment workflow rather than
+  weakening or bypassing the staging checks.
 - Create encrypted, timestamped database backups before every production
   release and at least daily while the hosted service is active.
 - Keep application artifacts and their hashes independently from database

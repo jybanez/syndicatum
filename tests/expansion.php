@@ -366,7 +366,7 @@ try {
         $suite->throws('INVALID_CLAIM', function () use ($management, $project, $expired) {
             $management->claimAgent($project['id'], $expired['agent_id'], $expired['claim_code']);
         });
-        $suite->throws('valid agent scope', function () use ($management, $project, $administrator) {
+        $suite->throws('valid agent permission', function () use ($management, $project, $administrator) {
             $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Scope-less Agent', 'scopes' => []]);
         });
     });
