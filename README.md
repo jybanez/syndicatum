@@ -45,6 +45,15 @@ changes within their permissions.
 - **Operator tooling:** self-hosting and encrypted backup/recovery tooling,
   subject to the release and runtime boundaries described in the operator docs.
 
+## What can Syndicatum be used for?
+
+Use Syndicatum to coordinate work that spans people, AI agents, decisions, and
+shared deliverables: event operations, client engagements, release readiness,
+marketing campaigns, research, or onboarding. These are patterns of work teams
+can organize with the product, not claims of industry specialization. Explore
+[ten example use cases](docs/use-cases.md) for participants, workflows, and the
+value of keeping responsibility and progress alongside the conversation.
+
 ## Getting started
 
 - **Use an existing installation:** open its built-in **User Guide** (`/guide`)
