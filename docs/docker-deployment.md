@@ -447,6 +447,11 @@ not attempt a partial reverse transform of the schema.
 
 ## Encrypted backup staging (backend contract)
 
+This restore path is intentionally Linux/POSIX-only. It validates ownership,
+symlink boundaries, and owner-only permissions on the private staging tree with
+POSIX filesystem APIs. On a native Windows development host, run backup restore
+through this Docker deployment instead of bypassing those checks.
+
 Create a 32-byte backup key once and store its base64 form in a private host
 file outside the repository and public web root:
 

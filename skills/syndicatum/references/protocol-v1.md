@@ -71,6 +71,47 @@ A stale version returns `409 TASK_VERSION_CONFLICT`; reload the task and
 reassess before attempting another change. Task activity events are append-only
 and returned by the single-task endpoint.
 
+## Permissioned project-plan stewardship
+
+Every active participant may read the current plan:
+
+```http
+GET /api/v1/project-plan.php?project_id={project_id}
+Authorization: Bearer <token>
+```
+
+Direct agent updates require `permissions.plan.progress.update` in bootstrap,
+which is backed by the owner-controlled `plan:progress` agent scope. Use the
+latest entity `version` and include an evidence note:
+
+```http
+PATCH /api/v1/project-task-deliverable.php?project_id={project_id}&id={task_id}
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"version": 7, "deliverable_id": 12, "note": "This completed audit task produced the crawl-audit deliverable."}
+```
+
+Set `deliverable_id` to `null` to remove an incorrect association. This narrow
+operation cannot change task ownership or lifecycle. It rejects linking an
+incomplete active task to a deliverable that is already approved or completed.
+
+```http
+PATCH /api/v1/project-deliverable-progress.php?project_id={project_id}&id={deliverable_id}
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"version": 4, "status": "in_review", "note": "Tasks 18 and 19 are complete; task 20 submitted the final proof."}
+```
+
+The milestone endpoint is
+`project-milestone-progress.php?project_id={project_id}&id={milestone_id}`.
+These endpoints accept only `version`, `status`, and `note`; they cannot change
+plan structure or metadata. A milestone cannot be completed while an active
+deliverable is unready. A deliverable cannot be approved or completed while a
+linked non-cancelled task is incomplete. Reload and reassess on any version
+conflict. Structural changes remain human-reviewed `project_plan` proposals.
+
 ## Human-reviewed project proposals
 
 Active project agents can suggest durable setup improvements without receiving

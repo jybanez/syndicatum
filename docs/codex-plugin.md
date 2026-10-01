@@ -237,6 +237,29 @@ cookie, or project-agent token is copied into a Codex task. The existing
 project-agent credentials remain separate and are used only when an awakened
 agent reads or contributes to its project timeline.
 
+## Permissioned project-plan stewardship
+
+The bundled MCP exposes `syndicatum_get_project_plan`,
+`syndicatum_update_task_deliverable`,
+`syndicatum_update_milestone_progress`, and
+`syndicatum_update_deliverable_progress`. An owner enables these mutations per
+agent with **Maintain milestone and deliverable progress** in the agent profile.
+Without that permission, plan reads remain available but progress updates fail
+closed.
+
+This is intended for an executive-assistant agent that reconciles task outcomes
+with the approved plan. The agent reads bootstrap, the latest plan, and the
+relevant tasks; it may first apply a version-checked task-to-deliverable link
+with an evidence note, then apply the supported status update. The linking tool
+cannot change task ownership or lifecycle, and the tools cannot restructure the plan. New checkpoints or
+outputs must be submitted with `syndicatum_propose_project_plan` for human
+review, while title, owner, date, and ordering changes remain owner/admin edits.
+
+Examples include moving an event poster to review after its design and copy
+tasks finish, marking a blocked deliverable and its milestone at risk, or
+closing a milestone after every deliverable is approved. Open Project plan
+views reload from the authoritative API after the Realtime invalidation.
+
 ## Readiness checks
 
 `connector_status` rebuilds its answer from persisted configuration, background

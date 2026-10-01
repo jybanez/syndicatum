@@ -180,17 +180,24 @@ class ProjectManagementService
         if ($name === '' || strlen($name) > 160) { throw new InvalidArgumentException('Invalid project name.'); }
         $description = array_key_exists('description', $input) ? trim((string) $input['description']) : $access['description'];
         $instructions = array_key_exists('instructions', $input) ? trim((string) $input['instructions']) : $access['instructions'];
+        $googleDriveUrl = array_key_exists('google_drive_url', $input)
+            ? $this->validatedGoogleDriveFolderUrl($input['google_drive_url'])
+            : $access['google_drive_url'];
         $contextChanged = $description !== (string) $access['description']
-            || $instructions !== (string) $access['instructions'];
+            || $instructions !== (string) $access['instructions']
+            || (string) $googleDriveUrl !== (string) $access['google_drive_url'];
         $now = Db::now();
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
-            $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?,
+            $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?, google_drive_url = ?,
                 context_version = context_version + ?, status = ?, archived_at = ?, updated_at = ? WHERE id = ?');
-            $statement->execute([$name, $description, $instructions, $contextChanged ? 1 : 0,
+            $statement->execute([$name, $description, $instructions, $googleDriveUrl, $contextChanged ? 1 : 0,
                 $status, $status === 'archived' ? $now : null, $now, (int) $projectId]);
-            $this->auth->audit((int) $userId, 'project.updated', 'project', (string) ((int) $projectId), ['status' => $status]);
+            $this->auth->audit((int) $userId, 'project.updated', 'project', (string) ((int) $projectId), [
+                'status' => $status,
+                'google_drive_configured' => $googleDriveUrl !== null,
+            ]);
             if ($ownsTransaction) { $this->pdo->commit(); }
             return $this->project($projectId);
         } catch (Exception $exception) { if ($ownsTransaction) { $this->rollback(); } throw $exception; }
@@ -453,7 +460,7 @@ class ProjectManagementService
         $now = Db::now();
         $projectKey = 'project-' . (int) $projectId . '-agent-' . substr(hash('sha256', $displayName . $claimCode), 0, 16);
         $scopes = isset($input['scopes']) && is_array($input['scopes']) ? $input['scopes'] : ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write'];
-        $scopes = array_values(array_unique(array_intersect($scopes, ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write'])));
+        $scopes = $this->validatedAgentScopes($scopes);
         if (empty($scopes)) { throw new InvalidArgumentException('At least one valid agent scope is required.'); }
         $claimExpiresAt = date('Y-m-d H:i:s', time() + 900);
         $role = $this->agentRoleValues($input);
@@ -560,6 +567,7 @@ class ProjectManagementService
             || $role['role_summary'] !== $agent['role_summary']
             || $role['role_instructions'] !== $agent['role_instructions']
             || $supervisorId !== ($agent['supervising_participant_id'] === null ? null : (int) $agent['supervising_participant_id']);
+        $scopes = array_key_exists('scopes', $input) ? $this->validatedAgentScopes($input['scopes']) : null;
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
@@ -574,6 +582,11 @@ class ProjectManagementService
                 $this->pdo->prepare('UPDATE chat_agents SET description = ?, updated_at = ? WHERE id = ?')
                     ->execute([$role['role_summary'], Db::now(), (int) $agentId]);
             }
+            if ($scopes !== null) {
+                $this->pdo->prepare('DELETE FROM agent_credential_scopes WHERE agent_id = ?')->execute([(int) $agentId]);
+                $insertScope = $this->pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope, created_at) VALUES (?, ?, ?)');
+                foreach ($scopes as $scope) { $insertScope->execute([(int) $agentId, $scope, Db::now()]); }
+            }
             $this->auth->audit((int) $actorUserId, 'project.agent_updated', 'agent', (string) ((int) $agentId),
                 ['project_id' => (int) $projectId, 'role_changed' => $roleChanged,
                     'supervising_participant_id' => $supervisorId]);
@@ -586,7 +599,16 @@ class ProjectManagementService
             'role_title' => $role['role_title'], 'role_summary' => $role['role_summary'],
             'role_instructions' => $role['role_instructions'],
             'role_version' => (int) $agent['role_version'] + ($roleChanged ? 1 : 0),
-            'supervising_participant_id' => $supervisorId];
+            'supervising_participant_id' => $supervisorId, 'scopes' => $scopes];
+    }
+
+    private function validatedAgentScopes($scopes)
+    {
+        if (!is_array($scopes)) { throw new InvalidArgumentException('Agent permissions must be a list.'); }
+        $allowed = ['messages:read', 'messages:write', 'messages:acknowledge', 'profile:read', 'profile:write', 'plan:progress'];
+        $scopes = array_values(array_unique(array_intersect($scopes, $allowed)));
+        if (empty($scopes)) { throw new InvalidArgumentException('At least one valid agent permission is required.'); }
+        return $scopes;
     }
 
     public function issueAgentClaim($projectId, $actorUserId, $agentId)
@@ -617,6 +639,8 @@ class ProjectManagementService
         $hasClaimCode = !empty($agent['claim_hash']);
         $claimExpiresAt = empty($agent['claim_expires_at']) ? null : $agent['claim_expires_at'];
         $claimIsActive = $hasClaimCode && ($claimExpiresAt === null || strtotime($claimExpiresAt) > time());
+        $scopeQuery = $this->pdo->prepare('SELECT scope FROM agent_credential_scopes WHERE agent_id = ? ORDER BY scope');
+        $scopeQuery->execute([(int) $agentId]);
 
         return [
             'agent_id' => (int) $agentId,
@@ -624,6 +648,7 @@ class ProjectManagementService
             'claim_status' => $claimIsActive ? 'pending' : ($hasClaimCode ? 'expired' : 'none'),
             'claim_expires_at' => $claimExpiresAt,
             'claimed_at' => empty($agent['claimed_at']) ? null : $agent['claimed_at'],
+            'scopes' => $scopeQuery->fetchAll(PDO::FETCH_COLUMN),
         ];
     }
 
@@ -788,7 +813,7 @@ class ProjectManagementService
         return $row;
     }
 
-    private function agentRoleValues(array $input, array $existing = null)
+    private function agentRoleValues(array $input, ?array $existing = null)
     {
         $roleTitle = array_key_exists('role_title', $input) ? trim((string) $input['role_title'])
             : ($existing ? (string) $existing['role_title'] : '');
@@ -864,6 +889,23 @@ class ProjectManagementService
         if (!$row) { throw new RuntimeException('PROJECT_NOT_FOUND'); }
         $row['id'] = (int) $row['id']; $row['workspace_id'] = (int) $row['workspace_id']; $row['owner_user_id'] = (int) $row['owner_user_id'];
         return $row;
+    }
+
+    private function validatedGoogleDriveFolderUrl($value)
+    {
+        $value = trim((string) $value);
+        if ($value === '') { return null; }
+        if (strlen($value) > 500) {
+            throw new InvalidArgumentException('Google Drive folder link cannot exceed 500 characters.');
+        }
+        $parts = parse_url($value);
+        if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || strtolower((string) ($parts['host'] ?? '')) !== 'drive.google.com'
+            || isset($parts['user']) || isset($parts['pass'])
+            || !preg_match('#^/(?:drive/(?:u/\d+/)?folders|folders)/([A-Za-z0-9_-]+)/*$#', (string) ($parts['path'] ?? ''), $matches)) {
+            throw new InvalidArgumentException('Google Drive folder link must be an HTTPS drive.google.com folder link.');
+        }
+        return 'https://drive.google.com/drive/folders/' . $matches[1];
     }
 
     private function uniqueSlug($workspaceId, $value, $excludeProjectId = null)

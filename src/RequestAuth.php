@@ -104,7 +104,7 @@ class RequestAuth
         $identity = $this->identity();
         if ($identity['kind'] === 'human') {
             $statement = $this->pdo->prepare(
-                "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
+                "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.google_drive_url, p.status,
                         pm.role, pp.id AS participant_id,
                         (SELECT COUNT(*) FROM project_participants counted
                          WHERE counted.project_id = p.id AND counted.kind = 'human' AND counted.status = 'active') AS human_count,
@@ -125,7 +125,7 @@ class RequestAuth
             $statement->execute([$identity['user']['id'], $identity['user']['id']]);
         } else {
             $statement = $this->pdo->prepare(
-                "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.status,
+                "SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.google_drive_url, p.status,
                         'agent' AS role, pp.id AS participant_id, 'assigned' AS relationship,
                         (SELECT COUNT(*) FROM project_participants counted
                          WHERE counted.project_id = p.id AND counted.kind = 'human' AND counted.status = 'active') AS human_count,
@@ -153,6 +153,7 @@ class RequestAuth
                 'name' => $row['name'],
                 'slug' => $row['slug'],
                 'description' => $row['description'],
+                'google_drive_url' => $row['google_drive_url'],
                 'status' => $row['status'],
                 'role' => $row['role'],
                 'participant_id' => (int) $row['participant_id'],

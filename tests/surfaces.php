@@ -834,6 +834,7 @@ try {
 
     $suite->test('Helper 0.21.217 retains planning contracts and adds the canonical safe Markdown view', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
+        $appCss = file_get_contents($root . '/assets/app.css');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
@@ -880,6 +881,10 @@ try {
             && strpos($app, 'markdown(task.acceptance_criteria') !== false
             && strpos($app, 'destroyMarkdownViews') !== false,
             'Timeline messages and task detail descriptions must render through Helper Markdown with lifecycle cleanup.');
+        $suite->true(strpos($appCss, '.message-card-body { grid-column: 1 / -1; width: 100%; min-width: 0; max-width: 100%;') !== false
+            && strpos($appCss, '.message-card-body.ui-markdown > .ui-markdown,') !== false
+            && strpos($appCss, '.message-card-body.ui-markdown .ui-markdown-content > * { max-width: 100%; overflow-wrap: anywhere; }') !== false,
+            'Timeline Markdown must shrink to its grid track and wrap authored content without overflowing the message card.');
         $suite->true(strpos($bundleCss, '.ui-timeline-menu-trigger') !== false,
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
@@ -987,10 +992,18 @@ try {
             && strpos($source, 'Governance baseline · version ${governance.version}') !== false
             && strpos($source, 'project-info-instructions-copy') !== false,
             'Project Info must distinguish the shared governance baseline from project-specific instructions.');
+        $suite->true(strpos($source, 'modalTextField("google_drive_url", "Google Drive folder"') !== false
+            && strpos($source, 'manageBusyOnSubmit: false') !== false
+            && strpos($source, 'showFormValidationSummary(result, context, labels)') !== false,
+            'Project editing must use the canonical validated form flow for optional shared storage.');
+        $suite->true(strpos($source, 'projectInfoMetadataRow(metadata, "Shared storage", storageLink)') !== false
+            && strpos($source, 'storageLink.rel = "noopener noreferrer"') !== false,
+            'Project Info must safely expose the configured shared-storage folder.');
     });
 
     $suite->test('project owners receive a section-loaded Helper status visualization', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
         $suite->true(strpos($source, 'label: "Project status"') !== false
             && strpos($source, 'String(project.role || "") === "owner"') !== false,
             'Project status must be visible only to the project owner.');
@@ -1020,6 +1033,12 @@ try {
         $suite->true(strpos($source, 'const row = projectInfoElement("button", "project-status-attention-item")') !== false
             && strpos($source, 'void openTaskDetails(item.id)') !== false,
             'Needs-attention rows must be keyboard-operable and open the existing task workflow.');
+        $suite->true(strpos($source, '"is-wide is-progress"') !== false
+            && strpos($source, '"is-wide is-activity"') !== false
+            && strpos($source, 'content.append(summary.section, attention.section, progress.section, plan.section, activity.section, team.section, integrations.section)') !== false
+            && strpos($styles, '.project-status-activity-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));') !== false
+            && strpos($styles, '.project-status-milestone-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));') !== false,
+            'Primary status sections must use the full dashboard width, prioritize attention, and make compact use of horizontal space.');
         foreach (['Summary', 'TaskProgress', 'Plan', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
             $suite->true(strpos($source, 'API.projectStatus' . $section) !== false,
                 'Missing independent Project Status request for ' . $section . '.');
@@ -1456,6 +1475,15 @@ try {
         $suite->true(strpos($profile, '"Connection"') !== false, 'Provider information must use the Connection section.');
         $suite->true(strpos($profile, '"Role version"') !== false && strpos($profile, '"Project context version"') !== false, 'Version metadata must remain in administrator technical details.');
         $suite->true(strpos($styles, '.participant-profile-supervisor-link') !== false, 'Clickable supervisors need profile-link styling.');
+        $suite->true(strpos($styles, '.participant-profile-modal .ui-modal-body { padding: 0; overflow: hidden; }') !== false
+            && strpos($styles, '.participant-profile-layout { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); align-items: stretch; overflow: hidden; }') !== false
+            && strpos($styles, '.participant-profile-identity { display: grid; place-items: center; align-content: safe center;') !== false
+            && strpos($styles, '.participant-profile-details { display: grid; align-content: start;') !== false
+            && substr_count($styles, 'overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;') >= 2,
+            'Desktop participant profile columns must remain bounded and scroll independently.');
+        $suite->true(strpos($styles, '.participant-profile-modal .ui-modal-body { padding: 0; overflow-y: auto; }') !== false
+            && strpos($styles, '.participant-profile-layout { grid-template-columns: 1fr; overflow: visible; }') !== false,
+            'Stacked participant profiles must return scrolling to the modal body on narrow screens.');
     });
 
     $suite->test('Agent editing opens the canonical Helper modal before loading details', function () use ($suite, $root) {

@@ -14,12 +14,15 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
+| `/api/v1/project-task-deliverable.php?project_id={project}&id={task}` | PATCH | `/api/v1/projects/{project}/tasks/{task}/deliverable` |
 | `/api/v1/project-change-proposals.php?project_id={project}` | POST | `/api/v1/projects/{project}/change-proposals` |
 | `/api/v1/project-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/plan` |
 | `/api/v1/project-milestones.php?project_id={project}` | POST | `/api/v1/projects/{project}/milestones` |
 | `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
 | `/api/v1/project-deliverables.php?project_id={project}` | POST | `/api/v1/projects/{project}/deliverables` |
 | `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}` |
+| `/api/v1/project-milestone-progress.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}/progress` |
+| `/api/v1/project-deliverable-progress.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}/progress` |
 | `/api/v1/project-plan-order.php?project_id={project}` | PATCH | `/api/v1/projects/{project}/plan/order` |
 | `/api/v1/project-status-summary.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/summary` |
 | `/api/v1/project-status-task-progress.php?project_id={project}` | GET | `/api/v1/projects/{project}/status/task-progress` |
@@ -55,6 +58,13 @@ agent bearer identity.
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
 
+Project context and bootstrap include the optional canonical
+`project.google_drive_url`. When configured, `effective_instructions` also tells
+agents to use that folder for generated project files only when their current
+environment has authorized access. Project-specific instructions and agent role
+instructions may define the folder structure or naming convention. The URL does
+not grant access, authorize sharing changes, or prove that an upload succeeded.
+
 The proposal endpoint accepts active project-agent bearer identities only. Its
 `proposal_type` is `project_details`, `project_plan`, `agent_setup`, or `agent_profile_update`;
 the allowed fields and human review lifecycle are documented in
@@ -65,6 +75,26 @@ Successful proposal creation and review enqueue the content-free
 `syndicatum.project_proposals.changed` Realtime invalidation. Authorized owner
 and administrator clients respond by reloading this protected endpoint; the
 shared project-room event does not contain the proposal payload or rationale.
+
+## Permissioned project-plan stewardship
+
+`GET project-plan.php` returns `can_update_progress` separately from
+`can_manage`. Project owners and administrators have both capabilities. An
+agent has progress authority only when its profile contains the explicit
+`plan:progress` scope, exposed in bootstrap as
+`permissions.plan.progress.update`.
+
+The task-deliverable endpoint accepts only `version`, `deliverable_id`, and
+`note`; a null deliverable unlinks the task. It cannot change task ownership or
+lifecycle. The two progress endpoints accept only `version`, `status`, and `note`. Agent
+notes are mandatory and limited to 4,000 characters. These endpoints cannot
+change a title, description, date, owner, milestone relationship, or display
+order. A stale version returns a conflict. A milestone cannot transition to
+`completed` while an active deliverable is not `approved` or `completed`; a
+deliverable cannot transition to `approved` or `completed` while a linked
+non-cancelled task is incomplete. An incomplete task cannot be newly linked to
+an approved or completed deliverable. Successful updates create immutable
+evidence and enqueue `syndicatum.project_plan.changed` for Realtime reload.
 
 ## Participant representation
 

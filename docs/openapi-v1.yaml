@@ -271,6 +271,47 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Deliverable version conflict }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-milestone-progress.php:
+    patch:
+      summary: Apply a permissioned, version-checked milestone status update
+      description: Requires owner/admin authority or the agent plan:progress scope. Accepts only version, status, and note; agents must provide a note.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated milestone }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Version conflict or incomplete deliverables }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-deliverable-progress.php:
+    patch:
+      summary: Apply a permissioned, version-checked deliverable status update
+      description: Requires owner/admin authority or the agent plan:progress scope. Accepts only version, status, and note; agents must provide a note.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated deliverable }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Version conflict or incomplete linked tasks }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-task-deliverable.php:
+    patch:
+      summary: Link or unlink a task from an approved-plan deliverable
+      description: Requires owner/admin authority or the agent plan:progress scope. Accepts only version, deliverable_id, and an evidence note. It cannot change task ownership or lifecycle, and rejects an incomplete task link that would invalidate a ready deliverable.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskDeliverableLinkUpdate' }
+      responses:
+        '200': { description: Updated task with its current deliverable link and immutable activity history }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Task version conflict or incompatible ready-deliverable link }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-plan-order.php:
     patch:
       summary: Atomically reorder milestones or move and reorder deliverables
@@ -744,7 +785,7 @@ components:
   schemas:
     ProjectSummary:
       type: object
-      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, status, role, participant_id, relationship, human_count, agent_count, integration_count, message_count]
+      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, google_drive_url, status, role, participant_id, relationship, human_count, agent_count, integration_count, message_count]
       properties:
         id: { type: integer, minimum: 1 }
         public_id: { type: string, format: uuid }
@@ -753,6 +794,7 @@ components:
         name: { type: string }
         slug: { type: string }
         description: { type: string, nullable: true }
+        google_drive_url: { type: string, format: uri, nullable: true, description: Optional canonical Google Drive folder used as shared project storage. }
         status: { type: string }
         role: { type: string, enum: [owner, admin, member, viewer, agent] }
         participant_id: { type: integer, minimum: 1 }
@@ -768,7 +810,7 @@ components:
         data: { type: array, items: { $ref: '#/components/schemas/ProjectSummary' } }
     ProjectDetails:
       type: object
-      required: [id, public_id, workspace_id, owner_user_id, owner_display_name, name, slug, description, instructions, status, created_at, updated_at]
+      required: [id, public_id, workspace_id, owner_user_id, owner_display_name, name, slug, description, instructions, google_drive_url, status, created_at, updated_at]
       properties:
         id: { type: integer, minimum: 1 }
         public_id: { type: string, format: uuid }
@@ -779,6 +821,7 @@ components:
         slug: { type: string }
         description: { type: string, nullable: true }
         instructions: { type: string, nullable: true }
+        google_drive_url: { type: string, format: uri, nullable: true, description: Optional canonical Google Drive folder used as shared project storage. }
         status: { type: string }
         created_at: { $ref: '#/components/schemas/UtcTimestamp' }
         updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
@@ -815,7 +858,7 @@ components:
                 immutable: { type: boolean, enum: [true] }
             effective_instructions:
               type: string
-              description: Governance baseline followed by any project-specific operating instructions.
+              description: Governance baseline followed by project-specific operating instructions and shared-storage guidance when configured.
             permissions: { $ref: '#/components/schemas/ProjectPermissions' }
             latest_sequence: { type: integer, minimum: 0 }
             capabilities:
@@ -1179,6 +1222,14 @@ components:
         blocked_reason: { type: string, nullable: true }
         completion_summary: { type: string, nullable: true }
         note: { type: string, nullable: true }
+    TaskDeliverableLinkUpdate:
+      type: object
+      required: [version, deliverable_id, note]
+      additionalProperties: false
+      properties:
+        version: { type: integer, minimum: 1, description: Latest observed optimistic-lock version for the task. }
+        deliverable_id: { type: integer, minimum: 1, nullable: true, description: Target deliverable, or null to unlink the task. }
+        note: { type: string, minLength: 1, maxLength: 4000, description: Evidence explaining why this task belongs to or is removed from the deliverable. }
     ProjectChangeProposalCreate:
       type: object
       required: [proposal_type]

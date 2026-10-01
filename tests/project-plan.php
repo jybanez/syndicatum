@@ -136,6 +136,58 @@ try {
         throw new RuntimeException('Expected stale reorder rejection.');
     });
 
+    $test('explicit agent plan stewardship links existing tasks and updates guarded progress with evidence', function () use ($plan, $tasks, $access, $same, $pdo, $owner, $project) {
+        $unlinked = $tasks->create($access, ['title' => 'Existing research evidence']);
+        $created = (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'], [
+            'display_name' => 'Executive Assistant', 'role_title' => 'Executive Assistant',
+            'role_summary' => 'Maintains project progress.',
+            'scopes' => ['messages:read', 'plan:progress'],
+        ]);
+        $participant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ? AND kind = 'agent'");
+        $participant->execute([$project['id'], $created['agent_id']]);
+        $agentAccess = ['project_id' => (int) $project['id'], 'participant_id' => (int) $participant->fetchColumn(),
+            'project_status' => 'active', 'role' => 'agent',
+            'identity' => ['kind' => 'agent', 'agent' => ['id' => (int) $created['agent_id']]]];
+        $current = $plan->plan($agentAccess);
+        $same(false, $current['can_manage']); $same(true, $current['can_update_progress']);
+        $target = $current['deliverables'][0];
+        $linked = $tasks->updateDeliverableLink($agentAccess, $unlinked['id'], [
+            'version' => $unlinked['version'], 'deliverable_id' => $target['id'],
+            'note' => 'The existing research task produced this deliverable.',
+        ]);
+        $same($target['id'], $linked['deliverable_id']);
+        $same('deliverable_linked', $linked['events'][0]['event_type']);
+        $same($target['id'], $linked['events'][0]['metadata']['to_deliverable_id']);
+        $staleRejected = false;
+        try { $tasks->updateDeliverableLink($agentAccess, $unlinked['id'], [
+            'version' => $unlinked['version'], 'deliverable_id' => null, 'note' => 'Stale unlink.',
+        ]); }
+        catch (RuntimeException $error) { $same('TASK_VERSION_CONFLICT', $error->getMessage()); $staleRejected = true; }
+        if (!$staleRejected) { throw new RuntimeException('Expected stale task-link rejection.'); }
+        $ready = $plan->createDeliverable($access, ['title' => 'Already approved output', 'status' => 'completed']);
+        $open = $tasks->create($access, ['title' => 'Unexpected follow-up work']);
+        $readyRejected = false;
+        try { $tasks->updateDeliverableLink($agentAccess, $open['id'], [
+            'version' => $open['version'], 'deliverable_id' => $ready['id'], 'note' => 'Would invalidate readiness.',
+        ]); }
+        catch (RuntimeException $error) { $same('DELIVERABLE_TASK_LINK_CONFLICT', $error->getMessage()); $readyRejected = true; }
+        if (!$readyRejected) { throw new RuntimeException('Expected ready-deliverable link rejection.'); }
+        $milestone = null;
+        foreach ($current['milestones'] as $candidate) {
+            if ($candidate['deliverable_count'] > $candidate['ready_deliverable_count']) { $milestone = $candidate; break; }
+        }
+        if ($milestone === null) { throw new RuntimeException('Expected a milestone with unfinished deliverables.'); }
+        $updated = $plan->updateMilestoneProgress($agentAccess, $milestone['id'], [
+            'version' => $milestone['version'], 'status' => 'at_risk', 'note' => 'Task approval remains open.',
+        ]);
+        $same('at_risk', $updated['status']);
+        $event = $pdo->query("SELECT event_type FROM message_events_outbox WHERE event_type = 'syndicatum.project_plan.changed' ORDER BY id DESC LIMIT 1")->fetchColumn();
+        $same('syndicatum.project_plan.changed', $event);
+        try { $plan->updateMilestoneProgress($agentAccess, $milestone['id'], ['version' => $updated['version'], 'status' => 'completed', 'note' => 'Premature completion.']); }
+        catch (RuntimeException $error) { $same('MILESTONE_DELIVERABLES_INCOMPLETE', $error->getMessage()); return; }
+        throw new RuntimeException('Expected incomplete milestone completion rejection.');
+    });
+
     $test('non-manager participants can read but cannot change the plan', function () use ($plan, $access, $same) {
         $viewer = $access; $viewer['role'] = 'member';
         $same(false, $plan->plan($viewer)['can_manage']);

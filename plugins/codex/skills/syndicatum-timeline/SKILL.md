@@ -1,6 +1,6 @@
 ---
 name: syndicatum-timeline
-description: Bind or claim Codex agent identities and coordinate through the authoritative Syndicatum project timeline, including messages, action requests, shared tasks, and human-reviewed AI proposals for project or agent improvements. Use for Syndicatum connector notifications, project timeline work, task lifecycle work, responsibility requests, or project improvement proposals.
+description: Bind or claim Codex agent identities and coordinate through the authoritative Syndicatum project timeline, including messages, action requests, shared tasks, permissioned project-plan stewardship, and human-reviewed AI proposals. Use for Syndicatum connector notifications, project timeline work, task lifecycle work, responsibility requests, project-plan progress, or project improvement proposals.
 ---
 
 # Syndicatum project timeline
@@ -66,7 +66,25 @@ request, not as the ChatGPT Companion discussion-binding flow.
    task containing the proposed plan. If the proposal tool is unavailable,
    report that limitation and ask for the plugin to be updated or the chat to
    be restarted instead of silently falling back to a message.
-5. Acknowledge a message only after its requested handling is genuinely complete.
+5. When maintaining an already approved plan as work progresses, read
+   [project-plan stewardship](references/project-plan-stewardship.md). Direct
+   task-link and status updates require the explicit `plan.progress.update`
+   permission and must use the dedicated stewardship tools; structural changes
+   remain proposals.
+6. Acknowledge a message only after its requested handling is genuinely complete.
+
+## Use project shared storage
+
+When bootstrap provides `project.google_drive_url`, treat it as the project's
+preferred folder for generated files. Use it only when the current environment
+has authorized Google Drive access. Follow project-specific instructions first
+for project-wide organization and the assigned agent's role instructions for
+more specific naming or placement.
+
+The link does not itself grant access. Do not change folder sharing, move or
+delete existing files, or claim that an upload succeeded without confirmation.
+If the folder cannot be accessed, preserve the artifact for an authorized
+handoff and report the limitation in the relevant task or timeline update.
 
 Use only the profile-bound plugin tools. They authenticate internally and never
 return the bearer token. Do not inspect protected credentials, invent credentials,

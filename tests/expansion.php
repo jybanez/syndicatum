@@ -366,7 +366,7 @@ try {
         $suite->throws('INVALID_CLAIM', function () use ($management, $project, $expired) {
             $management->claimAgent($project['id'], $expired['agent_id'], $expired['claim_code']);
         });
-        $suite->throws('valid agent scope', function () use ($management, $project, $administrator) {
+        $suite->throws('valid agent permission', function () use ($management, $project, $administrator) {
             $management->createAgent($project['id'], $administrator['id'], ['display_name' => 'Scope-less Agent', 'scopes' => []]);
         });
     });
@@ -386,6 +386,9 @@ try {
             'role_instructions' => 'Escalate pricing decisions to the project owner.',
             'supervising_participant_id' => $ownerParticipantId,
         ]);
+        $management->updateProject($project['id'], $administrator['id'], [
+            'google_drive_url' => 'https://drive.google.com/drive/u/0/folders/shared_Project-123?usp=sharing',
+        ]);
         $agentParticipant = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND agent_id = ?');
         $agentParticipant->execute([$project['id'], $created['agent_id']]);
         $agentParticipantId = (int) $agentParticipant->fetchColumn();
@@ -395,12 +398,15 @@ try {
             'identity' => ['kind' => 'agent', 'agent' => ['id' => $created['agent_id']]],
         ];
         $bootstrap = (new ProjectRepository($pdo))->bootstrapContext($access);
-        $suite->same(1, $bootstrap['project']['context_version']);
+        $suite->same(2, $bootstrap['project']['context_version']);
         $suite->same(1, $bootstrap['governance']['version']);
         $suite->same(true, $bootstrap['governance']['immutable']);
         $suite->same('Record important decisions.', $bootstrap['project']['instructions']);
+        $suite->same('https://drive.google.com/drive/folders/shared_Project-123', $bootstrap['project']['google_drive_url']);
         $suite->truthy(strpos($bootstrap['effective_instructions'], $bootstrap['governance']['instructions']) !== false);
         $suite->truthy(strpos($bootstrap['effective_instructions'], "Project-specific operating instructions\n\nRecord important decisions.") !== false);
+        $suite->truthy(strpos($bootstrap['effective_instructions'], "Project shared storage") !== false);
+        $suite->truthy(strpos($bootstrap['effective_instructions'], $bootstrap['project']['google_drive_url']) !== false);
         $suite->same('Commercial Assessor', $bootstrap['assignment']['role_title']);
         $suite->same('Assess commercial feasibility.', $bootstrap['assignment']['role_summary']);
         $suite->same($ownerParticipantId, $bootstrap['assignment']['supervisor']['participant_id']);
@@ -411,7 +417,12 @@ try {
 
         $management->updateProject($project['id'], $administrator['id'], ['description' => 'Refined purpose']);
         $updatedProject = $management->updateProject($project['id'], $administrator['id'], ['name' => 'Renamed Bootstrap Project']);
-        $suite->same(2, (int) $updatedProject['context_version']);
+        $suite->same(3, (int) $updatedProject['context_version']);
+        $suite->throws('Google Drive folder link must be', function () use ($management, $project, $administrator) {
+            $management->updateProject($project['id'], $administrator['id'], [
+                'google_drive_url' => 'https://example.com/not-a-drive-folder',
+            ]);
+        });
         $updatedAgent = $management->updateAgentProfile($project['id'], $administrator['id'], $created['agent_id'], [
             'role_summary' => 'Assess viability and commercialization risk.',
         ]);
