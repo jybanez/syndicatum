@@ -383,7 +383,7 @@ try {
             $tools[$tool['name']] = $tool['inputSchema'];
         }
         foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
-            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'acknowledge_message'] as $name) {
+            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
             $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
         }
@@ -391,12 +391,39 @@ try {
         $suite->same(200, $tools['list_messages']['properties']['limit']['maximum']);
         $suite->same(['title'], $tools['create_task']['required']);
         $suite->same(['task_id', 'version'], $tools['update_task']['required']);
+        $suite->same(['task_id', 'version', 'deliverable_id', 'note'], $tools['update_task_deliverable']['required']);
         $suite->same(['milestone_id', 'version', 'status', 'note'], $tools['update_milestone_progress']['required']);
         $suite->same(['deliverable_id', 'version', 'status', 'note'], $tools['update_deliverable_progress']['required']);
         $suite->same(['body', 'idempotency_key'], $tools['post_message']['required']);
         $suite->same(['neutral','info','success','warning','error','critical'], $tools['post_message']['properties']['severity']['enum']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
+    });
+
+    $suite->test('plan-progress permission links an existing task without granting broader task edits', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $agentOne, $pdo) {
+        $deliverable = projectApiRequest($baseUrl, 'POST', '/api/v1/project-deliverables.php?project_id=' . $projectOne,
+            $humanHeaders, ['title' => 'Approved-plan output']);
+        $task = projectApiRequest($baseUrl, 'POST', '/api/v1/project-tasks.php?project_id=' . $projectOne,
+            $humanHeaders, ['title' => 'Existing evidence task']);
+        $suite->same(201, $deliverable['status'], $deliverable['raw']);
+        $suite->same(201, $task['status'], $task['raw']);
+        $path = '/api/v1/project-task-deliverable.php?project_id=' . $projectOne . '&id=' . $task['body']['data']['id'];
+        $payload = ['version' => $task['body']['data']['version'], 'deliverable_id' => $deliverable['body']['data']['id'],
+            'note' => 'The existing task produces this approved-plan output.'];
+        $forbidden = projectApiRequest($baseUrl, 'PATCH', $path, $agentOneHeaders, $payload);
+        $suite->same(404, $forbidden['status']);
+        $pdo->prepare('INSERT INTO agent_credential_scopes (agent_id, scope, created_at) VALUES (?, ?, ?)')
+            ->execute([$agentOne['agent_id'], 'plan:progress', Db::now()]);
+        try {
+            $linked = projectApiRequest($baseUrl, 'PATCH', $path, $agentOneHeaders, $payload);
+            $suite->same(200, $linked['status'], $linked['raw']);
+            $suite->same($deliverable['body']['data']['id'], $linked['body']['data']['deliverable_id']);
+            $suite->same('deliverable_linked', $linked['body']['data']['events'][0]['event_type']);
+        } finally {
+            $pdo->prepare("DELETE FROM agent_credential_scopes WHERE agent_id = ? AND scope = 'plan:progress'")
+                ->execute([$agentOne['agent_id']]);
+            $pdo->exec('DELETE FROM message_events_outbox');
+        }
     });
 
     $messageId = null;

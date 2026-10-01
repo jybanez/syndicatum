@@ -98,6 +98,12 @@ const tools = [
     inputSchema: profileSchema(),
   },
   {
+    name: "syndicatum_update_task_deliverable",
+    description: "Link or unlink an existing task to an approved-plan deliverable using the task's latest version. Requires the agent's explicit plan-progress permission and an evidence note; cannot change task ownership or lifecycle.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "task_id", "version", "deliverable_id", "note"], properties: { profile_id: profileIdProperty(), task_id: { type: ["integer", "string"] }, version: { type: ["integer", "string"] }, deliverable_id: { type: ["integer", "string", "null"], description: "Target deliverable, or null to unlink the task" }, note: { type: "string", minLength: 1, maxLength: 4000 } }, additionalProperties: false },
+  },
+  {
     name: "syndicatum_update_milestone_progress",
     description: "Update only a milestone status using its latest version. Requires the agent's explicit plan-progress permission and an auditable note; cannot change plan structure.",
     annotations: remoteWriteAnnotations,
@@ -299,6 +305,7 @@ async function callTool(name, args) {
   if (name === "syndicatum_list_tasks") return textResult(await timeline.tasks(args.profile_id, args));
   if (name === "syndicatum_get_task") return textResult(await timeline.task(args.profile_id, args.task_id));
   if (name === "syndicatum_get_project_plan") return textResult(await timeline.projectPlan(args.profile_id));
+  if (name === "syndicatum_update_task_deliverable") return textResult(await timeline.updateTaskDeliverable(args.profile_id, args.task_id, args));
   if (name === "syndicatum_update_milestone_progress") return textResult(await timeline.updateMilestoneProgress(args.profile_id, args.milestone_id, args));
   if (name === "syndicatum_update_deliverable_progress") return textResult(await timeline.updateDeliverableProgress(args.profile_id, args.deliverable_id, args));
   if (name === "syndicatum_create_task") return textResult(await timeline.createTask(args.profile_id, args));

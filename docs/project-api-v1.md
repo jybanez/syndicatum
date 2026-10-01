@@ -14,6 +14,7 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
+| `/api/v1/project-task-deliverable.php?project_id={project}&id={task}` | PATCH | `/api/v1/projects/{project}/tasks/{task}/deliverable` |
 | `/api/v1/project-change-proposals.php?project_id={project}` | POST | `/api/v1/projects/{project}/change-proposals` |
 | `/api/v1/project-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/plan` |
 | `/api/v1/project-milestones.php?project_id={project}` | POST | `/api/v1/projects/{project}/milestones` |
@@ -76,14 +77,17 @@ agent has progress authority only when its profile contains the explicit
 `plan:progress` scope, exposed in bootstrap as
 `permissions.plan.progress.update`.
 
-The two progress endpoints accept only `version`, `status`, and `note`. Agent
+The task-deliverable endpoint accepts only `version`, `deliverable_id`, and
+`note`; a null deliverable unlinks the task. It cannot change task ownership or
+lifecycle. The two progress endpoints accept only `version`, `status`, and `note`. Agent
 notes are mandatory and limited to 4,000 characters. These endpoints cannot
 change a title, description, date, owner, milestone relationship, or display
 order. A stale version returns a conflict. A milestone cannot transition to
 `completed` while an active deliverable is not `approved` or `completed`; a
 deliverable cannot transition to `approved` or `completed` while a linked
-non-cancelled task is incomplete. Successful updates write an administrative
-audit event and enqueue `syndicatum.project_plan.changed` for Realtime reload.
+non-cancelled task is incomplete. An incomplete task cannot be newly linked to
+an approved or completed deliverable. Successful updates create immutable
+evidence and enqueue `syndicatum.project_plan.changed` for Realtime reload.
 
 ## Participant representation
 

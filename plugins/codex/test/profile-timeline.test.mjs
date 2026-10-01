@@ -119,7 +119,7 @@ test("profile task workflow creates work as the selected agent without a caller-
   assert.doesNotMatch(post.options.body, /supervising_participant_id|created_by_participant_id/);
 });
 
-test("profile plan stewardship reads the plan and sends narrow status-only updates", async () => {
+test("profile plan stewardship reads the plan and sends narrow link and status updates", async () => {
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
     calls.push({ url: String(url), options });
@@ -130,6 +130,11 @@ test("profile plan stewardship reads the plan and sends narrow status-only updat
   const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
   const plan = await client.projectPlan(profile.profile_id);
   assert.equal(plan.plan.can_update_progress, true);
+  const linked = await client.updateTaskDeliverable(profile.profile_id, 7, { version: 3, deliverable_id: 12, note: "Task 7 produced deliverable 12." });
+  const linkPatch = calls.at(-1);
+  assert.match(linkPatch.url, /project-task-deliverable\.php\?project_id=3&id=7/);
+  assert.deepEqual(JSON.parse(linkPatch.options.body), { version: 3, deliverable_id: 12, note: "Task 7 produced deliverable 12." });
+  assert.equal(linked.task.version, 3);
   const updated = await client.updateMilestoneProgress(profile.profile_id, 4, { version: 2, status: "in_progress", note: "Tasks 51–54 are underway." });
   const patch = calls.at(-1);
   assert.match(patch.url, /project-milestone-progress\.php\?project_id=3&id=4/);

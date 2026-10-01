@@ -145,12 +145,15 @@ Status includes a separately loaded Milestones & deliverables readiness section.
 
 An owner or administrator may grant an individual agent **Maintain milestone
 and deliverable progress** in that agent's profile. The permission authorizes
-status-only stewardship through the Project API and agent tools; it does not
-authorize titles, descriptions, owners, dates, hierarchy, or ordering changes.
-Agent updates require an evidence note and the latest optimistic version.
+narrow stewardship through the Project API and agent tools: the agent may link
+or unlink existing tasks to approved deliverables and update milestone or
+deliverable statuses. It cannot change task ownership or lifecycle, or plan
+titles, descriptions, owners, dates, hierarchy, or ordering. Agent updates
+require an evidence note and the latest optimistic version.
 Completing a milestone is rejected while active deliverables remain unready,
 and approving or completing a deliverable is rejected while linked active tasks
-remain incomplete. Successful updates invalidate open Project plan views through
+remain incomplete. Linking an incomplete task to an already approved or
+completed deliverable is also rejected. Successful updates invalidate open Project plan views through
 Realtime so the owner sees the current state without refreshing the browser.
 
 The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters.
@@ -279,11 +282,14 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-bootstrap.php` | GET | Project context, effective instructions, assignment, permissions, work summary, and timeline attention state |
 | `/api/v1/project-tasks.php` | GET, POST | List/filter shared project tasks or create a task under the authenticated giver identity |
 | `/api/v1/project-task.php` | GET, PATCH | Read one task with activity history or apply a version-checked lifecycle update |
+| `/api/v1/project-task-deliverable.php` | PATCH | Permissioned, version-checked task-to-deliverable link update with evidence |
 | `/api/v1/project-plan.php` | GET | Read milestones, deliverables, and computed task-backed progress |
 | `/api/v1/project-milestones.php` | POST | Owner/admin milestone creation |
 | `/api/v1/project-milestone.php` | PATCH | Owner/admin version-checked milestone update |
 | `/api/v1/project-deliverables.php` | POST | Owner/admin standalone or milestone-bound deliverable creation |
 | `/api/v1/project-deliverable.php` | PATCH | Owner/admin version-checked deliverable update |
+| `/api/v1/project-milestone-progress.php` | PATCH | Permissioned, version-checked milestone-status update with evidence |
+| `/api/v1/project-deliverable-progress.php` | PATCH | Permissioned, version-checked deliverable-status update with evidence |
 | `/api/v1/project-plan-order.php` | PATCH | Owner/admin atomic milestone reorder or deliverable membership-and-order move |
 | `/api/v1/project-status-summary.php` | GET | Owner-only headline task, active-team, and message-sequence aggregates |
 | `/api/v1/project-status-task-progress.php` | GET | Owner-only task counts by status and completion percentage |

@@ -141,7 +141,7 @@ class ResponsesApiActivationService
                 'authorization' => $this->decryptSecret($row['responses_mcp_token_encrypted']),
                 'require_approval' => 'never',
                 'allowed_tools' => ['get_project', 'get_bootstrap', 'list_participants', 'list_tasks', 'get_task',
-                    'create_task', 'update_task', 'get_project_plan', 'update_milestone_progress', 'update_deliverable_progress', 'list_messages', 'get_message', 'post_message', 'acknowledge_message',
+                    'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'list_messages', 'get_message', 'post_message', 'acknowledge_message',
                     'propose_project_details', 'propose_project_plan', 'propose_agent_setup', 'propose_agent_profile_update'],
             ]],
         ];

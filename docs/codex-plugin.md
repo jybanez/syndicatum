@@ -240,6 +240,7 @@ agent reads or contributes to its project timeline.
 ## Permissioned project-plan stewardship
 
 The bundled MCP exposes `syndicatum_get_project_plan`,
+`syndicatum_update_task_deliverable`,
 `syndicatum_update_milestone_progress`, and
 `syndicatum_update_deliverable_progress`. An owner enables these mutations per
 agent with **Maintain milestone and deliverable progress** in the agent profile.
@@ -247,9 +248,10 @@ Without that permission, plan reads remain available but progress updates fail
 closed.
 
 This is intended for an executive-assistant agent that reconciles task outcomes
-with the approved plan. The agent reads bootstrap and the latest plan, verifies
-the relevant task state, then applies one version-checked status update with an
-evidence note. The tools cannot restructure the plan. New checkpoints or
+with the approved plan. The agent reads bootstrap, the latest plan, and the
+relevant tasks; it may first apply a version-checked task-to-deliverable link
+with an evidence note, then apply the supported status update. The linking tool
+cannot change task ownership or lifecycle, and the tools cannot restructure the plan. New checkpoints or
 outputs must be submitted with `syndicatum_propose_project_plan` for human
 review, while title, owner, date, and ordering changes remain owner/admin edits.
 

@@ -55,6 +55,7 @@ function projectApiError(Exception $exception)
         'PROJECT_PLAN_PROGRESS_FORBIDDEN' => [403, 'This participant is not allowed to update project-plan progress.'],
         'MILESTONE_DELIVERABLES_INCOMPLETE' => [409, 'Complete or approve the milestone deliverables before marking the milestone completed.'],
         'DELIVERABLE_TASKS_INCOMPLETE' => [409, 'Complete the linked active tasks before approving or completing the deliverable.'],
+        'DELIVERABLE_TASK_LINK_CONFLICT' => [409, 'Move the deliverable back to an active status before linking incomplete work.'],
         'PROPOSAL_AGENT_REQUIRED' => [403, 'Only an active project agent can submit a project proposal.'],
         'AGENT_NOT_FOUND' => [404, 'Project agent not found.'],
         'MILESTONE_NOT_FOUND' => [404, 'Milestone not found.'],

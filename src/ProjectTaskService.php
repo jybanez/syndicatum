@@ -185,6 +185,61 @@ class ProjectTaskService
         }
     }
 
+    /**
+     * Plan-stewardship surface for associating existing work with an approved
+     * deliverable. It intentionally cannot change task ownership or lifecycle.
+     */
+    public function updateDeliverableLink(array $access, $taskId, array $input)
+    {
+        $this->requireWritable($access);
+        $this->requirePlanProgressPermission($access);
+        $projectId = (int) $access['project_id'];
+        $this->pdo->beginTransaction();
+        try {
+            $current = $this->task($access, $taskId, false);
+            if (!isset($input['version']) || (int) $input['version'] !== (int) $current['version']) {
+                throw new RuntimeException('TASK_VERSION_CONFLICT');
+            }
+            $note = trim((string) ($input['note'] ?? ''));
+            if ($note === '' || mb_strlen($note) > 4000) {
+                throw new InvalidArgumentException('An evidence note is required and must not exceed 4000 characters.');
+            }
+            $previousId = $current['deliverable_id'] === null ? null : (int) $current['deliverable_id'];
+            $deliverableId = null;
+            if (array_key_exists('deliverable_id', $input) && $input['deliverable_id'] !== null && $input['deliverable_id'] !== '') {
+                if (!preg_match('/^[1-9][0-9]*$/', (string) $input['deliverable_id'])) { throw new InvalidArgumentException('Select a valid deliverable.'); }
+                $deliverableId = (int) $input['deliverable_id'];
+            }
+            $this->lockDeliverables($projectId, array_values(array_filter([$previousId, $deliverableId])));
+            if ($deliverableId !== null) {
+                $deliverable = $this->activeDeliverable($projectId, $input['deliverable_id']);
+                if (in_array($deliverable['status'], ['approved', 'completed'], true)
+                    && !in_array($current['status'], ['completed', 'cancelled'], true)) {
+                    throw new RuntimeException('DELIVERABLE_TASK_LINK_CONFLICT');
+                }
+            }
+            if ($previousId === $deliverableId) { $this->pdo->commit(); return $current; }
+            $statement = $this->pdo->prepare(
+                'UPDATE project_tasks SET deliverable_id = ?, version = version + 1, updated_at = ? '
+                . 'WHERE id = ? AND project_id = ? AND version = ?'
+            );
+            $statement->execute([$deliverableId, Db::now(), (int) $taskId, $projectId, (int) $current['version']]);
+            if ($statement->rowCount() !== 1) { throw new RuntimeException('TASK_VERSION_CONFLICT'); }
+            $eventType = $deliverableId === null ? 'deliverable_unlinked' : 'deliverable_linked';
+            $this->event((int) $taskId, $projectId, (int) $access['participant_id'], $eventType,
+                $current['status'], $current['status'], $note,
+                ['from_deliverable_id' => $previousId, 'to_deliverable_id' => $deliverableId]);
+            $task = $this->task($access, $taskId, true);
+            $this->outbox->enqueueTaskUpdated($projectId, (int) $taskId, $task, $eventType);
+            $this->outbox->enqueueProjectPlanChanged($projectId, 'task', (int) $taskId, (int) $task['version'], 'task_deliverable_updated');
+            $this->pdo->commit();
+            return $task;
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
+    }
+
     private function taskSelect()
     {
         return "SELECT t.*,
@@ -258,6 +313,13 @@ class ProjectTaskService
 
     private function isManager(array $access) { return $access['identity']['kind'] === 'human' && in_array($access['role'], ['owner','admin'], true); }
     private function requireWritable(array $access) { if (isset($access['project_status']) && $access['project_status'] !== 'active') { throw new RuntimeException('PROJECT_ARCHIVED'); } }
+    private function requirePlanProgressPermission(array $access) {
+        if ($this->isManager($access)) { return; }
+        if (($access['identity']['kind'] ?? '') !== 'agent') { throw new RuntimeException('PROJECT_PLAN_PROGRESS_FORBIDDEN'); }
+        $statement = $this->pdo->prepare("SELECT COUNT(*) FROM agent_credential_scopes WHERE agent_id = ? AND scope = 'plan:progress'");
+        $statement->execute([(int) ($access['identity']['agent']['id'] ?? 0)]);
+        if ((int) $statement->fetchColumn() < 1) { throw new RuntimeException('PROJECT_PLAN_PROGRESS_FORBIDDEN'); }
+    }
     private function requireTaskCreator(array $access) {
         $kind = isset($access['identity']['kind']) ? (string) $access['identity']['kind'] : '';
         if ($kind === 'agent') { return; }
@@ -292,6 +354,23 @@ class ProjectTaskService
         $statement->execute([$projectId, (int) $value]);
         if (!$statement->fetchColumn()) { throw new InvalidArgumentException('Select an active deliverable from this project.'); }
         return (int) $value;
+    }
+    private function activeDeliverable($projectId, $value) {
+        if (!preg_match('/^[1-9][0-9]*$/', (string) $value)) { throw new InvalidArgumentException('Select a valid deliverable.'); }
+        $statement = $this->pdo->prepare("SELECT id, status FROM project_deliverables WHERE project_id = ? AND id = ? AND status <> 'cancelled'");
+        $statement->execute([(int) $projectId, (int) $value]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new InvalidArgumentException('Select an active deliverable from this project.'); }
+        return ['id' => (int) $row['id'], 'status' => (string) $row['status']];
+    }
+    private function lockDeliverables($projectId, array $ids) {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        sort($ids, SORT_NUMERIC);
+        if (!$ids) { return; }
+        $statement = $this->pdo->prepare('SELECT id FROM project_deliverables WHERE project_id = ? AND id IN ('
+            . implode(',', array_fill(0, count($ids), '?')) . ') ORDER BY id FOR UPDATE');
+        $statement->execute(array_merge([(int) $projectId], $ids));
+        $statement->fetchAll(PDO::FETCH_COLUMN);
     }
     private function requireSourceLink(array $access, $sourceMessageId, $conversionRequested) {
         $projectId = (int) $access['project_id'];

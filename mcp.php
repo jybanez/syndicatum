@@ -69,14 +69,14 @@ try {
         'list_projects' => 'projects:read', 'get_project' => 'projects:read', 'get_bootstrap' => 'projects:read',
         'list_participants' => 'participants:read', 'list_messages' => 'messages:read',
         'list_tasks' => 'messages:read', 'get_task' => 'messages:read', 'create_task' => 'messages:write', 'update_task' => 'messages:write',
-        'get_project_plan' => 'messages:read', 'update_milestone_progress' => 'messages:write', 'update_deliverable_progress' => 'messages:write',
+        'get_project_plan' => 'messages:read', 'update_task_deliverable' => 'messages:write', 'update_milestone_progress' => 'messages:write', 'update_deliverable_progress' => 'messages:write',
         'get_message' => 'messages:read', 'post_message' => 'messages:write',
         'propose_project_details' => 'messages:write', 'propose_project_plan' => 'messages:write', 'propose_agent_setup' => 'messages:write',
         'propose_agent_profile_update' => 'messages:write',
         'acknowledge_message' => 'messages:acknowledge'];
     if (!isset($scopeMap[$name])) { throw new InvalidArgumentException('Unknown tool.'); }
     if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope', $oauth); }
-    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'acknowledge_message', 'create_task', 'update_task', 'update_milestone_progress', 'update_deliverable_progress',
+    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'acknowledge_message', 'create_task', 'update_task', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress',
         'propose_project_details', 'propose_project_plan', 'propose_agent_setup', 'propose_agent_profile_update'];
     (new RateLimiter($pdo))->hit(
         'mcp.' . $name,
@@ -178,6 +178,12 @@ try {
         $value = (new ProjectTaskService($pdo))->update($access, mcpPositiveId($args, 'task_id'), $input);
     } elseif ($name === 'get_project_plan') {
         $value = (new ProjectPlanService($pdo))->plan($access);
+    } elseif ($name === 'update_task_deliverable') {
+        $value = (new ProjectTaskService($pdo))->updateDeliverableLink($access, mcpPositiveId($args, 'task_id'), [
+            'version' => mcpPositiveId($args, 'version'),
+            'deliverable_id' => array_key_exists('deliverable_id', $args) ? $args['deliverable_id'] : null,
+            'note' => trim((string) ($args['note'] ?? '')),
+        ]);
     } elseif ($name === 'update_milestone_progress') {
         $value = (new ProjectPlanService($pdo))->updateMilestoneProgress($access, mcpPositiveId($args, 'milestone_id'), [
             'version' => mcpPositiveId($args, 'version'), 'status' => trim((string) ($args['status'] ?? '')), 'note' => trim((string) ($args['note'] ?? '')),
@@ -279,6 +285,10 @@ function mcpTools()
                 'blocked_reason' => ['type' => 'string'], 'completion_summary' => ['type' => 'string'], 'note' => ['type' => 'string']],
             ['task_id', 'version'], $write),
         $tool('get_project_plan', 'Get project plan', 'Read milestones, deliverables, task-backed progress, optimistic versions, and the current agent\'s progress-update permission.', $binding, [], $read),
+        $tool('update_task_deliverable', 'Update task deliverable', 'Link or unlink an existing task to an approved-plan deliverable using the task\'s latest version and an evidence note. Requires the agent\'s explicit plan-progress permission and cannot change task ownership or lifecycle.',
+            $binding + ['task_id' => ['type' => 'integer', 'minimum' => 1], 'version' => ['type' => 'integer', 'minimum' => 1],
+                'deliverable_id' => ['type' => ['integer', 'null'], 'minimum' => 1, 'description' => 'Target deliverable, or null to unlink the task'],
+                'note' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 4000]], ['task_id', 'version', 'deliverable_id', 'note'], $write),
         $tool('update_milestone_progress', 'Update milestone progress', 'Update only a milestone status with the latest version and an evidence note. Requires the agent\'s explicit plan-progress permission.',
             $binding + ['milestone_id' => ['type' => 'integer', 'minimum' => 1], 'version' => ['type' => 'integer', 'minimum' => 1],
                 'status' => ['type' => 'string', 'enum' => ['planned','in_progress','completed','at_risk','cancelled']],

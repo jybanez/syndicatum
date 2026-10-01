@@ -78,6 +78,21 @@ export class ProfileTimelineClient {
     return { profile: publicAgentProfile(profile), plan: result.data ?? result };
   }
 
+  async updateTaskDeliverable(profileId, taskId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const id = positiveId(taskId, "task");
+    const payload = {
+      version: Number(positiveId(input.version, "task version")),
+      deliverable_id: input.deliverable_id === null || input.deliverable_id === ""
+        ? null
+        : Number(positiveId(input.deliverable_id, "deliverable")),
+      note: String(input.note || "").trim(),
+    };
+    if (!payload.note) throw new Error("An evidence note is required for task-to-deliverable updates.");
+    const result = await client.request(`/api/v1/project-task-deliverable.php?project_id=${encodeURIComponent(profile.project_id)}&id=${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    return { profile: publicAgentProfile(profile), task: result.data ?? result };
+  }
+
   async updateMilestoneProgress(profileId, milestoneId, input = {}) {
     return this.updatePlanProgress(profileId, "milestone", milestoneId, input);
   }

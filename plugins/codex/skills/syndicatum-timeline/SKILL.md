@@ -68,8 +68,9 @@ request, not as the ChatGPT Companion discussion-binding flow.
    be restarted instead of silently falling back to a message.
 5. When maintaining an already approved plan as work progresses, read
    [project-plan stewardship](references/project-plan-stewardship.md). Direct
-   status updates require the explicit `plan.progress.update` permission and
-   must use the dedicated progress tools; structural changes remain proposals.
+   task-link and status updates require the explicit `plan.progress.update`
+   permission and must use the dedicated stewardship tools; structural changes
+   remain proposals.
 6. Acknowledge a message only after its requested handling is genuinely complete.
 
 Use only the profile-bound plugin tools. They authenticate internally and never

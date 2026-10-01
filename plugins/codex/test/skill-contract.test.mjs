@@ -28,6 +28,7 @@ test("timeline skill keeps direct plan stewardship narrow and permissioned", asy
   assert.match(source, /project-plan stewardship/);
   assert.match(stewardship, /permissions\.plan\.progress\.update/);
   assert.match(stewardship, /syndicatum_get_project_plan/);
+  assert.match(stewardship, /syndicatum_update_task_deliverable/);
   assert.match(stewardship, /syndicatum_update_milestone_progress/);
   assert.match(stewardship, /syndicatum_update_deliverable_progress/);
   assert.match(stewardship, /structural changes remain proposals/i);

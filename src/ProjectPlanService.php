@@ -182,6 +182,7 @@ class ProjectPlanService
         $projectId = (int) $access['project_id'];
         $this->pdo->beginTransaction();
         try {
+            $this->lockDeliverable($projectId, (int) $id);
             $current = $this->deliverable($projectId, (int) $id);
             $this->requireVersion($input, $current['version'], 'DELIVERABLE_VERSION_CONFLICT');
             $status = $this->requiredChoice($input, 'status', $this->deliverableStatuses, 'deliverable status');
@@ -349,6 +350,13 @@ class ProjectPlanService
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         if (!$row) { throw new RuntimeException('DELIVERABLE_NOT_FOUND'); }
         return $this->normalizeDeliverable($row);
+    }
+
+    private function lockDeliverable($projectId, $id)
+    {
+        $statement = $this->pdo->prepare('SELECT id FROM project_deliverables WHERE project_id = ? AND id = ? FOR UPDATE');
+        $statement->execute([(int) $projectId, (int) $id]);
+        if (!$statement->fetchColumn()) { throw new RuntimeException('DELIVERABLE_NOT_FOUND'); }
     }
 
     private function normalizeMilestone(array $row)

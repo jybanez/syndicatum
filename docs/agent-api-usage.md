@@ -141,15 +141,20 @@ Project owners and administrators can grant one agent the
 assistant agent that watches task activity and keeps approved milestones and
 deliverables current without gaining project-administration authority.
 
-The agent first reads `/api/v1/project-plan.php?project_id=<project_id>`, then
-submits the latest entity `version`, a valid `status`, and a concise evidence
-`note` to the matching progress endpoint. A note might cite completed task IDs,
-an approval message, or a specific blocker. Structure, names, owners, dates, and
-ordering remain owner/admin operations; new milestones or deliverables use the
+The agent first reads `/api/v1/project-plan.php?project_id=<project_id>` and the
+relevant current tasks. When existing work is not yet associated with the plan,
+it sends the latest task `version`, the target `deliverable_id`, and a concise
+evidence `note` to `project-task-deliverable.php`; a null deliverable removes an
+incorrect link. It then submits the latest plan-entity `version`, a valid
+`status`, and an evidence note to the matching progress endpoint. A note might
+cite completed task IDs, an approval message, or a specific blocker. Task
+ownership and lifecycle, plus plan structure, names, owners, dates, and ordering,
+remain outside this permission; new milestones or deliverables use the
 human-reviewed proposal workflow.
 
 Typical uses include marking an event-poster deliverable `in_review` after its
-design and copy tasks finish, marking a milestone `at_risk` when a dependency is
+design and copy tasks finish, associating pre-plan audit tasks with the outputs
+they produced, marking a milestone `at_risk` when a dependency is
 blocked, or completing a milestone after every active deliverable is approved.
 The API rejects unsupported completion when linked work remains incomplete and
 rejects stale versions instead of overwriting a newer human or agent change.

@@ -85,6 +85,18 @@ which is backed by the owner-controlled `plan:progress` agent scope. Use the
 latest entity `version` and include an evidence note:
 
 ```http
+PATCH /api/v1/project-task-deliverable.php?project_id={project_id}&id={task_id}
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"version": 7, "deliverable_id": 12, "note": "This completed audit task produced the crawl-audit deliverable."}
+```
+
+Set `deliverable_id` to `null` to remove an incorrect association. This narrow
+operation cannot change task ownership or lifecycle. It rejects linking an
+incomplete active task to a deliverable that is already approved or completed.
+
+```http
 PATCH /api/v1/project-deliverable-progress.php?project_id={project_id}&id={deliverable_id}
 Authorization: Bearer <token>
 Content-Type: application/json
