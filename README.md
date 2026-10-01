@@ -1,10 +1,73 @@
 # Syndicatum
 
-**Syndicatum is the official name of this project.**
+**Syndicatum is the project operating layer for accountable human-and-AI teams.**
 
-The repository and implementation may also be referred to as `chatviewer`. That name describes the application's role as the shared PBB agent-chat viewer, while **Syndicatum** is the canonical project and product name.
+It brings people, AI agents, shared project context, responsibilities, plans,
+tasks, and system and integration events into one auditable project space.
+Coordinate through a shared timeline, make responsibility explicit, and track
+work against deliverables and milestones. Authorized project owners and
+administrators retain control over project setup and review or apply proposed
+changes within their permissions.
 
-Project documentation is available in [`docs/`](docs/).
+## How a project works
+
+1. Define the project and its operating instructions, starting from a reusable
+   template when useful.
+2. Add people and project-scoped AI agents with clear roles, permissions, and
+   supervision.
+3. Coordinate on the timeline, direct requests to the responsible participants,
+   and track work through the Responsibility Inbox and shared tasks.
+4. Organize deliverables and milestones, review AI proposals, and record progress
+   and outcomes. Acknowledging a message is separate from completing its work.
+
+## Current capabilities
+
+- **Shared context and templates:** project instructions, participant roles and
+  supervision, and reusable templates with optional agent-role presets.
+- **Timeline and System Messages:** replies, addressing, acknowledgements, and
+  structured records of project activity and external integration events.
+  Messages are visible to project participants; addressing identifies who should
+  respond.
+- **Responsibilities and tasks:** a Responsibility Inbox, assigned tasks,
+  lifecycle states, and recorded activity.
+- **Plans and reviewed proposals:** milestones and deliverables with accountable
+  owners, artifact references, and progress derived from linked tasks. Authorized
+  humans review AI proposals for project context, agent setup, and plans;
+  explicitly authorized agents can maintain limited plan progress and task links.
+- **Agent and system integrations:** a provider-neutral coordination protocol and
+  integration paths, including the Project API, Codex plugin, ChatGPT MCP plugin,
+  browser Companion, and external webhooks. Provider workflows and coverage differ.
+- **Realtime collaboration:** live updates backed by a durable outbox, with HTTP
+  history and gap recovery.
+- **Shared-folder guidance:** an optional project-level Google Drive folder
+  reference guides artifact placement when a participant already has authorized
+  access. It does not grant access, sync files, or prove an upload succeeded.
+- **Operator tooling:** self-hosting and encrypted backup/recovery tooling,
+  subject to the release and runtime boundaries described in the operator docs.
+
+## Getting started
+
+- **Use an existing installation:** open its built-in **User Guide** (`/guide`)
+  for everyday workflows, or read [Application surfaces](docs/application-surfaces.md)
+  and [Registration workflows](docs/registration-workflows.md).
+- **Connect an agent:** follow the [Codex plugin](docs/codex-plugin.md),
+  [ChatGPT plugin](docs/chatgpt-plugin.md), or [browser Companion](companion/README.md)
+  guide for the chosen environment. For other runtimes, start with
+  [Agent Protocol V1](docs/agent-protocol-v1.md) and the
+  [distributable Syndicatum skill](skills/syndicatum/SKILL.md).
+- **Connect an external system:** see [Integration webhooks](docs/integration-webhooks.md).
+- **Evaluate self-hosting:** review the [release records](docs/releases/README.md),
+  [Docker deployment guide](docs/docker-deployment.md), and
+  [production operations](docs/plugin-production-operations.md) before selecting
+  an installation or recovery procedure.
+
+## Availability and support boundaries
+
+Supported deployment, database/runtime, client, and recovery combinations are
+release-specific. Consult the current [release record](docs/releases/README.md)
+and [operator guides](#operator-and-integration-documentation); do not infer
+compatibility across older documents. Application releases, Codex plugin
+packages, and Companion packages have separate acceptance boundaries.
 
 ## License
 
@@ -18,148 +81,54 @@ licenses and notices. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`VENDORED.md`](VENDORED.md). The dependency and asset license inventory must be
 completed before a public V1 release.
 
-Expansion planning:
+## Operator and integration documentation
 
-- [`Syndicatum Expansion Proposal`](docs/syndicatum-expansion-proposal.md)
-- [`Syndicatum Expansion Implementation Checklist`](docs/syndicatum-expansion-implementation-checklist.md)
-- [`Agent Integration Roadmap`](docs/agent-integration-roadmap.md)
-- [`Email Notifications Proposal`](docs/email-notifications-proposal.md)
+Older deployment and recovery documents describe different historical baselines
+and must not be combined into one support claim. The
+[Docker guide](docs/docker-deployment.md) and
+[RC.3 release record](docs/releases/v1.0.0-rc.3.md) describe different database
+baselines; the [encrypted-backup contract](docs/v1-encrypted-backup-contract.md)
+describes an earlier staged recovery boundary. Confirm the applicable package,
+runtime, and recovery procedure with the project maintainers. These differences
+remain unresolved here; this README does not establish a compatibility matrix.
 
-Implementation and operations:
+- [Production operations and recovery](docs/plugin-production-operations.md)
+- [Docker deployment](docs/docker-deployment.md) and its
+  [clean-environment acceptance harness](scripts/docker-acceptance.ps1)
+- [Runtime and activation reference](docs/runtime-and-activation.md): webhook
+  workers, Realtime scheduling, discussion linking, and public-origin settings
+- [Project API V1](docs/project-api-v1.md) and [OpenAPI contract](docs/openapi-v1.yaml)
+- [AI-assisted project setup proposals](docs/mcp-project-setup-proposals.md)
+- [Google sign-in setup](docs/google-sso-setup.md)
+- [Expansion migration runbook](docs/expansion-migration-runbook.md) and
+  [production rollout record](docs/production-rollout-2026-09-05.md)
 
-- [`Docker deployment`](docs/docker-deployment.md) and its
-  [`clean-environment acceptance harness`](scripts/docker-acceptance.ps1)
-- [`Project API V1`](docs/project-api-v1.md) and [`OpenAPI contract`](docs/openapi-v1.yaml)
-- [`Agent Protocol V1`](docs/agent-protocol-v1.md) and the distributable [`Syndicatum skill`](skills/syndicatum/SKILL.md)
-- [`Application surfaces`](docs/application-surfaces.md)
-- [`Registration workflows`](docs/registration-workflows.md)
-- [`Integration webhooks`](docs/integration-webhooks.md)
-- [`Google sign-in setup`](docs/google-sso-setup.md)
-- [`Codex plugin`](docs/codex-plugin.md)
-- [`ChatGPT plugin`](docs/chatgpt-plugin.md)
-- [`Expansion migration runbook`](docs/expansion-migration-runbook.md)
-- [`Production rollout record`](docs/production-rollout-2026-09-05.md)
+## Development and verification
 
-The expansion is additive and is not activated merely by deploying these files. Follow the migration runbook to back up the installation, run preflight checks, apply schema migrations, bootstrap the first human administrator, migrate the current timeline, and reconcile it. Existing agent tokens and the legacy compatibility API remain valid throughout that transition.
+See [Development checks](docs/development-checks.md) for the existing local PHP
+suite commands and test-database behavior. The
+[CI workflow](.github/workflows/contract-ci.yml) is authoritative for the broader
+release-candidate, portability, security, backup, browser-adapter, and
+clean-environment acceptance inventory.
 
-## Tests
+## Repository note and historical planning
 
-Run the core backend security and API integration suites with PHP 8.2:
+`chatviewer` is the legacy repository and implementation name. **Syndicatum** is
+the canonical project and product name.
 
-```powershell
-C:\wamp64\bin\php\php8.2.29\php.exe tests\run.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\migrations.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\expansion.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\project-api.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\realtime.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\account-sso.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\google-sso.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\registration.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\account-profile.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\surfaces.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\avatar-webhooks.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\agent-activation.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\workspace-agent-triggers.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\project-tasks.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\project-status.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\project-plan.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\responsibility-events.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\integration-connections.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\email-notifications.php
-C:\wamp64\bin\php\php8.2.29\php.exe tests\package-contract.php
-python tests\openapi-message-contract.py --php C:\wamp64\bin\php\php8.2.29\php.exe
-```
+The following documents preserve design and migration context; proposals are not
+statements that every planned capability has shipped:
 
-This list covers the primary local product contracts but is not the complete CI
-inventory. [`.github/workflows/contract-ci.yml`](.github/workflows/contract-ci.yml)
-is authoritative for release-candidate, portability, security, baseline, backup,
-browser-adapter, and clean-environment acceptance checks.
+- [Syndicatum Expansion Proposal](docs/syndicatum-expansion-proposal.md)
+- [Syndicatum Expansion Implementation Checklist](docs/syndicatum-expansion-implementation-checklist.md)
+- [Agent Integration Roadmap](docs/agent-integration-roadmap.md)
+- [Email Notifications Proposal](docs/email-notifications-proposal.md)
 
-The suite creates a uniquely named `syndicatum_test_*` MySQL database, starts a PHP server on an ephemeral loopback port, and removes the test database during guarded cleanup. It does not use or modify the production `pbb_agentchat` database.
+For installations still using the legacy model, expansion is additive and is not
+activated merely by deploying files. Follow the migration runbook to back up the
+installation, run preflight checks, apply schema migrations, bootstrap the first
+human administrator, migrate the current timeline, and reconcile it. Existing
+agent tokens and the legacy compatibility API remain valid through that
+transition.
 
-Agent webhook deliveries are processed independently of Realtime with `php scripts/process-agent-webhooks.php`; run it on a short recurring schedule when webhooks are enabled. ChatGPT Responses API and Workspace Agent activation are disabled because they do not continue the intended visible ChatGPT discussion. Proactive ChatGPT delivery instead uses the provider-neutral browser companion in [`companion`](companion): it injects a metadata-only notification into the configured discussion and leaves authoritative timeline reads and writes to the ChatGPT MCP plugin. `SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST` may contain a comma-separated list of exact hostnames that are intentionally allowed to resolve to private addresses (for example a local PBB virtual host); leave it unset for the safest public-address-only policy. Avatar files default to `C:\wamp64\private\syndicatum-avatars` and can be relocated with `SYNDICATUM_AVATAR_DIR`.
-
-Canonical Companion packages and checksums are published through [Syndicatum GitHub Releases](https://github.com/jybanez/syndicatum/releases/latest). Self-hosted Syndicatum installations may provide mirrors, but those mirrors are not the distribution authority.
-
-Realtime message publication uses a durable transactional outbox. On Windows,
-install its current-user supervised Scheduled Task with:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-realtime-outbox-task.ps1
-```
-
-Use `scripts\status-realtime-outbox.ps1` to inspect it and
-`scripts\stop-realtime-outbox.ps1` to stop the worker temporarily. The task runs
-at logon, restarts failed workers, and verifies both task and worker state during
-installation. Runtime and supervisor diagnostics are written beneath the
-ignored `runtime/` directory. `scripts\start-realtime-outbox-hidden.ps1` remains
-available as a documented manual fallback when Scheduled Task execution is not
-available; the database worker lock prevents duplicate publishers.
-
-Linux deployments do not run these PowerShell supervisors. The Compose
-`worker` service runs `docker/worker-loop.sh`, which invokes the PHP webhook and
-Realtime outbox processors and records a delivery-worker heartbeat. Current
-portable full-clone backups include that Compose/worker scaffold, its PHP launch
-targets, the schema baseline, and migrations so a restored Linux runtime does
-not depend on Windows scripts.
-
-In the browser, an enabled Realtime project uses the vendored official PBB
-Realtime JavaScript SDK and its WebSocket as the live
-timeline transport and does not periodically poll the message API. A dropped
-connection is retried with bounded exponential backoff; after rejoining, the
-client performs one HTTP gap-recovery request. The 15-second timeline poll is
-used only when Realtime is disabled. Initial history, pagination, filters, and
-manual refresh continue to use the HTTP API.
-
-The administrator-facing Realtime base URL is canonical. Saving an HTTPS base
-such as `https://realtime.pbb.ph` derives
-`wss://realtime.pbb.ph/realtime` and the standard HTTPS publish endpoint. An
-insecure `ws://` override is rejected while the base uses HTTPS, and the browser
-does not repeatedly retry a mixed-content configuration.
-
-The **Syndicatum for Codex** plugin (`codex@syndicatum`) is distributed from the repository marketplace at
-`.agents/plugins/marketplace.json`. Its bundled local MCP server owns the PBB
-Realtime connector lifecycle and uses Codex's `queue` command to send an
-existing conversation only a request to check Syndicatum. It then dispatches
-the linked `codex://threads/{thread_id}` deeplink so Codex Desktop also loads a
-discussion that was not already open. On Windows, the plugin first installs one
-current-user Scheduled Task and verifies that the connector reaches ready or
-authorized-idle. If Task Scheduler cannot do so, it disables that task and
-automatically installs the same launcher in the current user's Run key, then
-verifies readiness again. Sanitized startup diagnostics are written under the
-plugin's user-only data directory. On macOS it installs one current-user
-LaunchAgent and stores credentials in Keychain. These mechanisms keep the
-background listener alive independently of Codex Desktop, are event-driven,
-and never run on a repeating schedule. The plugin also bundles the `syndicatum-timeline`
-skill used by the awakened conversation. No separate installer, Windows
-service, tray application, or legacy connector fallback is used. The original
-connector experiment has been retired in favor of this plugin-owned runtime. See
-[`docs/activation-connector-poc.md`](docs/activation-connector-poc.md) for the
-verified flow and compatibility boundary.
-
-Discussion linking is configured on the project agent in Syndicatum. Select the
-provider and paste its user-facing discussion reference; Codex currently uses
-`codex://threads/{thread_id}` from **Copy deeplink**. Syndicatum normalizes the
-reference and shares the binding with every connector device authorized for that
-user. The working-directory hint is optional and may differ or be unavailable on
-another computer.
-
-ChatGPT discussion binding is initiated through MCP with
-`@Syndicatum bind <project name> <agent name>` and confirmed in the Companion.
-The stable discussion identity is the segment after `/c/`; ChatGPT may add or
-change a project path before it without changing the binding. An authorized
-Companion delivers metadata-only notifications into the best matching open
-discussion, while that discussion uses MCP and OAuth to read and update the
-authoritative project timeline.
-
-The Companion has no preset server. The operator enters the self-hosted
-Syndicatum origin (the UI shows `http://syndicatumserver.com` only as a
-placeholder), and the extension validates the server identity and advertised
-browser-companion capability before it saves the origin or starts device
-authorization.
-
-The server's MCP/OAuth issuer is likewise explicit: set **Public Syndicatum
-URL** in System Settings, or lock `general.public_origin` through the
-`SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN` environment override. Production
-origins must use HTTPS and must not include a path, query, fragment, or embedded
-credentials. Forwarded Host headers never determine OAuth token audiences.
+Further project documentation is available in [docs/](docs/).
