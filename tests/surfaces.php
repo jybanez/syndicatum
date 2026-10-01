@@ -1461,6 +1461,15 @@ try {
         $suite->true(strpos($profile, '"Connection"') !== false, 'Provider information must use the Connection section.');
         $suite->true(strpos($profile, '"Role version"') !== false && strpos($profile, '"Project context version"') !== false, 'Version metadata must remain in administrator technical details.');
         $suite->true(strpos($styles, '.participant-profile-supervisor-link') !== false, 'Clickable supervisors need profile-link styling.');
+        $suite->true(strpos($styles, '.participant-profile-modal .ui-modal-body { padding: 0; overflow: hidden; }') !== false
+            && strpos($styles, '.participant-profile-layout { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); align-items: stretch; overflow: hidden; }') !== false
+            && strpos($styles, '.participant-profile-identity { display: grid; place-items: center; align-content: safe center;') !== false
+            && strpos($styles, '.participant-profile-details { display: grid; align-content: start;') !== false
+            && substr_count($styles, 'overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;') >= 2,
+            'Desktop participant profile columns must remain bounded and scroll independently.');
+        $suite->true(strpos($styles, '.participant-profile-modal .ui-modal-body { padding: 0; overflow-y: auto; }') !== false
+            && strpos($styles, '.participant-profile-layout { grid-template-columns: 1fr; overflow: visible; }') !== false,
+            'Stacked participant profiles must return scrolling to the modal body on narrow screens.');
     });
 
     $suite->test('Agent editing opens the canonical Helper modal before loading details', function () use ($suite, $root) {
