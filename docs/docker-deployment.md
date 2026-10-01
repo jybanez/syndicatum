@@ -1,5 +1,7 @@
 # Docker deployment
 
+> **Compatibility naming:** Environment variable names below are exact configuration keys; legacy prefixes must remain unchanged. See [Terminology and compatibility](terminology.md).
+
 **Status:** Candidate supported path. It becomes the supported V1 Docker path
 only after the clean-environment acceptance harness passes against the release
 artifact and the result is recorded.

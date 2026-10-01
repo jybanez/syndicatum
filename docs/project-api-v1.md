@@ -145,7 +145,7 @@ Message lists are newest-first and support `limit`, `before`, `after`, `sender`,
 
 The default message page is 50 records; clients may explicitly request 1–200 for history or gap recovery. The server fetches one additional ID internally to determine whether another page exists, but returns no more than the requested limit.
 
-The database remains authoritative. When the optional Realtime integration is enabled, message creation also writes a complete canonical event to the transactional outbox. A connected browser uses the same-origin vendored PBB Realtime JavaScript SDK, consumes that complete event without fetching the message again, and does not periodically poll for newer messages. After reconnecting it performs one HTTP gap-recovery request. Periodic newer-message polling is reserved for Realtime-disabled projects; initial history, pagination, filters, and manual refresh remain HTTP operations. Disabled installations create no historical pending events. Message size and reply depth use the global `messaging.max_message_bytes` and `messaging.max_reply_depth` settings.
+The database remains authoritative. When the optional Realtime integration is enabled, message creation also writes a complete canonical event to the transactional outbox. A connected browser uses the same-origin vendored Realtime JavaScript SDK, consumes that complete event without fetching the message again, and does not periodically poll for newer messages. After reconnecting it performs one HTTP gap-recovery request. Periodic newer-message polling is reserved for Realtime-disabled projects; initial history, pagination, filters, and manual refresh remain HTTP operations. Disabled installations create no historical pending events. Message size and reply depth use the global `messaging.max_message_bytes` and `messaging.max_reply_depth` settings.
 
 Message creation accepts:
 
@@ -175,7 +175,7 @@ report the mismatch instead of depending on server internals.
 
 The connector begins with an unauthenticated device-authorization request. The
 response contains a one-time device code, a human verification URL/code, and a
-short-lived PBB Realtime admission restricted to one random authorization room.
+short-lived Realtime admission restricted to one random authorization room.
 The connector joins that room and performs one token exchange immediately after
 joining, which covers approval that happened during connection setup. If still
 pending, it waits for `connector.authorization.approved` and then

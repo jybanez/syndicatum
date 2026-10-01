@@ -4,7 +4,7 @@ Status: fulfilled by Helper PR #68 and consumed by Syndicatum from Helper merge 
 
 ## Context
 
-Syndicatum uses `ui.timeline` to render a newest-first, day-grouped stream of variable-height PBB coordination messages. Its cursor API loads 200 recent messages initially and appends older pages when the reader reaches the bottom.
+Syndicatum uses `ui.timeline` to render a newest-first, day-grouped stream of variable-height Syndicatum coordination messages. Its cursor API loads 200 recent messages initially and appends older pages when the reader reaches the bottom.
 
 An evaluation of `ui.chat.thread` virtualization proved that measured-window rendering controls DOM growth, but the chat-bubble presentation and its bottom-anchor behavior do not fit Syndicatum's review timeline. `ui.virtual.list` is also not a safe fit because timeline rows have variable heights.
 

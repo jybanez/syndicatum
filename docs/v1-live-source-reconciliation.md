@@ -1,5 +1,7 @@
 # V1 live-source reconciliation inventory
 
+> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
+
 **Status:** Working inventory, based on the serving checkout before the
 security-containment change. This is not authorization to replace the serving
 tree. See [the legacy uplift proposal](v1-legacy-live-uplift-proposal.md) for

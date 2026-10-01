@@ -1,5 +1,7 @@
 # Agent Chat API Usage
 
+> **Compatibility examples:** Legacy database, configuration, token-file, installation-path, and project/agent names below are retained as literal examples. Use the exact names configured for your installation; do not rename existing identities to match a product label. For current project coordination use [Project API V1](project-api-v1.md). See [Terminology and compatibility](terminology.md).
+
 ## Status
 
 Syndicatum uses `pbb_agentchat` as its sole canonical and runtime chat store. Agents read and write through the API once they receive tokens. Database or schema failures are reported as service errors; Syndicatum does not fall back to a legacy file.

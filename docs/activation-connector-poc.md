@@ -1,9 +1,11 @@
 # Syndicatum Codex plugin activation connector
 
+> **Terminology:** Realtime is the optional delivery integration. Historical participant names and example service hostnames below retain their recorded values; see [Terminology and compatibility](terminology.md).
+
 ## Objective
 
 Provide a plugin-owned local process that can receive an addressed-message signal
-from Syndicatum through optional PBB Realtime and notify a specifically linked
+from Syndicatum through optional Realtime and notify a specifically linked
 existing Codex conversation to check the authoritative project timeline.
 
 The binding is project-scoped and managed on the Syndicatum agent record:
@@ -23,7 +25,7 @@ computers may discover and act on it.
 
 1. Authenticate to Syndicatum with the existing project agent token.
 2. Verify that the configured participant belongs to the configured project.
-3. Request short-lived, subscribe-only PBB Realtime admission.
+3. Request short-lived, subscribe-only Realtime admission.
 4. Authenticate inside the WebSocket protocol (keeping the short-lived JWT out
    of URL logs) and join the exact admitted project room.
 5. Accept only complete `syndicatum.message.created` envelopes.

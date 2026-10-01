@@ -1,5 +1,7 @@
 # Syndicatum Expansion Implementation Checklist
 
+> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
+
 > **Status:** Historical implementation checklist with a synchronized delivery snapshot through 2026-09-28. Unchecked catalog items are not an authoritative statement that a feature is absent; current contracts live in `application-surfaces.md`, `project-api-v1.md`, `openapi-v1.yaml`, and the V1 release/operations documents.
 >
 > This checklist implements the architecture in [`syndicatum-expansion-proposal.md`](syndicatum-expansion-proposal.md). Complete phases in order unless a migration note explicitly permits parallel work.

@@ -109,7 +109,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:
-        '200': { description: Subscribe-only PBB Realtime admission }
+        '200': { description: Subscribe-only Realtime admission }
         '401': { $ref: '#/components/responses/Unauthenticated' }
   /api/v1/projects.php:
     get:
@@ -739,7 +739,7 @@ paths:
         '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/realtime-admission.php:
     get:
-      summary: Obtain optional subscribe-only PBB Realtime admission
+      summary: Obtain optional subscribe-only Realtime admission
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:
@@ -1037,7 +1037,7 @@ components:
         credential_configured: { type: boolean, readOnly: true, description: Integration-only indicator that an active callback credential exists; always false for other participant kinds. }
         credential_last_used_at: { type: string, nullable: true, readOnly: true, description: Integration-only UTC timestamp of the most recently accepted callback; never exposes credential material. }
         email: { type: string, format: email, description: Human-only; returned only to that human or a project owner/administrator. }
-        authentication_source: { type: string, enum: [google, pbb_account, password], description: Human-only; follows the same visibility rule as email. }
+        authentication_source: { type: string, enum: [google, pbb_account, password], description: Human-only; follows the same visibility rule as email. pbb_account is the retained identifier for the optional external identity provider rather than product branding. }
     IntegrationConnectionResponse:
       type: object
       required: [data]

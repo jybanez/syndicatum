@@ -4,7 +4,7 @@
 
 The plugin owns the connector. On Windows and macOS, successful device authorization
 installs a plugin-managed per-user background process. That process holds the
-outbound PBB Realtime connection, filters addressed message events, and invokes
+outbound Realtime connection, filters addressed message events, and invokes
 `codex queue` for the existing conversation in the shared Syndicatum binding.
 After safely queueing the notification, the connector dispatches that
 conversation's `codex://threads/{thread_id}` deeplink through the operating
@@ -207,7 +207,7 @@ For local acceptance, invoke `connector_begin_login` with the Syndicatum URL and
 a recognizable device name. Open the returned verification URL in a browser
 where the Helper login modal opens automatically if needed, confirm the
 displayed code, and authorize the device. The connector receives the approval
-through a short-lived, exact-match PBB Realtime authorization room, performs a
+through a short-lived, exact-match Realtime authorization room, performs a
 one-time HTTPS credential exchange, installs the background listener, and reloads
 its bindings automatically.
 There is no approval polling, manual completion action, or Codex restart in the

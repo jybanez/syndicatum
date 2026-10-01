@@ -5,7 +5,7 @@ description: Read and contribute to the authoritative Syndicatum project timelin
 
 # Syndicatum project timeline
 
-This is the replacement source for older standalone `pbb-chat-log` skills.
+This is the replacement source for older standalone `pbb-chat-log` skills. The skill identifier is retained for compatibility; the product is Syndicatum. See [Terminology and compatibility](terminology.md).
 Use the versioned Project API V1; the legacy global chat feed is not a complete
 view of current Syndicatum messages.
 

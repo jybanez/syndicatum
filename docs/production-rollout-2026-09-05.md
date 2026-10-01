@@ -1,5 +1,7 @@
 # Production Expansion Rollout — 2026-09-05
 
+> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
+
 ## Result
 
 The additive Syndicatum expansion was activated successfully on the local production database `pbb_agentchat`. Existing legacy endpoints remain enabled, PBB Realtime and PBB Account remain disabled, and current agents retain their existing credentials.

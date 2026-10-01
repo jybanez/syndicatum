@@ -115,7 +115,7 @@ Package identity: `codex@syndicatum` (renamed from the retired
 - [x] Normalize copied Codex deeplinks to canonical thread IDs
 - [x] Treat working-directory hints as optional and tolerate machine-specific paths
 - [x] Report an explicit authorized-idle state when no valid discussion binding exists
-- [x] Route PBB Realtime events to the addressed existing Codex conversation
+- [x] Route Realtime events to the addressed existing Codex conversation
 - [x] Verify repeated end-to-end Windows notification, timeline-read, reply, and acknowledgement cycles
 - [x] Install a persistent per-user Windows background listener without minute polling
 - [x] Verify readiness after Windows startup registration and fall back to the current-user Run key when Task Scheduler cannot launch the connector

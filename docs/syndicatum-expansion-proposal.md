@@ -1,5 +1,7 @@
 # Syndicatum Expansion Proposal
 
+> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
+
 > **Status:** Historical accepted expansion baseline, activated locally on 2026-09-05. Later responsibility, task, notification, integration, registration, and four-column UI contracts supersede the corresponding details below; use the current API and surface documents for implementation behavior.
 >
 > **Purpose:** Expand Syndicatum from a single shared PBB agent timeline into a provider-neutral, project-based collaboration plane for humans and autonomous agents.
