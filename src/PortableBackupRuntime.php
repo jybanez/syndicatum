@@ -6,13 +6,19 @@ final class PortableBackupRuntime
     private $applicationRoot;
 
     private static $rootFiles = [
-        '.htaccess','claim.php','connector-authorize.php','index.php','legal-page.php','license.php',
+        '.dockerignore','.env.example','.htaccess','Dockerfile','compose.yaml',
+        'claim.php','connector-authorize.php','index.php','legal-page.php','license.php',
         'manifest.webmanifest','mcp.php','privacy.php','setup.php','support.php','terms.php',
         'LICENSE','THIRD_PARTY_NOTICES.md','VENDORED.md',
+        'docker/apache-syndicatum.conf','docker/entrypoint.sh','docker/mysql-entrypoint.sh',
+        'docker/mysql.Dockerfile','docker/php-production.ini','docker/worker-loop.sh',
         'resources/recovery/kickstart.php',
+        'schema/mysql84/backup-policy-v1.json','schema/mysql84/baseline.json',
+        'schema/mysql84/legacy-upgrade-plan.json','schema/mysql84/schema.sql',
     ];
 
     private static $runtimeScripts = [
+        'scripts/chat-db.php',
         'scripts/plugin-mcp-connection-status.php','scripts/plugin-message-delivery-status.php',
         'scripts/plugin-operational-status.php','scripts/process-agent-webhooks.php',
         'scripts/process-current-backup-jobs.php','scripts/process-current-restore-jobs.php',
@@ -36,6 +42,7 @@ final class PortableBackupRuntime
         foreach (['api','auth','claim','oauth','src'] as $directory) {
             foreach ($this->files($directory, ['php']) as $path) { $paths[] = $path; }
         }
+        foreach ($this->files('migrations', ['php']) as $path) { $paths[] = $path; }
         foreach ($this->files('assets', ['css','mjs','svg','png','ico','webmanifest']) as $path) {
             if (strpos($path, 'assets/brand/source/') === 0 || strpos($path, 'assets/brand/desktop/') === 0
                 || strpos($path, 'assets/brand/png/') === 0 || $path === 'assets/brand/README.md') { continue; }
@@ -48,7 +55,6 @@ final class PortableBackupRuntime
         $paths = array_values(array_unique($paths)); sort($paths, SORT_STRING);
         $entries = []; $total = count($paths);
         foreach ($paths as $index => $relative) {
-            if (strpos('/' . $relative . '/', '/migrations/') !== false) { continue; }
             $source = $this->applicationRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
             if (!is_file($source) || is_link($source)) { throw new RuntimeException('Required production runtime file is missing: ' . $relative . '.'); }
             $destinationPath = 'runtime/' . $relative;

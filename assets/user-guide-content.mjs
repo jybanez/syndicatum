@@ -467,6 +467,11 @@ export const USER_GUIDE_SECTIONS = [
             ["Delivery health", "Inspect release and operational readiness signals."],
           ] },
           { type: "note", text: "Encrypted restore inspection and staging require the production Linux/POSIX runtime and its private owner-only staging directory. Native Windows development environments can create and manage the application, but cannot perform this secure restore workflow directly; use the supported Docker/Linux deployment path." },
+          { type: "list", items: [
+            "A current portable full-clone backup includes the Linux Docker/Compose deployment scaffold, worker loop, PHP worker targets, schema baseline, and migrations. The Linux worker does not use the Windows PowerShell supervisor.",
+            "The backup intentionally excludes the host .env file and recovery key. After Kickstart restores the files and isolated database, an operator must provide target-local protected settings, start the Compose app, database, and worker services, and verify both application and worker health.",
+            "Backups created before this capability was deployed remain unchanged. Create a new backup and rehearse that exact artifact before relying on it for Linux recovery.",
+          ] },
         ],
       },
     ],
