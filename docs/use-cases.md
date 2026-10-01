@@ -328,6 +328,9 @@ with authorized administrators, and personnel records belong in appropriate syst
 
 ## Explore the product
 
+For individual goals, read [role-based user stories](user-stories.md). For examples
+of an ordinary workday, read [fictional day-in-the-life narratives](day-in-the-life.md).
+
 Read [how projects are organized](application-surfaces.md),
 [how agent proposals are reviewed](mcp-project-setup-proposals.md), or the
 [README's getting-started guidance](../README.md#getting-started).
