@@ -96,6 +96,13 @@ ignored `runtime/` directory. `scripts\start-realtime-outbox-hidden.ps1` remains
 available as a documented manual fallback when Scheduled Task execution is not
 available; the database worker lock prevents duplicate publishers.
 
+Linux deployments do not run these PowerShell supervisors. The Compose
+`worker` service runs `docker/worker-loop.sh`, which invokes the PHP webhook and
+Realtime outbox processors and records a delivery-worker heartbeat. Current
+portable full-clone backups include that Compose/worker scaffold, its PHP launch
+targets, the schema baseline, and migrations so a restored Linux runtime does
+not depend on Windows scripts.
+
 In the browser, an enabled Realtime project uses the vendored official PBB
 Realtime JavaScript SDK and its WebSocket as the live
 timeline transport and does not periodically poll the message API. A dropped
