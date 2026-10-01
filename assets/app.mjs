@@ -197,7 +197,8 @@ function csrfHeaders(extra = {}) {
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...options });
+  const { requireJson = false, ...fetchOptions } = options;
+  const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...fetchOptions });
   let payload = null;
   try { payload = await response.json(); } catch (_error) { payload = null; }
   if (!response.ok) {
@@ -205,6 +206,9 @@ async function request(url, options = {}) {
     error.status = response.status;
     error.payload = payload;
     throw error;
+  }
+  if (requireJson && (payload === null || typeof payload !== "object" || Array.isArray(payload))) {
+    throw new Error("The server returned an invalid project status response. Please retry.");
   }
   return payload;
 }
@@ -3727,8 +3731,19 @@ function projectStatusSkeleton(section, options = {}) {
 }
 
 function projectStatusQuery(endpoint, parameters, signal) {
-  return request(`${endpoint}?${new URLSearchParams({ project_id: selectedProjectId(), ...parameters })}`, { signal })
-    .then((payload) => unwrap(payload) || {});
+  const projectId = selectedProjectId();
+  return request(`${endpoint}?${new URLSearchParams({ project_id: projectId, ...parameters })}`, { signal, requireJson: true })
+    .then((payload) => {
+      const data = unwrap(payload);
+      if (!data || typeof data !== "object" || Array.isArray(data) || String(data.project_id) !== String(projectId)) {
+        throw new Error("The server returned an invalid project status response. Please retry.");
+      }
+      if (endpoint === API.projectStatusPlan && (!data.milestones || !data.deliverables
+        || !Number.isFinite(data.milestones.total) || !Number.isFinite(data.deliverables.total))) {
+        throw new Error("The server returned incomplete project plan totals. Please retry.");
+      }
+      return data;
+    });
 }
 
 function openProjectStatusModal() {

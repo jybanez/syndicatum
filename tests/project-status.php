@@ -60,6 +60,24 @@ try {
     $plan->createDeliverable($access, ['title' => 'Ready output', 'milestone_id' => $milestone['id'], 'status' => 'approved']);
     $plan->createDeliverable($access, ['title' => 'Blocked output', 'milestone_id' => $milestone['id'], 'status' => 'blocked']);
 
+    $test('plan status endpoint reaches authentication instead of returning a fatal error', function () use ($project, $same) {
+        $script = '$_SERVER["REQUEST_METHOD"] = "GET"; $_GET["project_id"] = '
+            . (int) $project['id'] . '; require '
+            . var_export(dirname(__DIR__) . '/api/v1/project-status-plan.php', true) . ';';
+        $lines = []; $exitCode = null;
+        $scriptPath = tempnam(sys_get_temp_dir(), 'syndicatum-status-route-');
+        if ($scriptPath === false) { throw new RuntimeException('Cannot create route test script.'); }
+        try {
+            file_put_contents($scriptPath, "<?php\n" . $script);
+            exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($scriptPath), $lines, $exitCode);
+        } finally {
+            unlink($scriptPath);
+        }
+        $same(0, $exitCode);
+        $response = json_decode(implode("\n", $lines), true);
+        $same('AUTHENTICATION_REQUIRED', $response['code'] ?? null);
+    });
+
     $test('summary returns small owner-scoped aggregates', function () use ($status, $access, $same) {
         $summary = $status->summary($access);
         $same(4, $summary['tasks']['total']);
