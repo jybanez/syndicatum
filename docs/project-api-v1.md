@@ -58,6 +58,13 @@ agent bearer identity.
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
 
+Project context and bootstrap include the optional canonical
+`project.google_drive_url`. When configured, `effective_instructions` also tells
+agents to use that folder for generated project files only when their current
+environment has authorized access. Project-specific instructions and agent role
+instructions may define the folder structure or naming convention. The URL does
+not grant access, authorize sharing changes, or prove that an upload succeeded.
+
 The proposal endpoint accepts active project-agent bearer identities only. Its
 `proposal_type` is `project_details`, `project_plan`, `agent_setup`, or `agent_profile_update`;
 the allowed fields and human review lifecycle are documented in

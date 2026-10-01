@@ -180,17 +180,24 @@ class ProjectManagementService
         if ($name === '' || strlen($name) > 160) { throw new InvalidArgumentException('Invalid project name.'); }
         $description = array_key_exists('description', $input) ? trim((string) $input['description']) : $access['description'];
         $instructions = array_key_exists('instructions', $input) ? trim((string) $input['instructions']) : $access['instructions'];
+        $googleDriveUrl = array_key_exists('google_drive_url', $input)
+            ? $this->validatedGoogleDriveFolderUrl($input['google_drive_url'])
+            : $access['google_drive_url'];
         $contextChanged = $description !== (string) $access['description']
-            || $instructions !== (string) $access['instructions'];
+            || $instructions !== (string) $access['instructions']
+            || (string) $googleDriveUrl !== (string) $access['google_drive_url'];
         $now = Db::now();
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) { $this->pdo->beginTransaction(); }
         try {
-            $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?,
+            $statement = $this->pdo->prepare('UPDATE projects SET name = ?, description = ?, instructions = ?, google_drive_url = ?,
                 context_version = context_version + ?, status = ?, archived_at = ?, updated_at = ? WHERE id = ?');
-            $statement->execute([$name, $description, $instructions, $contextChanged ? 1 : 0,
+            $statement->execute([$name, $description, $instructions, $googleDriveUrl, $contextChanged ? 1 : 0,
                 $status, $status === 'archived' ? $now : null, $now, (int) $projectId]);
-            $this->auth->audit((int) $userId, 'project.updated', 'project', (string) ((int) $projectId), ['status' => $status]);
+            $this->auth->audit((int) $userId, 'project.updated', 'project', (string) ((int) $projectId), [
+                'status' => $status,
+                'google_drive_configured' => $googleDriveUrl !== null,
+            ]);
             if ($ownsTransaction) { $this->pdo->commit(); }
             return $this->project($projectId);
         } catch (Exception $exception) { if ($ownsTransaction) { $this->rollback(); } throw $exception; }
@@ -882,6 +889,23 @@ class ProjectManagementService
         if (!$row) { throw new RuntimeException('PROJECT_NOT_FOUND'); }
         $row['id'] = (int) $row['id']; $row['workspace_id'] = (int) $row['workspace_id']; $row['owner_user_id'] = (int) $row['owner_user_id'];
         return $row;
+    }
+
+    private function validatedGoogleDriveFolderUrl($value)
+    {
+        $value = trim((string) $value);
+        if ($value === '') { return null; }
+        if (strlen($value) > 500) {
+            throw new InvalidArgumentException('Google Drive folder link cannot exceed 500 characters.');
+        }
+        $parts = parse_url($value);
+        if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || strtolower((string) ($parts['host'] ?? '')) !== 'drive.google.com'
+            || isset($parts['user']) || isset($parts['pass'])
+            || !preg_match('#^/(?:drive/(?:u/\d+/)?folders|folders)/([A-Za-z0-9_-]+)/*$#', (string) ($parts['path'] ?? ''), $matches)) {
+            throw new InvalidArgumentException('Google Drive folder link must be an HTTPS drive.google.com folder link.');
+        }
+        return 'https://drive.google.com/drive/folders/' . $matches[1];
     }
 
     private function uniqueSlug($workspaceId, $value, $excludeProjectId = null)

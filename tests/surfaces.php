@@ -992,6 +992,13 @@ try {
             && strpos($source, 'Governance baseline · version ${governance.version}') !== false
             && strpos($source, 'project-info-instructions-copy') !== false,
             'Project Info must distinguish the shared governance baseline from project-specific instructions.');
+        $suite->true(strpos($source, 'modalTextField("google_drive_url", "Google Drive folder"') !== false
+            && strpos($source, 'manageBusyOnSubmit: false') !== false
+            && strpos($source, 'showFormValidationSummary(result, context, labels)') !== false,
+            'Project editing must use the canonical validated form flow for optional shared storage.');
+        $suite->true(strpos($source, 'projectInfoMetadataRow(metadata, "Shared storage", storageLink)') !== false
+            && strpos($source, 'storageLink.rel = "noopener noreferrer"') !== false,
+            'Project Info must safely expose the configured shared-storage folder.');
     });
 
     $suite->test('project owners receive a section-loaded Helper status visualization', function () use ($suite, $root) {

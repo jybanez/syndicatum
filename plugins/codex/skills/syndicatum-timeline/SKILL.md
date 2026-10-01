@@ -73,6 +73,19 @@ request, not as the ChatGPT Companion discussion-binding flow.
    remain proposals.
 6. Acknowledge a message only after its requested handling is genuinely complete.
 
+## Use project shared storage
+
+When bootstrap provides `project.google_drive_url`, treat it as the project's
+preferred folder for generated files. Use it only when the current environment
+has authorized Google Drive access. Follow project-specific instructions first
+for project-wide organization and the assigned agent's role instructions for
+more specific naming or placement.
+
+The link does not itself grant access. Do not change folder sharing, move or
+delete existing files, or claim that an upload succeeded without confirmation.
+If the folder cannot be accessed, preserve the artifact for an authorized
+handoff and report the limitation in the relevant task or timeline update.
+
 Use only the profile-bound plugin tools. They authenticate internally and never
 return the bearer token. Do not inspect protected credentials, invent credentials,
 or use another participant's profile. Multiple identities may share a directory

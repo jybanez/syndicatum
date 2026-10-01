@@ -27,7 +27,7 @@ class ProjectRepository
     {
         $projectId = (int) $access['project_id'];
         $project = $this->pdo->prepare(
-            'SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.instructions,
+            'SELECT p.id, p.public_id, p.workspace_id, p.owner_user_id, p.name, p.slug, p.description, p.instructions, p.google_drive_url,
                     p.context_version, p.status,
                     p.created_at, p.updated_at, u.display_name AS owner_display_name
              FROM projects p JOIN users u ON u.id = p.owner_user_id WHERE p.id = ?'
@@ -50,6 +50,7 @@ class ProjectRepository
                 'slug' => $row['slug'],
                 'description' => $row['description'],
                 'instructions' => $row['instructions'],
+                'google_drive_url' => $row['google_drive_url'],
                 'context_version' => (int) $row['context_version'],
                 'status' => $row['status'],
                 'created_at' => $row['created_at'],
@@ -58,7 +59,7 @@ class ProjectRepository
             'current_participant_id' => (int) $access['participant_id'],
             'current_role' => $access['role'],
             'governance' => $governance,
-            'effective_instructions' => ProjectGovernancePolicy::effectiveInstructions($row['instructions']),
+            'effective_instructions' => ProjectGovernancePolicy::effectiveInstructions($row['instructions'], $row['google_drive_url']),
             'permissions' => $this->projectPermissions($access),
             'latest_sequence' => $next === false ? 0 : max(0, (int) $next - 1),
             'capabilities' => [
@@ -95,7 +96,10 @@ class ProjectRepository
         return [
             'project' => $context['project'],
             'governance' => $governance,
-            'effective_instructions' => ProjectGovernancePolicy::effectiveInstructions($context['project']['instructions']),
+            'effective_instructions' => ProjectGovernancePolicy::effectiveInstructions(
+                $context['project']['instructions'],
+                $context['project']['google_drive_url']
+            ),
             'assignment' => $assignment,
             'permissions' => $context['permissions'],
             'work' => $this->taskBootstrapSummary($access),

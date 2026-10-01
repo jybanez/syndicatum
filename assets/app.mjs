@@ -2835,12 +2835,71 @@ async function loadTemplatesSurface() {
 
 function openEditProjectModal() {
   const project = state.project || {};
-  state.factories.createFormModal({ title: "Edit Project", submitLabel: "Save project", initialValues: { name: project.name || "", description: project.description || "", instructions: project.instructions || "" }, rows: [
-    [modalTextField("name", "Project name", { required: true })], [{ type: "textarea", name: "description", label: "Description" }], [{ type: "textarea", name: "instructions", label: "Project-specific operating instructions", help: "Optional guidance unique to this project. The shared governance baseline is applied automatically." }],
-  ], async onSubmit(values, context) {
-    try { const result = unwrap(await request(API.manageProjects, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), ...values }) })); state.project = { ...state.project, ...(result.project || result) }; state.projects = state.projects.map((entry) => entry.id === selectedProjectId() ? { ...entry, ...state.project } : entry); renderWorkspace(); renderProjectHeader(); state.components.toast.success("Project updated."); return true; }
-    catch (error) { context.setFormError(error.message); return false; }
-  }}).open();
+  const labels = { name: "Project name", google_drive_url: "Google Drive folder" };
+  state.factories.createFormModal({
+    title: "Edit Project",
+    submitLabel: "Save project",
+    busyMessage: "Saving project…",
+    manageBusyOnSubmit: false,
+    initialValues: {
+      name: project.name || "",
+      description: project.description || "",
+      instructions: project.instructions || "",
+      google_drive_url: project.google_drive_url || "",
+    },
+    rows: [
+      [modalTextField("name", "Project name", { required: true, maxLength: 160 })],
+      [{ type: "textarea", name: "description", label: "Description" }],
+      [modalTextField("google_drive_url", "Google Drive folder", { input: "url", maxLength: 500,
+        placeholder: "https://drive.google.com/drive/folders/…",
+        help: "Optional shared folder for project files. Agents receive this link with the project instructions; access still depends on their connected Google account." })],
+      [{ type: "textarea", name: "instructions", label: "Project-specific operating instructions",
+        help: "Optional guidance unique to this project, including how files should be organized. The shared governance baseline is applied automatically." }],
+    ],
+    validate(values) {
+      const errors = {};
+      const name = String(values.name || "").trim();
+      const driveUrl = String(values.google_drive_url || "").trim();
+      if (!name) errors.name = "Project name — required";
+      else if (name.length > 160) errors.name = "Project name must contain no more than 160 characters.";
+      if (driveUrl.length > 500) errors.google_drive_url = "Google Drive folder cannot exceed 500 characters.";
+      else if (driveUrl) {
+        try {
+          const parsed = new URL(driveUrl);
+          if (parsed.protocol !== "https:" || parsed.hostname !== "drive.google.com"
+            || !/^\/(?:drive\/(?:u\/\d+\/)?folders|folders)\/[A-Za-z0-9_-]+\/*$/.test(parsed.pathname)) {
+            errors.google_drive_url = "Google Drive folder — enter an HTTPS drive.google.com folder link.";
+          }
+        } catch (_error) {
+          errors.google_drive_url = "Google Drive folder — enter a valid HTTPS drive.google.com folder link.";
+        }
+      }
+      return errors;
+    },
+    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Saving project…" });
+      try {
+        const result = unwrap(await request(API.manageProjects, {
+          method: "PATCH",
+          headers: csrfHeaders(),
+          body: JSON.stringify({ project_id: selectedProjectId(), ...values,
+            name: String(values.name || "").trim(), google_drive_url: String(values.google_drive_url || "").trim() }),
+        }));
+        state.project = { ...state.project, ...(result.project || result) };
+        state.projects = state.projects.map((entry) => entry.id === selectedProjectId() ? { ...entry, ...state.project } : entry);
+        renderWorkspace();
+        renderProjectHeader();
+        state.components.toast.success("Project updated.");
+        return true;
+      } catch (error) {
+        context.applyApiErrors?.(error.payload);
+        context.setFormError(error.message);
+        context.setBusy(false);
+        return false;
+      }
+    },
+  }).open();
 }
 
 function projectProposalLabel(type) {
@@ -3173,6 +3232,13 @@ function openProjectInfoModal() {
   details.append(projectInfoSectionHeading("actions.settings", "Project Details", "Access and project history."));
   const metadata = projectInfoElement("dl", "project-info-metadata-list");
   projectInfoMetadataRow(metadata, "Your role", projectInfoLabel(project.role || project.current_participant?.role || "Unavailable"));
+  if (project.google_drive_url) {
+    const storageLink = projectInfoElement("a", "project-info-inline-action", "Open shared folder");
+    storageLink.href = project.google_drive_url;
+    storageLink.target = "_blank";
+    storageLink.rel = "noopener noreferrer";
+    projectInfoMetadataRow(metadata, "Shared storage", storageLink);
+  }
   projectInfoMetadataRow(metadata, "Created", projectInfoDate(project.created_at));
   projectInfoMetadataRow(metadata, "Last updated", projectInfoDate(project.updated_at));
   details.append(metadata);
@@ -4053,7 +4119,9 @@ function projectInfoMetadataRow(host, label, value) {
   const row = projectInfoElement("div", "project-info-metadata-row");
   row.append(projectInfoElement("dt", "", label));
   const definition = projectInfoElement("dd");
-  if (value && typeof value === "object") {
+  if (value instanceof Node) {
+    definition.append(value);
+  } else if (value && typeof value === "object") {
     definition.append(projectInfoElement("span", "project-info-metadata-primary", value.primary));
     if (value.secondary) definition.append(projectInfoElement("span", "project-info-metadata-secondary", value.secondary));
   } else {

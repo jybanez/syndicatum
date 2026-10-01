@@ -34,6 +34,14 @@ test("timeline skill keeps direct plan stewardship narrow and permissioned", asy
   assert.match(stewardship, /structural changes remain proposals/i);
 });
 
+test("timeline skill uses configured project shared storage without assuming access", async () => {
+  const source = await readFile(skillUrl, "utf8");
+  assert.match(source, /project\.google_drive_url/);
+  assert.match(source, /authorized Google Drive access/);
+  assert.match(source, /Do not change folder sharing/);
+  assert.match(source, /claim that an upload succeeded without confirmation/);
+});
+
 test("timeline skill explains the Codex bind and claim-code flow", async () => {
   const source = await readFile(skillUrl, "utf8");
   assert.match(source, /Treat `syndicatum bind <project> <identity>` in Codex as a protected agent-claim\s+request/);

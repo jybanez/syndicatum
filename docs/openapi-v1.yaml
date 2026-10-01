@@ -785,7 +785,7 @@ components:
   schemas:
     ProjectSummary:
       type: object
-      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, status, role, participant_id, relationship, human_count, agent_count, integration_count, message_count]
+      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, google_drive_url, status, role, participant_id, relationship, human_count, agent_count, integration_count, message_count]
       properties:
         id: { type: integer, minimum: 1 }
         public_id: { type: string, format: uuid }
@@ -794,6 +794,7 @@ components:
         name: { type: string }
         slug: { type: string }
         description: { type: string, nullable: true }
+        google_drive_url: { type: string, format: uri, nullable: true, description: Optional canonical Google Drive folder used as shared project storage. }
         status: { type: string }
         role: { type: string, enum: [owner, admin, member, viewer, agent] }
         participant_id: { type: integer, minimum: 1 }
@@ -809,7 +810,7 @@ components:
         data: { type: array, items: { $ref: '#/components/schemas/ProjectSummary' } }
     ProjectDetails:
       type: object
-      required: [id, public_id, workspace_id, owner_user_id, owner_display_name, name, slug, description, instructions, status, created_at, updated_at]
+      required: [id, public_id, workspace_id, owner_user_id, owner_display_name, name, slug, description, instructions, google_drive_url, status, created_at, updated_at]
       properties:
         id: { type: integer, minimum: 1 }
         public_id: { type: string, format: uuid }
@@ -820,6 +821,7 @@ components:
         slug: { type: string }
         description: { type: string, nullable: true }
         instructions: { type: string, nullable: true }
+        google_drive_url: { type: string, format: uri, nullable: true, description: Optional canonical Google Drive folder used as shared project storage. }
         status: { type: string }
         created_at: { $ref: '#/components/schemas/UtcTimestamp' }
         updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
@@ -856,7 +858,7 @@ components:
                 immutable: { type: boolean, enum: [true] }
             effective_instructions:
               type: string
-              description: Governance baseline followed by any project-specific operating instructions.
+              description: Governance baseline followed by project-specific operating instructions and shared-storage guidance when configured.
             permissions: { $ref: '#/components/schemas/ProjectPermissions' }
             latest_sequence: { type: integer, minimum: 0 }
             capabilities:

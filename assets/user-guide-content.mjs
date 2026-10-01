@@ -54,6 +54,22 @@ export const USER_GUIDE_SECTIONS = [
         ],
       },
       {
+        id: "project-shared-storage",
+        title: "Set a shared project folder",
+        summary: "Give people and agents one Google Drive folder for generated project files.",
+        keywords: ["google drive", "shared storage", "files", "folder", "project instructions"],
+        blocks: [
+          { type: "steps", items: [
+            "Create or choose the Google Drive folder and configure its access in Google Drive.",
+            "Open the project menu, choose Edit Project, and paste the HTTPS drive.google.com folder link into Google Drive folder.",
+            "Use Project-specific operating instructions to describe the project-wide folder structure, file naming, or handoff rules.",
+            "Use an agent's role instructions when that agent needs more specific organization guidance.",
+            "Open Project Info to confirm or open the configured shared folder.",
+          ] },
+          { type: "note", text: "Syndicatum stores and shares the folder link as project context; it does not manage Google Drive permissions or upload files itself. An agent can use the folder only when its current environment has authorized Google Drive access, and it must not report an upload as successful without confirmation." },
+        ],
+      },
+      {
         id: "project-owner-status",
         title: "Review project status",
         summary: "Use the owner-only status view to spot progress, activity, and work needing attention.",
