@@ -107,6 +107,7 @@ jobs:
           php tests/package-contract.php
           php tests/backup-envelope.php
           php tests/archive-safety.php
+          php tests/portable-runtime-dependencies.php
 
   canonical-release-candidate:
     runs-on: ubuntu-24.04

@@ -251,6 +251,13 @@ an incident-specific recovery decision.
   backups. Protected credentials are database/environment state, not release
   files.
 - Test restore into an isolated database and non-production origin regularly.
+- Current portable full-clone backups include the Linux Docker/Compose worker
+  scaffold, worker PHP launch targets, schema baseline, and migrations. They do
+  not include `.env`, recovery keys, or PowerShell supervisors. After
+  Kickstart, provide target-local protected deployment settings and require the
+  Compose `worker` health check and a bounded outbox delivery check to pass.
+  Older backup artifacts are unchanged; create and rehearse a new artifact
+  after this capability is deployed.
 - Never restore a database over the only surviving copy. Restore to a new
   database, validate migrations and counts, then switch the application through
   controlled configuration.
