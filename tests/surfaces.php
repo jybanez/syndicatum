@@ -996,6 +996,7 @@ try {
 
     $suite->test('project owners receive a section-loaded Helper status visualization', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
         $suite->true(strpos($source, 'label: "Project status"') !== false
             && strpos($source, 'String(project.role || "") === "owner"') !== false,
             'Project status must be visible only to the project owner.');
@@ -1025,6 +1026,12 @@ try {
         $suite->true(strpos($source, 'const row = projectInfoElement("button", "project-status-attention-item")') !== false
             && strpos($source, 'void openTaskDetails(item.id)') !== false,
             'Needs-attention rows must be keyboard-operable and open the existing task workflow.');
+        $suite->true(strpos($source, '"is-wide is-progress"') !== false
+            && strpos($source, '"is-wide is-activity"') !== false
+            && strpos($source, 'content.append(summary.section, attention.section, progress.section, plan.section, activity.section, team.section, integrations.section)') !== false
+            && strpos($styles, '.project-status-activity-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));') !== false
+            && strpos($styles, '.project-status-milestone-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));') !== false,
+            'Primary status sections must use the full dashboard width, prioritize attention, and make compact use of horizontal space.');
         foreach (['Summary', 'TaskProgress', 'Plan', 'Activity', 'Attention', 'Team', 'Integrations'] as $section) {
             $suite->true(strpos($source, 'API.projectStatus' . $section) !== false,
                 'Missing independent Project Status request for ' . $section . '.');

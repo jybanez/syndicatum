@@ -3763,13 +3763,13 @@ function openProjectStatusModal() {
   intro.append(projectInfoElement("p", "", `Current operational status for ${state.project?.name || "this project"}. Sections load one at a time.`));
   content.append(intro);
   const summary = projectStatusSection("At a glance", "Small indexed aggregates for the current project.", "is-wide");
-  const progress = projectStatusSection("Task progress", "Distribution and completion across all project tasks.");
+  const progress = projectStatusSection("Task progress", "Distribution and completion across all project tasks.", "is-wide is-progress");
   const plan = projectStatusSection("Milestones & deliverables", "Checkpoint readiness and concrete project outputs.", "is-wide");
-  const activity = projectStatusSection("Project activity", "Outcome-focused task activity in UTC.");
+  const activity = projectStatusSection("Project activity", "Outcome-focused task activity in UTC.", "is-wide is-activity");
   const attention = projectStatusSection("Needs attention", "The newest blocked, review, or overdue tasks.", "is-wide");
   const team = projectStatusSection("Team", "Participant counts by identity and membership state.");
   const integrations = projectStatusSection("Integrations", "Connection and credential readiness without exposing secrets.");
-  content.append(summary.section, progress.section, plan.section, activity.section, attention.section, team.section, integrations.section);
+  content.append(summary.section, attention.section, progress.section, plan.section, activity.section, team.section, integrations.section);
 
   const closeAction = { id: "close", label: "Close", variant: "primary", autoFocus: true };
   let modal = null;
