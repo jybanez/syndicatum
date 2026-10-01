@@ -58,8 +58,8 @@ try {
         throw new RuntimeException('Portable Linux recovery runtime must not depend on PowerShell: ' . implode(', ', $powerShellPaths));
     }
     $dockerIgnore = file_get_contents($stage . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . '.dockerignore');
-    if (!is_string($dockerIgnore) || !preg_match('/^\.env$/m', $dockerIgnore)
-        || !preg_match('/^!\.env\.example$/m', $dockerIgnore)) {
+    if (!is_string($dockerIgnore) || !preg_match('/^\.env\r?$/m', $dockerIgnore)
+        || !preg_match('/^!\.env\.example\r?$/m', $dockerIgnore)) {
         throw new RuntimeException('Linux recovery runtime does not prevent target-local .env secrets from entering the Docker build context.');
     }
     $workerLoop = file_get_contents($stage . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'docker' . DIRECTORY_SEPARATOR . 'worker-loop.sh');
