@@ -1,5 +1,7 @@
 # Development checks
 
+> **Compatibility naming:** The production database name below is an existing installation identifier, not product branding. See [Terminology and compatibility](terminology.md).
+
 Run these commands from the repository root.
 
 ## Tests

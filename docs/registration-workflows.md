@@ -1,5 +1,7 @@
 # Registration and welcome workflows
 
+> **Integration name:** PBB Account identifies the optional external sign-in provider, not the Syndicatum product. Its UI and protocol labels are retained; see [Terminology and compatibility](terminology.md).
+
 ## Native registration
 
 1. The visitor submits the canonical registration form. Client validation runs before the form enters its busy state, and the API repeats all validation and authorization checks.

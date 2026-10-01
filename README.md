@@ -120,10 +120,7 @@ suite commands and test-database behavior. The
 release-candidate, portability, security, backup, browser-adapter, and
 clean-environment acceptance inventory.
 
-## Repository note and historical planning
-
-`chatviewer` is the legacy repository and implementation name. **Syndicatum** is
-the canonical project and product name.
+## Historical planning
 
 The following documents preserve design and migration context; proposals are not
 statements that every planned capability has shipped:

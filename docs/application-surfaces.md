@@ -1,8 +1,10 @@
 # Syndicatum Application Surfaces
 
+> **Integration names:** PBB Account is the optional external identity provider and remains an exact UI label, not another name for Syndicatum. Realtime refers to the optional delivery integration. See [Terminology and compatibility](terminology.md).
+
 > **Status:** Current implemented surface contract, synchronized 2026-09-28
 
-Syndicatum follows the standard PBB application shell used by PBB Chat: one fixed Helper navbar and a full-height main region. The navbar uses the approved Syndicatum standard color master at 48 px; favicon sizes from 16–24 px use the separately optimized micro master. The document body does not scroll. Workspace uses two independently scrolling columns; an open project uses four independently scrolling columns.
+Syndicatum uses a viewport-contained application shell: one fixed Helper navbar and a full-height main region. The navbar uses the approved Syndicatum standard color master at 48 px; favicon sizes from 16–24 px use the separately optimized micro master. The document body does not scroll. Workspace uses two independently scrolling columns; an open project uses four independently scrolling columns.
 
 ## Application Shell
 
@@ -15,7 +17,7 @@ Syndicatum — 100dvh, overflow hidden
 
 The shell must use `min-height: 0` and `min-width: 0` at grid boundaries so nested scrolling belongs to the intended columns. The page itself must not grow beyond the viewport.
 
-The navbar uses Helper `ui.navbar` with the same single-row, sticky, non-collapsing desktop behavior as PBB Chat. On narrow screens, navbar items may scroll horizontally rather than wrapping into a second row.
+The navbar uses Helper `ui.navbar` with single-row, sticky, non-collapsing desktop behavior. On narrow screens, navbar items may scroll horizontally rather than wrapping into a second row.
 
 ## Capability-Driven Navbar
 
@@ -352,7 +354,7 @@ Human sessions are revocation-based rather than inactivity-based. A successful n
 Webhook controls never expose the stored secret. Create/rotation responses return the newly generated secret exactly once. Status responses contain only destination/status metadata, last success/failure information, and whether a secret is configured. Webhook notification is an optional runtime signal for addressed agents; it is independent of the optional global Realtime integration and never changes timeline correctness.
 
 When a project's Realtime capability is enabled, its open Project surface uses
-the same-origin vendored PBB Realtime JavaScript SDK and does
+the same-origin vendored Realtime JavaScript SDK and does
 not periodically poll for newer timeline messages. Complete message events are
 applied directly to the timeline. Participant creation events cause the open
 project to reload its authoritative active-participant directory, including

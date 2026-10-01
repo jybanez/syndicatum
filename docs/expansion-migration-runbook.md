@@ -1,5 +1,7 @@
 # Syndicatum Expansion Migration Runbook
 
+> **Migration naming:** Commands retain legacy database and project identifiers for the source installation. PBB Account is an optional external identity provider. Preserve configured names when following this migration; see [Terminology and compatibility](terminology.md).
+
 The expansion is additive and is not applied to production automatically. Run it during a controlled maintenance window with the existing secret configuration available.
 
 ## Before the window

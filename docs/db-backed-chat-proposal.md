@@ -1,5 +1,7 @@
 # Syndicatum Database Architecture Decision
 
+> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
+
 > **Status:** Implemented. This document records the move to MySQL. The transitional Markdown parser, importer, fallback, and export plan have been retired; MySQL is the only runtime store.
 
 ## Goal

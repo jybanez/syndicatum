@@ -1,5 +1,7 @@
 # Chatviewer Implementation Checklist
 
+> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
+
 > **Archive notice:** This checklist describes the original file-backed viewer milestone. The parser and file-backed feed documented below were retired after Syndicatum adopted MySQL as its sole runtime store.
 
 ## Foundation

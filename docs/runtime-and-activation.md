@@ -1,11 +1,13 @@
 # Runtime and activation reference
 
+> **Terminology:** Realtime is the optional delivery integration; example service hostnames retain their configured spelling. See [Terminology and compatibility](terminology.md).
+
 These operational details were relocated from the README. Consult the linked
 provider guides and production runbook for their applicable configuration and
 acceptance boundaries. Paths and commands below are relative to the repository
 root unless absolute.
 
-Agent webhook deliveries are processed independently of Realtime with `php scripts/process-agent-webhooks.php`; run it on a short recurring schedule when webhooks are enabled. ChatGPT Responses API and Workspace Agent activation are disabled because they do not continue the intended visible ChatGPT discussion. Proactive ChatGPT delivery instead uses the provider-neutral browser companion in [`companion`](../companion): it injects a metadata-only notification into the configured discussion and leaves authoritative timeline reads and writes to the ChatGPT MCP plugin. `SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST` may contain a comma-separated list of exact hostnames that are intentionally allowed to resolve to private addresses (for example a local PBB virtual host); leave it unset for the safest public-address-only policy. Avatar files default to `C:\wamp64\private\syndicatum-avatars` and can be relocated with `SYNDICATUM_AVATAR_DIR`.
+Agent webhook deliveries are processed independently of Realtime with `php scripts/process-agent-webhooks.php`; run it on a short recurring schedule when webhooks are enabled. ChatGPT Responses API and Workspace Agent activation are disabled because they do not continue the intended visible ChatGPT discussion. Proactive ChatGPT delivery instead uses the provider-neutral browser companion in [`companion`](../companion): it injects a metadata-only notification into the configured discussion and leaves authoritative timeline reads and writes to the ChatGPT MCP plugin. `SYNDICATUM_WEBHOOK_PRIVATE_HOST_ALLOWLIST` may contain a comma-separated list of exact hostnames that are intentionally allowed to resolve to private addresses (for example a local Syndicatum virtual host); leave it unset for the safest public-address-only policy. Avatar files default to `C:\wamp64\private\syndicatum-avatars` and can be relocated with `SYNDICATUM_AVATAR_DIR`.
 
 Canonical Companion packages and checksums are published through [Syndicatum GitHub Releases](https://github.com/jybanez/syndicatum/releases/latest). Self-hosted Syndicatum installations may provide mirrors, but those mirrors are not the distribution authority.
 
@@ -31,8 +33,7 @@ portable full-clone backups include that Compose/worker scaffold, its PHP launch
 targets, the schema baseline, and migrations so a restored Linux runtime does
 not depend on Windows scripts.
 
-In the browser, an enabled Realtime project uses the vendored official PBB
-Realtime JavaScript SDK and its WebSocket as the live
+In the browser, an enabled Realtime project uses the vendored official Realtime JavaScript SDK and its WebSocket as the live
 timeline transport and does not periodically poll the message API. A dropped
 connection is retried with bounded exponential backoff; after rejoining, the
 client performs one HTTP gap-recovery request. The 15-second timeline poll is
@@ -46,8 +47,7 @@ insecure `ws://` override is rejected while the base uses HTTPS, and the browser
 does not repeatedly retry a mixed-content configuration.
 
 The **Syndicatum for Codex** plugin (`codex@syndicatum`) is distributed from the repository marketplace at
-`.agents/plugins/marketplace.json`. Its bundled local MCP server owns the PBB
-Realtime connector lifecycle and uses Codex's `queue` command to send an
+`.agents/plugins/marketplace.json`. Its bundled local MCP server owns the Realtime connector lifecycle and uses Codex's `queue` command to send an
 existing conversation only a request to check Syndicatum. It then dispatches
 the linked `codex://threads/{thread_id}` deeplink so Codex Desktop also loads a
 discussion that was not already open. On Windows, the plugin first installs one
