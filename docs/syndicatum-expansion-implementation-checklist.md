@@ -1,16 +1,113 @@
 # Syndicatum Expansion Implementation Checklist
 
-> **Historical context:** This record retains terminology, identities, and paths from its original scope. Syndicatum is the current product name; retained legacy names and integration labels are explained in [Terminology and compatibility](terminology.md). This record is not current setup guidance.
-
-> **Status:** Historical implementation checklist with a synchronized delivery snapshot through 2026-09-28. Unchecked catalog items are not an authoritative statement that a feature is absent; current contracts live in `application-surfaces.md`, `project-api-v1.md`, `openapi-v1.yaml`, and the V1 release/operations documents.
+> **Historical context:** This record retains terminology, identities, and paths
+> from its original scope. Syndicatum is the current product name; retained
+> legacy names and integration labels are explained in
+> [Terminology and compatibility](terminology.md). This record is not current
+> setup guidance.
+>
+> **Status:** Reconciled delivery record through 2026-10-02. The current status
+> table and open-work list below are authoritative for this expansion. The
+> original checkbox catalog is retained afterward as the accepted historical
+> scope; its unchecked boxes must not be interpreted as missing features.
 >
 > This checklist implements the architecture in [`syndicatum-expansion-proposal.md`](syndicatum-expansion-proposal.md). Complete phases in order unless a migration note explicitly permits parallel work.
 
-## Implementation Snapshot
+## Current reconciliation — 2026-10-02
+
+Status meanings:
+
+- **Complete** — the intended expansion capability is implemented and has
+  repository evidence.
+- **Core complete; follow-up open** — the usable V1 path is implemented, but a
+  named hardening, compatibility-exit, or external acceptance item remains.
+- **Deferred** — intentionally outside the current supported boundary.
+
+| Original section | Current status | Evidence and remaining boundary |
+| --- | --- | --- |
+| 0. Existing baseline | **Complete** | MySQL-only runtime, individual agent credentials, canonical revisions, pagination, and the measured timeline are covered by `tests/project-api.php`, `tests/migrations.php`, and `tests/surfaces.php`. |
+| 1. Architecture and migration preparation | **Complete** | `architecture-inventory.md`, `production-rollout-2026-09-05.md`, `expansion-migration-runbook.md`, and the release/backup acceptance documents record the inventory, rollout evidence, recovery plan, and compatibility-exit criteria. |
+| 2. Migration framework | **Complete** | `SchemaMigrator`, migration locks/checksums, preflight/reconciliation commands, post-baseline migrations, MySQL 5.7→8.4 acceptance, and clean MySQL 8.4 release installation are exercised by the migration, package, and release CI jobs. Forward-only DDL uses verified backup restoration instead of synthetic down migrations. |
+| 3. Human users and native authentication | **Core complete; follow-up open** | Native registration/login/logout/session handling, CSRF, rate limiting, password change, session rotation, bootstrap administration, account states, and final-administrator protection are implemented and tested. A dedicated end-user forgotten-password flow remains outside the current surface. |
+| 4. System roles and global administration | **Core complete; follow-up open** | System roles, guarded user and agent administration, settings, audit events, delivery health, and privilege-isolation checks are implemented. Explicit administrative project inspection and abandoned-owner recovery remain open. |
+| 5. Personal workspaces | **Complete** | One owner-only workspace is created/backfilled per user; workspace metadata editing, owned/shared project discovery, and isolation are implemented and tested. |
+| 5A. Application shell and Workspace | **Complete** | The fixed Helper shell, capability-driven navigation, independently scrolling Workspace columns, project metadata/search/states, guarded creation, deep links, and narrow-screen switching are the current `application-surfaces.md` contract and are covered by `tests/surfaces.php`. |
+| 6. Projects and human membership | **Core complete; follow-up open** | Project creation/editing, roles, invitations with accept/decline/expiry, membership changes/removal, ownership transfer, owned/shared discovery, and cross-project concealment are implemented. Invitation revocation and abandoned-owner recovery remain open. |
+| 7. Unified human and agent participants | **Complete** | Human and agent participants share the canonical directory representation and lifecycle constraints; migration and Project API tests cover creation, normalization, removal history, and isolation. |
+| 8. Project-scoped agent identities and credentials | **Complete** | Project ownership, claim codes, scoped credentials, rotation/revocation/suspension, prefix/secret-version compatibility, cross-project denial, and project-admin controls are implemented and tested. |
+| 9. Message and addressee model | **Complete** | Project-scoped senders, sequences, replies, idempotency, direct/mention/broadcast addressees, acknowledgement state, revisions, tombstones, rate/size/depth controls, and isolation are covered by the Project API and OpenAPI contract suites. |
+| 10. Topic retirement | **Core complete; compatibility exit open** | Topics are absent from the canonical Project API and current UI. Transitional legacy routes/storage remain until active clients migrate and the documented observation and owner-approval gates pass. |
+| 11. Versioned Project API | **Complete** | The authenticated V1 project, participant, message, responsibility, task, plan, status, integration, proposal, and connector routes are documented in `project-api-v1.md` and `openapi-v1.yaml`; real response samples are schema-validated in CI. |
+| 12. Single project timeline UI | **Core complete; follow-up open** | The four-column surface, attached tabs, filters, virtualization, reply/acknowledgement/revision behavior, loading/recovery handling, local timestamps, and responsive switching are implemented. Pinned-message operations and a final broad keyboard/mobile acceptance pass remain open. |
+| 13. Human message composition | **Complete** | Session/CSRF-authenticated posting, participant addressing, structured mentions, broadcasts, replies, anti-spoofing, validation/busy handling, safe links, and the no-attachment boundary are implemented and tested. |
+| 14. User and agent avatars | **Core complete; follow-up open** | Authenticated upload/replace, MIME and dimension validation, decode/re-encode, opaque private storage, safe serving, cleanup on replacement, participant normalization, fallback rendering, and agent indicators are implemented. Explicit remove controls and the remaining multipart/isolation boundary matrix remain open. |
+| 15. Database-backed System Settings | **Complete** | The guarded registry, validation, typed sections, encrypted write-only secrets, environment locks, audits, and authorization tests are implemented. |
+| 16. Optional Realtime and connector delivery | **Core complete; follow-up open** | Transactional message/task/plan/proposal invalidation, authenticated admission, retry/dead-letter handling, reconnect gap recovery, Companion device pairing/bindings, and Windows/macOS lifecycle support are implemented. Broader message mutation events, duplicate/out-of-order acceptance, physical-Mac acceptance, and supported Linux Secret Service installation remain open. |
+| 16A. Project-agent webhooks | **Core complete; follow-up open** | Project-scoped encrypted one-time secrets, canonical signed delivery, durable per-recipient queues, retry/dead-letter processing, IPv4 SSRF/DNS-rebinding defenses, and safe health reporting are implemented. IPv6 policy, jitter/`Retry-After`, automatic endpoint disable/re-enable, and broader receiver tests remain open. |
+| 17. Optional PBB Account | **Core complete; external acceptance open** | Disabled-by-default OAuth, state/nonce, server-side exchange, immutable identity linking, guarded existing-user behavior, least-privilege JIT provisioning, local authorization, logout, and native break-glass access are implemented and tested locally. External outage/recovery acceptance remains open. |
+| 17A. Optional Google Sign-In | **Core complete; external acceptance open** | Authorization code with PKCE, ID-token verification, immutable subject binding, deliberate linking, least-privilege provisioning, protected secrets, and UI entry points are implemented. Production-client callback and outage/recovery acceptance remain open. |
+| 18. Agent protocol and skill packages | **Core complete; follow-up open** | `agent-protocol-v1.md`, `agent-api-usage.md`, OpenAPI examples, the bundled Codex timeline skill, provider-neutral instructions, idempotency/retry guidance, and responsibility semantics are published. Physical end-to-end validation on a second non-Codex provider remains open. |
+| 19. Safety, audit, and operations | **Core complete; follow-up open** | Security/admin audits, rate limits, credential controls, delivery diagnostics, health separation, backup/restore, release provenance, and security inventory are implemented. Project export, abandoned-owner recovery, retention/deletion controls, and the final pre-legacy-disable review remain open. |
+| 20. Current data migration | **Complete; legacy exit open** | Production-shaped data was migrated with identities, tokens, messages, recipients, revisions, and compatibility behavior preserved and reconciled. Telemetry and deprecation controls are present; disabling/removing legacy routes still requires the documented observation period and explicit owner approval. |
+| 21. End-to-end acceptance | **Core complete; external gates open** | Source, package, Docker, clean MySQL 8.4, MySQL 5.7→8.4, encrypted backup round-trip, security, and OpenAPI CI are green. External provider acceptance, final legacy retirement, and the remaining named UX/hardening items stay open. |
+
+### Delivered after the 2026-09-28 snapshot
+
+- [x] Add project-status summaries, task outcomes, attention queues, team and
+      integration health, plan readiness, and bounded activity charts.
+- [x] Add durable project tasks, responsibility workflow, task-detail tabs,
+      Markdown rendering, and chronological activity timelines.
+- [x] Add milestones, deliverables, linked tasks, optimistic inline editing,
+      grouped reordering, and project-plan status rules.
+- [x] Add human-reviewed AI proposals for project details, project plans,
+      agent setup, and agent-profile changes.
+- [x] Add explicit agent-profile permission for evidence-backed milestone and
+      deliverable progress stewardship without broader task or plan authority.
+- [x] Add project Google Drive URL metadata and inject bounded shared-storage
+      guidance into effective agent instructions without implying Drive access.
+- [x] Add per-project and inactive-tab unread/attention counters with durable
+      participant read state.
+- [x] Add portable Linux restore support and a portable Realtime outbox worker
+      runtime while retaining the Windows supervised-worker path.
+- [x] Add public use-case documentation and reconcile current product naming
+      while preserving operational identifiers and historical records.
+
+### Current open work
+
+- [ ] Complete the legacy-client observation period, migrate remaining clients,
+      rehearse the final exit, and obtain explicit owner approval before
+      disabling or removing compatibility routes/storage.
+- [ ] Add invitation revocation, pinned-message operations, project export,
+      abandoned-owner recovery, and explicit audited administrative project
+      inspection.
+- [ ] Finish avatar removal controls and the remaining multipart, isolation,
+      cleanup, and fallback acceptance matrix.
+- [ ] Extend Realtime/webhook hardening for the event, IPv6, retry-jitter,
+      endpoint-disable, duplicate, out-of-order, and health-control gaps named
+      above.
+- [ ] Complete production/external acceptance for PBB Account and Google, a
+      physical Mac connector run, and a supported Linux Secret Service install.
+- [ ] Validate the provider-neutral agent protocol end to end with a second
+      non-Codex runtime.
+
+### Evidence index
+
+Current behavior is defined by
+[`application-surfaces.md`](application-surfaces.md),
+[`project-api-v1.md`](project-api-v1.md),
+[`openapi-v1.yaml`](openapi-v1.yaml),
+[`agent-protocol-v1.md`](agent-protocol-v1.md), and the
+[`V1 commercial checklist`](v1-commercial-viability-implementation-checklist.md).
+Migration, release, backup, restore, portability, and security evidence is
+recorded in the dated acceptance documents under `docs/` and enforced by the
+source, package, Docker, migration, release-candidate, backup-roundtrip, and
+security CI jobs.
+
+## Historical implementation snapshot
 
 The worktree now includes the additive migration framework and reconciliation tooling; native human authentication and self-service password change; personal workspaces; projects, memberships, invitations, agents, and unified participants; the canonical project message API; project isolation and credential controls; the fixed-navbar Workspace, Project, and Administration surfaces; the single virtualized timeline; database-backed global settings; global administration APIs; optional PBB Realtime and PBB Account integrations; and provider-neutral agent instructions.
 
-The 2026-09-28 surface synchronization also records the current project UUID
+The 2026-10-02 synchronization also records the current project UUID
 routes, revocation-based persistent browser sessions, project-overview header,
 attached Timeline/Responsibility tabs, multi-sender and message-type filters,
 the shared Tasks and Team rails, icon-based filter popover and refresh action, automatic reply
@@ -18,6 +115,10 @@ addressing, browser-local timestamps, Helper alert validation, avatar fallback
 and agent-badge rules, immediate busy feedback for project selection and agent
 editing, invitation review/accept/decline, the `/notifications` inbox, personal
 and system-default IANA timezones, and copyable one-time credential handoffs.
+It additionally includes project status and planning, linked tasks and
+responsibility workflow, safe Markdown task details, human-reviewed AI
+proposals, permissioned agent plan-progress stewardship, shared Google Drive
+metadata, unread counters, and portable Linux restore/outbox-worker support.
 The project workspace now uses compact four-pixel column spacing, aligned header
 separators, open tab-panel edges, a transparent timeline canvas, and explicit
 scrollbar gutters. ChatGPT remains interactive
@@ -36,7 +137,9 @@ The backup-first production rollout was completed on 2026-09-05 and is recorded 
 - Extend the delivered project-agent webhook path with IPv6 destinations, `Retry-After`/jitter scheduling, automatic endpoint disablement, and richer delivery-health controls.
 - Validate the published agent protocol with a second non-Codex provider runtime.
 
-Unchecked boxes below remain the detailed acceptance catalog rather than a claim that no implementation exists; the snapshot above records the current delivery boundary.
+The checkbox catalog below is the original accepted scope and is retained for
+traceability. It is not the current status tracker; use the reconciliation and
+open-work list above when deciding what remains.
 
 ### Clarified-requirement implementation and test gaps
 
@@ -44,7 +147,9 @@ Human and project-agent forms now upload JPEG, PNG, or WebP files through an aut
 
 Project-agent webhooks now have project-scoped configuration, encrypted show-once secrets, durable per-recipient delivery rows, canonical signed events, a scheduler-friendly worker, bounded transport behavior, IPv4 SSRF/DNS-rebinding defenses, retry/dead-letter handling, safe pre-migration feature detection, and focused integration tests. Delivery remains independent of optional Realtime and cannot roll back message creation. Remaining work is IPv6 destination support, randomized retry jitter and capped `Retry-After`, automatic disable/manual re-enable policy, richer health inspection, and broader endpoint/receiver contract coverage.
 
-## 0. Existing Baseline
+## Original acceptance catalog (historical)
+
+### 0. Existing Baseline
 
 - [x] Use MySQL as the only runtime message store
 - [x] Authenticate agent writes with individually claimed tokens
@@ -56,7 +161,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Use native measured-height `ui.timeline` virtualization
 - [x] Maintain backend security and API integration tests
 
-## 1. Architecture and Migration Preparation
+### 1. Architecture and Migration Preparation
 
 - [x] Confirm workspaces are personal, single-owner containers
 - [x] Confirm projects, not workspaces, support multiple human members
@@ -76,7 +181,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Write forward and rollback migration plans
 - [ ] Define compatibility duration and removal criteria for legacy API routes
 
-## 2. Migration Framework
+### 2. Migration Framework
 
 - [ ] Add a versioned database migration runner
 - [ ] Add a schema-version table and migration lock
@@ -87,7 +192,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add rollback tests for every reversible migration
 - [ ] Add reconciliation commands for row counts and foreign-key integrity
 
-## 3. Human Users and Native Authentication
+### 3. Human Users and Native Authentication
 
 - [ ] Create `users`
 - [ ] Add unique normalized email or username identity
@@ -106,7 +211,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Prevent removal, suspension, or demotion of the final active administrator
 - [ ] Add native login and recovery tests
 
-## 4. System Roles and Global Administration
+### 4. System Roles and Global Administration
 
 - [ ] Create `system_roles`
 - [ ] Create `user_system_roles`
@@ -121,7 +226,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add administrative audit-event storage and viewer
 - [ ] Add horizontal and vertical privilege-escalation tests
 
-## 5. Personal Workspaces
+### 5. Personal Workspaces
 
 - [ ] Create `workspaces`
 - [ ] Enforce one personal workspace per user in V1
@@ -132,7 +237,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add workspace rename and basic metadata management
 - [ ] Add workspace ownership and isolation tests
 
-## 5A. Application Shell and Workspace Surface
+### 5A. Application Shell and Workspace Surface
 
 - [x] Replace the custom banner with Helper `ui.navbar`
 - [x] Keep the navbar fixed, single-row, and full width
@@ -156,7 +261,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Add narrow-screen Profile and Projects panel switching
 - [x] Test viewport containment and both independent scroll owners
 
-## 6. Projects and Human Membership
+### 6. Projects and Human Membership
 
 - [ ] Create `projects`
 - [ ] Create `project_members`
@@ -171,7 +276,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Deny cross-project access without revealing whether the resource exists
 - [ ] Add exhaustive project-isolation tests
 
-## 7. Unified Human and Agent Participants
+### 7. Unified Human and Agent Participants
 
 - [ ] Create `project_participants`
 - [ ] Support participant kind `human`
@@ -184,7 +289,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add participant directory and project-member filters
 - [ ] Add participant lifecycle and uniqueness tests
 
-## 8. Project-Scoped Agent Identities and Credentials
+### 8. Project-Scoped Agent Identities and Credentials
 
 - [ ] Add `project_id` ownership to agents or create replacement project-agent tables
 - [ ] Ensure an agent belongs to exactly one project
@@ -199,7 +304,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Deny the same token across all other projects
 - [ ] Add token lifecycle, leakage, and cross-project authorization tests
 
-## 9. Message and Addressee Model
+### 9. Message and Addressee Model
 
 - [ ] Add `project_id` to every message
 - [ ] Replace agent-only senders with `sender_participant_id`
@@ -220,7 +325,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Preserve soft-delete/tombstone behavior and reply context
 - [ ] Add message-size, rate-limit, idempotency, and validation tests
 
-## 10. Topic Retirement
+### 10. Topic Retirement
 
 - [ ] Confirm no active automation depends on topic endpoints
 - [ ] Remove topic selection from message creation
@@ -232,7 +337,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Remove topic foreign keys and tables after backup and reconciliation
 - [ ] Remove topic guidance from agent skills and API documentation
 
-## 11. Versioned Project API
+### 11. Versioned Project API
 
 - [ ] Add `/api/v1` routing
 - [ ] Add authenticated project discovery
@@ -249,7 +354,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Add OpenAPI or equivalent machine-readable contract
 - [x] Add complete API integration and authorization tests
 
-## 12. Single Project Timeline UI
+### 12. Single Project Timeline UI
 
 - [x] Open projects from the Workspace project list
 - [x] Show immediate busy feedback and prevent duplicate project selection while loading
@@ -281,7 +386,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [x] Select Timeline automatically after opening a project on narrow screens
 - [ ] Verify desktop and mobile scrolling, anchoring, filtering, and keyboard access
 
-## 13. Human Message Composition
+### 13. Human Message Composition
 
 - [ ] Add authenticated human message posting
 - [ ] Use one participant selector for humans and agents
@@ -296,7 +401,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Do not add message attachment upload, file metadata, preview, or provider credentials; avatar profile media is the only narrow upload exception
 - [ ] Add composition and authorization tests
 
-## 14. User and Agent Avatars
+### 14. User and Agent Avatars
 
 - [x] Add user and agent display names
 - [x] Render uploaded avatars without the fallback fill, omit redundant human badges, and retain an accessible agent robot badge
@@ -313,7 +418,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Preserve accessibility labels and adequate contrast
 - [ ] Add upload authorization, CSRF, content validation, isolation, replacement, deletion, and rendering tests
 
-## 15. Database-Backed System Settings Modal
+### 15. Database-Backed System Settings Modal
 
 - [ ] Create a controlled `system_settings` store
 - [ ] Define a backend registry for setting keys, types, defaults, and validation
@@ -333,7 +438,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Keep database credentials, master encryption key, and bootstrap configuration outside the database
 - [ ] Add settings validation, authorization, encryption, and audit tests
 
-## 16. Optional PBB Realtime Integration
+### 16. Optional PBB Realtime Integration
 
 - [x] Add `realtime_enabled` capability setting defaulting to false
 - [x] Add Realtime endpoints, credentials, timeout, and CA settings
@@ -378,7 +483,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add Linux Secret Service credential storage and a per-user service before Linux public release
 - [x] Establish a prioritized, provider-neutral agent integration roadmap in [`agent-integration-roadmap.md`](agent-integration-roadmap.md)
 
-## 16A. Optional Project-Agent Notification Webhooks
+### 16A. Optional Project-Agent Notification Webhooks
 
 - [x] Add one optional webhook configuration per project-agent identity, managed by project owners/administrators
 - [x] Keep webhook enablement and delivery independent of global `realtime.enabled`
@@ -397,7 +502,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Surface safe delivery health and manual re-enable controls to project administrators
 - [ ] Add addressed/unaddressed, Realtime-off, signature, retry, dedupe, SSRF, timeout, secret lifecycle, dead-letter, and no-message-rollback tests
 
-## 17. Optional PBB Account Integration
+### 17. Optional PBB Account Integration
 
 - [ ] Add `account_sso_enabled` setting defaulting to false
 - [ ] Add Account base URL, client ID, callback, post-logout, scopes, timeout, and CA settings
@@ -419,7 +524,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Keep native break-glass administrator access
 - [ ] Keep native login functional when Account integration is disabled
 
-## 17A. Optional Google Sign-In
+### 17A. Optional Google Sign-In
 
 - [x] Add authorization-code login with state, nonce, and PKCE S256
 - [x] Validate Google's ID-token signature and security claims
@@ -432,7 +537,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Exercise the callback against a production Google OAuth client over public HTTPS
 - [ ] Add disabled, enabled, linking, suspended-account, logout, outage, and recovery tests
 
-## 18. Agent Protocol and Skill Packages
+### 18. Agent Protocol and Skill Packages
 
 - [ ] Define Syndicatum Agent Protocol V1
 - [ ] Document authentication and token storage
@@ -453,7 +558,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Publish OpenAPI examples and curl examples
 - [ ] Validate the protocol with at least two different provider runtimes
 
-## 19. Safety, Audit, and Operations
+### 19. Safety, Audit, and Operations
 
 - [ ] Add immutable security and administrative audit events
 - [ ] Add project membership and credential audit events
@@ -470,7 +575,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Add structured operational diagnostics without message or secret leakage
 - [ ] Perform security review before disabling legacy compatibility
 
-## 20. Current Data Migration
+### 20. Current Data Migration
 
 - [ ] Create the bootstrap human administrator
 - [ ] Create the administrator's personal workspace
@@ -492,7 +597,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Disable legacy public reads after active clients migrate
 - [ ] Remove compatibility routes only after explicit acceptance
 
-## 21. End-to-End Acceptance
+### 21. End-to-End Acceptance
 
 - [ ] A new human can authenticate and receives one personal workspace
 - [x] A fresh login opens the Workspace surface unless a valid project deep link was requested
@@ -509,8 +614,8 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] An agent can message another agent
 - [ ] Any participant can broadcast to the project
 - [ ] Every active project participant can see every project message
-- [ ] Only addressees receive responsibility and acknowledgement state
-- [ ] Direct, mention, and broadcast addressees follow the same notification pipeline
+- [x] Only addressees receive responsibility and acknowledgement state
+- [x] Direct, mention, and broadcast addressees follow the same notification pipeline
 - [x] One timeline supports text, addressed, acknowledgement, multi-sender, message-type, and date filters
 - [ ] Cross-project reads and writes fail safely
 - [ ] Realtime-enabled clients receive complete committed messages without per-message fetches

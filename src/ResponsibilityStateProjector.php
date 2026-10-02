@@ -9,13 +9,13 @@ require_once __DIR__ . '/ResponsibilityStateReducer.php';
 class ResponsibilityStateProjector
 {
     public static function replay($requestId, $requesterId, $initialResponderId,
-        $initialGeneration, array $rows)
+        $initialGeneration, array $rows, $requestType = 'work')
     {
         if ($initialGeneration === null) {
             throw new RuntimeException('RESPONSIBILITY_BASELINE_UNAVAILABLE');
         }
         $state = ResponsibilityStateReducer::initial($requestId,
-            $requesterId, $initialResponderId);
+            $requesterId, $initialResponderId, $requestType);
         $generation = (int) $initialGeneration;
         $knownEvents = [];
         $latestSequence = null;

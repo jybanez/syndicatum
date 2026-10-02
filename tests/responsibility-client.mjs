@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { responsibilityActions, responsibilityEvent, responsibilityLabels } from "../assets/responsibility-inbox.mjs";
+import { responsibilityActions, responsibilityEvent, responsibilityLabels, responsibilityStateLabel } from "../assets/responsibility-inbox.mjs";
 import { evidenceDetails } from "../assets/responsibility-evidence.mjs";
 
 const request = {
@@ -97,4 +97,20 @@ test("resolved work labels a retained block as history rather than a current blo
     ["Blocked"]);
   assert.deepEqual(responsibilityLabels({ ...request, blocked: true, state: "resolved" }, name),
     ["Previously blocked"]);
+});
+
+test("classified requests expose only their decision vocabulary", () => {
+  const active = [10, 20];
+  const approval = { ...request, request_type: "approval" };
+  assert.deepEqual(responsibilityActions(approval, 20, false, active),
+    ["approval_approved", "approval_denied", "transfer_offered"]);
+  assert.equal(responsibilityStateLabel(approval), "Awaiting approval");
+  const review = { ...request, request_type: "review" };
+  assert.deepEqual(responsibilityActions(review, 20, false, active),
+    ["review_accepted", "review_revision_requested", "transfer_offered"]);
+  assert.equal(responsibilityStateLabel(review), "Awaiting review");
+  assert.equal(responsibilityStateLabel({ ...approval, state: "resolved",
+    outcome: "approved" }), "Approved");
+  assert.equal(responsibilityStateLabel({ ...review, state: "resolved",
+    outcome: "revision_requested" }), "Revision requested");
 });

@@ -24,6 +24,12 @@ creation and lifecycle updates are recorded under the selected protected agent
 identity. Conversation IDs and working directories are routing data and are
 never posted into timeline messages.
 
+Action requests are explicitly classified as Work, Approval, or Review. The
+Responsibility Inbox presents the corresponding decisions, records each one as
+immutable system evidence, and routes its notification to the participant who
+owns the next step. Agents do not duplicate those decisions as ordinary
+timeline replies.
+
 The skill also exposes human-reviewed AI proposals for improving project
 details, proposing a new project agent, or refining an existing agent's role and
 supervision. Every proposal remains pending until an owner or administrator

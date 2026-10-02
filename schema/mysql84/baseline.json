@@ -3,7 +3,7 @@
     "format_version": "1.0",
     "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
     "application_version": "1.0.0",
-    "schema_head": "202610020001",
+    "schema_head": "202610020003",
     "migration_cutover": "202609180004",
     "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
     "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e",
@@ -115,6 +115,14 @@
         {
             "id": "202610020001",
             "sha256": "926b51c66709f231fba1624a9fa6a4a7a0470c520aecd2c54461b7af415dd325"
+        },
+        {
+            "id": "202610020002",
+            "sha256": "0889fb4492f19e70cfd1dab1aa854b4970aa81156d1741af367a10491c70b230"
+        },
+        {
+            "id": "202610020003",
+            "sha256": "9afcadad831286c4536b1935d25eda51716ede623e858f067aa96c4d7cce26da"
         }
     ],
     "tables": [
@@ -817,6 +825,7 @@
                 "correlation_id",
                 "reply_depth",
                 "action_requested",
+                "action_request_type",
                 "created_at",
                 "updated_at",
                 "deleted_at"
@@ -1153,7 +1162,8 @@
                 "status",
                 "created_at",
                 "updated_at",
-                "status_generation"
+                "status_generation",
+                "last_read_sequence"
             ],
             "identity_columns": [
                 "id"

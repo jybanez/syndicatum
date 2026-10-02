@@ -326,6 +326,7 @@ try {
         $suite->same(2, $agentProjects['body']['data'][0]['human_count']);
         $suite->same(1, $agentProjects['body']['data'][0]['agent_count']);
         $suite->same(0, $agentProjects['body']['data'][0]['message_count']);
+        $suite->same(0, $agentProjects['body']['data'][0]['unread_message_count']);
         $suite->true(preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $agentProjects['body']['data'][0]['public_id']) === 1);
         $suite->same($agentProjects['body']['data'][0]['public_id'], $agentContext['body']['data']['project']['public_id']);
         $suite->same(1, count($humanProjects['body']['data']));
@@ -478,6 +479,39 @@ try {
         $suite->same($messageId, $lookup['body']['data'][0]['id']);
     });
 
+    $suite->test('project summaries count unread messages from others and advance read state safely', function () use ($suite, $baseUrl, $agentOneHeaders, $memberHeaders, $projectOne, $messageId) {
+        $memberProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $memberHeaders);
+        $memberProject = array_values(array_filter($memberProjects['body']['data'], function ($project) use ($projectOne) {
+            return (int) $project['id'] === (int) $projectOne;
+        }))[0];
+        $message = projectApiRequest($baseUrl, 'GET', '/api/v1/project-message.php?project_id=' . $projectOne . '&id=' . $messageId, $memberHeaders);
+        $agentRead = projectApiRequest($baseUrl, 'POST', '/api/v1/project-read-state.php?project_id=' . $projectOne, $agentOneHeaders, [
+            'last_read_sequence' => max(0, $message['body']['data']['project_sequence'] - 1),
+        ]);
+        $suite->same(200, $agentRead['status'], $agentRead['raw']);
+        $agentProjects = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $agentOneHeaders);
+        $agentProject = array_values(array_filter($agentProjects['body']['data'], function ($project) use ($projectOne) {
+            return (int) $project['id'] === (int) $projectOne;
+        }))[0];
+        $suite->true($memberProject['unread_message_count'] >= 1, 'Messages from other participants must be counted as unread.');
+        $suite->same(0, $agentProject['unread_message_count'], 'A participant\'s own message must not be unread.');
+
+        $read = projectApiRequest($baseUrl, 'POST', '/api/v1/project-read-state.php?project_id=' . $projectOne, $memberHeaders, [
+            'last_read_sequence' => $message['body']['data']['project_sequence'],
+        ]);
+        $suite->same(200, $read['status'], $read['raw']);
+        $suite->same(0, $read['body']['data']['unread_message_count']);
+        $suite->same($message['body']['data']['project_sequence'], $read['body']['data']['last_read_sequence']);
+
+        $refreshed = projectApiRequest($baseUrl, 'GET', '/api/v1/projects.php', $memberHeaders);
+        $memberProject = array_values(array_filter($refreshed['body']['data'], function ($project) use ($projectOne) {
+            return (int) $project['id'] === (int) $projectOne;
+        }))[0];
+        $suite->same(0, $memberProject['unread_message_count']);
+        $missing = projectApiRequest($baseUrl, 'POST', '/api/v1/project-read-state.php?project_id=' . $projectOne, $memberHeaders, []);
+        $suite->same(422, $missing['status']);
+    });
+
     $suite->test('responsibility stale transition is an HTTP conflict, not a server error', function () use ($suite, $baseUrl, $agentTwoHeaders, $memberHeaders, $projectTwo, $memberId, $pdo, &$contractSamples) {
         $participantLookup = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND user_id = ?');
         $participantLookup->execute([$projectTwo, $memberId]);
@@ -525,6 +559,57 @@ try {
         $contractSamples[] = ['schema' => 'ApiError',
             'path' => '/api/v1/project-messages.php', 'method' => 'post',
             'status' => 409, 'body' => $stale['body']];
+    });
+
+    $suite->test('classified approval and review requests expose typed decisions', function () use ($suite, $baseUrl, $agentTwoHeaders, $memberHeaders, $projectTwo, $memberId, $pdo) {
+        $participantLookup = $pdo->prepare('SELECT id FROM project_participants WHERE project_id = ? AND user_id = ?');
+        $participantLookup->execute([$projectTwo, $memberId]);
+        $responder = (int) $participantLookup->fetchColumn();
+        $path = '/api/v1/project-messages.php?project_id=' . $projectTwo;
+        $approval = projectApiRequest($baseUrl, 'POST', $path, $agentTwoHeaders, [
+            'body' => 'Approve this publication',
+            'direct_participant_ids' => [$responder],
+            'action_requested' => true,
+            'action_request_type' => 'approval',
+        ]);
+        $suite->same(201, $approval['status'], $approval['raw']);
+        $suite->same('approval', $approval['body']['data']['action_request_type']);
+        $approvalId = $approval['body']['data']['id'];
+        $decision = projectApiRequest($baseUrl, 'POST', $path, $memberHeaders, [
+            'body' => 'Approved for publication',
+            'idempotency_key' => 'api-typed-approval',
+            'responsibility_event' => [
+                'kind' => 'approval_approved',
+                'request_message_id' => $approvalId,
+                'initial_responder_participant_id' => $responder,
+                'expected_event_id' => $approvalId,
+            ],
+        ]);
+        $suite->same(201, $decision['status'], $decision['raw']);
+        $suite->same('responsibility.approval_approved',
+            $decision['body']['data']['system_event']['type']);
+
+        $review = projectApiRequest($baseUrl, 'POST', $path, $agentTwoHeaders, [
+            'body' => 'Review this publication',
+            'direct_participant_ids' => [$responder],
+            'action_requested' => true,
+            'action_request_type' => 'review',
+        ]);
+        $suite->same(201, $review['status'], $review['raw']);
+        $reviewId = $review['body']['data']['id'];
+        $mismatch = projectApiRequest($baseUrl, 'POST', $path, $memberHeaders, [
+            'body' => 'Wrong workflow action',
+            'idempotency_key' => 'api-typed-review-mismatch',
+            'responsibility_event' => [
+                'kind' => 'work_started',
+                'request_message_id' => $reviewId,
+                'initial_responder_participant_id' => $responder,
+                'expected_event_id' => $reviewId,
+            ],
+        ]);
+        $suite->same(409, $mismatch['status'], $mismatch['raw']);
+        $suite->same('RESPONSIBILITY_ACTION_TYPE_MISMATCH',
+            $mismatch['body']['code']);
     });
 
     $suite->test('responsibility API conceals foreign and unrelated IDs before actor decisions', function () use ($suite, $baseUrl, $agentOneHeaders, $agentTwoHeaders, $memberHeaders, $projectOne, $projectTwo, $memberId, $agentOne, $messageId, $pdo) {
@@ -1012,8 +1097,20 @@ try {
             $memberHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
         $assertRejected($post('requester-start', 'work_started', $requestId,
             $humanHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
-        $started = $assertCreated($post('responder-start', 'work_started',
-            $requestId, $responderHeaders));
+        $startedResponse = $post('responder-start', 'work_started',
+            $requestId, $responderHeaders);
+        $started = $assertCreated($startedResponse);
+        $suite->same('system', $startedResponse['body']['data']['message_kind']);
+        $suite->same('responsibility.work_started',
+            $startedResponse['body']['data']['system_event']['type']);
+        $suite->same($requestId,
+            $startedResponse['body']['data']['reply_to_message_id']);
+        $suite->same(1, count($startedResponse['body']['data']['addressees']),
+            'Responsibility update must not use the ordinary broadcast fallback.');
+        $suite->same($request['body']['data']['sender']['participant_id'],
+            $startedResponse['body']['data']['addressees'][0]['participant_id']);
+        $suite->same('direct',
+            $startedResponse['body']['data']['addressees'][0]['reason']);
         $assertRejected($post('target-block', 'blocked', $started,
             $memberHeaders), 403, 'RESPONSIBILITY_FORBIDDEN');
         $blocked = $assertCreated($post('responder-block', 'blocked',
@@ -1075,6 +1172,9 @@ try {
             'path' => '/api/v1/project-responsibility-inbox.php',
             'method' => 'get', 'status' => 200, 'body' => $resolvedPage['body']];
         $suite->same(1, count($resolvedPage['body']['data']));
+        $suite->true(isset($resolvedPage['body']['page']['unacknowledged_count'])
+            && is_int($resolvedPage['body']['page']['unacknowledged_count']),
+            'Responsibility pages must expose the viewer attention count for inactive-tab badges.');
         $suite->same($requestId,
             $resolvedPage['body']['data'][0]['request_message_id']);
         $suite->same($corrected,

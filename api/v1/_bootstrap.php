@@ -46,6 +46,7 @@ function projectApiError(Exception $exception)
         'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT' => [409, 'This participant is not an addressee of the message.'],
         'IDEMPOTENCY_KEY_CONFLICT' => [409, 'This idempotency key was already used for a different message request.'],
         'RESPONSIBILITY_CONFLICT' => [409, 'Responsibility state changed; reload the latest event and retry explicitly.'],
+        'RESPONSIBILITY_ACTION_TYPE_MISMATCH' => [409, 'This action does not match the request type; reload the request and use its available actions.'],
         'RESPONSIBILITY_FORBIDDEN' => [403, 'This participant cannot perform that responsibility event.'],
         'RESPONSIBILITY_TARGET_INACTIVE' => [409, 'The responsibility target is not active.'],
         'RESPONSIBILITY_BASELINE_UNAVAILABLE' => [409, 'Historical request requires responsibility migration before state changes.'],

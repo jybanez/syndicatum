@@ -7,12 +7,15 @@
  */
 class ResponsibilityStateReducer
 {
-    public static function initial($requestMessageId, $requesterId, $responderId)
+    public static function initial($requestMessageId, $requesterId, $responderId,
+        $requestType = 'work')
     {
         return [
             'request_message_id' => (int) $requestMessageId,
             'requester_id' => (int) $requesterId,
             'responder_id' => (int) $responderId,
+            'request_type' => in_array($requestType,
+                ['work', 'approval', 'review'], true) ? $requestType : 'work',
             'state' => 'open',
             'blocked' => false,
             'block_event_id' => null,
@@ -43,6 +46,20 @@ class ResponsibilityStateReducer
         $mayDecide = $requester || $moderator;
         $base = $state['state'];
         $pending = $state['pending'];
+        $requestType = isset($state['request_type'])
+            ? (string) $state['request_type'] : 'work';
+        $typedKinds = [
+            'work' => ['work_started', 'blocked', 'unblocked',
+                'resolution_proposed', 'resolution_accepted',
+                'resolution_disputed', 'resolution_withdrawn'],
+            'approval' => ['approval_approved', 'approval_denied'],
+            'review' => ['review_accepted', 'review_revision_requested'],
+        ];
+        foreach ($typedKinds as $type => $kinds) {
+            if (in_array($kind, $kinds, true) && $requestType !== $type) {
+                throw new RuntimeException('RESPONSIBILITY_ACTION_TYPE_MISMATCH');
+            }
+        }
 
         switch ($kind) {
             case 'work_started':
@@ -89,6 +106,22 @@ class ResponsibilityStateReducer
                 self::requireActor($actorId === (int) $pending['proposer_id']);
                 $state['state'] = $pending['prior_state'];
                 $state['pending'] = null;
+                break;
+            case 'approval_approved':
+            case 'approval_denied':
+                self::requireState($base, ['open']);
+                self::requireActor($responder);
+                $state['state'] = 'resolved';
+                $state['outcome'] = $kind === 'approval_approved'
+                    ? 'approved' : 'denied';
+                break;
+            case 'review_accepted':
+            case 'review_revision_requested':
+                self::requireState($base, ['open']);
+                self::requireActor($responder);
+                $state['state'] = 'resolved';
+                $state['outcome'] = $kind === 'review_accepted'
+                    ? 'accepted' : 'revision_requested';
                 break;
             case 'request_withdrawn':
                 self::requireState($base, ['open', 'disputed', 'orphaned',

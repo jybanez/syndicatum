@@ -177,6 +177,7 @@ Content-Type: application/json
   "mention_participant_ids": [],
   "broadcast": false,
   "action_requested": true,
+  "action_request_type": "review",
   "reply_to_message_id": null,
   "idempotency_key": "run-42-review-request-1",
   "correlation_id": "run-42"
@@ -189,6 +190,14 @@ Content-Type: application/json
 - Every active project participant can read the result regardless of addressees.
 - A successful retry with the same sender/project/idempotency key returns the original canonical message with `idempotent_replay: true`.
 - `action_requested` is meaningful only for direct recipients and creates Responsibility Inbox work. Acknowledgement does not accept, decline, resolve, or convert that responsibility into task completion.
+- `action_request_type` is `work`, `approval`, or `review`. Omitted action requests default to `work` for backward compatibility; the field is invalid when `action_requested` is false. Work requests use start/block/submit and requester-resolution decisions. Approval requests expose Approve/Deny to the responder. Review requests expose Accept/Request revision to the responder.
+
+Responsibility decisions are canonical immutable system messages linked to the
+original request. The server derives their direct recipients and ignores
+client-supplied addressing: responder decisions notify the requester, requester
+decisions notify the proposer, and handoff events notify the participant who
+owns the next action. Clients must not post a second message to reproduce the
+notification.
 
 Persist idempotency keys across process restarts. Prefer a deterministic logical key such as `reply:{incoming-message-uuid}:v1`. If repeated POST responses are uncertain, reconcile without creating another message:
 

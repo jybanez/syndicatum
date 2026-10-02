@@ -114,6 +114,11 @@ class RequestAuth
                          WHERE counted.project_id = p.id AND counted.kind = 'integration' AND counted.status = 'active') AS integration_count,
                         (SELECT COUNT(*) FROM messages counted
                          WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count,
+                        (SELECT COUNT(*) FROM messages counted
+                         WHERE counted.project_id = p.id AND counted.deleted_at IS NULL
+                           AND (counted.sender_participant_id IS NULL OR counted.sender_participant_id <> pp.id)
+                           AND counted.project_sequence > pp.last_read_sequence
+                           AND counted.created_at >= pp.created_at) AS unread_message_count,
                         CASE WHEN p.owner_user_id = ? THEN 'owned' ELSE 'shared' END AS relationship
                  FROM project_members pm
                  JOIN projects p ON p.id = pm.project_id
@@ -134,7 +139,12 @@ class RequestAuth
                         (SELECT COUNT(*) FROM project_participants counted
                          WHERE counted.project_id = p.id AND counted.kind = 'integration' AND counted.status = 'active') AS integration_count,
                         (SELECT COUNT(*) FROM messages counted
-                         WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count
+                         WHERE counted.project_id = p.id AND counted.deleted_at IS NULL) AS message_count,
+                        (SELECT COUNT(*) FROM messages counted
+                         WHERE counted.project_id = p.id AND counted.deleted_at IS NULL
+                           AND (counted.sender_participant_id IS NULL OR counted.sender_participant_id <> pp.id)
+                           AND counted.project_sequence > pp.last_read_sequence
+                           AND counted.created_at >= pp.created_at) AS unread_message_count
                  FROM project_agents pa
                  JOIN projects p ON p.id = pa.project_id
                  JOIN project_participants pp ON pp.project_id = p.id AND pp.agent_id = pa.agent_id
@@ -162,6 +172,7 @@ class RequestAuth
                 'agent_count' => (int) $row['agent_count'],
                 'integration_count' => (int) $row['integration_count'],
                 'message_count' => (int) $row['message_count'],
+                'unread_message_count' => (int) $row['unread_message_count'],
             ];
         }, $statement->fetchAll());
     }

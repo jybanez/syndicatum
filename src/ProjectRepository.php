@@ -375,6 +375,50 @@ class ProjectRepository
         return $messages[0];
     }
 
+    public function markProjectRead(array $access, $lastReadSequence)
+    {
+        if (!is_int($lastReadSequence) && !ctype_digit((string) $lastReadSequence)) {
+            throw new InvalidArgumentException('last_read_sequence must be a non-negative integer.');
+        }
+        $lastReadSequence = (int) $lastReadSequence;
+        if ($lastReadSequence < 0) {
+            throw new InvalidArgumentException('last_read_sequence must be a non-negative integer.');
+        }
+
+        $latest = $this->pdo->prepare(
+            'SELECT COALESCE(MAX(project_sequence), 0) FROM messages WHERE project_id = ? AND deleted_at IS NULL'
+        );
+        $latest->execute([(int) $access['project_id']]);
+        $safeSequence = min($lastReadSequence, (int) $latest->fetchColumn());
+        $update = $this->pdo->prepare(
+            'UPDATE project_participants
+             SET last_read_sequence = GREATEST(last_read_sequence, ?)
+             WHERE id = ? AND project_id = ? AND status = \'active\''
+        );
+        $update->execute([$safeSequence, (int) $access['participant_id'], (int) $access['project_id']]);
+
+        $state = $this->pdo->prepare(
+            'SELECT pp.last_read_sequence,
+                    (SELECT COUNT(*) FROM messages m
+                     WHERE m.project_id = pp.project_id AND m.deleted_at IS NULL
+                       AND (m.sender_participant_id IS NULL OR m.sender_participant_id <> pp.id)
+                       AND m.project_sequence > pp.last_read_sequence
+                       AND m.created_at >= pp.created_at) AS unread_message_count
+             FROM project_participants pp
+             WHERE pp.id = ? AND pp.project_id = ? AND pp.status = \'active\''
+        );
+        $state->execute([(int) $access['participant_id'], (int) $access['project_id']]);
+        $row = $state->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new RuntimeException('PROJECT_NOT_FOUND');
+        }
+        return [
+            'project_id' => (int) $access['project_id'],
+            'last_read_sequence' => (int) $row['last_read_sequence'],
+            'unread_message_count' => (int) $row['unread_message_count'],
+        ];
+    }
+
     public function revisions(array $access, $messageId)
     {
         $this->message($access, $messageId);
@@ -422,8 +466,32 @@ class ProjectRepository
         }
         $severity = MessageSeverity::normalize(isset($input['severity']) ? $input['severity'] : 'neutral');
         $input['severity'] = $severity;
-        $actionRequested = !isset($input['responsibility_event'])
-            && !empty($input['action_requested']);
+        $isResponsibilityEvent = isset($input['responsibility_event']);
+        if ($isResponsibilityEvent && !is_array($input['responsibility_event'])) {
+            throw new InvalidArgumentException('responsibility_event must be an object.');
+        }
+        $actionRequested = !$isResponsibilityEvent && !empty($input['action_requested']);
+        $actionRequestType = null;
+        if (!$isResponsibilityEvent && array_key_exists('action_request_type', $input)
+            && $input['action_request_type'] !== null
+            && !is_string($input['action_request_type'])) {
+            throw new InvalidArgumentException('action_request_type must be a string.');
+        }
+        if (!$isResponsibilityEvent && array_key_exists('action_request_type', $input)
+            && $input['action_request_type'] !== null
+            && trim((string) $input['action_request_type']) !== '') {
+            $actionRequestType = strtolower(trim((string) $input['action_request_type']));
+            if (!in_array($actionRequestType, ['work', 'approval', 'review'], true)) {
+                throw new InvalidArgumentException(
+                    'action_request_type must be work, approval, or review.');
+            }
+        }
+        if ($actionRequested) {
+            $actionRequestType = $actionRequestType ?: 'work';
+        } elseif ($actionRequestType !== null) {
+            throw new InvalidArgumentException(
+                'action_request_type is valid only when action_requested is true.');
+        }
         $requestFingerprint = $idempotencyKey === '' ? null
             : $this->messageRequestFingerprint($senderId, $body, $input);
         $legacyRequestFingerprint = $idempotencyKey === '' ? null
@@ -442,22 +510,38 @@ class ProjectRepository
             }
         }
 
-        $replyTo = !empty($input['reply_to_message_id']) ? (int) $input['reply_to_message_id'] : null;
+        $replyTo = $isResponsibilityEvent
+            ? (int) (isset($input['responsibility_event']['request_message_id'])
+                ? $input['responsibility_event']['request_message_id'] : 0)
+            : (!empty($input['reply_to_message_id']) ? (int) $input['reply_to_message_id'] : null);
+        if ($replyTo < 1) {
+            $replyTo = null;
+        }
         $replyDepth = 0;
         if ($replyTo !== null) {
             $reply = $this->pdo->prepare('SELECT reply_depth FROM messages WHERE id = ? AND project_id = ? AND deleted_at IS NULL');
             $reply->execute([$replyTo, $projectId]);
             $parentDepth = $reply->fetchColumn();
             if ($parentDepth === false) {
+                if ($isResponsibilityEvent) {
+                    throw new RuntimeException('MESSAGE_NOT_FOUND');
+                }
                 throw new InvalidArgumentException('Reply target does not belong to this project.');
             }
             $replyDepth = (int) $parentDepth + 1;
             $maxReplyDepth = (int) $this->settings->get('messaging.max_reply_depth');
-            if ($replyDepth > $maxReplyDepth) {
+            // The depth limit protects participant-authored conversation trees.
+            // A server-owned workflow event must still be recorded against its
+            // request when that request already sits at the configured limit.
+            if (!$isResponsibilityEvent && $replyDepth > $maxReplyDepth) {
                 throw new InvalidArgumentException('Maximum reply depth exceeded.');
             }
         }
-        $addressees = $this->resolveAddressees($projectId, $senderId, $input);
+        // Responsibility-event recipients are derived by the server after the
+        // reducer validates the authoritative state. Missing client recipients
+        // must never fall through to the ordinary broadcast default.
+        $addressees = $isResponsibilityEvent
+            ? [] : $this->resolveAddressees($projectId, $senderId, $input);
         if ($actionRequested
             && !in_array('direct', array_values($addressees), true)) {
             throw new InvalidArgumentException(
@@ -469,22 +553,57 @@ class ProjectRepository
             $sequence = $this->nextSequence($projectId);
             $uuid = $this->uuidV4();
             $now = Db::now();
+            $messageKind = $isResponsibilityEvent ? 'system' : 'participant';
+            $eventType = null;
+            $eventDataJson = null;
+            if ($isResponsibilityEvent) {
+                $eventType = 'responsibility.'
+                    . trim((string) (isset($input['responsibility_event']['kind'])
+                        ? $input['responsibility_event']['kind'] : 'unknown'));
+                $eventDataJson = json_encode([
+                    'subject_type' => 'responsibility_request',
+                    'request_message_id' => $replyTo,
+                    'initial_responder_participant_id' => isset($input['responsibility_event']['initial_responder_participant_id'])
+                        ? (int) $input['responsibility_event']['initial_responder_participant_id'] : null,
+                    'kind' => isset($input['responsibility_event']['kind'])
+                        ? trim((string) $input['responsibility_event']['kind']) : null,
+                    'actor_participant_id' => $senderId,
+                    'target_participant_id' => isset($input['responsibility_event']['target_participant_id'])
+                        ? (int) $input['responsibility_event']['target_participant_id'] : null,
+                    'reference_event_message_id' => isset($input['responsibility_event']['reference_event_id'])
+                        ? (int) $input['responsibility_event']['reference_event_id'] : null,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                if ($eventDataJson === false) {
+                    throw new RuntimeException('Unable to encode responsibility event metadata.');
+                }
+            }
             $insert = $this->pdo->prepare(
                 'INSERT INTO messages
                  (message_uuid, project_id, project_sequence, sender_participant_id, message_kind, severity,
-                   reply_to_message_id, body,
+                   event_type, event_data_json, reply_to_message_id, body,
                    client_idempotency_key, request_fingerprint, correlation_id, reply_depth,
-                   action_requested, created_at, updated_at)
-                  VALUES (?, ?, ?, ?, \'participant\', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                   action_requested, action_request_type, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
-                $uuid, $projectId, $sequence, $senderId, $severity, $replyTo, $body,
+                $uuid, $projectId, $sequence, $senderId, $messageKind, $severity,
+                $eventType, $eventDataJson, $replyTo, $body,
                 $idempotencyKey === '' ? null : $idempotencyKey,
                 $requestFingerprint,
                  empty($input['correlation_id']) ? null : substr((string) $input['correlation_id'], 0, 160),
-                 $replyDepth, $actionRequested ? 1 : 0, $now, $now,
+                 $replyDepth, $actionRequested ? 1 : 0, $actionRequestType,
+                 $now, $now,
              ]);
              $messageId = (int) $this->pdo->lastInsertId();
+
+            if ($isResponsibilityEvent) {
+                $eventResult = (new ResponsibilityEventService($this->pdo))->record($access,
+                    $input['responsibility_event'], $messageId, $idempotencyKey, $body);
+                foreach ($eventResult['notification_participant_ids'] as $participantId) {
+                    $addressees[(int) $participantId] = 'direct';
+                }
+            }
+
             $add = $this->pdo->prepare(
                 'INSERT INTO message_addressees
                  (message_id, participant_id, reason, responsibility_status_generation, created_at)
@@ -494,14 +613,6 @@ class ProjectRepository
             foreach ($addressees as $participantId => $reason) {
                 $add->execute([$messageId, $reason, $reason, 'direct', $now,
                     $participantId, $projectId]);
-            }
-
-            if (isset($input['responsibility_event'])) {
-                if (!is_array($input['responsibility_event'])) {
-                    throw new InvalidArgumentException('responsibility_event must be an object.');
-                }
-                (new ResponsibilityEventService($this->pdo))->record($access,
-                    $input['responsibility_event'], $messageId, $idempotencyKey, $body);
             }
 
             $message = $this->messagesByIds($projectId, [$messageId]);
@@ -584,6 +695,10 @@ class ProjectRepository
         if ($includeActionRequested) {
             $fingerprintInput['action_requested'] = !isset($input['responsibility_event'])
                 && !empty($input['action_requested']);
+        }
+        if (array_key_exists('action_request_type', $input)) {
+            $fingerprintInput['action_request_type'] = $input['action_request_type'] === null
+                ? null : strtolower(trim((string) $input['action_request_type']));
         }
         $severity = MessageSeverity::normalize(isset($input['severity']) ? $input['severity'] : 'neutral');
         if ($severity !== 'neutral') {
@@ -720,6 +835,8 @@ class ProjectRepository
                 'correlation_id' => $row['correlation_id'],
                  'reply_depth' => (int) $row['reply_depth'],
                 'action_requested' => (bool) $row['action_requested'],
+                'action_request_type' => empty($row['action_request_type'])
+                    ? null : $row['action_request_type'],
                 'created_at' => $row['created_at'],
                 'updated_at' => $row['updated_at'],
                 'deleted_at' => $row['deleted_at'],

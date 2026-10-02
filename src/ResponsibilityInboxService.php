@@ -64,6 +64,7 @@ class ResponsibilityInboxService
         }
         $sql = 'SELECT m.id AS request_message_id,
                 m.project_sequence AS request_sequence, m.created_at,
+                m.action_request_type,
                 m.sender_participant_id, ma.participant_id AS initial_responder_id,
                 ma.acknowledged_at, ma.responsibility_status_generation
             FROM messages m JOIN message_addressees ma ON ma.message_id = m.id
@@ -87,7 +88,8 @@ class ResponsibilityInboxService
                     (int) $row['sender_participant_id'],
                     (int) $row['initial_responder_id'],
                     $row['responsibility_status_generation'],
-                    isset($events[$key]) ? $events[$key] : []);
+                    isset($events[$key]) ? $events[$key] : [],
+                    $row['action_request_type'] ?: 'work');
                 $currentResponderIds[(int) $result['state']['responder_id']] = true;
                 $projected[$key] = $result;
             } catch (Exception $error) {
@@ -125,6 +127,7 @@ class ResponsibilityInboxService
                 'request_message_id' => (int) $row['request_message_id'],
                 'request_sequence' => (int) $row['request_sequence'],
                 'request_created_at' => $row['created_at'],
+                'request_type' => $row['action_request_type'] ?: 'work',
                 'requester_participant_id' => (int) $row['sender_participant_id'],
                 'initial_responder_participant_id' => (int) $row['initial_responder_id'],
                 'current_responder_participant_id' => !$hasActiveOwner
@@ -170,11 +173,28 @@ class ResponsibilityInboxService
             'limit' => $limit,
             'scanned' => count($rows),
             'has_more' => $hasMore,
+            'unacknowledged_count' => $this->unacknowledgedCount($projectId, $viewerId),
             'changed_request_message_id' => $changedRequestId,
             'older_cursor' => $last === null ? null
                 : $this->encodeCursor($projectId, $last['request_sequence'],
                     $last['initial_responder_id']),
         ]];
+    }
+
+    private function unacknowledgedCount($projectId, $viewerId)
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT COUNT(*)
+             FROM messages m
+             JOIN message_addressees ma ON ma.message_id = m.id
+             WHERE m.project_id = ? AND m.action_requested = 1
+               AND ma.reason = 'direct' AND ma.participant_id = ?
+               AND ma.acknowledged_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM responsibility_events source_event
+                   WHERE source_event.event_message_id = m.id)"
+        );
+        $statement->execute([(int) $projectId, (int) $viewerId]);
+        return (int) $statement->fetchColumn();
     }
 
     private function requestChangedByMessage($projectId, $messageId)
