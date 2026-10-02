@@ -19,7 +19,8 @@ test("timeline skill uses Project API V1 and rejects legacy feed reads", async (
   assert.match(coordination, /`work` for execution followed by submission/);
   assert.match(coordination, /`approval` for Approve or Deny/);
   assert.match(coordination, /`review` for Accept or\s+Request revision/);
-  assert.match(coordination, /acknowledgement is not a workflow decision or\s+task completion/);
+  assert.match(coordination, /responsibility action by the addressed\s+responder also acknowledges the originating request/);
+  assert.match(coordination, /Acknowledgement by itself is not a workflow decision\s+or task completion/);
   assert.match(coordination, /immutable system messages linked to the\s+original request/);
   assert.match(coordination, /Do not post a duplicate\s+timeline reply/);
   assert.match(source, /Syndicatum profile ID/);

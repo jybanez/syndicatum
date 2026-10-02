@@ -255,7 +255,7 @@ export const USER_GUIDE_SECTIONS = [
         keywords: ["convert", "source message", "structured work"],
         blocks: [
           { type: "terms", items: [
-            ["Action request", "Conversation-first. It preserves who asked, who currently owns the response, acknowledgement, handoffs, blockers, and the proposed resolution."],
+            ["Action request", "Conversation-first. It preserves who asked, who currently owns the response, workflow actions, handoffs, blockers, and the proposed resolution."],
             ["Task", "Plan-first. It has a title, description, assignee, priority, due date, acceptance criteria, status, and immutable activity history."],
           ] },
           { type: "p", text: "Convert an action request to a task when the work needs planning, progress tracking, acceptance criteria, or a durable deliverable. The originating message remains linked as evidence, and the same request cannot be converted twice." },
@@ -271,7 +271,7 @@ export const USER_GUIDE_SECTIONS = [
             "Direct addressees are the people or agents expected to respond; mentions provide visibility without assigning responsibility.",
             "A broadcast notifies every active participant. Use it for project-wide information, not targeted work.",
             "Reply keeps the conversation connected to its parent message.",
-            "Acknowledge means you have seen an addressed message. It does not complete an action request and does not close a task.",
+            "Acknowledge means you have seen an addressed informational message. Action requests use their Work, Approval, or Review actions instead; the first successful responder action also acknowledges the request.",
           ] },
         ],
       },
@@ -317,7 +317,7 @@ export const USER_GUIDE_SECTIONS = [
         blocks: [
           { type: "terms", items: [
             ["My work", "Open requests where you are the current responder, plus decisions or handoffs that specifically need your action."],
-            ["Unacknowledged", "Direct requests addressed to you that you have not acknowledged yet."],
+            ["Unacknowledged", "Direct requests addressed to you where no responder workflow action has yet acknowledged receipt."],
             ["Waiting on others", "Requests you made or are watching where another participant currently owns the next action."],
             ["All direct work", "All responsibility records you are permitted to see in the project, regardless of current owner or state."],
             ["Blocked", "Requests whose current responder recorded a blocker."],
@@ -337,17 +337,17 @@ export const USER_GUIDE_SECTIONS = [
         keywords: ["work request", "approval", "review", "start work", "approve", "deny", "accept", "revision"],
         blocks: [
           { type: "list", items: [
-            "Work is for producing an outcome: acknowledge it, start or block the work, submit a proposed resolution, and wait for the requester to accept it or request changes.",
+            "Work is for producing an outcome: start or block the work, submit a proposed resolution, and wait for the requester to accept it or request changes.",
             "Approval is for a decision on a proposed action: the recipient chooses Approve or Deny.",
             "Review is for evaluating an existing result: the recipient chooses Accept or Request revision.",
           ] },
           { type: "steps", items: [
-            "Acknowledge the request to confirm that you have seen it.",
-            "Use the actions shown for the request type. Syndicatum does not offer work-production actions on Approval or Review requests.",
+            "Use the actions shown for the request type. The first successful responder action also acknowledges the originating request; there is no separate acknowledgement step.",
+            "Syndicatum does not offer work-production actions on Approval or Review requests.",
             "Offer handoff when another active participant should own the response. Responsibility changes only after they accept.",
-            "Record a concrete reason or evidence note for the response. The resulting decision appears in the timeline and notifies the requester.",
+            "Complete the response dialog. Deny, Request revision, and work-progress actions require a concrete reason or evidence note. Approve and Accept may be submitted without a note; add context when it will help the requester understand the decision.",
           ] },
-          { type: "note", text: "Each work update is recorded as immutable workflow evidence linked to the original request. Syndicatum directly addresses the requester and any participant who owns the next action, so they receive the update without broadcasting it to the whole project." },
+          { type: "note", text: "The same controls are available on the Timeline message and in the Responsibility Inbox. Acting in either place opens the same response dialog and updates the shared request, so you do not need to visit the other view. Each work update is immutable workflow evidence linked to the original request." },
         ],
       },
     ],

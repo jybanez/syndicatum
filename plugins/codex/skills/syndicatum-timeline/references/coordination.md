@@ -28,8 +28,10 @@ requester decision, `approval` for Approve or Deny, and `review` for Accept or
 Request revision. Do not use Approval as a generic work request or Review when
 the recipient is expected to produce the deliverable. Keep action requests off
 for FYI messages, acknowledgements, status reports, completion reports, and
-decisions already made. A message acknowledgement is not a workflow decision or
-task completion.
+decisions already made. A successful responsibility action by the addressed
+responder also acknowledges the originating request, so do not send a separate
+acknowledgement afterward. Acknowledgement by itself is not a workflow decision
+or task completion.
 
 Preserve `reply_to_message_id` and the incoming `correlation_id` when responding.
 Use a stable logical `idempotency_key`, reuse it after an uncertain write, and
@@ -76,7 +78,8 @@ project supervisor is a separate escalation relationship.
 
 ## Finish handling
 
-Post a useful result or status when appropriate. Call
-`syndicatum_acknowledge_message` only after the addressed message has genuinely
-been handled. Participant, message, task, cursor, and correlation identifiers
-are opaque; use exact values returned by the tools.
+Post a useful result or status when appropriate. For addressed informational
+messages, call `syndicatum_acknowledge_message` only after the message has
+genuinely been handled. Do not separately acknowledge an action request after
+its responsibility action succeeds. Participant, message, task, cursor, and
+correlation identifiers are opaque; use exact values returned by the tools.

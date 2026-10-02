@@ -7,7 +7,7 @@ const UI_ICONS_REV = "0.21.209";
 const UI_FILE_INPUT_REV = "0.21.108";
 const UI_CHAT_REV = "0.21.120";
 const UI_PASSWORD_REV = "0.21.66";
-const UI_PROPERTY_VIEWER_REV = "0.21.1";
+const UI_PROPERTY_VIEWER_REV = "0.21.221";
 const UI_DATE_REV = "0.21.204";
 const UI_NAV_REV = "0.21.4";
 const UI_POPOVER_REV = "0.21.215";
@@ -19,8 +19,8 @@ const UI_SPLITTER_REV = "0.21.207";
 const UI_DEVICE_PRIMER_REV = "0.21.65";
 const UI_GAME_REV = "0.21.112";
 const UI_INSPECTION_REV = "0.21.1";
-const UI_TIMELINE_REV = "0.21.212";
-const UI_BUNDLE_REV = "0.21.217";
+const UI_TIMELINE_REV = "0.21.222";
+const UI_BUNDLE_REV = "0.21.222";
 const UI_GAME_BUNDLE_REV = "0.21.209";
 const UI_INSPECTION_BUNDLE_REV = "0.21.1";
 const UI_BUNDLE_JS = `../../dist/helpers.ui.bundle.min.js?v=${UI_BUNDLE_REV}`;
@@ -801,20 +801,20 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "incidentTypesDetailsEditor",
   },
   "incident.types.details.viewer": {
-    js: "../incident/incident.types.details.viewer.js",
+    js: "../incident/incident.types.details.viewer.js?v=0.21.221",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
       INCIDENT_BASE_CSS,
       "../../css/incident/incident.base.css",
       "../../css/incident/incident.types.css",
-      "../../css/incident/incident.types.details.viewer.css",
+      "../../css/incident/incident.types.details.viewer.css?v=0.21.220",
     ],
-    deps: ["incident.base"],
+    deps: ["incident.base", "ui.field.group", "ui.property.viewer"],
     export: "incidentTypesDetailsViewer",
   },
   "incident.types": {
-    js: "../incident/incident.types.js",
+    js: "../incident/incident.types.js?v=0.21.221",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -824,7 +824,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/incident/incident.types.css",
       "../../css/ui/ui.field.group.css",
       "../../css/incident/incident.types.details.editor.css",
-      "../../css/incident/incident.types.details.viewer.css",
+      "../../css/incident/incident.types.details.viewer.css?v=0.21.220",
     ],
     deps: ["incident.base", "incident.types.details.editor", "incident.types.details.viewer"],
     export: "incidentTypes",

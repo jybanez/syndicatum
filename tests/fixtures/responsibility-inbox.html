@@ -3,6 +3,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Responsibility Inbox visual fixture</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" data-ui-bundle="ui" href="../../vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.222">
 <link rel="stylesheet" href="../../assets/app.css">
 <style>
   :root { --ui-text: #eef4ff; --ui-muted: #a9bbd9; --ui-border-strong: #6485ba; --ui-radius-sm: 8px; --ui-font: system-ui, sans-serif; }
@@ -17,7 +19,8 @@
 </main>
 <script type="module">
   import { createResponsibilityInbox } from "../../assets/responsibility-inbox.mjs";
-  import { showCanonicalEvidence } from "../../assets/responsibility-evidence.mjs";
+  import { uiLoader } from "../../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.222";
+  const createDropdown = await uiLoader.get("ui.dropdown");
   const people = [
     { id: 10, display_name: "Requester Maya", status: "active" },
     { id: 20, display_name: "Responder Joel", status: "active" },
@@ -50,7 +53,6 @@
     participants: () => people,
     actorId: () => 20,
     moderator: () => false,
-    newKey: () => crypto.randomUUID(),
     async fetchPage(view) {
       const data = view === "all" ? rows : rows.filter((row) => {
         if (view === "mine") return row.current_responder_participant_id === 20;
@@ -60,15 +62,15 @@
       });
       return { data, page: { older_cursor: null, has_more: false } };
     },
-    async writeEvent() { throw Object.assign(new Error("Visual fixture: no write sent."), { status: 422 }); },
-    async acknowledge() { throw new Error("Visual fixture: no acknowledgement sent."); },
-    openMessage: (id) => showCanonicalEvidence({
-      id: String(id), sequence: Number(id) - 90, sender: { display_name: "Requester Maya" },
-      created_at: "2026-09-19T08:00:00Z", addressees: [{ display_name: "Responder Joel" }],
-      reply_to_message_id: "99", revision_count: 2, deleted_at: null,
-      body: "Canonical evidence shown without changing the inbox view or timeline filters.",
-    }, { parent: { id: "99", sequence: 9, sender: { display_name: "Earlier participant" } },
-      onTimeline: () => document.getElementById("navigation-status").textContent = "Timeline selected; filters unchanged." }),
+    openActionModal: (item, kind) => {
+      document.getElementById("navigation-status").textContent = `Modal requested for ${kind} on #${item.request_message_id}.`;
+    },
+    openMessage: (id) => {
+      document.getElementById("navigation-status").textContent = `Original message #${id} requested without changing views.`;
+    },
+    linkedTasks: () => [],
+    canCreateTask: () => false,
+    createDropdown,
   });
   await inbox.load();
 </script>

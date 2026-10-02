@@ -1,7 +1,13 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.217";
-import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.222";
+import {
+  createResponsibilityInbox,
+  responsibilityActions,
+  responsibilityEvent,
+  RESPONSIBILITY_ACTIONS,
+  RESPONSIBILITY_DIRECT_DECISIONS,
+} from "./responsibility-inbox.mjs?v=20261003043000";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261002153000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003043000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -19,6 +25,11 @@ const TEMPLATE_MOBILE_QUERY = "(max-width: 680px)";
 const TASK_RECONCILIATION_INTERVAL_MS = 60000;
 const TIMELINE_MARKER_ICONS = new Map();
 const MESSAGE_SEVERITIES = new Set(["neutral", "info", "success", "warning", "error", "critical"]);
+const RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS = new Set(["approval_approved", "review_accepted"]);
+const RESPONSIBILITY_DEFAULT_NOTES = {
+  approval_approved: "Approved.",
+  review_accepted: "Accepted.",
+};
 
 const API = {
   session: "api/v1/session.php",
@@ -132,6 +143,7 @@ const state = {
   newestCursor: "",
   hasOlder: false,
   loading: false,
+  pendingOlderLoad: false,
   generation: 0,
   messageGeneration: 0,
   filterTimer: null,
@@ -1786,6 +1798,7 @@ function renderMessageHeaderSeverity(host, message, severityLabel) {
 function canAcknowledgeMessage(message) {
   return state.mode === "expanded"
     && message.current_participant_state?.is_addressee
+    && !message.action_requested
     && !message.current_participant_state?.acknowledged_at
     && (can("messages.acknowledge") || message.permissions?.acknowledge);
 }
@@ -1801,6 +1814,7 @@ function mountMessageCard(host, item) {
     renderedContentKey = nextItem.contentKey;
     markdownView?.destroy();
     markdownView = null;
+    destroyTimelineResponsibilityActions(host);
     host.replaceChildren();
     const details = document.createElement("div");
     details.className = "message-card-details";
@@ -1867,9 +1881,17 @@ function mountMessageCard(host, item) {
     footer.append(actions, messageId);
     details.appendChild(footer);
     host.appendChild(details);
+    if (state.mode === "expanded" && current.action_requested && !current.deleted_at
+        && can("messages.write") && current.message_kind !== "system") {
+      void mountTimelineResponsibilityActions(current, actions);
+    }
   }
   paint(item);
-  return { update: paint, destroy() { markdownView?.destroy(); markdownView = null; } };
+  return { update: paint, destroy() {
+    destroyTimelineResponsibilityActions(host);
+    markdownView?.destroy();
+    markdownView = null;
+  } };
 }
 
 function actionButton(label, handler) {
@@ -1877,8 +1899,351 @@ function actionButton(label, handler) {
   button.type = "button";
   button.className = "ui-button ui-button-borderless message-action";
   button.textContent = label;
-  button.addEventListener("click", handler);
+  if (typeof handler === "function") button.addEventListener("click", handler);
   return button;
+}
+
+function destroyTimelineResponsibilityActions(host) {
+  host.querySelectorAll(".message-responsibility-actions").forEach((mount) => {
+    mount.helperDropdowns?.forEach((dropdown) => dropdown?.destroy?.());
+    mount.helperDropdowns = [];
+  });
+}
+
+function createScrollDismissedDropdown(trigger, items, options) {
+  let dropdown = null;
+  let listening = false;
+  const scrollWindow = trigger.ownerDocument?.defaultView || window;
+  const dismiss = () => dropdown?.close?.();
+  const listen = (open) => {
+    if (listening === open) return;
+    listening = open;
+    if (open) scrollWindow.addEventListener("scroll", dismiss, { passive: true, capture: true });
+    else scrollWindow.removeEventListener("scroll", dismiss, { capture: true });
+  };
+  dropdown = state.factories.createDropdown(trigger, items, {
+    ...options,
+    onOpenChange(open, context) {
+      listen(open);
+      options.onOpenChange?.(open, context);
+    },
+  });
+  return {
+    close: (...args) => dropdown?.close?.(...args),
+    destroy() {
+      listen(false);
+      dropdown?.destroy?.();
+    },
+  };
+}
+
+function participantName(participantId) {
+  return state.participants.find((entry) => Number(entry.id) === Number(participantId))
+    ?.display_name || `Participant #${participantId}`;
+}
+
+async function responsibilityItemsForMessage(messageId, { signal } = {}) {
+  const query = new URLSearchParams({
+    project_id: selectedProjectId(), view: "all", limit: "50",
+    changed_by_message_id: id(messageId),
+  });
+  const payload = await request(`${API.responsibilityInbox}?${query}`, { signal });
+  return payload.data || [];
+}
+
+async function mountTimelineResponsibilityActions(message, actionsHost) {
+  const mount = document.createElement("span");
+  mount.className = "message-responsibility-actions";
+  mount.helperDropdowns = [];
+  actionsHost.appendChild(mount);
+  try {
+    const items = await responsibilityItemsForMessage(message.id);
+    if (!mount.isConnected) return;
+    const actorId = Number(state.project?.current_participant?.id);
+    const moderator = ["owner", "admin"].includes(state.project?.current_participant?.role);
+    const activeIds = state.participants.filter((entry) => entry.status === "active")
+      .map((entry) => Number(entry.id));
+    const actionable = items.map((item) => ({
+      item,
+      available: responsibilityActions(item, actorId, moderator, activeIds),
+    })).filter((entry) => entry.available.length);
+    mount.replaceChildren();
+    for (const entry of actionable) {
+      const group = document.createElement("span");
+      group.className = "message-responsibility-action-group";
+      if (actionable.length > 1) {
+        const target = document.createElement("span");
+        target.className = "message-responsibility-target";
+        target.textContent = `For ${participantName(entry.item.initial_responder_participant_id)}`;
+        group.appendChild(target);
+      }
+      for (const kind of entry.available.filter((value) => RESPONSIBILITY_DIRECT_DECISIONS.has(value))) {
+        const control = actionButton(RESPONSIBILITY_ACTIONS[kind], () => {
+          openTimelineResponsibilityActionModal(message, mount, entry.item, kind);
+        });
+        group.appendChild(control);
+      }
+      const menuActions = entry.available.filter((value) => !RESPONSIBILITY_DIRECT_DECISIONS.has(value));
+      if (menuActions.length) {
+        const trigger = actionButton("Update work");
+        group.appendChild(trigger);
+        const dropdown = createScrollDismissedDropdown(trigger, menuActions.map((kind) => ({
+          id: kind,
+          label: RESPONSIBILITY_ACTIONS[kind],
+        })), {
+          align: "left",
+          ariaLabel: "Update work",
+          className: "message-responsibility-dropdown",
+          onSelect(option) {
+            openTimelineResponsibilityActionModal(message, mount, entry.item, option.id);
+          },
+        });
+        mount.helperDropdowns.push(dropdown);
+      }
+      mount.appendChild(group);
+    }
+  } catch (error) {
+    if (!mount.isConnected) return;
+    mount.textContent = "Request actions unavailable. Refresh the timeline to retry.";
+    mount.classList.add("message-responsibility-error");
+    mount.setAttribute("role", "alert");
+  }
+}
+
+function openTimelineResponsibilityActionModal(message, actionsMount, item, kind) {
+  openResponsibilityActionModal(item, kind, {
+    async onSuccess(eventMessage) {
+      const actionsHost = actionsMount.parentElement;
+      actionsMount.helperDropdowns?.forEach((dropdown) => dropdown?.destroy?.());
+      actionsMount.remove();
+      if (actionsHost) await mountTimelineResponsibilityActions(message, actionsHost);
+      if (eventMessage?.id) state.components.responsibilityInbox?.refreshFromRealtime(eventMessage.id);
+      void loadMessages("newer").catch(handleLoadError);
+      void refreshProjectViewCounters().catch(handleLoadError);
+      state.components.toast.success(`${RESPONSIBILITY_ACTIONS[kind]} recorded in the project timeline.`);
+    },
+    async onConflict() {
+      await loadMessages("newer").catch(handleLoadError);
+      void refreshProjectViewCounters().catch(handleLoadError);
+    },
+  });
+}
+
+function responsibilityActionAvailable(item, kind) {
+  const actorId = Number(state.project?.current_participant?.id);
+  const moderator = ["owner", "admin"].includes(state.project?.current_participant?.role);
+  const activeIds = state.participants.filter((entry) => entry.status === "active")
+    .map((entry) => Number(entry.id));
+  return responsibilityActions(item, actorId, moderator, activeIds).includes(kind);
+}
+
+function responsibilityActionContext(item, kind) {
+  const requester = participantName(item.requester_participant_id);
+  const responder = item.current_responder_participant_id
+    ? participantName(item.current_responder_participant_id)
+    : "No active owner";
+  return {
+    badge: RESPONSIBILITY_ACTIONS[kind] || "Update work",
+    summary: `Request #${item.request_message_id} · Requested by ${requester} · Assigned to ${responder}`,
+  };
+}
+
+function responsibilityActionRows(item, kind) {
+  const optionalNote = RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind);
+  const rows = [
+    [{ type: "text", content: `This response will be recorded as a project timeline message for request #${item.request_message_id}.` }],
+    [{
+      type: "textarea",
+      name: "note",
+      label: optionalNote ? "Note (optional)" : "Reason or evidence note",
+      required: !optionalNote,
+      maxLength: 10000,
+      rows: 5,
+      help: optionalNote
+        ? "Optional. Add context when it will help the requester understand the decision."
+        : "Explain the decision or provide the evidence the requester needs.",
+    }],
+  ];
+  if (kind === "transfer_offered") {
+    rows.push([{
+      type: "select",
+      name: "target_participant_id",
+      label: "Active handoff target",
+      required: true,
+      options: state.participants
+        .filter((participant) => participant.status === "active"
+          && Number(participant.id) !== Number(item.current_responder_participant_id))
+        .map((participant) => ({ value: participant.id, label: participant.display_name })),
+      help: "Choose the active participant who should receive this work.",
+    }]);
+  }
+  return rows;
+}
+
+async function refreshResponsibilityItem(item, { signal } = {}) {
+  const items = await responsibilityItemsForMessage(item.request_message_id, { signal });
+  const refreshed = items.find((entry) =>
+    Number(entry.initial_responder_participant_id) === Number(item.initial_responder_participant_id));
+  if (!refreshed) throw new Error("This responsibility item is no longer available. Refresh the project and try again.");
+  return refreshed;
+}
+
+function openResponsibilityActionModal(item, kind, hooks = {}) {
+  const existing = state.components.responsibilityActionModal;
+  if (existing?.getState?.().open) {
+    existing.refs?.panel?.focus?.();
+    return existing;
+  }
+  const projectId = selectedProjectId();
+  const projectGeneration = state.generation;
+  const labels = { note: "Reason or evidence note", target_participant_id: "Active handoff target" };
+  let currentItem = item;
+  let initialized = false;
+  let disposed = false;
+  let initializationGeneration = 0;
+  let initializationController = null;
+  let idempotencyKey = makeIdempotencyKey();
+  let modal = null;
+
+  const formOptions = () => ({
+    title: RESPONSIBILITY_ACTIONS[kind] || "Update work",
+    size: "md",
+    className: "responsibility-action-modal",
+    submitLabel: RESPONSIBILITY_ACTIONS[kind] || "Submit",
+    cancelLabel: "Cancel",
+    busyMessage: "Recording response…",
+    context: responsibilityActionContext(currentItem, kind),
+    initialValues: { note: "", target_participant_id: "" },
+    rows: responsibilityActionRows(currentItem, kind),
+    manageBusyOnSubmit: false,
+    closeWhileBusy: false,
+    backdropCloseWhileBusy: false,
+    escapeCloseWhileBusy: false,
+    validate(values) {
+      const errors = {};
+      if (!RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind) && !String(values.note || "").trim()) {
+        errors.note = "Reason or evidence note — required";
+      }
+      if (kind === "transfer_offered" && !Number(values.target_participant_id || 0)) {
+        errors.target_participant_id = "Active handoff target — required";
+      }
+      return errors;
+    },
+    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    onChange() { idempotencyKey = makeIdempotencyKey(); },
+    async onSubmit(values, context) {
+      if (!initialized || disposed || projectId !== selectedProjectId()
+          || projectGeneration !== state.generation || !responsibilityActionAvailable(currentItem, kind)) {
+        context.setFormError("This responsibility changed before your response. Close this dialog and review the refreshed request.");
+        return false;
+      }
+      let event = null;
+      try {
+        event = responsibilityEvent(currentItem, kind, values.target_participant_id);
+      } catch (error) {
+        context.setFormError(error.message || "The response could not be prepared.");
+        return false;
+      }
+      const note = String(values.note || "").trim() || RESPONSIBILITY_DEFAULT_NOTES[kind] || "";
+      context.clearFormError();
+      context.setBusy(true, { message: "Recording response…" });
+      try {
+        const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: csrfHeaders({ "Idempotency-Key": idempotencyKey }),
+          body: JSON.stringify({ body: note, idempotency_key: idempotencyKey, responsibility_event: event }),
+        });
+        const eventMessage = unwrap(payload);
+        try { await hooks.onSuccess?.(eventMessage); }
+        catch (hookError) { handleLoadError(hookError); }
+        context.setBusy(false);
+        return true;
+      } catch (error) {
+        context.setBusy(false);
+        if (error.status === 409) {
+          initialized = false;
+          try { await hooks.onConflict?.(); }
+          catch (hookError) { handleLoadError(hookError); }
+          context.setFormError("Responsibility changed before your response. Nothing was posted. Close this dialog and review the refreshed request.");
+          return false;
+        }
+        context.applyApiErrors?.(error.payload);
+        context.setFormError(error.message || "The response could not be recorded. Review the form and try again.");
+        return false;
+      }
+    },
+    onClose() {
+      disposed = true;
+      initializationGeneration++;
+      initializationController?.abort();
+      if (state.components.responsibilityActionModal === modal) {
+        state.components.responsibilityActionModal = null;
+      }
+    },
+  });
+
+  async function initialize() {
+    const currentGeneration = ++initializationGeneration;
+    initializationController?.abort();
+    initializationController = new AbortController();
+    initialized = false;
+    modal.update(formOptions());
+    modal.setBusy(true, {
+      message: "Loading current request…",
+      cancelBusy: {
+        label: "Cancel",
+        onCancel() {
+          initializationController?.abort();
+          void modal.close({ reason: "initialization-cancelled" });
+          return true;
+        },
+      },
+    });
+    try {
+      const refreshed = await refreshResponsibilityItem(currentItem, {
+        signal: initializationController.signal,
+      });
+      if (disposed || currentGeneration !== initializationGeneration || !modal.getState().open) return;
+      if (projectId !== selectedProjectId() || projectGeneration !== state.generation) {
+        throw new Error("The selected project changed. Close this dialog and try again from the current project.");
+      }
+      if (!responsibilityActionAvailable(refreshed, kind)) {
+        throw new Error("This action is no longer available because the responsibility changed.");
+      }
+      const values = modal.getValues();
+      currentItem = refreshed;
+      modal.update({ ...formOptions(), initialValues: values });
+      initialized = true;
+      modal.setBusy(false, { cancelBusy: false });
+    } catch (error) {
+      if (error.name === "AbortError" || disposed || currentGeneration !== initializationGeneration
+          || !modal.getState().open) return;
+      modal.setBusy(false, { cancelBusy: false });
+      modal.setFormError(`Unable to load the current request. ${error.message || "Refresh the project and try again."}`);
+      modal.setActions([
+        {
+          id: "retry",
+          label: "Retry",
+          variant: "primary",
+          closeOnClick: false,
+          onClick() { void initialize(); return false; },
+        },
+        {
+          id: "cancel",
+          label: "Cancel",
+          variant: "ghost",
+          closeOnClick: false,
+          onClick() { void modal.close({ reason: "initialization-failed-cancel" }); return false; },
+        },
+      ]);
+    }
+  }
+
+  modal = state.factories.createFormModal(formOptions());
+  state.components.responsibilityActionModal = modal;
+  modal.open();
+  void initialize();
+  return modal;
 }
 
 function messageLinkedTasks(messageId) {
@@ -2110,7 +2475,11 @@ function renderTimeline(mode = "replace", changed = state.messages) {
     },
     onReachEnd() {
       const viewport = el.timeline_host.querySelector(".ui-timeline-viewport");
-      if (viewport?.clientHeight > 0) void loadMessages("older").catch(handleLoadError);
+      if (!viewport || viewport.clientHeight <= 0) {
+        state.components.timeline?.resetReachEnd({ check: false });
+        return;
+      }
+      void loadMessages("older").catch(handleLoadError);
     },
   };
   if (!state.components.timeline) state.components.timeline = state.factories.createTimeline(el.timeline_host, items, options);
@@ -2141,11 +2510,18 @@ function messageQuery({ before = "", after = "", order = "desc" } = {}) {
 }
 
 async function loadMessages(mode = "initial", generation = state.generation, messageGeneration = state.messageGeneration) {
-  if (state.loading && mode !== "initial") return 0;
+  if (state.loading && mode !== "initial") {
+    if (mode === "older") state.pendingOlderLoad = true;
+    return 0;
+  }
   if (mode === "older" && (!state.hasOlder || !state.oldestCursor)) return 0;
   state.loading = true;
   const showTimelineLoading = mode !== "newer";
-  if (showTimelineLoading) state.components.timeline?.update(undefined, { isLoading: true, hasMore: state.hasOlder });
+  if (showTimelineLoading) state.components.timeline?.update(undefined, {
+    isLoading: true,
+    hasMore: state.hasOlder,
+    loadingText: mode === "older" ? "Loading earlier messages…" : "Loading messages…",
+  });
   try {
     const before = mode === "older" ? state.oldestCursor : "";
     const after = mode === "newer" ? state.newestCursor : "";
@@ -2186,6 +2562,13 @@ async function loadMessages(mode = "initial", generation = state.generation, mes
   } finally {
     state.loading = false;
     if (showTimelineLoading) state.components.timeline?.update(undefined, { isLoading: false, hasMore: state.hasOlder });
+    if (state.pendingOlderLoad) {
+      state.pendingOlderLoad = false;
+      if (generation === state.generation && messageGeneration === state.messageGeneration
+          && state.hasOlder && state.oldestCursor) {
+        queueMicrotask(() => void loadMessages("older", generation, messageGeneration).catch(handleLoadError));
+      }
+    }
   }
 }
 
@@ -4329,7 +4712,12 @@ function showInvitationResult(result) {
 function showFormValidationSummary(result, context, fieldLabels = {}) {
   const entries = Object.entries(result?.errors || {});
   if (entries.length < 2) return;
-  const summary = context.modal.refs.formError;
+  const summary = context.modal.refs.formError
+    || context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error");
+  if (!summary) {
+    context.setFormError("Please address the highlighted fields before continuing.");
+    return;
+  }
   summary.replaceChildren(document.createTextNode("Please address the following issues before continuing:"));
   const list = document.createElement("ul");
   list.className = "integration-form-error-list";
@@ -6834,11 +7222,16 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.projectView = "timeline";
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
+  if (state.components.responsibilityActionModal?.getState?.().open) {
+    void state.components.responsibilityActionModal.close({ reason: "project-change" });
+  }
+  state.components.responsibilityActionModal = null;
   state.timelineDefaultCollapsed = false;
   updateTimelineCollapseButton();
   state.oldestCursor = "";
   state.newestCursor = "";
   state.hasOlder = false;
+  state.pendingOlderLoad = false;
   dismissMessageComposerModal();
   state.draft = { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
   state.components.timeline?.destroy();
@@ -7363,33 +7756,13 @@ function showProjectView(view) {
       participants: () => state.participants,
       actorId: () => state.project?.current_participant?.id,
       moderator: () => ["owner", "admin"].includes(state.project?.current_participant?.role),
-      newKey: makeIdempotencyKey,
       async fetchPage(view, before, changedByMessageId = null) {
         const query = new URLSearchParams({ project_id: selectedProjectId(), view, limit: "50" });
         if (before) query.set("before", before);
         if (changedByMessageId) query.set("changed_by_message_id", changedByMessageId);
         return request(`${API.responsibilityInbox}?${query}`);
       },
-      async writeEvent(body, responsibilityEvent, key) {
-        return request(`${API.messages}?${new URLSearchParams({ project_id: selectedProjectId() })}`, {
-          method: "POST",
-          headers: csrfHeaders({ "Idempotency-Key": key }),
-          body: JSON.stringify({ body, idempotency_key: key, responsibility_event: responsibilityEvent }),
-        });
-      },
-      async acknowledge(item) {
-        const payload = await request(`${API.acknowledge}?${new URLSearchParams({ project_id: selectedProjectId(), id: item.request_message_id })}`, {
-          method: "POST", headers: csrfHeaders(), body: JSON.stringify({}),
-        });
-        const responseMessage = unwrap(payload);
-        if (responseMessage?.id) {
-          const updated = normalizeMessage(responseMessage);
-          state.messages = state.messages.map((entry) => entry.id === updated.id ? updated : entry);
-        }
-        state.components.toast.success("Message acknowledged.");
-        scheduleProjectViewCounterRefresh();
-        return payload;
-      },
+      openActionModal: (item, kind, hooks) => openResponsibilityActionModal(item, kind, hooks),
       openMessage: (messageId) => void openResponsibilityMessage(messageId),
       linkedTasks: (messageId) => messageLinkedTasks(messageId),
       canCreateTask: () => state.mode === "expanded" && can("messages.write"),
@@ -7400,6 +7773,7 @@ function showProjectView(view) {
       openTask: (taskId) => void openTaskDetails(taskId),
       openLinkedTasks: (messageId) => openLinkedMessageTasks({ id: messageId }),
       openGuide: (articleId) => showGuideSurface(articleId),
+      createDropdown: state.factories.createDropdown,
     });
     void state.components.responsibilityInbox.load();
   }
