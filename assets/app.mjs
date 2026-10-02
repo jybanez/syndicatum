@@ -7,6 +7,10 @@ import {
   RESPONSIBILITY_DIRECT_DECISIONS,
 } from "./responsibility-inbox.mjs?v=20261003043000";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
+import {
+  settleResponsibilityAction,
+  validationAlertItems,
+} from "./responsibility-action-flow.mjs?v=20261003051000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003043000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
@@ -960,8 +964,8 @@ function openRegistrationModal() {
       else if (password !== confirmation) errors.password_confirmation = "Confirm password — must match Password.";
       return errors;
     },
-    onInvalid(result, context) {
-      showFormValidationSummary(result, context, {
+    async onInvalid(result, context) {
+      await showFormValidationSummary(result, context, {
         display_name: "Display name", email: "Email address", password: "Password", password_confirmation: "Confirm password",
       });
     },
@@ -2012,18 +2016,22 @@ async function mountTimelineResponsibilityActions(message, actionsHost) {
 
 function openTimelineResponsibilityActionModal(message, actionsMount, item, kind) {
   openResponsibilityActionModal(item, kind, {
-    async onSuccess(eventMessage) {
+    async onSuccess(eventMessage, lifecycle) {
+      if (!lifecycle.isCurrent()) return;
       const actionsHost = actionsMount.parentElement;
       actionsMount.helperDropdowns?.forEach((dropdown) => dropdown?.destroy?.());
       actionsMount.remove();
       if (actionsHost) await mountTimelineResponsibilityActions(message, actionsHost);
+      if (!lifecycle.isCurrent()) return;
       if (eventMessage?.id) state.components.responsibilityInbox?.refreshFromRealtime(eventMessage.id);
       void loadMessages("newer").catch(handleLoadError);
       void refreshProjectViewCounters().catch(handleLoadError);
       state.components.toast.success(`${RESPONSIBILITY_ACTIONS[kind]} recorded in the project timeline.`);
     },
-    async onConflict() {
+    async onConflict(lifecycle) {
+      if (!lifecycle.isCurrent()) return;
       await loadMessages("newer").catch(handleLoadError);
+      if (!lifecycle.isCurrent()) return;
       void refreshProjectViewCounters().catch(handleLoadError);
     },
   });
@@ -2104,6 +2112,11 @@ function openResponsibilityActionModal(item, kind, hooks = {}) {
   let initializationController = null;
   let idempotencyKey = makeIdempotencyKey();
   let modal = null;
+  const isCurrent = () => !disposed
+    && projectId === selectedProjectId()
+    && projectGeneration === state.generation
+    && state.components.responsibilityActionModal === modal
+    && Boolean(modal?.getState?.().open);
 
   const formOptions = () => ({
     title: RESPONSIBILITY_ACTIONS[kind] || "Update work",
@@ -2129,7 +2142,7 @@ function openResponsibilityActionModal(item, kind, hooks = {}) {
       }
       return errors;
     },
-    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, labels); },
     onChange() { idempotencyKey = makeIdempotencyKey(); },
     async onSubmit(values, context) {
       if (!initialized || disposed || projectId !== selectedProjectId()
@@ -2147,30 +2160,31 @@ function openResponsibilityActionModal(item, kind, hooks = {}) {
       const note = String(values.note || "").trim() || RESPONSIBILITY_DEFAULT_NOTES[kind] || "";
       context.clearFormError();
       context.setBusy(true, { message: "Recording response…" });
-      try {
-        const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: projectId })}`, {
-          method: "POST",
-          headers: csrfHeaders({ "Idempotency-Key": idempotencyKey }),
-          body: JSON.stringify({ body: note, idempotency_key: idempotencyKey, responsibility_event: event }),
-        });
-        const eventMessage = unwrap(payload);
-        try { await hooks.onSuccess?.(eventMessage); }
-        catch (hookError) { handleLoadError(hookError); }
-        context.setBusy(false);
-        return true;
-      } catch (error) {
-        context.setBusy(false);
-        if (error.status === 409) {
-          initialized = false;
-          try { await hooks.onConflict?.(); }
-          catch (hookError) { handleLoadError(hookError); }
-          context.setFormError("Responsibility changed before your response. Nothing was posted. Close this dialog and review the refreshed request.");
-          return false;
-        }
-        context.applyApiErrors?.(error.payload);
-        context.setFormError(error.message || "The response could not be recorded. Review the form and try again.");
+      const result = await settleResponsibilityAction({
+        submit: async () => {
+          const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: projectId })}`, {
+            method: "POST",
+            headers: csrfHeaders({ "Idempotency-Key": idempotencyKey }),
+            body: JSON.stringify({ body: note, idempotency_key: idempotencyKey, responsibility_event: event }),
+          });
+          return unwrap(payload);
+        },
+        isCurrent,
+        onSuccess: hooks.onSuccess,
+        onConflict: hooks.onConflict,
+        onHookError: handleLoadError,
+      });
+      if (!result.current) return false;
+      context.setBusy(false);
+      if (result.outcome === "success") return true;
+      if (result.outcome === "conflict") {
+        initialized = false;
+        context.setFormError("Responsibility changed before your response. Nothing was posted. Close this dialog and review the refreshed request.");
         return false;
       }
+      context.applyApiErrors?.(result.error?.payload);
+      context.setFormError(result.error?.message || "The response could not be recorded. Review the form and try again.");
+      return false;
     },
     onClose() {
       disposed = true;
@@ -3307,7 +3321,7 @@ function openEditProjectModal() {
       }
       return errors;
     },
-    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, labels); },
     async onSubmit(values, context) {
       context.setBusy(true, { message: "Saving project…" });
       try {
@@ -4709,28 +4723,37 @@ function showInvitationResult(result) {
   }).open();
 }
 
-function showFormValidationSummary(result, context, fieldLabels = {}) {
+async function showFormValidationSummary(result, context, fieldLabels = {}) {
   const entries = Object.entries(result?.errors || {});
-  if (entries.length < 2) return;
-  const summary = context.modal.refs.formError
-    || context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error");
-  if (!summary) {
-    context.setFormError("Please address the highlighted fields before continuing.");
-    return;
+  if (!entries.length) return;
+  const items = validationAlertItems(result, fieldLabels,
+    (name) => context.modal.refs.fields.get(name)?.config?.label || name);
+  if (entries.length > 1) {
+    const summary = context.modal.refs.formError
+      || context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error");
+    if (summary) {
+      summary.replaceChildren(document.createTextNode("Please address the following issues before continuing:"));
+      const list = document.createElement("ul");
+      list.className = "integration-form-error-list";
+      items.forEach((message) => {
+        const item = document.createElement("li");
+        item.textContent = message;
+        list.appendChild(item);
+      });
+      summary.appendChild(list);
+      summary.hidden = false;
+    } else {
+      context.setFormError("Please address the highlighted fields before continuing.");
+    }
   }
-  summary.replaceChildren(document.createTextNode("Please address the following issues before continuing:"));
-  const list = document.createElement("ul");
-  list.className = "integration-form-error-list";
-  entries.forEach(([name, message]) => {
-    const label = fieldLabels[name] || context.modal.refs.fields.get(name)?.config?.label || name;
-    const item = document.createElement("li");
-    item.textContent = String(message).toLowerCase().includes("required")
-      ? `${label} — required`
-      : String(message).replace(`${label}: `, "");
-    list.appendChild(item);
-  });
-  summary.appendChild(list);
-  summary.hidden = false;
+  await state.factories.uiAlert(
+    entries.length > 1 ? "Please address the following issues before continuing:" : items[0],
+    {
+      title: "Form needs attention",
+      variant: "warning",
+      items: entries.length > 1 ? items : [],
+    },
+  );
 }
 
 function integrationFormRows(connection = null) {
@@ -4816,7 +4839,7 @@ function openAddIntegrationModal() {
     rows: integrationFormRows(),
     manageBusyOnSubmit: false,
     validate(values) { return validateIntegrationForm(values, false); },
-    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, labels); },
     async onSubmit(values, context) {
       context.setBusy(true, { message: "Creating integration…" });
       let connection = null;
@@ -4868,7 +4891,7 @@ function openManageIntegrationModal(integrationId) {
     rows: [[{ type: "text", content: "Loading integration…" }]],
     manageBusyOnSubmit: false,
     validate(values) { return connection ? validateIntegrationForm(values, true) : {}; },
-    onInvalid(result, context) { showFormValidationSummary(result, context, labels); },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, labels); },
     onClose() {
       controller.abort();
       if (state.components.integrationManager === modal) state.components.integrationManager = null;

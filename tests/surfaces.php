@@ -1276,22 +1276,28 @@ try {
             'Responsibility initialization must be cancellable and ignore or abort late loading work.');
         $suite->true(strpos($workflow, 'manageBusyOnSubmit: false') !== false
             && strpos($workflow, 'validate(values)') !== false
-            && strpos($workflow, 'onInvalid(result, context) { showFormValidationSummary') !== false
+            && strpos($workflow, 'async onInvalid(result, context) { await showFormValidationSummary') !== false
             && strpos($workflow, 'context.setBusy(true, { message: "Recording response…" })') !== false,
             'Form validation must run through Helper before the mutation enters busy state.');
         $suite->true(strpos($app, 'Please address the following issues before continuing:') !== false
             && strpos($app, 'context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error")') !== false
+            && strpos($app, 'await state.factories.uiAlert(') !== false
+            && strpos($app, 'items: entries.length > 1 ? items : []') !== false
             && strpos($workflow, 'errors.note = "Reason or evidence note — required"') !== false
             && strpos($workflow, 'errors.target_participant_id = "Active handoff target — required"') !== false,
-            'Invalid responsibility forms must expose field feedback and the structured multi-error summary.');
+            'Invalid responsibility forms must expose field feedback and a canonical draggable alert with structured multi-error content.');
         $suite->true(strpos($app, 'RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS = new Set(["approval_approved", "review_accepted"])') !== false
             && strpos($app, 'approval_approved: "Approved."') !== false
             && strpos($app, 'review_accepted: "Accepted."') !== false,
             'Positive approval and review decisions must allow an optional note while retaining a valid canonical message body.');
-        $suite->true(strpos($workflow, 'error.status === 409') !== false
+        $suite->true(strpos($workflow, 'result.outcome === "conflict"') !== false
             && strpos($workflow, 'Nothing was posted.') !== false
             && strpos($workflow, 'idempotencyKey = makeIdempotencyKey()') !== false,
             'Responsibility mutations must preserve explicit conflict and idempotency protections.');
+        $suite->true(strpos($workflow, 'settleResponsibilityAction({') !== false
+            && strpos($workflow, 'if (!result.current) return false;') !== false
+            && strpos($workflow, 'state.components.responsibilityActionModal === modal') !== false,
+            'Delayed responsibility mutations must suppress stale UI effects after project, generation, or modal changes.');
         $suite->true(strpos($inbox, 'options.openActionModal(item, kind, {') !== false
             && strpos($app, 'openActionModal: (item, kind, hooks) => openResponsibilityActionModal(item, kind, hooks)') !== false,
             'Timeline and Responsibility Inbox must delegate to the same form-modal workflow.');

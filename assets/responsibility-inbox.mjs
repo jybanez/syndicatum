@@ -484,12 +484,16 @@ export function createResponsibilityInbox(host, options) {
 
   function openActionModal(item, kind) {
     options.openActionModal(item, kind, {
-      async onSuccess() {
+      async onSuccess(_eventMessage, lifecycle) {
+        if (!lifecycle.isCurrent()) return;
         await load();
+        if (!lifecycle.isCurrent()) return;
         status.textContent = `${RESPONSIBILITY_ACTIONS[kind]} recorded in the project timeline.`;
       },
-      async onConflict() {
+      async onConflict(lifecycle) {
+        if (!lifecycle.isCurrent()) return;
         const refreshed = await load();
+        if (!lifecycle.isCurrent()) return;
         conflictNotice = true;
         status.textContent = refreshed
           ? "Responsibility changed before your action. Review the refreshed item; nothing was posted by this attempt."
