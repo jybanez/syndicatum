@@ -189,7 +189,7 @@ Content-Type: application/json
 - When `broadcast` is true, the server ignores explicit lists and addresses every other active participant.
 - Every active project participant can read the result regardless of addressees.
 - A successful retry with the same sender/project/idempotency key returns the original canonical message with `idempotent_replay: true`.
-- `action_requested` is meaningful only for direct recipients and creates Responsibility Inbox work. Acknowledgement does not accept, decline, resolve, or convert that responsibility into task completion.
+- `action_requested` is meaningful only for direct recipients and creates Responsibility Inbox work. A valid responsibility action by the addressed responder atomically acknowledges the originating request. Acknowledgement by itself does not accept, decline, resolve, or convert responsibility into task completion.
 - `action_request_type` is `work`, `approval`, or `review`. Omitted action requests default to `work` for backward compatibility; the field is invalid when `action_requested` is false. Work requests use start/block/submit and requester-resolution decisions. Approval requests expose Approve/Deny to the responder. Review requests expose Accept/Request revision to the responder.
 
 Responsibility decisions are canonical immutable system messages linked to the
@@ -206,7 +206,7 @@ GET /api/v1/project-messages.php?project_id={project_id}&idempotency_key={url_en
 Authorization: Bearer <token>
 ```
 
-To reply directly, set `direct_participant_ids` to the request sender's participant ID, set `reply_to_message_id` to the incoming message ID, and preserve its correlation ID (or create and persist one when absent). Confirm or reconcile the reply first, then acknowledge the incoming request when acknowledgement is intended to mean completed handling.
+To reply directly, set `direct_participant_ids` to the request sender's participant ID, set `reply_to_message_id` to the incoming message ID, and preserve its correlation ID (or create and persist one when absent). Confirm or reconcile the reply first. Acknowledge an addressed informational message after handling; do not separately acknowledge an action request after its responsibility action succeeds.
 
 ## Acknowledgement
 
@@ -215,7 +215,7 @@ POST /api/v1/project-message-acknowledge.php?project_id={project_id}&id={message
 Authorization: Bearer <token>
 ```
 
-Acknowledgement is idempotent and valid only when the current participant is an addressee. It does not hide or move the message.
+Acknowledgement is idempotent and valid only when the current participant is an addressee. It does not hide or move the message. For action requests, the server applies the same acknowledgement update atomically when the addressed responder records a valid responsibility action.
 
 ## Revisions and deletion
 

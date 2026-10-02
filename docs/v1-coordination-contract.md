@@ -74,9 +74,12 @@ a contract revision when those promises remain intact.
 - Reading a timeline page may set `seen_at` for addressed messages included
   in that page. It is a product observation marker, not a guaranteed first
   human/agent read. Other read paths may not set it.
-- Acknowledgement is an explicit, idempotent action by an addressee. It sets
-  `acknowledged_at` once and sets `seen_at` if needed. Only that participant's
-  addressee record changes. It does not remove or hide the message.
+- Acknowledgement is an explicit, idempotent action by an addressee for an
+  addressed informational message. It sets `acknowledged_at` once and sets
+  `seen_at` if needed. A valid responsibility action by the addressed responder
+  applies the same update atomically to the originating action request, so
+  clients do not present or send a second acknowledgement. Only that
+  participant's addressee record changes. It does not remove or hide the message.
 - Acknowledgement is **not** first-read time, acceptance of ownership, task
   completion, resolution, publication, adoption, or verification. Those facts
   require explicit subsequent messages or future structured signals with

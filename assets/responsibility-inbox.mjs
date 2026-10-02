@@ -7,7 +7,7 @@ const VIEWS = [
   ["unknown", "Historical / unknown"],
 ];
 
-const ACTIONS = {
+export const RESPONSIBILITY_ACTIONS = {
   work_started: "Start work", blocked: "Mark blocked", unblocked: "Unblock",
   resolution_proposed: "Propose resolution", resolution_accepted: "Accept resolution",
   resolution_disputed: "Dispute resolution", resolution_withdrawn: "Withdraw proposal",
@@ -19,7 +19,7 @@ const ACTIONS = {
   review_accepted: "Accept", review_revision_requested: "Request revision",
 };
 
-const DIRECT_DECISIONS = new Set([
+export const RESPONSIBILITY_DIRECT_DECISIONS = new Set([
   "approval_approved", "approval_denied",
   "review_accepted", "review_revision_requested",
 ]);
@@ -109,7 +109,7 @@ export function responsibilityStateLabel(item) {
 }
 
 export function responsibilityEvent(item, kind, targetId = null) {
-  if (!Object.hasOwn(ACTIONS, kind) || !item || item.state === "unknown") {
+  if (!Object.hasOwn(RESPONSIBILITY_ACTIONS, kind) || !item || item.state === "unknown") {
     throw new Error("This responsibility action is unavailable.");
   }
   const event = {
@@ -144,7 +144,7 @@ function element(tag, className = "", text = "") {
 function button(label, onClick, className = "ui-button ui-button-ghost") {
   const node = element("button", className, label);
   node.type = "button";
-  node.addEventListener("click", onClick);
+  if (typeof onClick === "function") node.addEventListener("click", onClick);
   return node;
 }
 
@@ -163,10 +163,38 @@ export function createResponsibilityInbox(host, options) {
   let realtimeRefreshTimer = null;
   let realtimeRefreshing = false;
   const realtimeMessageIds = new Set();
+  const dropdowns = new Set();
   const participants = () => options.participants();
   const participantName = (participantId) => participants()
     .find((entry) => Number(entry.id) === Number(participantId))?.display_name
       || `Participant #${participantId}`;
+
+  function createScrollDismissedDropdown(trigger, items, dropdownOptions) {
+    let dropdown = null;
+    let listening = false;
+    const scrollWindow = trigger.ownerDocument?.defaultView || window;
+    const dismiss = () => dropdown?.close?.();
+    const listen = (open) => {
+      if (listening === open) return;
+      listening = open;
+      if (open) scrollWindow.addEventListener("scroll", dismiss, { passive: true, capture: true });
+      else scrollWindow.removeEventListener("scroll", dismiss, { capture: true });
+    };
+    dropdown = options.createDropdown(trigger, items, {
+      ...dropdownOptions,
+      onOpenChange(open, context) {
+        listen(open);
+        dropdownOptions.onOpenChange?.(open, context);
+      },
+    });
+    return {
+      close: (...args) => dropdown?.close?.(...args),
+      destroy() {
+        listen(false);
+        dropdown?.destroy?.();
+      },
+    };
+  }
 
   host.replaceChildren();
   const shell = element("section", "responsibility-inbox");
@@ -245,6 +273,8 @@ export function createResponsibilityInbox(host, options) {
   }
 
   function render() {
+    for (const dropdown of dropdowns) dropdown?.destroy?.();
+    dropdowns.clear();
     list.replaceChildren();
     for (const item of rows) list.append(renderItem(item));
     updatePagingControls();
@@ -341,27 +371,6 @@ export function createResponsibilityInbox(host, options) {
     list.append(element("li", "responsibility-empty", emptyStateMessage()));
   }
 
-  function applyAcknowledgement(row, item, scrollTop) {
-    const acknowledged = { ...item, acknowledged: true };
-    if (view === "unacknowledged") {
-      rows = rows.filter((entry) => Number(entry.request_message_id) !== Number(item.request_message_id));
-      row.remove();
-      renderEmptyState();
-    } else {
-      rows = rows.map((entry) => Number(entry.request_message_id) === Number(item.request_message_id)
-        ? acknowledged : entry);
-      const replacement = renderItem(acknowledged);
-      replacement.tabIndex = -1;
-      row.replaceWith(replacement);
-      replacement.focus({ preventScroll: true });
-    }
-    host.scrollTop = scrollTop;
-    requestAnimationFrame(() => {
-      if (!destroyed) host.scrollTop = scrollTop;
-    });
-    status.textContent = `Request #${item.request_message_id} acknowledged. ${rows.length} item${rows.length === 1 ? "" : "s"} shown${hasMore ? " · more available" : ""}.`;
-  }
-
   function renderItem(item) {
     const row = element("li", "responsibility-row");
     row.dataset.requestMessageId = String(item.request_message_id);
@@ -419,61 +428,34 @@ export function createResponsibilityInbox(host, options) {
       row.append(card);
       return row;
     }
-    if (!item.acknowledged
-        && Number(item.initial_responder_participant_id) === Number(options.actorId())) {
-      let acknowledgementPending = false;
-      const acknowledge = button("Acknowledge", async () => {
-        if (acknowledgementPending) return;
-        acknowledgementPending = true;
-        const scrollTop = host.scrollTop;
-        acknowledge.setAttribute("aria-disabled", "true");
-        const requestedView = view;
-        try {
-          await options.acknowledge(item);
-          host.scrollTop = scrollTop;
-          if (!row.isConnected || view !== requestedView) {
-            await load();
-            return;
-          }
-          applyAcknowledgement(row, item, scrollTop);
-        } catch (error) {
-          status.textContent = error.message || "Acknowledgement failed.";
-          acknowledgementPending = false;
-          if (acknowledge.isConnected) acknowledge.removeAttribute("aria-disabled");
-        }
-      }, "ui-button ui-button-borderless");
-      actions.append(acknowledge);
-    }
     const activeIds = participants().filter((entry) => entry.status === "active")
       .map((entry) => Number(entry.id));
     const available = responsibilityActions(item, options.actorId(),
       options.moderator(), activeIds);
-    for (const kind of available.filter((entry) => DIRECT_DECISIONS.has(entry))) {
-      const variant = ["approval_approved", "review_accepted"].includes(kind)
-        ? "ui-button ui-button-primary" : "ui-button ui-button-ghost";
-      actions.append(button(ACTIONS[kind], () => openActionForm(card, item, kind), variant));
+    for (const kind of available.filter((entry) => RESPONSIBILITY_DIRECT_DECISIONS.has(entry))) {
+      actions.append(button(RESPONSIBILITY_ACTIONS[kind], () => openActionModal(item, kind),
+        "ui-button ui-button-borderless"));
     }
-    const menuActions = available.filter((entry) => !DIRECT_DECISIONS.has(entry));
+    const menuActions = available.filter((entry) => !RESPONSIBILITY_DIRECT_DECISIONS.has(entry));
     if (menuActions.length) {
-      const menu = element("details", "responsibility-action-menu");
-      const summary = element("summary", "", "Update work");
-      const choices = element("div", "responsibility-action-choices");
-      for (const kind of menuActions) {
-        choices.append(button(ACTIONS[kind], () => {
-          menu.open = false;
-          openActionForm(card, item, kind);
-        }));
-      }
-      menu.append(summary, choices);
-      actions.append(menu);
+      const trigger = button("Update work", null, "ui-button ui-button-borderless");
+      actions.append(trigger);
+      const dropdown = createScrollDismissedDropdown(trigger, menuActions.map((kind) => ({
+        id: kind,
+        label: RESPONSIBILITY_ACTIONS[kind],
+      })), {
+        align: "left",
+        ariaLabel: "Update work",
+        className: "responsibility-update-dropdown",
+        onSelect(option) { openActionModal(item, option.id); },
+      });
+      dropdowns.add(dropdown);
     }
     const guidance = element("p", "responsibility-guidance");
     const actor = Number(options.actorId());
     const isResponder = actor === Number(item.current_responder_participant_id);
     const isRequester = actor === Number(item.requester_participant_id);
-    if (!item.acknowledged && actor === Number(item.initial_responder_participant_id)) {
-      guidance.textContent = "Next: acknowledge this request to confirm you received it.";
-    } else if (item.state === "open" && isResponder && item.request_type === "approval") {
+    if (item.state === "open" && isResponder && item.request_type === "approval") {
       guidance.textContent = "Next: approve or deny this request.";
     } else if (item.state === "open" && isResponder && item.request_type === "review") {
       guidance.textContent = "Next: accept the reviewed result or request a revision.";
@@ -500,67 +482,24 @@ export function createResponsibilityInbox(host, options) {
     return row;
   }
 
-  function openActionForm(card, item, kind) {
-    card.querySelector(".responsibility-action-form")?.remove();
-    const form = element("form", "responsibility-action-form");
-    const noteLabel = element("label", "", `${ACTIONS[kind]} — reason or evidence note`);
-    const note = element("textarea", "ui-input");
-    note.required = true;
-    note.maxLength = 10000;
-    note.rows = 3;
-    noteLabel.append(note);
-    form.append(noteLabel);
-    let target = null;
-    if (kind === "transfer_offered") {
-      const targetLabel = element("label", "", "Active handoff target");
-      target = element("select", "ui-input");
-      target.required = true;
-      const placeholder = element("option", "", "Choose a participant");
-      placeholder.value = "";
-      target.append(placeholder);
-      for (const person of participants().filter((entry) => entry.status === "active"
-          && Number(entry.id) !== Number(item.last_responder_participant_id))) {
-        const choice = element("option", "", person.display_name);
-        choice.value = person.id;
-        target.append(choice);
-      }
-      targetLabel.append(target);
-      form.append(targetLabel);
-    }
-    const errorText = element("p", "responsibility-action-error");
-    errorText.setAttribute("role", "alert");
-    const controls = element("div", "responsibility-action-controls");
-    const submit = element("button", "ui-button ui-button-primary", ACTIONS[kind]);
-    submit.type = "submit";
-    controls.append(submit, button("Cancel", () => form.remove()));
-    form.append(errorText, controls);
-    let key = options.newKey();
-    note.addEventListener("input", () => { key = options.newKey(); });
-    target?.addEventListener("change", () => { key = options.newKey(); });
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      submit.disabled = true;
-      errorText.textContent = "";
-      try {
-        const structured = responsibilityEvent(item, kind, target?.value);
-        await options.writeEvent(note.value.trim(), structured, key);
+  function openActionModal(item, kind) {
+    options.openActionModal(item, kind, {
+      async onSuccess(_eventMessage, lifecycle) {
+        if (!lifecycle.isCurrent()) return;
         await load();
-        status.textContent = `${ACTIONS[kind]} recorded in the project timeline.`;
-      } catch (error) {
-        if (error.status === 409) {
-          const refreshed = await load();
-          conflictNotice = true;
-          status.textContent = refreshed
-            ? "Responsibility changed before your action. Review the refreshed item; nothing was posted by this attempt."
-            : "Responsibility changed before your action; nothing was posted. Refresh failed; use Refresh before trying again.";
-        } else {
-          errorText.textContent = error.message || "Action failed. You can retry the unchanged request.";
-          submit.disabled = false;
-        }
-      }
+        if (!lifecycle.isCurrent()) return;
+        status.textContent = `${RESPONSIBILITY_ACTIONS[kind]} recorded in the project timeline.`;
+      },
+      async onConflict(lifecycle) {
+        if (!lifecycle.isCurrent()) return;
+        const refreshed = await load();
+        if (!lifecycle.isCurrent()) return;
+        conflictNotice = true;
+        status.textContent = refreshed
+          ? "Responsibility changed before your action. Review the refreshed item; nothing was posted by this attempt."
+          : "Responsibility changed before your action; nothing was posted. Refresh failed; use Refresh before trying again.";
+      },
     });
-    card.append(form);
-    note.focus();
   }
 
   async function load(append = false) {
@@ -628,6 +567,8 @@ export function createResponsibilityInbox(host, options) {
     destroy() {
       destroyed = true;
       generation++;
+      for (const dropdown of dropdowns) dropdown?.destroy?.();
+      dropdowns.clear();
       pageObserver?.disconnect();
       host.removeEventListener("scroll", scheduleAutomaticPaging);
       if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);

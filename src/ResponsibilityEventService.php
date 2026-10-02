@@ -121,6 +121,16 @@ class ResponsibilityEventService
         $prior = $state;
         $priorState = $state['state'];
         $state = ResponsibilityStateReducer::apply($state, $event, $actor);
+        if ((int) $access['participant_id'] === $initialResponderId) {
+            $now = Db::now();
+            $acknowledge = $this->pdo->prepare(
+                'UPDATE message_addressees
+                 SET seen_at = COALESCE(seen_at, ?),
+                     acknowledged_at = COALESCE(acknowledged_at, ?)
+                 WHERE message_id = ? AND participant_id = ?'
+            );
+            $acknowledge->execute([$now, $now, $requestId, $initialResponderId]);
+        }
         $notificationParticipantIds = $this->notificationParticipantIds(
             $projectId, $kind, $prior, $state,
             (int) $access['participant_id'], $targetId);

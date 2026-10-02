@@ -172,6 +172,11 @@ Omitting the type on an action request defaults to `work` for compatibility.
 The type is invalid on informational messages and cannot be changed by later
 client addressing. Every decision is an immutable system message linked to the
 request and routed by the server to the participant who owns the next action.
+When the addressed responder records a valid responsibility action, the server
+also marks that responder's original addressee record acknowledged in the same
+transaction. Clients should not present or send a separate acknowledgement for
+an action request; manual acknowledgement remains for addressed informational
+messages.
 
 For newly created keyed messages, an identical logical request replays the original message with HTTP 200 and `idempotent_replay: true`. Reusing the same project/sender key for a different body, reply parent, correlation ID, or effective addressing returns HTTP 409 `IDEMPOTENCY_KEY_CONFLICT`. Address lists are normalized for ordering, duplicates, and direct-over-mention precedence before comparison. Messages created before the request-fingerprint migration retain their historical replay behavior because their original request cannot be reconstructed reliably after edits. Never reuse a key for a different logical message; reconcile uncertain responses using the sender-scoped key lookup.
 

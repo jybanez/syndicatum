@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Responsibility response modal visual fixture</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" data-ui-bundle="ui" href="../../vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.222">
+<link rel="stylesheet" href="../../assets/app.css">
+<style>
+  body { min-height: 100vh; margin: 0; padding: 24px; background: #07111f; color: #eef4ff; box-sizing: border-box; }
+  main { max-width: 760px; margin: auto; }
+  .fixture-card { display: grid; gap: 10px; padding: 18px; border: 1px solid #30496f; border-radius: 12px; background: #102039; }
+  .fixture-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+</style>
+<main>
+  <h1>Responsibility response modal</h1>
+  <article class="fixture-card">
+    <strong>Approval request #6790</strong>
+    <span>Requested by Syndicatum Developer · Assigned to Jonathan Anthony Ybañez</span>
+    <div class="fixture-actions">
+      <button class="ui-button" type="button" data-action="approval_approved">Approve</button>
+      <button class="ui-button" type="button" data-action="approval_denied">Deny</button>
+      <button class="ui-button" type="button" data-action="transfer_offered">Offer handoff</button>
+      <button class="ui-button" type="button" data-action="delayed_success">Delayed success</button>
+      <button class="ui-button" type="button" data-action="delayed_conflict">Delayed conflict</button>
+    </div>
+    <span data-fixture-status role="status">Requests: 0 · Success hooks: 0 · Conflict hooks: 0</span>
+  </article>
+</main>
+<script type="module">
+  import { uiLoader } from "../../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.222";
+  import {
+    settleResponsibilityAction,
+    validationAlertItems,
+  } from "../../assets/responsibility-action-flow.mjs?v=20261003051000";
+
+  const createFormModal = await uiLoader.get("ui.form.modal");
+  const uiAlert = await uiLoader.get("ui.dialog.alert");
+  const labels = {
+    approval_approved: "Approve",
+    approval_denied: "Deny",
+    transfer_offered: "Offer handoff",
+    delayed_success: "Delayed success",
+    delayed_conflict: "Delayed conflict",
+  };
+  const optional = new Set(["approval_approved", "delayed_success", "delayed_conflict"]);
+  const status = document.querySelector("[data-fixture-status]");
+  const metrics = { requests: 0, successHooks: 0, conflictHooks: 0 };
+  const renderMetrics = () => {
+    status.textContent = `Requests: ${metrics.requests} · Success hooks: ${metrics.successHooks} · Conflict hooks: ${metrics.conflictHooks}`;
+  };
+
+  async function showSummary(result, context) {
+    const entries = Object.entries(result.errors || {});
+    const items = validationAlertItems(result, {
+      note: "Reason or evidence note",
+      target_participant_id: "Active handoff target",
+    });
+    if (entries.length > 1) {
+      const summary = context.modal.refs.formError
+        || context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error");
+      if (summary) {
+        summary.replaceChildren(document.createTextNode("Please address the following issues before continuing:"));
+        const list = document.createElement("ul");
+        list.className = "integration-form-error-list";
+        items.forEach((message) => {
+          const item = document.createElement("li");
+          item.textContent = message;
+          list.appendChild(item);
+        });
+        summary.appendChild(list);
+        summary.hidden = false;
+      }
+    }
+    await uiAlert(entries.length > 1
+      ? "Please address the following issues before continuing:"
+      : items[0], {
+      title: "Form needs attention",
+      variant: "warning",
+      items: entries.length > 1 ? items : [],
+    });
+  }
+
+  function openModal(kind) {
+    const rows = [
+      [{ type: "text", content: "This response will be recorded as a project timeline message for request #6790." }],
+      [{ type: "textarea", name: "note", label: optional.has(kind) ? "Note (optional)" : "Reason or evidence note",
+        required: !optional.has(kind), maxLength: 10000, rows: 5,
+        help: optional.has(kind) ? "Optional. Add context when it will help the requester understand the decision."
+          : "Explain the decision or provide the evidence the requester needs." }],
+    ];
+    if (kind === "transfer_offered") rows.push([{
+      type: "select", name: "target_participant_id", label: "Active handoff target", required: true,
+      options: [{ value: "", label: "Choose a participant" }, { value: "30", label: "New responder" }],
+      help: "Choose the active participant who should receive this work.",
+    }]);
+    let current = true;
+    const modal = createFormModal({
+      title: labels[kind], size: "md", submitLabel: labels[kind], cancelLabel: "Cancel",
+      context: { badge: labels[kind], summary: "Request #6790 · Requested by Syndicatum Developer · Assigned to Jonathan Anthony Ybañez" },
+      rows, initialValues: { note: "", target_participant_id: "" }, manageBusyOnSubmit: false,
+      validate(values) {
+        const errors = {};
+        if (!optional.has(kind) && !String(values.note || "").trim()) errors.note = "Reason or evidence note — required";
+        if (kind === "transfer_offered" && !values.target_participant_id) errors.target_participant_id = "Active handoff target — required";
+        return errors;
+      },
+      onInvalid: showSummary,
+      async onSubmit(_values, context) {
+        metrics.requests += 1;
+        renderMetrics();
+        if (!kind.startsWith("delayed_")) {
+          context.setFormError("Visual fixture only; no response was posted.");
+          return false;
+        }
+        const conflict = Object.assign(new Error("Conflict"), { status: 409 });
+        context.setBusy(true, { message: "Recording response…" });
+        setTimeout(() => { current = false; void modal.close({ reason: "project-switch" }); }, 30);
+        const result = await settleResponsibilityAction({
+          submit: () => new Promise((resolve, reject) => {
+            setTimeout(() => kind === "delayed_conflict" ? reject(conflict) : resolve({ id: 200 }), 120);
+          }),
+          isCurrent: () => current && modal.getState().open,
+          onSuccess() { metrics.successHooks += 1; renderMetrics(); },
+          onConflict() { metrics.conflictHooks += 1; renderMetrics(); },
+        });
+        status.dataset.outcome = `${result.outcome}:${result.current}`;
+        return false;
+      },
+      onClose() { current = false; },
+    });
+    modal.open();
+  }
+
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", () => openModal(button.dataset.action));
+  });
+</script>
+</html>

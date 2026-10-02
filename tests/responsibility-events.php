@@ -99,6 +99,17 @@ function responsibilityMessageAddressees(PDO $pdo, $messageId)
     }, $statement->fetchAll(PDO::FETCH_ASSOC));
 }
 
+function responsibilityAcknowledged(PDO $pdo, $messageId, $participantId)
+{
+    $statement = $pdo->prepare(
+        'SELECT acknowledged_at FROM message_addressees
+         WHERE message_id = ? AND participant_id = ?'
+    );
+    $statement->execute([(int) $messageId, (int) $participantId]);
+    $value = $statement->fetchColumn();
+    return $value !== false && $value !== null;
+}
+
 $database = 'syndicatum_resp_test_' . bin2hex(random_bytes(6));
 if (!preg_match('/^syndicatum_resp_test_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe temporary database name.');
@@ -156,6 +167,9 @@ try {
         'participant_id' => $ownerParticipant,
         'reason' => 'direct',
     ]], 'Responder update was not addressed only to the requester.');
+    responsibilityAssert(responsibilityAcknowledged(
+        $pdo, $requestId, $responderParticipant),
+        'A valid responder workflow action did not acknowledge the original request.');
     $same = responsibilityWrite($repository, $responder, $requestId,
         $responderParticipant, $requestId, 'work_started', 'responsibility-start');
     responsibilityAssert(!$same['created'] && $same['message']['id'] === $eventId,
@@ -523,8 +537,9 @@ try {
         }));
     responsibilityAssert(count($approvalItems) === 1
         && $approvalItems[0]['request_type'] === 'approval'
+        && $approvalItems[0]['acknowledged'] === true
         && $approvalItems[0]['outcome'] === 'approved',
-        'Approval decision was not projected as a classified result.');
+        'Approval decision was not projected as an acknowledged classified result.');
 
     $reviewRequest = $repository->createMessage($owner, [
         'body' => 'Review the final infographic',
@@ -545,8 +560,9 @@ try {
         }));
     responsibilityAssert(count($reviewItems) === 1
         && $reviewItems[0]['request_type'] === 'review'
+        && $reviewItems[0]['acknowledged'] === true
         && $reviewItems[0]['outcome'] === 'revision_requested',
-        'Review revision decision was not projected as a classified result.');
+        'Review revision decision was not projected as an acknowledged classified result.');
 
     $dual = $repository->createMessage($owner, [
         'body' => 'Two independent direct responsibilities',

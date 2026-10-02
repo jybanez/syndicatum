@@ -581,6 +581,7 @@ try {
 
     $suite->test('Message composer precedes filters and the newest-first timeline', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
+        $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
         $messagesColumn = strpos($index, 'class="surface-column project-messages-column"');
         $overview = strpos($index, 'class="project-overview timeline-project-overview"');
@@ -607,6 +608,12 @@ try {
             'The New message and Refresh actions must remain grouped to the right of project search.');
         $suite->true(strpos($styles, '.filter-bar { display: grid; grid-template-columns: auto minmax(190px, 1fr) auto;') !== false,
             'The timeline toolbar must reserve compact action columns on both sides of the search field.');
+        $suite->true(strpos($source, 'if (state.loading && mode !== "initial") {') !== false
+            && strpos($source, 'if (mode === "older") state.pendingOlderLoad = true;') !== false
+            && strpos($source, 'queueMicrotask(() => void loadMessages("older", generation, messageGeneration).catch(handleLoadError));') !== false,
+            'A periodic newer-message refresh must queue rather than consume an older-page boundary request.');
+        $suite->true(strpos($source, 'state.components.timeline?.resetReachEnd({ check: false });') !== false,
+            'A Timeline boundary that cannot load must be rearmed so a later visible scroll can retry.');
     });
 
     $suite->test('Project views use the attached Helper tabs variant', function () use ($suite, $root) {
@@ -688,8 +695,8 @@ try {
             && strpos($source, 'params.set("message_kind", state.filters.kind)') !== false,
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
-            && strpos($loader, 'const UI_TIMELINE_REV = "0.21.212";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.217";') !== false,
+            && strpos($loader, 'const UI_TIMELINE_REV = "0.21.222";') !== false
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.222";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -851,7 +858,7 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.217 retains planning contracts and adds the canonical safe Markdown view', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.222 retains planning contracts and owns Timeline pagination loading', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $appCss = file_get_contents($root . '/assets/app.css');
         $setup = file_get_contents($root . '/assets/setup.mjs');
@@ -859,13 +866,13 @@ try {
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.217') !== false,
-                'Every Helper entry point must use the canonical 0.21.217 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.222') !== false,
+                'Every Helper entry point must use the canonical 0.21.222 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.217') !== false,
-                $surface . ' must use the matching canonical 0.21.217 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.222') !== false,
+                $surface . ' must use the matching canonical 0.21.222 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -908,15 +915,20 @@ try {
             'The matching Helper stylesheet must include native timeline menu presentation.');
         $suite->true(strpos($bundleJs, 'firstElementChild.getBoundingClientRect().top') !== false,
             'The Helper timeline must anchor virtual rows to the scroll content origin rather than the bordered viewport box.');
-        $suite->same('386444d3aeb01c79fcec2819d9c63aca91f59a3b1bb79f2c713e80921db7da08',
+        $suite->true(strpos($bundleJs, 'ui-timeline-loading') !== false
+            && strpos($bundleCss, '.ui-timeline-loading') !== false
+            && strpos($bundleJs, 'Loading timeline items…') !== false
+            && strpos($app, 'loadingText: mode === "older" ? "Loading earlier messages…" : "Loading messages…"') !== false,
+            'Timeline pagination must use Helper-owned loading presentation and an application-specific accessible label.');
+        $suite->same('081d31904ac60ab189a5de41f3555c548ee6b5f53981bd7ed2ae0b2fe285b7d5',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match upstream commit 766df8c exactly.');
-        $suite->same('3d6cc2d1a709996e823529e97d207e6f63a17f06a8199850f7bf56ee0ed21da3',
+            'The vendored Helper JavaScript must match canonical commit 0640350 exactly.');
+        $suite->same('6e3aed81c249f6dea649b87756ad41fe75c0bc0bd7313eebdcd51a834ba0137b',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match upstream commit 766df8c exactly.');
-        $suite->same('fe22fe40e6282f401b42e982a9f928a25925a156739bbabb274fd0e875c10775',
+            'The vendored Helper stylesheet must match canonical commit 0640350 exactly.');
+        $suite->same('ad67920d25d246d5e3c9c5a3b40203747052f2bac5fbf47252a80782c819edbd',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match upstream commit 766df8c exactly.');
+            'The vendored Helper loader must match canonical commit 0640350 exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -1211,22 +1223,86 @@ try {
             'The project search input must shrink within its assigned grid column.');
     });
 
-    $suite->test('Responsibility acknowledgement updates one card without reloading the list', function () use ($suite, $root) {
+    $suite->test('Action requests use workflow actions instead of duplicate acknowledgement', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/responsibility-inbox.mjs');
-        $suite->true(strpos($source, 'applyAcknowledgement(row, item, scrollTop);') !== false,
-            'Responsibility acknowledgement must apply a targeted card update.');
-        $suite->true(strpos($source, "await options.acknowledge(item);\n          await load();") === false,
-            'The normal acknowledgement path must not reload and rebuild the entire responsibility list.');
-        $suite->true(strpos($source, 'const scrollTop = host.scrollTop;') !== false
-            && substr_count($source, 'host.scrollTop = scrollTop;') >= 2
-            && strpos($source, 'focus({ preventScroll: true })') !== false,
-            'The targeted acknowledgement update must preserve scroll position and focus without scrolling.');
-        $suite->true(strpos($source, 'const scrollTop = host.scrollTop;')
-            < strpos($source, 'await options.acknowledge(item);'),
-            'The inbox scroll position must be captured before the acknowledgement request begins.');
+        $app = file_get_contents($root . '/assets/app.mjs');
+        $suite->true(strpos($source, 'button("Acknowledge"') === false
+            && strpos($source, 'Next: acknowledge this request') === false,
+            'Responsibility cards must not expose a separate acknowledgement step.');
+        $suite->true(strpos($app, '&& !message.action_requested') !== false,
+            'Timeline acknowledgement must remain available only for non-action messages.');
+        $suite->true(strpos($app, 'mountTimelineResponsibilityActions(current, actions)') !== false
+            && strpos($app, 'responsibilityEvent(currentItem, kind, values.target_participant_id)') !== false,
+            'Timeline request cards must expose the same responsibility actions as the Inbox.');
+        $suite->true(strpos($app, 'dropdown = state.factories.createDropdown(trigger, items, {') !== false
+            && strpos($app, 'createScrollDismissedDropdown(trigger, menuActions.map') !== false
+            && strpos($app, 'createDropdown: state.factories.createDropdown') !== false
+            && strpos($source, 'createScrollDismissedDropdown(trigger, menuActions.map') !== false,
+            'Update work must use the canonical Helper dropdown on both Timeline and Inbox cards.');
+        $suite->true(substr_count($app, 'function createScrollDismissedDropdown(') === 1
+            && strpos($app, 'scrollWindow.addEventListener("scroll", dismiss, { passive: true, capture: true })') !== false
+            && strpos($source, 'scrollWindow.addEventListener("scroll", dismiss, { passive: true, capture: true })') !== false,
+            'Open Update work dropdowns must dismiss when their Timeline or Inbox scroll container moves.');
+        $suite->true(strpos($app, 'ui-button ui-button-borderless message-action') !== false
+            && strpos($source, '"ui-button ui-button-borderless"') !== false,
+            'Message and responsibility actions must use consistent borderless Helper buttons.');
         $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($styles, '.message-actions { display: flex; min-width: 0; align-items: center; flex-wrap: nowrap;') !== false,
+            'Timeline message actions must stay on one line.');
         $suite->true(strpos($styles, '.responsibility-scroll { min-height: 0; overflow: auto; overflow-anchor: none;') !== false,
             'The responsibility scroll container must not let browser anchoring override the preserved position.');
+    });
+
+    $suite->test('Responsibility responses use one canonical loading form modal', function () use ($suite, $root) {
+        $app = str_replace("\r\n", "\n", file_get_contents($root . '/assets/app.mjs'));
+        $inbox = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $start = strpos($app, 'function openResponsibilityActionModal(item, kind, hooks = {})');
+        $end = strpos($app, "\nfunction messageLinkedTasks", $start);
+        $suite->true($start !== false && $end !== false, 'The shared responsibility form-modal workflow is missing.');
+        $workflow = substr($app, $start, $end - $start);
+        $open = strpos($workflow, 'modal.open();');
+        $initializeCall = strrpos($workflow, 'void initialize();');
+        $initializeStart = strpos($workflow, 'async function initialize()');
+        $busy = strpos($workflow, 'modal.setBusy(true, {', $initializeStart);
+        $request = strpos($workflow, 'await refreshResponsibilityItem(currentItem', $initializeStart);
+        $suite->true(strpos($workflow, 'state.factories.createFormModal(formOptions())') !== false
+            && $open !== false && $initializeCall !== false && $open < $initializeCall
+            && $initializeStart !== false && $busy !== false && $request !== false && $busy < $request,
+            'The complete Helper Form Modal must open and enter busy state before loading current responsibility data.');
+        $suite->true(strpos($workflow, 'new AbortController()') !== false
+            && strpos($workflow, 'label: "Cancel"') !== false
+            && strpos($workflow, 'initializationController?.abort()') !== false,
+            'Responsibility initialization must be cancellable and ignore or abort late loading work.');
+        $suite->true(strpos($workflow, 'manageBusyOnSubmit: false') !== false
+            && strpos($workflow, 'validate(values)') !== false
+            && strpos($workflow, 'async onInvalid(result, context) { await showFormValidationSummary') !== false
+            && strpos($workflow, 'context.setBusy(true, { message: "Recording response…" })') !== false,
+            'Form validation must run through Helper before the mutation enters busy state.');
+        $suite->true(strpos($app, 'Please address the following issues before continuing:') !== false
+            && strpos($app, 'context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error")') !== false
+            && strpos($app, 'await state.factories.uiAlert(') !== false
+            && strpos($app, 'items: entries.length > 1 ? items : []') !== false
+            && strpos($workflow, 'errors.note = "Reason or evidence note — required"') !== false
+            && strpos($workflow, 'errors.target_participant_id = "Active handoff target — required"') !== false,
+            'Invalid responsibility forms must expose field feedback and a canonical draggable alert with structured multi-error content.');
+        $suite->true(strpos($app, 'RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS = new Set(["approval_approved", "review_accepted"])') !== false
+            && strpos($app, 'approval_approved: "Approved."') !== false
+            && strpos($app, 'review_accepted: "Accepted."') !== false,
+            'Positive approval and review decisions must allow an optional note while retaining a valid canonical message body.');
+        $suite->true(strpos($workflow, 'result.outcome === "conflict"') !== false
+            && strpos($workflow, 'Nothing was posted.') !== false
+            && strpos($workflow, 'idempotencyKey = makeIdempotencyKey()') !== false,
+            'Responsibility mutations must preserve explicit conflict and idempotency protections.');
+        $suite->true(strpos($workflow, 'settleResponsibilityAction({') !== false
+            && strpos($workflow, 'if (!result.current) return false;') !== false
+            && strpos($workflow, 'state.components.responsibilityActionModal === modal') !== false,
+            'Delayed responsibility mutations must suppress stale UI effects after project, generation, or modal changes.');
+        $suite->true(strpos($inbox, 'options.openActionModal(item, kind, {') !== false
+            && strpos($app, 'openActionModal: (item, kind, hooks) => openResponsibilityActionModal(item, kind, hooks)') !== false,
+            'Timeline and Responsibility Inbox must delegate to the same form-modal workflow.');
+        $suite->true(strpos($styles, '.responsibility-action-form') === false,
+            'The retired inline responsibility form styling must not remain in the application.');
     });
 
     $suite->test('Action requests expose classified composer and decision workflows', function () use ($suite, $root) {
@@ -1242,7 +1318,7 @@ try {
             $suite->true(strpos($inbox, $decision) !== false,
                 'Missing classified responsibility decision: ' . $decision);
         }
-        $suite->true(strpos($inbox, 'DIRECT_DECISIONS.has(entry)') !== false
+        $suite->true(strpos($inbox, 'RESPONSIBILITY_DIRECT_DECISIONS.has(entry)') !== false
             && strpos($inbox, 'request_type === "approval"') !== false
             && strpos($inbox, 'request_type === "review"') !== false,
             'Approval and Review decisions must be presented directly instead of as generic work actions.');
@@ -1363,8 +1439,9 @@ try {
             'Create task must remain in the native context menu rather than the expanding footer.');
         $suite->true(strpos($source, 'function canAcknowledgeMessage(message)') !== false
             && strpos($source, 'actionButton("Acknowledge"') !== false
-            && strpos($source, 'actions.appendChild(acknowledge);') !== false,
-            'Eligible messages must restore Acknowledge directly beside Reply.');
+            && strpos($source, 'actions.appendChild(acknowledge);') !== false
+            && strpos($source, '&& !message.action_requested') !== false,
+            'Only eligible non-action messages must expose Acknowledge directly beside Reply.');
         $suite->true(strpos($source, 'View linked tasks (') !== false
             && strpos($source, 'function openLinkedMessageTasks(message)') !== false,
             'Messages must expose tasks linked through source_message_id.');

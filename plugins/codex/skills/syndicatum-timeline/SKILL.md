@@ -71,7 +71,10 @@ request, not as the ChatGPT Companion discussion-binding flow.
    task-link and status updates require the explicit `plan.progress.update`
    permission and must use the dedicated stewardship tools; structural changes
    remain proposals.
-6. Acknowledge a message only after its requested handling is genuinely complete.
+6. Acknowledge an addressed informational message only after its requested
+   handling is genuinely complete. A successful responsibility action by the
+   addressed responder acknowledges the originating action request; do not
+   acknowledge it again.
 
 ## Use project shared storage
 

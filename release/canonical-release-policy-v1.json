@@ -1299,6 +1299,13 @@
       "mode": 420
     },
     {
+      "source": "assets/responsibility-action-flow.mjs",
+      "action": "ship",
+      "path": "app/assets/responsibility-action-flow.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "assets/responsibility-evidence.mjs",
       "action": "ship",
       "path": "app/assets/responsibility-evidence.mjs",
