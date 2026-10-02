@@ -42,9 +42,6 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <div class="project-overview-heading">
                                     <h1 id="project-title">Select a project</h1>
                                     <div class="project-overview-actions">
-                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action new-message-trigger" id="new-message-trigger" aria-label="New message" title="New message" hidden>
-                                            <span class="timeline-action-icon" id="new-message-icon" aria-hidden="true"></span>
-                                        </button>
                                         <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
                                             <span class="timeline-action-icon" id="project-actions-icon" aria-hidden="true"></span>
                                         </button>
@@ -64,14 +61,19 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <div id="composer-host"></div>
                             </section>
                             <section class="filter-bar" id="timeline-filter-bar" aria-label="Timeline filters">
-                                <div id="search-mount" class="app-search"></div>
-                                <div class="filter-bar-actions">
+                                <div class="filter-bar-leading-actions">
+                                    <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="timeline-collapse-toggle" aria-label="Collapse all messages" title="Collapse all messages">
+                                        <span class="timeline-action-icon" id="timeline-collapse-icon" aria-hidden="true"></span>
+                                    </button>
                                     <button type="button" class="ui-button ui-button-borderless timeline-icon-action timeline-filter-trigger" id="filter-popover-trigger" aria-label="Timeline filters" title="Filters">
                                         <span class="timeline-action-icon" id="filter-icon" aria-hidden="true"></span>
                                         <span class="ui-badge timeline-filter-count" id="filter-count" hidden>0</span>
                                     </button>
-                                    <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="timeline-collapse-toggle" aria-label="Collapse all messages" title="Collapse all messages">
-                                        <span class="timeline-action-icon" id="timeline-collapse-icon" aria-hidden="true"></span>
+                                </div>
+                                <div id="search-mount" class="app-search"></div>
+                                <div class="filter-bar-actions">
+                                    <button type="button" class="ui-button ui-button-borderless timeline-icon-action new-message-trigger" id="new-message-trigger" aria-label="New message" title="New message" hidden>
+                                        <span class="timeline-action-icon" id="new-message-icon" aria-hidden="true"></span>
                                     </button>
                                     <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="refresh-button" aria-label="Refresh timeline" title="Refresh">
                                         <span class="timeline-action-icon" id="refresh-icon" aria-hidden="true"></span>

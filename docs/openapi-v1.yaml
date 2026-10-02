@@ -135,6 +135,26 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-read-state.php:
+    post:
+      summary: Advance the authenticated participant's project timeline read position
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [last_read_sequence]
+              properties:
+                last_read_sequence: { type: integer, minimum: 0 }
+      responses:
+        '200': { description: Current read position and remaining unread-message count }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-bootstrap.php:
     get:
       summary: Read project context, effective instructions, assignment, permissions, work summary, and timeline attention state
@@ -785,7 +805,7 @@ components:
   schemas:
     ProjectSummary:
       type: object
-      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, google_drive_url, status, role, participant_id, relationship, human_count, agent_count, integration_count, message_count]
+      required: [id, public_id, workspace_id, owner_user_id, name, slug, description, google_drive_url, status, role, participant_id, relationship, human_count, agent_count, integration_count, message_count, unread_message_count]
       properties:
         id: { type: integer, minimum: 1 }
         public_id: { type: string, format: uuid }
@@ -803,6 +823,7 @@ components:
         agent_count: { type: integer, minimum: 0 }
         integration_count: { type: integer, minimum: 0 }
         message_count: { type: integer, minimum: 0 }
+        unread_message_count: { type: integer, minimum: 0, description: Non-deleted messages from other participants since this participant last read the full project timeline. }
     ProjectListResponse:
       type: object
       required: [data]
@@ -907,7 +928,7 @@ components:
         editor: { $ref: '#/components/schemas/MessageSender' }
     Message:
       type: object
-      required: [id, uuid, project_id, project_sequence, message_kind, severity, system_event, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, action_requested, created_at, updated_at, deleted_at, edited, revision_count]
+      required: [id, uuid, project_id, project_sequence, message_kind, severity, system_event, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, action_requested, action_request_type, created_at, updated_at, deleted_at, edited, revision_count]
       properties:
         id: { type: integer, minimum: 1 }
         uuid: { type: string, format: uuid }
@@ -923,6 +944,7 @@ components:
         correlation_id: { type: string, nullable: true }
         reply_depth: { type: integer, minimum: 0 }
         action_requested: { type: boolean, description: True only when this direct message explicitly creates Responsibility Inbox work. }
+        action_request_type: { type: string, nullable: true, enum: [work, approval, review, null], description: Classified response workflow for an action request; null for informational and system messages. }
         created_at: { $ref: '#/components/schemas/UtcTimestamp' }
         updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
         deleted_at: { allOf: [{ $ref: '#/components/schemas/UtcTimestamp' }], nullable: true }
@@ -948,12 +970,13 @@ components:
         page: { $ref: '#/components/schemas/MessagePage' }
     ResponsibilityInboxItem:
       type: object
-      required: [project_id, request_message_id, request_sequence, request_created_at, requester_participant_id, initial_responder_participant_id, current_responder_participant_id, last_responder_participant_id, state, blocked, block_event_message_id, work_started, outcome, pending_event_message_id, pending_target_participant_id, pending_proposer_participant_id, acknowledged, latest_evidence_message_id, latest_evidence_sequence, projection_error, canonical_message_api_href]
+      required: [project_id, request_message_id, request_sequence, request_created_at, request_type, requester_participant_id, initial_responder_participant_id, current_responder_participant_id, last_responder_participant_id, state, blocked, block_event_message_id, work_started, outcome, pending_event_message_id, pending_target_participant_id, pending_proposer_participant_id, acknowledged, latest_evidence_message_id, latest_evidence_sequence, projection_error, canonical_message_api_href]
       properties:
         project_id: { type: integer, minimum: 1 }
         request_message_id: { type: integer, minimum: 1 }
         request_sequence: { type: integer, minimum: 1 }
         request_created_at: { type: string }
+        request_type: { type: string, enum: [work, approval, review] }
         requester_participant_id: { type: integer, minimum: 1 }
         initial_responder_participant_id: { type: integer, minimum: 1 }
         current_responder_participant_id: { type: integer, minimum: 1, nullable: true }
@@ -962,7 +985,7 @@ components:
         blocked: { type: boolean, nullable: true }
         block_event_message_id: { type: integer, minimum: 1, nullable: true, description: Exact active block event to reference when unblocking. }
         work_started: { type: boolean, nullable: true }
-        outcome: { type: string, nullable: true, enum: [accepted, withdrawn, null], description: Distinguishes accepted completion from withdrawn requests. }
+        outcome: { type: string, nullable: true, enum: [accepted, approved, denied, revision_requested, withdrawn, null], description: Distinguishes the terminal decision from withdrawn requests. }
         pending_event_message_id: { type: integer, minimum: 1, nullable: true, description: Exact pending transfer offer or resolution proposal event to reference for a decision. }
         pending_target_participant_id: { type: integer, minimum: 1, nullable: true, description: Proposed transfer target when a transfer is pending. }
         pending_proposer_participant_id: { type: integer, minimum: 1, nullable: true, description: Resolution proposer when a resolution is pending. }
@@ -978,11 +1001,12 @@ components:
         data: { type: array, items: { $ref: '#/components/schemas/ResponsibilityInboxItem' } }
         page:
           type: object
-          required: [limit, scanned, has_more, changed_request_message_id, older_cursor]
+          required: [limit, scanned, has_more, unacknowledged_count, changed_request_message_id, older_cursor]
           properties:
             limit: { type: integer, minimum: 1, maximum: 50 }
             scanned: { type: integer, minimum: 0, maximum: 50 }
             has_more: { type: boolean }
+            unacknowledged_count: { type: integer, minimum: 0, description: Current participant's total unacknowledged direct action requests in this project. }
             changed_request_message_id: { type: integer, minimum: 1, nullable: true, description: Original request resolved from changed_by_message_id; null for normal pagination. }
             older_cursor: { type: string, nullable: true }
     MessageResponse:
@@ -1164,6 +1188,7 @@ components:
         mention_participant_ids: { type: array, items: { type: integer, minimum: 1 } }
         broadcast: { type: boolean, description: If true, addresses all other active participants and ignores explicit lists. Omitted or empty addressing also broadcasts. }
         action_requested: { type: boolean, default: false, description: If true, creates Responsibility Inbox work for each direct recipient. Invalid for broadcasts. Direct addressing alone is informational. }
+        action_request_type: { type: string, enum: [work, approval, review], description: Required conceptually when action_requested is true; omitted requests default to work for backward compatibility and it is invalid otherwise. }
         severity: { type: string, enum: [neutral, info, success, warning, error, critical], default: neutral, description: Canonical importance independent from addressing and action-request state. }
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
         idempotency_key: { type: string, maxLength: 160 }
@@ -1173,8 +1198,12 @@ components:
       type: object
       description: >-
         Optional P1.1 structured event written atomically with this canonical
-        message. An idempotency key is required. The referenced source must be
-        a same-project direct message, not another responsibility-event message.
+        immutable workflow/system message. Recipient routing is server-owned:
+        the requester receives responder updates and participants who own the
+        next action are directly addressed. Client-supplied addressing is
+        ignored and an empty list never falls back to broadcast. An idempotency
+        key is required. The referenced source must be a same-project direct
+        message, not another responsibility-event message.
         Historical direct messages without a membership-generation baseline
         require migration before they can receive responsibility events.
       required: [kind, request_message_id, initial_responder_participant_id, expected_event_id]
@@ -1184,6 +1213,8 @@ components:
           type: string
           enum: [work_started, blocked, unblocked, resolution_proposed,
             resolution_accepted, resolution_disputed, resolution_withdrawn,
+            approval_approved, approval_denied, review_accepted,
+            review_revision_requested,
             request_withdrawn, transfer_offered, transfer_accepted,
             transfer_declined, reopened, responder_restored, corrected]
         request_message_id: { type: integer, minimum: 1 }

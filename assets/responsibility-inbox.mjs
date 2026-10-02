@@ -15,7 +15,14 @@ const ACTIONS = {
   transfer_accepted: "Accept handoff", transfer_declined: "Decline handoff",
   reopened: "Reopen", responder_restored: "Restore responder",
   corrected: "Correct evidence note",
+  approval_approved: "Approve", approval_denied: "Deny",
+  review_accepted: "Accept", review_revision_requested: "Request revision",
 };
+
+const DIRECT_DECISIONS = new Set([
+  "approval_approved", "approval_denied",
+  "review_accepted", "review_revision_requested",
+]);
 
 const STATE_LABELS = {
   open: "Awaiting work",
@@ -35,14 +42,21 @@ export function responsibilityActions(item, actorId, moderator, activeParticipan
   const target = actor === Number(item.pending_target_participant_id);
   const proposer = actor === Number(item.pending_proposer_participant_id);
   const mayDecide = requester || moderator;
+  const requestType = item.request_type || "work";
   const actions = [];
   if (["open", "disputed"].includes(item.state) && responder) {
-    if (!item.work_started) actions.push("work_started");
-    if (!item.blocked) actions.push("blocked");
-    else if (item.block_event_message_id) actions.push("unblocked");
-    actions.push("resolution_proposed");
+    if (requestType === "approval" && item.state === "open") {
+      actions.push("approval_approved", "approval_denied");
+    } else if (requestType === "review" && item.state === "open") {
+      actions.push("review_accepted", "review_revision_requested");
+    } else if (requestType === "work") {
+      if (!item.work_started) actions.push("work_started");
+      if (!item.blocked) actions.push("blocked");
+      else if (item.block_event_message_id) actions.push("unblocked");
+      actions.push("resolution_proposed");
+    }
   }
-  if (item.state === "resolution_pending") {
+  if (requestType === "work" && item.state === "resolution_pending") {
     if (mayDecide) actions.push("resolution_accepted", "resolution_disputed");
     if (proposer) actions.push("resolution_withdrawn");
   }
@@ -78,6 +92,20 @@ export function responsibilityLabels(item, participantName) {
     labels.push(`Offered to ${participantName(item.pending_target_participant_id)}`);
   }
   return labels;
+}
+
+export function responsibilityStateLabel(item) {
+  if (item.state === "open") {
+    if (item.request_type === "approval") return "Awaiting approval";
+    if (item.request_type === "review") return "Awaiting review";
+  }
+  if (item.state === "resolved") {
+    return {
+      approved: "Approved", denied: "Denied", accepted: "Accepted",
+      revision_requested: "Revision requested", withdrawn: "Withdrawn",
+    }[item.outcome] || "Resolved";
+  }
+  return STATE_LABELS[item.state] || item.state.replaceAll("_", " ");
 }
 
 export function responsibilityEvent(item, kind, targetId = null) {
@@ -339,9 +367,11 @@ export function createResponsibilityInbox(host, options) {
     row.dataset.requestMessageId = String(item.request_message_id);
     const card = element("article", "responsibility-card");
     const heading = element("div", "responsibility-card-heading");
-    const title = element("h3", "", `Action request #${item.request_message_id}`);
+    const requestLabel = item.request_type === "approval" ? "Approval request"
+      : item.request_type === "review" ? "Review request" : "Work request";
+    const title = element("h3", "", `${requestLabel} #${item.request_message_id}`);
     const state = element("span", `responsibility-state is-${item.state}`,
-      STATE_LABELS[item.state] || item.state.replaceAll("_", " "));
+      responsibilityStateLabel(item));
     heading.append(title, state);
     const meta = element("p", "responsibility-meta");
     const requester = participantName(item.requester_participant_id);
@@ -371,7 +401,8 @@ export function createResponsibilityInbox(host, options) {
         && (options.moderator()
           || actor === Number(item.requester_participant_id)
           || actor === Number(item.initial_responder_participant_id));
-      if (mayConvert && !["resolved", "unknown"].includes(item.state)) {
+      if (mayConvert && (item.request_type || "work") === "work"
+          && !["resolved", "unknown"].includes(item.state)) {
         actions.append(button("Convert to task", () => options.convertToTask(item),
           "ui-button ui-button-borderless"));
       }
@@ -417,11 +448,17 @@ export function createResponsibilityInbox(host, options) {
       .map((entry) => Number(entry.id));
     const available = responsibilityActions(item, options.actorId(),
       options.moderator(), activeIds);
-    if (available.length) {
+    for (const kind of available.filter((entry) => DIRECT_DECISIONS.has(entry))) {
+      const variant = ["approval_approved", "review_accepted"].includes(kind)
+        ? "ui-button ui-button-primary" : "ui-button ui-button-ghost";
+      actions.append(button(ACTIONS[kind], () => openActionForm(card, item, kind), variant));
+    }
+    const menuActions = available.filter((entry) => !DIRECT_DECISIONS.has(entry));
+    if (menuActions.length) {
       const menu = element("details", "responsibility-action-menu");
       const summary = element("summary", "", "Update work");
       const choices = element("div", "responsibility-action-choices");
-      for (const kind of available) {
+      for (const kind of menuActions) {
         choices.append(button(ACTIONS[kind], () => {
           menu.open = false;
           openActionForm(card, item, kind);
@@ -436,6 +473,10 @@ export function createResponsibilityInbox(host, options) {
     const isRequester = actor === Number(item.requester_participant_id);
     if (!item.acknowledged && actor === Number(item.initial_responder_participant_id)) {
       guidance.textContent = "Next: acknowledge this request to confirm you received it.";
+    } else if (item.state === "open" && isResponder && item.request_type === "approval") {
+      guidance.textContent = "Next: approve or deny this request.";
+    } else if (item.state === "open" && isResponder && item.request_type === "review") {
+      guidance.textContent = "Next: accept the reviewed result or request a revision.";
     } else if (item.state === "open" && isResponder && !item.work_started) {
       guidance.textContent = "Next: start work, or mark the request blocked if you cannot proceed.";
     } else if (["open", "disputed"].includes(item.state) && isResponder && item.blocked) {

@@ -188,6 +188,17 @@ export class ProfileTimelineClient {
       action_requested: input.action_requested === true,
       idempotency_key: idempotencyKey,
     };
+    if (payload.action_requested) {
+      const requestType = String(input.action_request_type || "work").trim().toLowerCase();
+      if (!["work", "approval", "review"].includes(requestType)) {
+        throw new Error("Action request type must be work, approval, or review.");
+      }
+      payload.action_request_type = requestType;
+    } else if (input.action_request_type !== undefined
+        && input.action_request_type !== null
+        && String(input.action_request_type).trim() !== "") {
+      throw new Error("Action request type requires action_requested to be true.");
+    }
     if (input.reply_to_message_id !== undefined && input.reply_to_message_id !== null) payload.reply_to_message_id = Number(positiveId(input.reply_to_message_id, "reply message"));
     if (String(input.correlation_id || "").trim()) payload.correlation_id = String(input.correlation_id).trim();
     const result = await client.request(`/api/v1/project-messages.php?project_id=${encodeURIComponent(profile.project_id)}`, {

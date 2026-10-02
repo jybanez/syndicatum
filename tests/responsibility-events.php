@@ -86,6 +86,19 @@ function responsibilityWrite(ProjectRepository $repository, array $access,
     ]);
 }
 
+function responsibilityMessageAddressees(PDO $pdo, $messageId)
+{
+    $statement = $pdo->prepare(
+        'SELECT participant_id, reason FROM message_addressees
+         WHERE message_id = ? ORDER BY participant_id'
+    );
+    $statement->execute([(int) $messageId]);
+    return array_map(function ($row) {
+        return ['participant_id' => (int) $row['participant_id'],
+            'reason' => $row['reason']];
+    }, $statement->fetchAll(PDO::FETCH_ASSOC));
+}
+
 $database = 'syndicatum_resp_test_' . bin2hex(random_bytes(6));
 if (!preg_match('/^syndicatum_resp_test_[a-f0-9]{12}$/', $database)) {
     throw new RuntimeException('Unsafe temporary database name.');
@@ -133,6 +146,16 @@ try {
     responsibilityAssert($event['created'], 'Initial event was not created.');
     responsibilityAssert((int) $pdo->query('SELECT COUNT(*) FROM responsibility_events')->fetchColumn() === 1,
         'Event and message were not committed together.');
+    $eventRecord = $pdo->query('SELECT message_kind, event_type, reply_to_message_id
+        FROM messages WHERE id = ' . (int) $eventId)->fetch(PDO::FETCH_ASSOC);
+    responsibilityAssert($eventRecord['message_kind'] === 'system'
+        && $eventRecord['event_type'] === 'responsibility.work_started'
+        && (int) $eventRecord['reply_to_message_id'] === $requestId,
+        'Responsibility event was not persisted as linked workflow evidence.');
+    responsibilityAssert(responsibilityMessageAddressees($pdo, $eventId) === [[
+        'participant_id' => $ownerParticipant,
+        'reason' => 'direct',
+    ]], 'Responder update was not addressed only to the requester.');
     $same = responsibilityWrite($repository, $responder, $requestId,
         $responderParticipant, $requestId, 'work_started', 'responsibility-start');
     responsibilityAssert(!$same['created'] && $same['message']['id'] === $eventId,
@@ -189,11 +212,22 @@ try {
         $responderParticipant, $correctionId, 'transfer_offered', 'responsibility-offer',
         ['target_participant_id' => $targetParticipant]);
     $offerId = $offered['message']['id'];
+    responsibilityAssert(responsibilityMessageAddressees($pdo, $offerId) === [[
+        'participant_id' => $targetParticipant,
+        'reason' => 'direct',
+    ]], 'Handoff offer was not addressed to its proposed recipient.');
     $accepted = responsibilityWrite($repository, $target, $requestId,
         $responderParticipant, $offerId, 'transfer_accepted', 'responsibility-accept',
         ['reference_event_id' => $offerId]);
     responsibilityAssert($accepted['created'], 'Transfer acceptance was not committed.');
     $acceptedId = $accepted['message']['id'];
+    responsibilityAssert(responsibilityMessageAddressees($pdo, $acceptedId) === [[
+        'participant_id' => $ownerParticipant,
+        'reason' => 'direct',
+    ], [
+        'participant_id' => $responderParticipant,
+        'reason' => 'direct',
+    ]], 'Handoff acceptance did not notify the requester and prior responder.');
     $management = new ProjectManagementService($pdo);
     $management->updateMember($projectId, $ownerId, $targetId, 'member', true);
     $management->updateMember($projectId, $ownerId, $targetId, 'member', false);
@@ -213,7 +247,7 @@ try {
         'Explicit restoration did not reenable the responder.');
     $addressedEvent = $repository->createMessage($target, [
         'body' => 'Blocking this request; owner notified directly',
-        'direct_participant_ids' => [$ownerParticipant],
+        'direct_participant_ids' => [$responderParticipant],
         'idempotency_key' => 'responsibility-addressed-event',
         'responsibility_event' => [
             'kind' => 'blocked', 'request_message_id' => $requestId,
@@ -221,14 +255,23 @@ try {
             'expected_event_id' => $afterRestore['message']['id'],
         ],
     ]);
+    responsibilityAssert(responsibilityMessageAddressees(
+        $pdo, $addressedEvent['message']['id']) === [[
+            'participant_id' => $ownerParticipant,
+            'reason' => 'direct',
+        ]], 'Client-supplied event recipients overrode authoritative requester routing.');
     responsibilityExpectFailure(function () use ($repository, $owner, $addressedEvent,
         $ownerParticipant) {
         responsibilityWrite($repository, $owner, $addressedEvent['message']['id'],
             $ownerParticipant, $addressedEvent['message']['id'], 'work_started',
             'responsibility-event-not-request');
     }, 'MESSAGE_NOT_FOUND');
-    $repository->updateMessage($owner, $blockedId, ['body' => 'Edited explanation']);
-    $repository->deleteMessage($owner, $blockedId);
+    responsibilityExpectFailure(function () use ($repository, $owner, $blockedId) {
+        $repository->updateMessage($owner, $blockedId, ['body' => 'Edited explanation']);
+    }, 'SYSTEM_MESSAGE_IMMUTABLE');
+    responsibilityExpectFailure(function () use ($repository, $owner, $blockedId) {
+        $repository->deleteMessage($owner, $blockedId);
+    }, 'SYSTEM_MESSAGE_IMMUTABLE');
     $check = $pdo->prepare('SELECT COUNT(*) FROM responsibility_events WHERE event_message_id = ?');
     $check->execute([$blockedId]);
     responsibilityAssert((int) $check->fetchColumn() === 1,
@@ -456,6 +499,55 @@ try {
     responsibilityAssert($informationalItems === [],
         'An informational direct message appeared in the Responsibility Inbox.');
 
+    $approvalRequest = $repository->createMessage($owner, [
+        'body' => 'Approve the publication decision',
+        'direct_participant_ids' => [$responderParticipant],
+        'action_requested' => true,
+        'action_request_type' => 'approval',
+    ]);
+    $approvalId = $approvalRequest['message']['id'];
+    responsibilityAssert($approvalRequest['message']['action_request_type'] === 'approval',
+        'Approval request type was not persisted.');
+    $approvalDecision = responsibilityWrite($repository, $responder, $approvalId,
+        $responderParticipant, $approvalId, 'approval_approved',
+        'responsibility-approval-approved');
+    responsibilityAssert(responsibilityMessageAddressees(
+        $pdo, $approvalDecision['message']['id']) === [[
+            'participant_id' => $ownerParticipant,
+            'reason' => 'direct',
+        ]], 'Approval decision did not notify the requester.');
+    $approvalItems = array_values(array_filter(
+        $inbox->page($owner, ['view' => 'resolved'])['data'],
+        function ($item) use ($approvalId) {
+            return $item['request_message_id'] === $approvalId;
+        }));
+    responsibilityAssert(count($approvalItems) === 1
+        && $approvalItems[0]['request_type'] === 'approval'
+        && $approvalItems[0]['outcome'] === 'approved',
+        'Approval decision was not projected as a classified result.');
+
+    $reviewRequest = $repository->createMessage($owner, [
+        'body' => 'Review the final infographic',
+        'direct_participant_ids' => [$responderParticipant],
+        'action_requested' => true,
+        'action_request_type' => 'review',
+    ]);
+    $reviewId = $reviewRequest['message']['id'];
+    $reviewDecision = responsibilityWrite($repository, $responder, $reviewId,
+        $responderParticipant, $reviewId, 'review_revision_requested',
+        'responsibility-review-revision');
+    responsibilityAssert($reviewDecision['message']['message_kind'] === 'system',
+        'Review decision was not immutable system evidence.');
+    $reviewItems = array_values(array_filter(
+        $inbox->page($owner, ['view' => 'resolved'])['data'],
+        function ($item) use ($reviewId) {
+            return $item['request_message_id'] === $reviewId;
+        }));
+    responsibilityAssert(count($reviewItems) === 1
+        && $reviewItems[0]['request_type'] === 'review'
+        && $reviewItems[0]['outcome'] === 'revision_requested',
+        'Review revision decision was not projected as a classified result.');
+
     $dual = $repository->createMessage($owner, [
         'body' => 'Two independent direct responsibilities',
         'direct_participant_ids' => [$responderParticipant, $targetParticipant],
@@ -470,6 +562,11 @@ try {
     $proposal = responsibilityWrite($repository, $responder, $resolutionRequestId,
         $responderParticipant, $resolutionRequestId,
         'resolution_proposed', 'responsibility-inbox-resolution-proposal');
+    responsibilityAssert(responsibilityMessageAddressees(
+        $pdo, $proposal['message']['id']) === [[
+            'participant_id' => $ownerParticipant,
+            'reason' => 'direct',
+        ]], 'Resolution proposal was not addressed to the requester for review.');
     $resolutionItems = $inbox->page($owner, ['view' => 'resolution_pending'])['data'];
     $resolutionItems = array_values(array_filter($resolutionItems,
         function ($item) use ($resolutionRequestId) {

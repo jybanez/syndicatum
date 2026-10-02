@@ -80,6 +80,17 @@ test("profile timeline posts as the selected profile with stable idempotency", a
   assert.deepEqual(JSON.parse(post.options.body), { body: "Handled", direct_participant_ids: [11], mention_participant_ids: [], broadcast: false, action_requested: false, idempotency_key: "reply-1699-v1", reply_to_message_id: 1699 });
   assert.equal(result.message.id, 1700);
   assert.doesNotMatch(JSON.stringify(result), /secret-agent-token/);
+
+  await client.post(profile.profile_id, { body: "Please approve", direct_participant_ids: [11],
+    action_requested: true, action_request_type: "approval", idempotency_key: "approval-1" });
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    body: "Please approve", direct_participant_ids: [11], mention_participant_ids: [],
+    broadcast: false, action_requested: true, idempotency_key: "approval-1",
+    action_request_type: "approval",
+  });
+  await assert.rejects(() => client.post(profile.profile_id, {
+    body: "Invalid typed FYI", action_request_type: "review",
+  }), /requires action_requested/);
 });
 
 test("profile task workflow reads shared tasks and updates with optimistic version", async () => {

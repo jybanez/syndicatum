@@ -35,7 +35,8 @@ class ResponsibilityEventService
         // This row lock also prevents a source-message edit/deletion race while
         // validating the item. The project sequence lock serializes event writes.
         $source = $this->pdo->prepare(
-            'SELECT m.sender_participant_id, ma.responsibility_status_generation
+            'SELECT m.sender_participant_id, m.action_request_type,
+                    ma.responsibility_status_generation
              FROM messages m
              JOIN message_addressees ma ON ma.message_id = m.id
                 AND ma.participant_id = ? AND ma.reason = ?
@@ -62,7 +63,8 @@ class ResponsibilityEventService
         $projection = ResponsibilityStateProjector::replay($requestId,
             (int) $sourceRow['sender_participant_id'], $initialResponderId,
             $sourceRow['responsibility_status_generation'],
-            $history->fetchAll(PDO::FETCH_ASSOC));
+            $history->fetchAll(PDO::FETCH_ASSOC),
+            $sourceRow['action_request_type'] ?: 'work');
         $state = $projection['state'];
         $knownEvents = $projection['known_event_ids'];
 
@@ -116,8 +118,12 @@ class ResponsibilityEventService
             }
             unset($event['target_id']);
         }
+        $prior = $state;
         $priorState = $state['state'];
         $state = ResponsibilityStateReducer::apply($state, $event, $actor);
+        $notificationParticipantIds = $this->notificationParticipantIds(
+            $projectId, $kind, $prior, $state,
+            (int) $access['participant_id'], $targetId);
         $newResponderGeneration = in_array($kind,
             ['transfer_accepted', 'responder_restored'], true)
             ? $this->participantGeneration($projectId, $state['responder_id']) : null;
@@ -137,6 +143,62 @@ class ResponsibilityEventService
             $actor['moderator'] ? 1 : 0, $kind, $priorState,
             (int) $event['expected_event_id'],
             $ref, $targetId, $newResponderGeneration, $idempotencyKey, Db::now()]);
+
+        return [
+            'notification_participant_ids' => $notificationParticipantIds,
+            'state' => $state,
+        ];
+    }
+
+    /**
+     * Responsibility messages are server-routed workflow evidence. The
+     * requester receives responder updates, while participants who acquire the
+     * next action (reviewer, handoff target, or restored responder) are also
+     * addressed. The actor is excluded to avoid self-notifications.
+     */
+    private function notificationParticipantIds($projectId, $kind, array $prior,
+        array $next, $actorId, $targetId)
+    {
+        $ids = [(int) $prior['requester_id']];
+        $pending = isset($prior['pending']) && is_array($prior['pending'])
+            ? $prior['pending'] : [];
+
+        switch ($kind) {
+            case 'resolution_accepted':
+            case 'resolution_disputed':
+                if (isset($pending['proposer_id'])) {
+                    $ids[] = (int) $pending['proposer_id'];
+                }
+                break;
+            case 'request_withdrawn':
+                $ids[] = (int) $prior['responder_id'];
+                break;
+            case 'transfer_offered':
+                if ($targetId !== null) {
+                    $ids[] = (int) $targetId;
+                }
+                break;
+            case 'transfer_accepted':
+            case 'transfer_declined':
+                $ids[] = (int) $prior['responder_id'];
+                break;
+            case 'reopened':
+            case 'responder_restored':
+                $ids[] = (int) $next['responder_id'];
+                break;
+            case 'corrected':
+                $ids[] = (int) $prior['responder_id'];
+                break;
+        }
+
+        $active = [];
+        foreach (array_values(array_unique(array_map('intval', $ids))) as $participantId) {
+            if ($participantId > 0 && $participantId !== (int) $actorId
+                && $this->activeParticipant((int) $projectId, $participantId)) {
+                $active[] = $participantId;
+            }
+        }
+        return $active;
     }
 
     private function activeParticipant($projectId, $participantId)

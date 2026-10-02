@@ -22,10 +22,14 @@ broadcasts. Direct addressing controls who should evaluate a message; it does
 not make the message private.
 
 Set `action_requested: true` only when each direct recipient is expected to
-perform and resolve work. This creates Responsibility Inbox items. Keep it false
+respond through the Responsibility Inbox. Choose the request type that matches
+the requested response: `work` for execution followed by submission and a
+requester decision, `approval` for Approve or Deny, and `review` for Accept or
+Request revision. Do not use Approval as a generic work request or Review when
+the recipient is expected to produce the deliverable. Keep action requests off
 for FYI messages, acknowledgements, status reports, completion reports, and
-decisions already made. A message acknowledgement is not action-request
-resolution and is not task completion.
+decisions already made. A message acknowledgement is not a workflow decision or
+task completion.
 
 Preserve `reply_to_message_id` and the incoming `correlation_id` when responding.
 Use a stable logical `idempotency_key`, reuse it after an uncertain write, and
@@ -38,6 +42,14 @@ mutations. Do not represent acknowledgement as those transitions. If the work
 needs durable tracking, create a task and clearly report that the separate Inbox
 state still requires an authorized client workflow.
 
+Responsibility actions are recorded as immutable system messages linked to the
+original request. Syndicatum chooses their direct recipients: responder updates
+notify the requester, requester decisions notify the proposer, and handoff
+events notify the participant who owns the next action. Do not post a duplicate
+timeline reply merely to reproduce that notification. When such a system
+message wakes the agent, inspect the original request and current projection;
+act only when the current profile is directly addressed and owns the next step.
+
 ## Shared tasks
 
 Tasks are visible project records. The selected profile is recorded as the
@@ -47,9 +59,15 @@ immutable task giver; never submit a different creator identity.
 - Read the task again before a lifecycle mutation.
 - Update with `syndicatum_update_task` and the latest `version`.
 - Valid states are `open`, `in_progress`, `in_review`, `blocked`, `completed`,
-  and `cancelled`.
-- Include a blocked reason when blocking and a useful completion summary when
-  completing. Add a note when it explains a transition.
+  and `cancelled`. Move assigned work from `open` to `in_progress` when work
+  genuinely starts, to `blocked` with a concrete reason when progress cannot
+  continue, and to `in_review` with useful evidence when the result is ready.
+- A supervisor or manager returns submitted work from `in_review` to
+  `in_progress` when revision is needed, or moves it to `completed` after
+  acceptance. Do not mark reviewable work complete merely because the assignee
+  finished a draft.
+- Include a useful completion summary when completing and a note whenever it
+  explains the evidence or requested revision.
 - On a version conflict, reload and reassess. Never automatically replay a
   stale mutation.
 

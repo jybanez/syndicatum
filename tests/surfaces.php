@@ -445,7 +445,7 @@ try {
         $source = file_get_contents($root . '/assets/app.mjs');
         $suite->true(strpos($source, 'envelope.type === "syndicatum.participants.changed"') !== false, 'Realtime participant changes must be handled.');
         $suite->true(strpos($source, 'async function refreshParticipants(') !== false, 'The participant reload helper is missing.');
-        $suite->true(strpos($source, 'Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()])') !== false, 'Polling fallback must refresh participants and tasks.');
+        $suite->true(strpos($source, 'Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks(), refreshProjectSummaries()])') !== false, 'Polling fallback must refresh participants, tasks, and project counters.');
         $suite->true(strpos($source, 'function receiveRealtimeTask(source)') !== false
             && strpos($source, 'receiveRealtimeTask(envelope.payload.task)') !== false,
             'Realtime task snapshots must update the task rail without a list request.');
@@ -596,6 +596,17 @@ try {
             'Timeline content must keep a visible gutter before the Helper-owned scrollbar.');
         $suite->true(strpos($styles, '#timeline-host .ui-timeline-group-label { position: sticky;') === false,
             'Legacy sticky positioning must not override the Helper timeline floating-date implementation.');
+        $filterTrigger = strpos($index, 'id="filter-popover-trigger"');
+        $searchMount = strpos($index, 'id="search-mount"');
+        $collapseAction = strpos($index, 'id="timeline-collapse-toggle"');
+        $newMessageAction = strpos($index, 'id="new-message-trigger"');
+        $refreshAction = strpos($index, 'id="refresh-button"');
+        $suite->true($filters < $collapseAction && $collapseAction < $filterTrigger && $filterTrigger < $searchMount,
+            'Collapse/Expand and Filter must appear in that order directly left of the project search field.');
+        $suite->true($searchMount < $newMessageAction && $newMessageAction < $refreshAction,
+            'The New message and Refresh actions must remain grouped to the right of project search.');
+        $suite->true(strpos($styles, '.filter-bar { display: grid; grid-template-columns: auto minmax(190px, 1fr) auto;') !== false,
+            'The timeline toolbar must reserve compact action columns on both sides of the search field.');
     });
 
     $suite->test('Project views use the attached Helper tabs variant', function () use ($suite, $root) {
@@ -619,6 +630,13 @@ try {
             'Proposal rows must open one focused review/details modal instead of a modal-based list.');
         $suite->true(strpos($source, 'state.components.projectViewTabs?.setActive?.(state.projectView, false);') !== false,
             'Programmatic project changes must keep the canonical tabs synchronized without duplicate change events.');
+        $suite->true(strpos($source, 'function renderProjectViewTabCounters()') !== false
+            && strpos($source, 'className = "ui-badge project-view-tab-count"') !== false
+            && strpos($source, 'state.projectView === view') !== false
+            && strpos($source, 'view: "unacknowledged", limit: "1"') !== false
+            && strpos($source, 'status: "pending"') !== false
+            && strpos($styles, '.project-view-tab-count { box-sizing: border-box; min-width: 20px; min-height: 18px;') !== false,
+            'Inactive project tabs must show compact counters for unread messages, unacknowledged requests, and pending proposals.');
         $suite->true(strpos($styles, '.project-view-switch .ui-button') === false,
             'Application CSS must not recreate the removed button-style view switch.');
         $suite->true(strpos($styles, '.project-view-switch .ui-tabpanel { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }') !== false,
@@ -652,7 +670,8 @@ try {
         $refresh = strpos($index, 'id="refresh-button"');
         $panel = strpos($index, 'id="filter-popover-content"');
         $suite->true($search !== false && $trigger !== false && $refresh !== false && $panel !== false, 'Timeline search or action markup is missing.');
-        $suite->true($search < $trigger && $trigger < $refresh && $refresh < $panel, 'Search must remain visible with adjacent filter and refresh actions.');
+        $collapse = strpos($index, 'id="timeline-collapse-toggle"');
+        $suite->true($collapse < $trigger && $trigger < $search && $search < $refresh && $refresh < $panel, 'Search must remain visible after Collapse/Expand and Filter and before the remaining timeline actions.');
         $suite->true(strpos($source, 'createPopover: await uiLoader.get("ui.popover", options)') !== false, 'Timeline filters must use the supported Helper popover factory.');
         $suite->true(strpos($source, 'state.components.filterPopover = state.factories.createPopover') !== false, 'Timeline filters must mount through the Helper popover.');
         $suite->true(strpos($source, 'helperIconHtml("data.filter", 18)') !== false, 'The filter action must use the shared Helper icon registry.');
@@ -1210,6 +1229,25 @@ try {
             'The responsibility scroll container must not let browser anchoring override the preserved position.');
     });
 
+    $suite->test('Action requests expose classified composer and decision workflows', function () use ($suite, $root) {
+        $app = file_get_contents($root . '/assets/app.mjs');
+        $inbox = file_get_contents($root . '/assets/responsibility-inbox.mjs');
+        $suite->true(strpos($app, '{ value: "work", label: "Work request" }') !== false
+            && strpos($app, '{ value: "approval", label: "Approval request" }') !== false
+            && strpos($app, '{ value: "review", label: "Review request" }') !== false
+            && strpos($app, 'action_request_type: state.draft.mode === "direct"') !== false,
+            'The composer must persist an explicit Work, Approval, or Review request type.');
+        foreach (['approval_approved: "Approve"', 'approval_denied: "Deny"',
+            'review_accepted: "Accept"', 'review_revision_requested: "Request revision"'] as $decision) {
+            $suite->true(strpos($inbox, $decision) !== false,
+                'Missing classified responsibility decision: ' . $decision);
+        }
+        $suite->true(strpos($inbox, 'DIRECT_DECISIONS.has(entry)') !== false
+            && strpos($inbox, 'request_type === "approval"') !== false
+            && strpos($inbox, 'request_type === "review"') !== false,
+            'Approval and Review decisions must be presented directly instead of as generic work actions.');
+    });
+
     $suite->test('Responsibility inbox automatically pages near the scroll boundary', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/responsibility-inbox.mjs');
         $suite->true(strpos($source, 'new IntersectionObserver') !== false
@@ -1431,6 +1469,12 @@ try {
         $suite->true(strpos($styles, '.project-list { gap: 8px; }') !== false
             && strpos($styles, '.admin-list { gap: 10px; }') !== false,
             'Only the project rail spacing should be compacted; administration lists retain their established rhythm.');
+        $suite->true(strpos($source, 'project.unread_message_count') !== false
+            && strpos($source, 'className = "ui-badge project-card-unread"') !== false
+            && strpos($source, 'API.projectReadState') !== false
+            && strpos($source, 'timelineShowsAllMessages()') !== false
+            && strpos($styles, '.project-card-unread { flex: 0 0 auto; box-sizing: border-box; min-width: 22px; min-height: 18px;') !== false,
+            'Project cards must expose a compact accessible unread badge that does not stretch the title row and only advance read state after the full timeline is visible.');
         $suite->true(strpos($source, 'modal.setBusy(true, { message: "Loading task details..." })') !== false,
             'Task detail modals must open before loading and expose a busy state.');
         $suite->true(strpos($source, 'title: "Task details", size: "full"') !== false,
@@ -1456,8 +1500,9 @@ try {
             && strpos($source, 'activityTimeline?.destroy();') !== false
             && strpos($source, 'taskTabs?.destroy();') !== false
             && strpos($styles, '.task-detail { display: grid; align-content: start; gap: 14px; }') !== false
+            && strpos($styles, '.task-detail-tabs > .ui-tabs.is-attached > .ui-tabpanel { background: transparent; padding: 14px 0 0; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }') !== false
             && strpos($styles, '.task-detail-activity .task-detail-markdown { font-size: 12px; }') === false,
-            'Task details must use canonical tabs for overview, requirements, and lifecycle-safe activity timeline content.');
+            'Task details must use canonical tabs with an open content frame for overview, requirements, and lifecycle-safe activity timeline content.');
     });
 
     $suite->test('Agent profiles foreground project assignment and responsibilities', function () use ($suite, $root) {

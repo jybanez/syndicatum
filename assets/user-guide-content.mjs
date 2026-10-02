@@ -11,6 +11,8 @@ export const USER_GUIDE_SECTIONS = [
         blocks: [
           { type: "p", text: "The workspace is your starting point. Select a project on the left to open its Timeline, Tasks, and Team." },
           { type: "list", items: [
+            "Project cards show total activity and a badge when messages from other participants are still unread. Opening the full Timeline clears the badge after its messages load.",
+            "Inactive project tabs show attention counters: unread Timeline messages, unacknowledged Responsibility Inbox requests, and pending AI Proposals when you can review them.",
             "Timeline is the project record for updates, decisions, and requests.",
             "Responsibility Inbox turns addressed action requests into a focused work view.",
             "Tasks track structured work with an owner, status, priority, due date, and acceptance criteria.",
@@ -323,7 +325,7 @@ export const USER_GUIDE_SECTIONS = [
             ["Decisions needed", "A responder proposed a resolution and the requester or moderator must accept it or request changes."],
             ["Disputed", "The proposed resolution was not accepted and further work is expected."],
             ["Unassigned", "The responsible participant is no longer active or the request needs a new owner."],
-            ["Resolved", "Requests whose proposed resolution was accepted."],
+            ["Resolved", "Requests completed by an accepted work resolution, approval decision, review decision, or withdrawal."],
             ["Historical / unknown", "Older records that predate the current responsibility model or cannot be classified safely."],
           ] },
         ],
@@ -331,16 +333,21 @@ export const USER_GUIDE_SECTIONS = [
       {
         id: "responsibility-lifecycle",
         title: "Work an action request",
-        summary: "Move a request from acknowledgement through work, handoff, and resolution.",
-        keywords: ["start work", "mark blocked", "propose resolution", "handoff", "withdraw"],
+        summary: "Use the response workflow selected by the requester.",
+        keywords: ["work request", "approval", "review", "start work", "approve", "deny", "accept", "revision"],
         blocks: [
+          { type: "list", items: [
+            "Work is for producing an outcome: acknowledge it, start or block the work, submit a proposed resolution, and wait for the requester to accept it or request changes.",
+            "Approval is for a decision on a proposed action: the recipient chooses Approve or Deny.",
+            "Review is for evaluating an existing result: the recipient chooses Accept or Request revision.",
+          ] },
           { type: "steps", items: [
             "Acknowledge the request to confirm that you have seen it.",
-            "Choose Start work when you begin. If progress cannot continue, choose Mark blocked and record the concrete reason.",
+            "Use the actions shown for the request type. Syndicatum does not offer work-production actions on Approval or Review requests.",
             "Offer handoff when another active participant should own the response. Responsibility changes only after they accept.",
-            "Choose Propose resolution when the requested outcome is ready for review.",
-            "The requester or an authorized moderator accepts the resolution to close the request, or disputes it with the changes still needed.",
+            "Record a concrete reason or evidence note for the response. The resulting decision appears in the timeline and notifies the requester.",
           ] },
+          { type: "note", text: "Each work update is recorded as immutable workflow evidence linked to the original request. Syndicatum directly addresses the requester and any participant who owns the next action, so they receive the update without broadcasting it to the whole project." },
         ],
       },
     ],
@@ -362,7 +369,7 @@ export const USER_GUIDE_SECTIONS = [
             "Priority and due date communicate urgency; they do not change authorization.",
             "Activity records every lifecycle change and cannot be rewritten.",
           ] },
-          { type: "p", text: "Typical flow: Open → In progress → In review → Completed. Use Blocked when progress cannot continue, with a specific reason. Only authorized participants see the actions they may perform." },
+          { type: "p", text: "Typical flow: Open → In progress → In review → Completed. The assignee submits reviewable work as In review; a supervisor or manager returns revisions to In progress or marks accepted work Completed. Use Blocked when progress cannot continue, with a specific reason. Only authorized participants see the actions they may perform." },
         ],
       },
       {

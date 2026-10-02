@@ -45,14 +45,22 @@ its project, original request message, stable request-item key, actor
 participant, current and proposed responder where applicable, kind, expected
 prior event ID, idempotency key/fingerprint, referenced event/offer/proposal,
 and its **event message ID**.
-The message body carries the participant's human-readable explanation; a
-machine-readable event kind must not be reconstructed by parsing that body.
-Event records are append-only. Editing or soft-deleting the explanatory
-message preserves the event and revision/tombstone trail; the UI must show
-that the explanation changed or became unavailable. Project sequence, not
-client time, orders competing events. A repeated write with the same
+The canonical system-message body carries the participant's human-readable
+explanation; a machine-readable event kind must not be reconstructed by
+parsing that body. Both the event record and its linked workflow-evidence
+message are immutable. A correction is a new explicit `corrected` event rather
+than an edit or soft deletion. Project sequence, not client time, orders
+competing events. A repeated write with the same
 idempotency key and unchanged payload returns the same message and event;
 reusing that key for a different transition is a conflict.
+
+Recipient routing is server-owned. The original requester receives responder
+updates, and a participant who owns the next decision or handoff receives that
+event directly. Requester-authored decisions notify the responder or proposer
+instead of self-notifying the requester. Client-supplied event addressees are
+ignored, and an empty derived recipient set never falls back to a project
+broadcast. The canonical addressee rows feed the existing Realtime, webhook,
+and agent-activation notification pipeline.
 
 The primary derived states are `open`, `transfer_pending`,
 `resolution_pending`, `resolved`, `disputed`, and `orphaned`. These answer
@@ -61,8 +69,15 @@ a requester must decide a proposed resolution, the request was closed, its
 outcome is contested, or its current responder has become inactive. A
 separate explicit `blocked` flag and optional `work_started` marker qualify
 unresolved states; they are not inferred from acknowledgements or time.
-`resolved` carries an outcome such as `accepted` or `withdrawn`, so a
-withdrawn request is never described as completed work.
+`resolved` carries an outcome such as `accepted`, `approved`, `denied`,
+`revision_requested`, or `withdrawn`, so a withdrawn request is never described
+as completed work.
+
+The original request classifies the expected response as `work`, `approval`, or
+`review`. Work retains the two-step submit-and-requester-decision flow. Approval
+and Review are decision requests: their assigned responder completes the item
+directly with the vocabulary appropriate to that type. An event from another
+type is rejected rather than silently interpreted as an equivalent decision.
 
 | Explicit event | Derived state/observation | Authorized actor and evidence |
 | --- | --- | --- |
@@ -73,6 +88,8 @@ withdrawn request is never described as completed work.
 | `resolution_accepted` | `resolved`, outcome `accepted` | Original requester or moderator; references pending proposal |
 | `resolution_disputed` | `disputed`; same responder remains accountable | Original requester or moderator; references pending proposal |
 | `resolution_withdrawn` | `open` or prior disputed state | Proposing responder retracts their pending proposal |
+| `approval_approved` / `approval_denied` | `resolved`, outcome `approved` or `denied` | Current active responder to an Approval request |
+| `review_accepted` / `review_revision_requested` | `resolved`, outcome `accepted` or `revision_requested` | Current active responder to a Review request |
 | `request_withdrawn` | `resolved`, outcome `withdrawn`, not completed | Original requester or moderator gives reason |
 | `transfer_offered` | `transfer_pending`; prior responder/state retained | From `open`/`disputed`: current responder, requester, or moderator; from `orphaned`: requester or moderator only; target is active in same project |
 | `transfer_accepted` | `open` with proposed responder now accountable | Proposed target explicitly accepts referenced pending offer |

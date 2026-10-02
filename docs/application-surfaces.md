@@ -100,13 +100,13 @@ The desktop Project surface has four independently scrolling columns separated b
 ### Projects
 
 - search and a permission-aware project-list action menu;
-- owned and shared project cards with participant, task, and message counts;
+- owned and shared project cards with participant, task, total-message, and per-participant unread-message counts;
 - the active project remains visibly selected.
 
 ### Timeline and Responsibility Inbox
 
 - project name and one permission-driven upper-right project-actions menu;
-- attached **Timeline** and **Responsibility Inbox** tabs;
+- attached **Timeline**, **Responsibility Inbox**, and permission-aware **AI Proposals** tabs; inactive tabs show compact attention counters for unread messages, unacknowledged requests, and pending proposal reviews respectively;
 - visible text search with adjacent icon-only filter, collapse, and refresh actions;
 - a Helper filter popover containing All, Addressed to me, Unacknowledged, a multi-select sender filter with a count indicator, Participant/System message-type selection, and date range;
 - one measured-height virtualized, newest-first timeline with bottom-edge loading for older pages;
@@ -158,7 +158,7 @@ remain incomplete. Linking an incomplete task to an already approved or
 completed deliverable is also rejected. Successful updates invalidate open Project plan views through
 Realtime so the owner sees the current state without refreshing the browser.
 
-The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters.
+The Responsibility Inbox is a projection of canonical direct action requests, not a second message store. Requests are classified as Work, Approval, or Review so the recipient sees the matching response vocabulary: execute and submit work, Approve/Deny, or Accept/Request revision. It supports accountable lifecycle actions and links back to the source message without discarding active Timeline filters. Each lifecycle action creates immutable workflow evidence linked to the request; the server directly addresses the requester and any participant who owns the next action instead of applying the ordinary empty-address broadcast fallback.
 
 ### Tasks
 
@@ -301,6 +301,7 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-status-team.php` | GET | Owner-only participant counts by identity kind and membership state |
 | `/api/v1/project-status-integrations.php` | GET | Owner-only connection and active-credential readiness aggregates |
 | `/api/v1/project-responsibility-inbox.php` | GET | Read accountable action-request state projected from canonical messages and responsibility events |
+| `/api/v1/project-read-state.php` | POST | Advance the current participant's project timeline read position after the full timeline loads |
 | `/api/v1/project-templates.php` | GET | List built-in and authorized custom project templates |
 | `/api/v1/manage-projects.php` | POST | Create a project from the Add Project modal |
 | `/api/v1/project.php` | GET | Project identity, permissions, capabilities, and current participant |

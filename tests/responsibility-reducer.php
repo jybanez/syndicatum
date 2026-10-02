@@ -203,7 +203,7 @@ checkResponsibility('moderator correction is audit-only and cannot forge consent
     responsibilitySame($before, $state);
 });
 
-checkResponsibility('every event kind enforces its actor-role matrix', function () {
+checkResponsibility('every work event kind enforces its actor-role matrix', function () {
     $matrix = [
         'work_started' => [20], 'blocked' => [20], 'unblocked' => [20],
         'resolution_proposed' => [20], 'resolution_accepted' => [10, 40],
@@ -268,6 +268,43 @@ checkResponsibility('every event kind enforces its actor-role matrix', function 
             }
         }
     }
+});
+
+checkResponsibility('approval and review requests use responder-owned decisions', function () {
+    $approval = ResponsibilityStateReducer::initial(200, 10, 20, 'approval');
+    responsibilityFails(function () use ($approval) {
+        ResponsibilityStateReducer::apply($approval,
+            responsibilityEvent($approval, 201, 'approval_approved'),
+            responsibilityActor(10));
+    });
+    responsibilityFails(function () use ($approval) {
+        ResponsibilityStateReducer::apply($approval,
+            responsibilityEvent($approval, 201, 'work_started'),
+            responsibilityActor(20));
+    });
+    $approved = ResponsibilityStateReducer::apply($approval,
+        responsibilityEvent($approval, 201, 'approval_approved'),
+        responsibilityActor(20));
+    responsibilitySame('resolved', $approved['state']);
+    responsibilitySame('approved', $approved['outcome']);
+
+    $denied = ResponsibilityStateReducer::apply(
+        ResponsibilityStateReducer::initial(210, 10, 20, 'approval'),
+        responsibilityEvent(ResponsibilityStateReducer::initial(210, 10, 20,
+            'approval'), 211, 'approval_denied'), responsibilityActor(20));
+    responsibilitySame('denied', $denied['outcome']);
+
+    $review = ResponsibilityStateReducer::initial(220, 10, 20, 'review');
+    $accepted = ResponsibilityStateReducer::apply($review,
+        responsibilityEvent($review, 221, 'review_accepted'),
+        responsibilityActor(20));
+    responsibilitySame('accepted', $accepted['outcome']);
+    $revision = ResponsibilityStateReducer::apply(
+        ResponsibilityStateReducer::initial(230, 10, 20, 'review'),
+        responsibilityEvent(ResponsibilityStateReducer::initial(230, 10, 20,
+            'review'), 231, 'review_revision_requested'),
+        responsibilityActor(20));
+    responsibilitySame('revision_requested', $revision['outcome']);
 });
 
 echo PHP_EOL . $passed . ' passed, ' . $failed . ' failed.' . PHP_EOL;

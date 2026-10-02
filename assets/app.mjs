@@ -1,7 +1,7 @@
 import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.217";
 import { createResponsibilityInbox } from "./responsibility-inbox.mjs";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20260928230000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261002153000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -27,6 +27,7 @@ const API = {
   context: "api/v1/project.php",
   participants: "api/v1/project-participants.php",
   messages: "api/v1/project-messages.php",
+  projectReadState: "api/v1/project-read-state.php",
   tasks: "api/v1/project-tasks.php",
   task: "api/v1/project-task.php",
   projectPlan: "api/v1/project-plan.php",
@@ -110,6 +111,8 @@ const state = {
   projectProposalsAbortController: null,
   projectProposalsRealtimeTimer: null,
   projectProposalsRealtimePending: false,
+  projectViewCounts: { timeline: 0, responsibility: 0, proposals: 0 },
+  projectViewCounterTimer: null,
   templates: [],
   templateCategories: [],
   selectedTemplateId: "",
@@ -1731,7 +1734,10 @@ function messageAddresseesLabel(message) {
   });
   if (message.addressees.length > 5) names.push(`+${message.addressees.length - 5}`);
   const recipients = names.join("  ");
-  return message.action_requested ? `Action requested from ${recipients}` : recipients;
+  if (!message.action_requested) return recipients;
+  const requestType = message.action_request_type === "approval" ? "Approval"
+    : message.action_request_type === "review" ? "Review" : "Work";
+  return `${requestType} requested from ${recipients}`;
 }
 
 function updateTimelineCollapseButton() {
@@ -1919,7 +1925,10 @@ function messageInfoContent(message) {
     [systemMessage ? "Triggered by" : "Sender", message.sender?.display_name || "Unknown"],
     ["Time", formatDate(message.created_at)],
     ["Addressing", systemMessage ? "Project timeline" : (messageAddresseesLabel(message) || "No addressees")],
-    ["Type", systemMessage ? "System event" : (message.action_requested ? "Action request" : "Update")],
+    ["Type", systemMessage ? "System event" : (message.action_requested
+      ? `${message.action_request_type === "approval" ? "Approval"
+        : message.action_request_type === "review" ? "Review" : "Work"} request`
+      : "Update")],
     ["Severity", message.severity === "neutral" ? "Neutral" : messageSeverityLabel(message.severity)],
     ["Acknowledgement", acknowledgement],
     ["History", `${message.revision_count || 0} revision${message.revision_count === 1 ? "" : "s"}; ${message.deleted_at ? "Removed" : "Current visible revision"}`],
@@ -2166,6 +2175,13 @@ async function loadMessages(mode = "initial", generation = state.generation, mes
       fresh.forEach((message) => state.components.responsibilityInbox?.refreshFromRealtime(message.id));
       state.components.toast.info(`${fresh.length} new message${fresh.length === 1 ? "" : "s"}`, { title: "Timeline updated" });
     }
+    if (state.mode === "expanded" && state.projectView === "timeline" && timelineShowsAllMessages()
+        && (mode === "initial" || (mode === "newer" && fresh.length))) {
+      const latestVisibleSequence = state.messages.reduce((value, message) => Math.max(value, Number(message.sequence || 0)), 0);
+      void markSelectedProjectRead(latestVisibleSequence, generation).catch(handleLoadError);
+    } else if (state.mode === "expanded" && mode === "newer" && fresh.length) {
+      scheduleProjectViewCounterRefresh(generation);
+    }
     return fresh.length;
   } finally {
     state.loading = false;
@@ -2212,6 +2228,7 @@ function showWorkspaceSurface({ historyMode = "push" } = {}) {
   renderProjectHeader();
   setMobilePanel("projects");
   updateApplicationRoute("workspace", "", historyMode);
+  void refreshProjectSummaries().catch((error) => state.components.toast.warn(error.message || "Unable to refresh projects.", { title: "Project list error" }));
   if (state.project && !state.realtimeSocket) void connectRealtime(state.generation);
 }
 
@@ -2255,6 +2272,15 @@ function renderWorkspace() {
     const top = document.createElement("span"); top.className = "project-card-top";
     const title = document.createElement("strong"); title.textContent = project.name;
     top.appendChild(title);
+    const unreadCount = Math.max(0, Number(project.unread_message_count || 0));
+    if (unreadCount > 0) {
+      const unread = document.createElement("span");
+      unread.className = "ui-badge project-card-unread";
+      unread.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+      unread.setAttribute("aria-label", `${unreadCount} unread message${unreadCount === 1 ? "" : "s"}`);
+      unread.title = unread.getAttribute("aria-label");
+      top.appendChild(unread);
+    }
     const stats = document.createElement("span");
     stats.className = "project-card-stats";
     [
@@ -2297,6 +2323,28 @@ async function openWorkspaceProject(project, trigger) {
     trigger.disabled = false;
     loadingOverlay.destroy();
   }
+}
+
+function timelineShowsAllMessages() {
+  return state.filters.primary === "all" && state.filters.kind === "all" && !state.filters.q
+    && state.filters.sender.length === 0 && !state.filters.from && !state.filters.to;
+}
+
+async function markSelectedProjectRead(lastReadSequence, generation = state.generation) {
+  if (state.mode !== "expanded" || !selectedProjectId() || !Number.isFinite(Number(lastReadSequence))) return;
+  const projectId = selectedProjectId();
+  const result = unwrap(await request(`${API.projectReadState}?${new URLSearchParams({ project_id: projectId })}`, {
+    method: "POST",
+    headers: csrfHeaders(),
+    body: JSON.stringify({ last_read_sequence: Math.max(0, Number(lastReadSequence)) }),
+  }));
+  if (generation !== state.generation || selectedProjectId() !== projectId) return;
+  state.projects = state.projects.map((project) => project.id === projectId
+    ? { ...project, unread_message_count: Number(result?.unread_message_count || 0) }
+    : project);
+  renderWorkspace();
+  syncTimelineProjectViewCount();
+  renderProjectViewTabCounters();
 }
 
 function modalTextField(name, label, options = {}) { return { type: "input", name, label, ...options }; }
@@ -3121,6 +3169,7 @@ async function loadProjectChangeProposals({ force = false, background = false } 
     if (controller.signal.aborted || generation !== state.generation || projectId !== selectedProjectId()) return;
     state.projectProposals = proposals;
     state.projectProposalsLoaded = true;
+    state.projectViewCounts.proposals = proposals.filter((proposal) => proposal.status === "pending").length;
   } catch (error) {
     if (controller.signal.aborted) return;
     state.projectProposals = [];
@@ -3131,6 +3180,7 @@ async function loadProjectChangeProposals({ force = false, background = false } 
     if (!controller.signal.aborted && generation === state.generation && projectId === selectedProjectId()) {
       state.projectProposalsLoading = false;
       renderProjectChangeProposals();
+      renderProjectViewTabCounters();
       if (scrollTop !== null && state.components.projectProposalsHost) {
         state.components.projectProposalsHost.scrollTop = scrollTop;
       }
@@ -3143,6 +3193,7 @@ function scheduleProjectProposalRealtimeRefresh(projectGeneration = state.genera
   if (!can("project.manage") && !can("project.admin")) return;
   state.projectProposalsLoaded = false;
   state.projectProposalsRealtimePending = true;
+  scheduleProjectViewCounterRefresh(projectGeneration);
   clearTimeout(state.projectProposalsRealtimeTimer);
   state.projectProposalsRealtimeTimer = setTimeout(() => {
     state.projectProposalsRealtimeTimer = null;
@@ -6777,6 +6828,9 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   clearTimeout(state.projectProposalsRealtimeTimer);
   state.projectProposalsRealtimeTimer = null;
   state.projectProposalsRealtimePending = false;
+  clearTimeout(state.projectViewCounterTimer);
+  state.projectViewCounterTimer = null;
+  state.projectViewCounts = { timeline: 0, responsibility: 0, proposals: 0 };
   state.projectView = "timeline";
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
@@ -6839,6 +6893,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   renderTasks();
   renderComposerControls();
   await loadMessages("initial", generation, messageGeneration);
+  void refreshProjectViewCounters(generation).catch(handleLoadError);
   el.status_badge.textContent = "Live";
   void connectRealtime(generation);
 }
@@ -6915,11 +6970,14 @@ function renderComposerControls() {
   state.components.messageIntent?.destroy();
   state.components.messageIntent = state.factories.createSelect(el.message_intent, [
     { value: "update", label: "Update / FYI" },
-    { value: "request", label: "Action request" },
+    { value: "work", label: "Work request" },
+    { value: "approval", label: "Approval request" },
+    { value: "review", label: "Review request" },
   ], {
     searchable: false, clearable: false, ariaLabel: "Message intent", selected: state.draft.intent,
     onChange(value) {
-      state.draft.intent = value === "request" ? "request" : "update";
+      state.draft.intent = ["work", "approval", "review"].includes(value)
+        ? value : "update";
     },
   });
   state.components.composer?.destroy();
@@ -7095,7 +7153,9 @@ async function sendMessage({ text }) {
       direct_participant_ids: state.draft.mode === "broadcast" ? [] : state.draft.addressees,
       mention_participant_ids: [],
       broadcast: state.draft.mode === "broadcast",
-      action_requested: state.draft.mode === "direct" && state.draft.intent === "request",
+      action_requested: state.draft.mode === "direct" && state.draft.intent !== "update",
+      action_request_type: state.draft.mode === "direct" && state.draft.intent !== "update"
+        ? state.draft.intent : null,
       idempotency_key: state.draft.idempotencyKey,
     };
     const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: selectedProjectId() })}`, {
@@ -7197,6 +7257,82 @@ function mountProjectViewTabs() {
       showProjectView(tabId);
     },
   });
+  renderProjectViewTabCounters();
+}
+
+const PROJECT_VIEW_TAB_LABELS = {
+  timeline: "Timeline",
+  responsibility: "Responsibility Inbox",
+  proposals: "AI Proposals",
+};
+
+function syncTimelineProjectViewCount() {
+  const project = state.projects.find((entry) => entry.id === selectedProjectId());
+  state.projectViewCounts.timeline = Math.max(0, Number(project?.unread_message_count || 0));
+}
+
+function renderProjectViewTabCounters() {
+  if (!state.components.projectViewTabs || !el.project_view_switch) return;
+  for (const [view, label] of Object.entries(PROJECT_VIEW_TAB_LABELS)) {
+    const tab = el.project_view_switch.querySelector(`[role="tab"][data-tab-id="${view}"]`);
+    if (!tab) continue;
+    tab.querySelector(".project-view-tab-count")?.remove();
+    tab.setAttribute("aria-label", label);
+    if (state.projectView === view) continue;
+    const count = Math.max(0, Number(state.projectViewCounts[view] || 0));
+    if (!count) continue;
+    const badge = document.createElement("span");
+    badge.className = "ui-badge project-view-tab-count";
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.setAttribute("aria-hidden", "true");
+    const subject = view === "timeline" ? "unread message" : view === "responsibility" ? "unacknowledged request" : "pending proposal";
+    const description = `${count} ${subject}${count === 1 ? "" : "s"}`;
+    badge.title = description;
+    tab.setAttribute("aria-label", `${label}, ${description}`);
+    tab.append(badge);
+  }
+}
+
+async function refreshProjectViewCounters(projectGeneration = state.generation) {
+  if (state.mode !== "expanded" || projectGeneration !== state.generation || !selectedProjectId()) return;
+  const projectId = selectedProjectId();
+  syncTimelineProjectViewCount();
+  const requests = [
+    request(API.projects, { signal: state.abortController?.signal }),
+    request(`${API.responsibilityInbox}?${new URLSearchParams({ project_id: projectId, view: "unacknowledged", limit: "1" })}`, {
+      signal: state.abortController?.signal,
+    }),
+  ];
+  if (can("project.manage") || can("project.admin")) {
+    requests.push(request(`${API.projectChangeProposals}?${new URLSearchParams({ project_id: projectId, status: "pending" })}`, {
+      signal: state.abortController?.signal,
+    }));
+  }
+  const results = await Promise.allSettled(requests);
+  if (projectGeneration !== state.generation || projectId !== selectedProjectId()) return;
+  if (results[0]?.status === "fulfilled") {
+    state.projects = projectSummariesFromPayload(results[0].value);
+    renderWorkspace();
+    syncTimelineProjectViewCount();
+  }
+  if (results[1]?.status === "fulfilled") {
+    const inbox = results[1].value || {};
+    state.projectViewCounts.responsibility = Math.max(0, Number(inbox.page?.unacknowledged_count || 0));
+  }
+  if (results[2]?.status === "fulfilled") {
+    state.projectViewCounts.proposals = (unwrap(results[2].value) || []).filter((proposal) => proposal.status === "pending").length;
+  }
+  renderProjectViewTabCounters();
+}
+
+function scheduleProjectViewCounterRefresh(projectGeneration = state.generation) {
+  clearTimeout(state.projectViewCounterTimer);
+  state.projectViewCounterTimer = setTimeout(() => {
+    state.projectViewCounterTimer = null;
+    void refreshProjectViewCounters(projectGeneration).catch((error) => {
+      if (error?.name !== "AbortError") handleLoadError(error);
+    });
+  }, 120);
 }
 
 function showProjectView(view) {
@@ -7208,12 +7344,19 @@ function showProjectView(view) {
   if (state.components.projectViewTabs?.getActiveId?.() !== state.projectView) {
     state.components.projectViewTabs?.setActive?.(state.projectView, false);
   }
+  renderProjectViewTabCounters();
   el.new_message_trigger.hidden = inbox || proposals || !can("messages.write");
   el.timeline_filter_bar.hidden = inbox || proposals;
   el.timeline_notice.hidden = inbox || proposals || !el.timeline_notice.textContent;
   el.timeline_scroll.hidden = inbox || proposals;
   el.responsibility_host.hidden = !inbox;
-  if (!inbox && !proposals && state.components.timeline) renderTimeline();
+  if (!inbox && !proposals && state.components.timeline) {
+    renderTimeline();
+    if (timelineShowsAllMessages()) {
+      const latestVisibleSequence = state.messages.reduce((value, message) => Math.max(value, Number(message.sequence || 0)), 0);
+      if (latestVisibleSequence) void markSelectedProjectRead(latestVisibleSequence).catch(handleLoadError);
+    }
+  }
   if (proposals) void loadProjectChangeProposals();
   if (inbox && !state.components.responsibilityInbox) {
     state.components.responsibilityInbox = createResponsibilityInbox(el.responsibility_host, {
@@ -7244,6 +7387,7 @@ function showProjectView(view) {
           state.messages = state.messages.map((entry) => entry.id === updated.id ? updated : entry);
         }
         state.components.toast.success("Message acknowledged.");
+        scheduleProjectViewCounterRefresh();
         return payload;
       },
       openMessage: (messageId) => void openResponsibilityMessage(messageId),
@@ -7725,16 +7869,30 @@ async function openSettings() {
   }
 }
 
-async function loadExpanded() {
-  const [projectsPayload] = await Promise.all([request(API.projects), loadNotifications()]);
+function projectSummariesFromPayload(projectsPayload) {
   const source = unwrap(projectsPayload) || {};
   const owned = Array.isArray(source) ? source : (source.owned || source.projects || []);
   const shared = Array.isArray(source.shared) ? source.shared : [];
-  state.projects = [...owned.map((project) => ({
+  return [...owned.map((project) => ({
     ...project,
     id: id(project.id || project.project_id),
     collection: project.relationship === "shared" ? "Shared" : "My",
   })), ...shared.map((project) => ({ ...project, id: id(project.id || project.project_id), collection: "Shared" }))];
+}
+
+async function refreshProjectSummaries(projectGeneration = state.generation) {
+  if (state.mode !== "expanded") return;
+  const projectsPayload = await request(API.projects);
+  if (projectGeneration !== state.generation) return;
+  state.projects = projectSummariesFromPayload(projectsPayload);
+  renderWorkspace();
+  syncTimelineProjectViewCount();
+  renderProjectViewTabCounters();
+}
+
+async function loadExpanded() {
+  const [projectsPayload] = await Promise.all([request(API.projects), loadNotifications()]);
+  state.projects = projectSummariesFromPayload(projectsPayload);
   const requestedRoute = currentApplicationRoute();
   if (!state.projects.length) {
     showApplication();
@@ -7891,6 +8049,11 @@ function receiveRealtimeMessage(source) {
   state.messages = sortAndDedupe([...state.messages, message]);
   renderTimeline("prepend", [message]);
   state.components.toast.info("1 new message", { title: "Timeline updated" });
+  if (state.projectView === "timeline" && timelineShowsAllMessages()) {
+    void markSelectedProjectRead(message.sequence).catch(handleLoadError);
+  } else {
+    scheduleProjectViewCounterRefresh();
+  }
 }
 
 async function connectRealtime(projectGeneration = state.generation) {
@@ -8060,7 +8223,7 @@ function scheduleTaskReconciliation(projectGeneration = state.generation) {
     state.taskReconciliationTimer = null;
     if (!state.realtimeSocket || projectGeneration !== state.generation || !selectedProjectId()) return;
     if (document.visibilityState !== "hidden") {
-      try { await loadTasks(projectGeneration); }
+      try { await Promise.all([loadTasks(projectGeneration), refreshProjectSummaries(projectGeneration)]); }
       catch (error) { if (error?.name !== "AbortError") handleLoadError(error); }
     }
     scheduleTaskReconciliation(projectGeneration);
@@ -8073,7 +8236,7 @@ function startPolling() {
   state.taskReconciliationTimer = null;
   const tick = async () => {
     try {
-      const refreshes = [Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks()])];
+      const refreshes = [Promise.all([loadMessages("newer"), refreshParticipants(), loadTasks(), refreshProjectSummaries()])];
       if ((state.projectProposalsLoaded || state.projectView === "proposals")
           && (can("project.manage") || can("project.admin"))) {
         refreshes.push(loadProjectChangeProposals({ force: true, background: true }));
@@ -8185,7 +8348,7 @@ async function bootstrap() {
     onChange(payload) { state.filters.kind = payload.value || "all"; void reloadForFilters(); },
   });
   state.components.filterPopover = state.factories.createPopover(el.filter_popover_trigger, {
-    placement: "bottom-end",
+    placement: "bottom-start",
     panelRole: "dialog",
     ariaLabel: "Timeline filters",
     className: "syndicatum-filter-popover",

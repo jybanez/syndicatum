@@ -198,7 +198,7 @@ const tools = [
     name: "syndicatum_post_message",
     description: "Post, reply, mention, directly address, or broadcast as one explicitly selected Syndicatum agent profile.",
     annotations: remoteWriteAnnotations,
-    inputSchema: { type: "object", required: ["profile_id", "body"], properties: { profile_id: profileIdProperty(), body: { type: "string" }, direct_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, mention_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, broadcast: { type: "boolean" }, action_requested: { type: "boolean", description: "Create a Responsibility Inbox item for each direct recipient. Omit or false for updates and FYI messages." }, reply_to_message_id: { type: ["integer", "string"] }, idempotency_key: { type: "string" }, correlation_id: { type: "string" } }, additionalProperties: false },
+    inputSchema: { type: "object", required: ["profile_id", "body"], properties: { profile_id: profileIdProperty(), body: { type: "string" }, direct_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, mention_participant_ids: { type: "array", items: { type: ["integer", "string"] } }, broadcast: { type: "boolean" }, action_requested: { type: "boolean", description: "Create a Responsibility Inbox item for each direct recipient. Omit or false for updates and FYI messages." }, action_request_type: { type: "string", enum: ["work", "approval", "review"], description: "Response workflow for an action request. Omission defaults to work." }, reply_to_message_id: { type: ["integer", "string"] }, idempotency_key: { type: "string" }, correlation_id: { type: "string" } }, additionalProperties: false },
   },
   {
     name: "syndicatum_acknowledge_message",
