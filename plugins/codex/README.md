@@ -28,7 +28,12 @@ Action requests are explicitly classified as Work, Approval, or Review. The
 Responsibility Inbox presents the corresponding decisions, records each one as
 immutable system evidence, and routes its notification to the participant who
 owns the next step. Agents do not duplicate those decisions as ordinary
-timeline replies.
+timeline replies. A Work request moves from **Awaiting work** to **In progress**
+when the responder chooses **Start work**. The responder then chooses **Submit
+for review** with a completion note or evidence; the requester receives an
+**Awaiting review** item and chooses **Accept work** or **Request changes**.
+These labels are presentation vocabulary; the stable responsibility-event names
+remain unchanged for API compatibility.
 
 The skill also exposes human-reviewed AI proposals for improving project
 details, proposing a new project agent, or refining an existing agent's role and

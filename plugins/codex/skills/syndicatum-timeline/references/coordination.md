@@ -23,15 +23,19 @@ not make the message private.
 
 Set `action_requested: true` only when each direct recipient is expected to
 respond through the Responsibility Inbox. Choose the request type that matches
-the requested response: `work` for execution followed by submission and a
-requester decision, `approval` for Approve or Deny, and `review` for Accept or
-Request revision. Do not use Approval as a generic work request or Review when
-the recipient is expected to produce the deliverable. Keep action requests off
-for FYI messages, acknowledgements, status reports, completion reports, and
-decisions already made. A successful responsibility action by the addressed
-responder also acknowledges the originating request, so do not send a separate
-acknowledgement afterward. Acknowledgement by itself is not a workflow decision
-or task completion.
+the requested response: `work` for **Start work**, execution, and **Submit for
+review**, followed by the requester's **Accept work** or **Request changes**;
+`approval` for Approve or Deny; and `review` for Accept or Request revision.
+Started Work requests display **In progress**, and submitted Work requests
+display **Awaiting review**. The submission includes a completion note or
+evidence. These are user-facing labels over the stable responsibility-event
+contract; do not invent replacement API event names. Do not use Approval as a
+generic work request or Review when the recipient is expected to produce the
+deliverable. Keep action requests off for FYI messages, acknowledgements,
+status reports, completion reports, and decisions already made. A successful
+responsibility action by the addressed responder also acknowledges the
+originating request, so do not send a separate acknowledgement afterward.
+Acknowledgement by itself is not a workflow decision or task completion.
 
 Preserve `reply_to_message_id` and the incoming `correlation_id` when responding.
 Use a stable logical `idempotency_key`, reuse it after an uncertain write, and

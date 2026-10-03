@@ -79,6 +79,15 @@ and Review are decision requests: their assigned responder completes the item
 directly with the vocabulary appropriate to that type. An event from another
 type is rejected rather than silently interpreted as an equivalent decision.
 
+The Work UI presents this technical state machine in task-oriented language:
+`open` begins as **Awaiting work**, an item with `work_started=true` displays
+**In progress**, and `resolution_pending` displays **Awaiting review**. The
+responder uses **Submit for review** (`resolution_proposed`) with a completion
+note or evidence; the requester then uses **Accept work**
+(`resolution_accepted`) or **Request changes** (`resolution_disputed`). A
+responder may **Withdraw submission** (`resolution_withdrawn`). The internal
+event and state names remain stable for API and historical compatibility.
+
 | Explicit event | Derived state/observation | Authorized actor and evidence |
 | --- | --- | --- |
 | Direct addressee on canonical post | `open`, awaiting response, not accepted work | Permitted sender; original message and direct addressee |
