@@ -9,8 +9,8 @@ const VIEWS = [
 
 export const RESPONSIBILITY_ACTIONS = {
   work_started: "Start work", blocked: "Mark blocked", unblocked: "Unblock",
-  resolution_proposed: "Propose resolution", resolution_accepted: "Accept resolution",
-  resolution_disputed: "Dispute resolution", resolution_withdrawn: "Withdraw proposal",
+  resolution_proposed: "Submit for review", resolution_accepted: "Accept work",
+  resolution_disputed: "Request changes", resolution_withdrawn: "Withdraw submission",
   request_withdrawn: "Withdraw request", transfer_offered: "Offer handoff",
   transfer_accepted: "Accept handoff", transfer_declined: "Decline handoff",
   reopened: "Reopen", responder_restored: "Restore responder",
@@ -26,7 +26,7 @@ export const RESPONSIBILITY_DIRECT_DECISIONS = new Set([
 
 const STATE_LABELS = {
   open: "Awaiting work",
-  resolution_pending: "Awaiting approval",
+  resolution_pending: "Awaiting review",
   transfer_pending: "Handoff pending",
   disputed: "Changes requested",
   orphaned: "Unassigned",
@@ -98,6 +98,7 @@ export function responsibilityStateLabel(item) {
   if (item.state === "open") {
     if (item.request_type === "approval") return "Awaiting approval";
     if (item.request_type === "review") return "Awaiting review";
+    if ((item.request_type || "work") === "work" && item.work_started) return "In progress";
   }
   if (item.state === "resolved") {
     return {
@@ -464,9 +465,9 @@ export function createResponsibilityInbox(host, options) {
     } else if (["open", "disputed"].includes(item.state) && isResponder && item.blocked) {
       guidance.textContent = "This request is blocked. Unblock it when work can continue.";
     } else if (["open", "disputed"].includes(item.state) && isResponder) {
-      guidance.textContent = "Next: propose a resolution when the requested work is complete.";
+      guidance.textContent = "Next: submit the completed work for review.";
     } else if (item.state === "resolution_pending" && (isRequester || options.moderator())) {
-      guidance.textContent = "Next: accept the proposed resolution or request changes.";
+      guidance.textContent = "Next: accept the submitted work or request changes.";
     } else if (item.state === "transfer_pending"
         && actor === Number(item.pending_target_participant_id)) {
       guidance.textContent = "Next: accept or decline this handoff.";

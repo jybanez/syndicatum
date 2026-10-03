@@ -1283,7 +1283,8 @@ try {
             && strpos($app, 'context.modal.refs.body?.querySelector?.(".ui-form-modal-form-error")') !== false
             && strpos($app, 'await state.factories.uiAlert(') !== false
             && strpos($app, 'items: entries.length > 1 ? items : []') !== false
-            && strpos($workflow, 'errors.note = "Reason or evidence note — required"') !== false
+            && strpos($workflow, '? "Completion note or evidence — required"') !== false
+            && strpos($workflow, ': "Reason or evidence note — required"') !== false
             && strpos($workflow, 'errors.target_participant_id = "Active handoff target — required"') !== false,
             'Invalid responsibility forms must expose field feedback and a canonical draggable alert with structured multi-error content.');
         $suite->true(strpos($app, 'RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS = new Set(["approval_approved", "review_accepted"])') !== false
@@ -1295,6 +1296,14 @@ try {
             && strpos($app, 'if (!RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind))') !== false
             && strpos($workflow, '&& !RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind)') !== false,
             'Starting work must use a canonical message body without showing or requiring a reason/evidence field.');
+        $suite->true(strpos($inbox, 'resolution_proposed: "Submit for review"') !== false
+            && strpos($inbox, 'resolution_accepted: "Accept work"') !== false
+            && strpos($inbox, 'resolution_disputed: "Request changes"') !== false
+            && strpos($inbox, 'resolution_pending: "Awaiting review"') !== false
+            && strpos($inbox, 'item.work_started) return "In progress"') !== false
+            && strpos($app, 'label: optionalNote ? "Note (optional)"') !== false
+            && strpos($app, ': submittingWork ? "Completion note or evidence"') !== false,
+            'Work requests must use familiar in-progress, submission, review, and decision language.');
         $suite->true(strpos($workflow, 'result.outcome === "conflict"') !== false
             && strpos($workflow, 'Nothing was posted.') !== false
             && strpos($workflow, 'idempotencyKey = makeIdempotencyKey()') !== false,

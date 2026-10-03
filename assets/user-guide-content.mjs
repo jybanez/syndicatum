@@ -255,7 +255,7 @@ export const USER_GUIDE_SECTIONS = [
         keywords: ["convert", "source message", "structured work"],
         blocks: [
           { type: "terms", items: [
-            ["Action request", "Conversation-first. It preserves who asked, who currently owns the response, workflow actions, handoffs, blockers, and the proposed resolution."],
+            ["Action request", "Conversation-first. It preserves who asked, who currently owns the response, workflow actions, handoffs, blockers, and submitted work."],
             ["Task", "Plan-first. It has a title, description, assignee, priority, due date, acceptance criteria, status, and immutable activity history."],
           ] },
           { type: "p", text: "Convert an action request to a task when the work needs planning, progress tracking, acceptance criteria, or a durable deliverable. The originating message remains linked as evidence, and the same request cannot be converted twice." },
@@ -322,8 +322,8 @@ export const USER_GUIDE_SECTIONS = [
             ["All direct work", "All responsibility records you are permitted to see in the project, regardless of current owner or state."],
             ["Blocked", "Requests whose current responder recorded a blocker."],
             ["Handoffs", "Requests with a proposed transfer of responsibility waiting for acceptance or decline."],
-            ["Decisions needed", "A responder proposed a resolution and the requester or moderator must accept it or request changes."],
-            ["Disputed", "The proposed resolution was not accepted and further work is expected."],
+            ["Decisions needed", "A responder submitted completed work and the requester or moderator must accept it or request changes."],
+            ["Disputed", "The submitted work needs changes and further work is expected."],
             ["Unassigned", "The responsible participant is no longer active or the request needs a new owner."],
             ["Resolved", "Requests completed by an accepted work resolution, approval decision, review decision, or withdrawal."],
             ["Historical / unknown", "Older records that predate the current responsibility model or cannot be classified safely."],
@@ -337,7 +337,7 @@ export const USER_GUIDE_SECTIONS = [
         keywords: ["work request", "approval", "review", "start work", "approve", "deny", "accept", "revision"],
         blocks: [
           { type: "list", items: [
-            "Work is for producing an outcome: start or block the work, submit a proposed resolution, and wait for the requester to accept it or request changes.",
+            "Work is for producing an outcome: start or block the work, submit the completed work for review, and wait for the requester to accept it or request changes.",
             "Approval is for a decision on a proposed action: the recipient chooses Approve or Deny.",
             "Review is for evaluating an existing result: the recipient chooses Accept or Request revision.",
           ] },
@@ -345,7 +345,7 @@ export const USER_GUIDE_SECTIONS = [
             "Use the actions shown for the request type. The first successful responder action also acknowledges the originating request; there is no separate acknowledgement step.",
             "Syndicatum does not offer work-production actions on Approval or Review requests.",
             "Offer handoff when another active participant should own the response. Responsibility changes only after they accept.",
-            "Start work records the responder and start time without asking for a note. Deny, Request revision, and later work updates require a concrete reason or evidence note. Approve and Accept may be submitted without a note; add context when it will help the requester understand the decision.",
+            "Start work records the responder and start time without asking for a note. Submit for review requires a completion note or evidence. Deny, Request revision, and other work updates require a concrete reason or evidence note. Approve and Accept may be submitted without a note; add context when it will help the requester understand the decision.",
           ] },
           { type: "note", text: "The same controls are available on the Timeline message and in the Responsibility Inbox. Acting in either place opens the same response dialog and updates the shared request, so you do not need to visit the other view. Each work update is immutable workflow evidence linked to the original request." },
         ],
