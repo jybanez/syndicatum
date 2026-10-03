@@ -341,6 +341,10 @@ try {
             fclose($stream);
             $suite->same('application/pdf', $uploaded['file']['mime_type']);
             $suite->truthy(!isset($uploaded['file']['storage_key']) && !isset($uploaded['file']['path']), 'Storage internals leaked through metadata.');
+            $storedKey = $pdo->prepare('SELECT storage_key FROM project_files WHERE project_id = ? AND public_id = ?');
+            $storedKey->execute([$project['id'], $uploaded['file']['id']]);
+            $suite->truthy(strpos((string) $storedKey->fetchColumn(), 'objects/' . strtolower($project['public_id']) . '/') === 0,
+                'Physical object was not grouped by project public ID.');
             $replayStream = fopen('php://temp', 'w+b'); fwrite($replayStream, "%PDF-1.4\nfirst\n"); rewind($replayStream);
             $replayedUpload = $service->uploadStream($access, $replayStream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
             fclose($replayStream);

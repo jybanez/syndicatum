@@ -2013,6 +2013,13 @@
       "mode": 420
     },
     {
+      "source": "scripts/project-file-storage.php",
+      "action": "ship",
+      "path": "app/scripts/project-file-storage.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "scripts/record-delivery-worker-heartbeat.php",
       "action": "ship",
       "path": "app/scripts/record-delivery-worker-heartbeat.php",

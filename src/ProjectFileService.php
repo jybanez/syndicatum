@@ -124,7 +124,7 @@ final class ProjectFileService
                 }
                 $folder = $this->resolveFolderForWrite($access, $folderPublicId);
                 $this->assertQuota((int) $access['project_id'], (int) $staged['size_bytes'], 0);
-                $publishedKey = $this->storage->publish($staged['staging_key']);
+                $publishedKey = $this->storage->publish($staged['staging_key'], $this->projectStorageNamespace((int) $access['project_id']));
                 $publicId = Db::uuidV4();
                 $now = Db::now();
                 $insert = $this->pdo->prepare(
@@ -234,7 +234,7 @@ final class ProjectFileService
                 if (!$file || $file['deleted_at'] !== null || $file['state'] !== 'available') { throw new RuntimeException('FILE_NOT_FOUND'); }
                 if ((int) $file['version'] !== $version) { throw new RuntimeException('FILE_VERSION_CONFLICT'); }
                 $this->assertQuota((int) $access['project_id'], (int) $staged['size_bytes'], (int) $file['size_bytes']);
-                $publishedKey = $this->storage->publish($staged['staging_key']);
+                $publishedKey = $this->storage->publish($staged['staging_key'], $this->projectStorageNamespace((int) $access['project_id']));
                 $now = Db::now();
                 $update = $this->pdo->prepare(
                     'UPDATE project_files SET storage_driver = ?, storage_key = ?, original_name = ?, mime_type = ?, size_bytes = ?, sha256 = ?,
@@ -485,6 +485,15 @@ final class ProjectFileService
     {
         if (!isset($access['participant_status']) || $access['participant_status'] !== 'active') { throw new RuntimeException('PROJECT_NOT_FOUND'); }
         if (isset($access['project_status']) && $access['project_status'] === 'archived') { throw new RuntimeException('PROJECT_ARCHIVED'); }
+    }
+
+    private function projectStorageNamespace($projectId)
+    {
+        $statement = $this->pdo->prepare('SELECT public_id FROM projects WHERE id = ? LIMIT 1');
+        $statement->execute([(int) $projectId]);
+        $publicId = $statement->fetchColumn();
+        if (!is_string($publicId) || $publicId === '') { throw new RuntimeException('PROJECT_NOT_FOUND'); }
+        return $publicId;
     }
 
     private function deleteObjectBestEffort($storageKey, $context)

@@ -94,14 +94,19 @@ than machine-specific absolute paths or provider URLs.
 ### 4.1 Local driver
 
 The default driver stores content outside the public web root under a configured
-storage root. A generated storage key may resolve to a path such as:
+storage root. Objects are grouped by opaque project public ID and then split
+across a two-character hexadecimal performance shard. A generated storage key
+may resolve to a path such as:
 
 ```text
-/srv/syndicatum/files/7f/2a/7f2ad4...bin
+/srv/syndicatum/files/objects/3903bbfe-7ef3-4c70-af45-6bb6aa141757/7f/7f2ad4...
 ```
 
 The application controls key generation and placement. Original filenames must
-not determine physical storage paths.
+not determine physical storage paths. The 256-way shard keeps large projects
+from accumulating every object in one directory, while the project grouping
+makes reconciliation, cleanup, and backup verification project-aware. Public
+URLs remain independent of this physical layout.
 
 Development and Windows installations may initially stream files through the
 application. Linux production installations should support Nginx

@@ -24,6 +24,7 @@ function projectFileStorageRemove($path)
 
 try {
     $storage = new LocalFileStorage($application, $storageRoot);
+    $projectNamespace = '3903bbfe-7ef3-4c70-af45-6bb6aa141757';
     if ($storage->driver() !== 'local') { throw new RuntimeException('Unexpected storage driver.'); }
 
     $content = "Syndicatum project file\n";
@@ -38,8 +39,8 @@ try {
     if ($storage->detectMimeType($staged['staging_key']) !== 'text/plain') {
         throw new RuntimeException('Server-side MIME inspection did not identify text content.');
     }
-    $key = $storage->publish($staged['staging_key']);
-    if (!preg_match('#\Aobjects/[a-f0-9]{2}/[a-f0-9]{64}\z#', $key) || !$storage->exists($key)
+    $key = $storage->publish($staged['staging_key'], $projectNamespace);
+    if (!preg_match('#\Aobjects/' . preg_quote($projectNamespace, '#') . '/[a-f0-9]{2}/[a-f0-9]{64}\z#', $key) || !$storage->exists($key)
         || $storage->size($key) !== strlen($content) || $storage->checksum($key) !== hash('sha256', $content)) {
         throw new RuntimeException('Published object contract failed.');
     }
@@ -47,6 +48,14 @@ try {
     $roundTrip = stream_get_contents($read);
     fclose($read);
     if ($roundTrip !== $content) { throw new RuntimeException('Published content did not round-trip.'); }
+    $legacyKey = $storage->relocateObject($key, null);
+    if (!preg_match('#\Aobjects/[a-f0-9]{2}/[a-f0-9]{64}\z#', $legacyKey) || !$storage->exists($legacyKey)) {
+        throw new RuntimeException('Legacy relocation fixture failed.');
+    }
+    $key = $storage->relocateObject($legacyKey, $projectNamespace);
+    if (strpos($key, 'objects/' . $projectNamespace . '/') !== 0 || !$storage->exists($key)) {
+        throw new RuntimeException('Project grouping relocation failed.');
+    }
 
     $oversized = fopen('php://temp', 'w+b');
     fwrite($oversized, 'too large');

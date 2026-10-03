@@ -6,13 +6,13 @@ interface FileStorage
     public function driver();
     public function stageStream($stream, $maximumBytes);
     public function detectMimeType($stagingKey);
-    public function publish($stagingKey);
+    public function publish($stagingKey, $projectNamespace);
     public function discard($stagingKey);
     public function openReadStream($storageKey);
     public function exists($storageKey);
     public function size($storageKey);
     public function checksum($storageKey);
     public function delete($storageKey);
-    public function copyTo($storageKey, FileStorage $destination);
+    public function copyTo($storageKey, FileStorage $destination, $destinationProjectNamespace);
 }
 
