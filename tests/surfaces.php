@@ -1057,7 +1057,9 @@ try {
             && strpos($source, 'openCreateProjectFolder') !== false
             && strpos($source, 'openProjectFileUploader') !== false
             && strpos($source, 'multiple: true') !== false
-            && strpos($source, 'payload.storage?.max_files_per_action') !== false,
+            && strpos($source, 'payload.storage?.max_files_per_action') !== false
+            && strpos($source, 'const successful = items.filter((item) => item.status === "success");') !== false
+            && strpos($source, 'refreshFiles();') !== false,
             'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
         $suite->true(strpos($styles, '.project-files-layout') !== false
             && strpos($styles, 'height: min(66vh, 660px)') !== false,

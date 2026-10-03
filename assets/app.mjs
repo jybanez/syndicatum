@@ -1207,7 +1207,13 @@ function openProjectFileUploader(projectId, folder, maximumBytes, maximumFiles, 
   const mount = document.createElement("div");
   content.append(mount);
   let modal;
+  let refreshPending = false;
   const idempotencyKeys = new Map();
+  const refreshFiles = () => {
+    if (!refreshPending) return;
+    refreshPending = false;
+    onUploaded?.();
+  };
   const uploader = state.factories.createFileUploader(mount, {
     ariaLabel: "Upload project file",
     dropzoneAriaLabel: "Choose a project file",
@@ -1232,19 +1238,29 @@ function openProjectFileUploader(projectId, folder, maximumBytes, maximumFiles, 
       let payload = null;
       try { payload = await response.json(); } catch (_error) { payload = null; }
       if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+      refreshPending = true;
       controls.report(100);
     },
     onComplete(value) {
       const items = Array.isArray(value.items) ? value.items : [];
-      if (!items.length || items.some((item) => item.status !== "success")) return;
-      state.components.toast.success(`${items.length} ${items.length === 1 ? "file" : "files"} uploaded.`);
-      onUploaded?.();
+      const successful = items.filter((item) => item.status === "success");
+      if (!successful.length) return;
+      refreshFiles();
+      if (items.some((item) => item.status !== "success")) {
+        state.components.toast.success(`${successful.length} ${successful.length === 1 ? "file" : "files"} uploaded. Review the remaining items.`);
+        return;
+      }
+      state.components.toast.success(`${successful.length} ${successful.length === 1 ? "file" : "files"} uploaded.`);
       void modal.close({ reason: "uploaded" });
     },
   });
   modal = state.factories.createActionModal({
     title: `Upload to ${folder?.name || "Project files"}`, size: "lg", content,
-    actions: [{ id: "close", label: "Close" }], onClose() { uploader.destroy?.(); },
+    actions: [{ id: "close", label: "Close" }],
+    onClose() {
+      refreshFiles();
+      uploader.destroy?.();
+    },
   });
   modal.open();
 }
