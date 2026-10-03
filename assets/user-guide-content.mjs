@@ -489,13 +489,15 @@ export const USER_GUIDE_SECTIONS = [
         summary: "Prepare the private server directory that will hold project files.",
         keywords: ["storage", "files", "location", "directory", "server path", "system settings"],
         blocks: [
-          { type: "p", text: "Open System Settings, select Storage, and enter the absolute directory on the Syndicatum server that should hold project file content. This is a server filesystem path, not a folder selected from your browser." },
+          { type: "p", text: "Open System Settings and select Storage. Configure the private server directory, upload limits, allowed file types, per-project capacity, and public delivery cache policy. The storage location is a server filesystem path, not a folder selected from your browser." },
           { type: "list", items: [
             "Use a dedicated directory outside the public application root, such as C:\\private\\syndicatum-files on Windows or /srv/syndicatum/files on Linux.",
             "Syndicatum creates the directory when possible and requires it to be writable. Linux/POSIX directories must use private owner-only permissions (0700).",
+            "The recommended defaults allow files up to 25 MiB, 10 files per upload, 64 GiB per project, immediate deleted-content cleanup, and a 300-second public cache duration.",
+            "Allowed file types can be narrowed to server-supported downloads. Inline previews are limited to selected image, audio, and video types and must also be allowed upload types.",
             "The Storage location is separate from Recovery backup storage. Future complete backups must preserve both the database and stored project file content.",
           ] },
-          { type: "note", text: "This setting prepares the storage foundation only. Uploads, file records, previews, downloads, and public file links are not enabled until the project file storage feature is implemented." },
+          { type: "note", text: "The folder icon beside the project menu opens the Project Files workspace. During this foundation stage it shows the canonical folder tree and current-folder file list, while Create folder and Upload files remain disabled until file metadata and write operations are available." },
         ],
       },
     ],

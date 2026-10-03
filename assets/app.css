@@ -152,6 +152,20 @@ button, input, textarea { font: inherit; }
 .project-overview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
 .project-overview-heading h1 { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 26px; line-height: 1.15; }
 .project-overview-actions { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.project-files-modal .ui-modal-body { overflow: hidden; }
+.project-files-loading { min-height: min(62vh, 620px); }
+.project-files-layout { display: grid; grid-template-columns: minmax(220px, .32fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "notice notice" "folders files"; gap: 12px; height: min(66vh, 660px); min-height: 440px; min-width: 0; }
+.project-files-notice { grid-area: notice; margin: 0; padding: 9px 12px; border: 1px solid rgba(224, 169, 77, .4); border-radius: 9px; color: #ffe0a8; background: rgba(100, 67, 18, .3); }
+.project-files-folders { grid-area: folders; }
+.project-files-list { grid-area: files; }
+.project-files-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--app-border); border-radius: 10px; background: color-mix(in srgb, var(--ui-surface-raised, var(--ui-surface)) 78%, transparent); }
+.project-files-pane-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 0 0 auto; min-height: 56px; padding: 9px 12px; border-bottom: 1px solid var(--app-border); }
+.project-files-pane-header h3 { min-width: 0; margin: 0; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.project-files-tree, .project-files-grid { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.project-files-tree .ui-tree, .project-files-tree .ui-tree-viewport { height: 100% !important; min-height: 0; }
+.project-files-grid .ui-grid { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.project-files-load-error { min-height: 240px; display: grid; place-items: center; padding: 24px; color: var(--ui-danger, #ff8f9c); text-align: center; }
 .filter-bar { display: grid; grid-template-columns: auto minmax(190px, 1fr) auto; gap: 8px; align-items: center; padding: 10px 0 12px; border-top: 1px solid rgba(73, 93, 129, .3); border-bottom: 1px solid rgba(73, 93, 129, .3); }
 .app-search, .app-search .ui-search-wrap, .sender-filter { min-width: 0; }
 .app-search .ui-search-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
@@ -795,6 +809,11 @@ button, input, textarea { font: inherit; }
   .project-template-picker, .project-workflow-row, .project-agent-fields { grid-template-columns: 1fr; }
   .project-template-picker .template-tree { max-height: none; }
   .project-agent-fields > .project-workflow-field:nth-child(n+4) { grid-column: auto; }
+}
+@media (max-width: 760px) {
+  .project-files-modal .ui-modal-body { overflow-y: auto; }
+  .project-files-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(230px, 1fr) minmax(280px, 1.2fr); grid-template-areas: "notice" "folders" "files"; height: auto; min-height: 0; }
+  .project-files-pane { min-height: 230px; }
 }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
 .connection-label { color: var(--app-muted); font-size: 12px; }

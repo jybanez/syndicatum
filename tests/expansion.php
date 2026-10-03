@@ -123,6 +123,26 @@ try {
         $suite->throws('storage.local_base_path must be an absolute server filesystem path', function () use ($settings, $administrator) {
             $settings->update(['storage.local_base_path' => 'relative/project-files'], $administrator['id']);
         });
+        $settings->update([
+            'storage.max_upload_bytes' => 26214400,
+            'storage.max_files_per_action' => 10,
+            'storage.allowed_content_types' => ['image/jpeg', 'application/pdf'],
+            'storage.inline_preview_types' => ['image/jpeg'],
+            'storage.default_project_quota_bytes' => 68719476736,
+            'storage.deleted_content_retention_days' => 0,
+            'storage.public_cache_max_age_seconds' => 300,
+        ], $administrator['id']);
+        $suite->same(26214400, $settings->get('storage.max_upload_bytes'));
+        $suite->same(['image/jpeg', 'application/pdf'], $settings->get('storage.allowed_content_types'));
+        $suite->throws('storage.default_project_quota_bytes must be greater than storage.max_upload_bytes', function () use ($settings, $administrator) {
+            $settings->update(['storage.default_project_quota_bytes' => 1048576], $administrator['id']);
+        });
+        $suite->throws('storage.inline_preview_types must be a subset of storage.allowed_content_types', function () use ($settings, $administrator) {
+            $settings->update(['storage.allowed_content_types' => ['application/pdf']], $administrator['id']);
+        });
+        $suite->throws('storage.allowed_content_types contains an unsupported content type', function () use ($settings, $administrator) {
+            $settings->update(['storage.allowed_content_types' => ['application/x-msdownload']], $administrator['id']);
+        });
     });
 
     $suite->test('project file storage prepares a private root outside the application', function () use ($suite) {

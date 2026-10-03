@@ -1,12 +1,12 @@
 # V1 Project File Storage Implementation Checklist
 
-Status: Draft for project-owner review
+Status: Approved and in progress
 Prepared: October 3, 2026
 Source: [V1 Project File Storage Proposal](v1-project-file-storage-proposal.md)
 
-> No storage feature implementation is authorized by this checklist yet. The
-> project owner must approve the checklist and the decisions in Gate A before
-> work proceeds beyond the already completed configuration foundation.
+> The project owner approved this checklist and its project-plan conversion on
+> October 3, 2026. Implementation proceeds gate by gate; incomplete operations
+> remain visibly unavailable rather than simulating success.
 
 ## 1. Outcome and scope
 
@@ -108,18 +108,18 @@ secure file management to Google Drive or another dedicated service.
 | `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [x] Owner-approved |
 | `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [x] Owner-approved |
 
-- [ ] Add these fields to the existing canonical Storage tab, grouped into
+- [x] Add these fields to the existing canonical Storage tab, grouped into
   **Location**, **Uploads**, **Capacity**, and **Delivery** sections.
-- [ ] Load the modal before settings data, retain canonical busy/loading
+- [x] Load the modal before settings data, retain canonical busy/loading
   behavior, and disable only controls whose data or authorization is not ready.
-- [ ] Validate all applicable fields before busy state or requests. Cross-field
+- [x] Validate all applicable fields before busy state or requests. Cross-field
   errors—such as a quota below the maximum file size—must appear beside the
   fields and in the structured multi-error summary.
-- [ ] Store byte values canonically while presenting ordinary MiB/GiB units to
+- [x] Store byte values canonically while presenting ordinary MiB/GiB units to
   administrators.
-- [ ] Lock environment-overridden settings visibly and omit them from browser
+- [x] Lock environment-overridden settings visibly and omit them from browser
   mutations.
-- [ ] Audit changes without recording file content, private paths beyond the
+- [x] Audit changes without recording file content, private paths beyond the
   setting value already authorized for administration, or other secrets.
 - [ ] Apply one backend policy service to human, agent, and future provider
   upload paths so settings cannot be bypassed.
@@ -317,7 +317,7 @@ OpenAPI contract suites pass.
 
 ### 8.2 Project Files management modal
 
-- [ ] Add a project-level **Files** action that opens the canonical modal
+- [x] Add a project-level **Files** action that opens the canonical modal
   immediately in its loading state, then loads the first file page.
 - [ ] List filename, type, size, uploader, creation/update time, and availability
   with bounded pagination, search, sort, loading skeletons, empty state, and
@@ -336,6 +336,12 @@ OpenAPI contract suites pass.
   public URL; do not introduce an internal-only preview or thumbnail URL.
 - [ ] Reconcile remote file changes through the established realtime/refresh
   model without silently discarding an in-progress local action.
+
+Foundation note (October 3, 2026): the project action now opens a large
+canonical modal, loads a participant-authorized read contract, and mounts
+Helper's complete tree and grid components in fixed-height panes. **Create
+folder** and **Upload files** are intentionally disabled until the Gate B
+metadata and mutation services exist.
 
 ### 8.3 Timeline message attachments
 

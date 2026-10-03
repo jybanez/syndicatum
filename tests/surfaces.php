@@ -376,6 +376,15 @@ try {
             && strpos($settings, '"storage.local_base_path": storagePath') !== false
             && strpos($settings, 'Storage location: enter an absolute server path') !== false,
             'The Storage tab must expose, validate, and persist the local project-file root.');
+        foreach (['storage_max_upload_mib', 'storage_max_files_per_action', 'storage_allowed_content_types',
+            'storage_inline_preview_types', 'storage_project_quota_gib', 'storage_deleted_retention_days',
+            'storage_public_cache_seconds'] as $field) {
+            $suite->true(strpos($settings, 'name: "' . $field . '"') !== false,
+                'Missing controlled Storage field: ' . $field);
+        }
+        $suite->true(strpos($settings, 'Default quota per project — choose a quota larger than the maximum file size.') !== false
+            && strpos($settings, 'Inline preview types — select only file types also enabled under Allowed file types.') !== false,
+            'Storage settings need client-side cross-field validation before submission.');
         $suite->true(strpos($settingsEndpoint, "new ProjectFileStorage") !== false
             && strpos($settingsEndpoint, "Storage location is invalid or unavailable") !== false,
             'The settings endpoint must validate and prepare the configured project-file root.');
@@ -417,7 +426,7 @@ try {
             'The deferred email notification proposal is incomplete.');
         $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
         $suite->true(strpos($guide, 'id: "configure-local-storage"') !== false
-            && strpos($guide, 'This setting prepares the storage foundation only.') !== false,
+            && strpos($guide, 'The folder icon beside the project menu opens the Project Files workspace.') !== false,
             'The user guide must explain local storage configuration and its current scope.');
     });
 
@@ -1028,7 +1037,27 @@ try {
     $suite->test('Project overview uses one upper-right action menu without status chrome', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $filesApi = file_get_contents($root . '/api/v1/project-files.php');
         $suite->true(strpos($index, 'id="project-actions-trigger"') !== false, 'The project overview action-menu trigger is missing.');
+        $filesAction = strpos($index, 'id="project-files-trigger"');
+        $projectMenu = strpos($index, 'id="project-actions-trigger"');
+        $suite->true($filesAction !== false && $filesAction < $projectMenu,
+            'The Project Files action must appear immediately before the project menu.');
+        $suite->true(strpos($source, 'title: "Project files"') !== false
+            && strpos($source, 'size: "lg"') !== false
+            && strpos($source, 'modal.open();') !== false
+            && strpos($source, 'message: "Loading project files…"') !== false
+            && strpos($source, 'state.factories.createTree(treeHost') !== false
+            && strpos($source, 'state.factories.createGrid(gridHost') !== false,
+            'Project Files must open a loading canonical modal and use Helper tree/grid components.');
+        $suite->true(strpos($filesApi, "projectAccess(\$projectId, 'profile:read')") !== false
+            && strpos($filesApi, "'create_folder' => \$operationsReady") !== false
+            && strpos($filesApi, "'upload' => \$operationsReady") !== false,
+            'The Project Files read contract must authorize the participant and keep unavailable mutations disabled.');
+        $suite->true(strpos($styles, '.project-files-layout') !== false
+            && strpos($styles, 'height: min(66vh, 660px)') !== false,
+            'The Project Files modal needs a fixed-height two-column workspace.');
         $suite->true(strpos($index, '<p class="ui-eyebrow">Project</p>') === false, 'The redundant Project eyebrow must not render.');
         $suite->true(strpos($index, 'class="ui-badge" id="status-badge"') === false, 'Realtime state must not render as a visible pill.');
         $suite->true(strpos($source, 'state.components.projectActions = state.factories.createDropdown') !== false, 'Project management actions must use the supported Helper dropdown.');
@@ -1530,7 +1559,7 @@ try {
             && strpos($source, 'await loadTasks(state.generation);') !== false
             && strpos($source, 'el.task_refresh_trigger.disabled = true;') !== false,
             'The task rail needs an accessible, duplicate-safe authoritative refresh action.');
-        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-actions-trigger', 'filter-popover-trigger',
+        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-files-trigger', 'project-actions-trigger', 'filter-popover-trigger',
             'timeline-collapse-toggle', 'refresh-button', 'new-task-trigger', 'task-sort-trigger', 'task-refresh-trigger', 'team-actions-trigger'] as $iconActionId) {
             $suite->true((bool) preg_match('/class="[^"]*ui-button-borderless[^"]*"[^>]*id="' . preg_quote($iconActionId, '/') . '"/', $index),
                 'Icon-only action #' . $iconActionId . ' must use the consistent borderless treatment.');
