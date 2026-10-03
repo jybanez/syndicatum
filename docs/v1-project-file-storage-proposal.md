@@ -55,6 +55,14 @@ After upload, Syndicatum shows the filename, type, size, uploader, and creation
 time, together with **Copy link**, **Download**, and authorized deletion or
 replacement actions. Supported images and PDFs receive an inline preview.
 
+Syndicatum uses one canonical permanent URL for both internal rendering and
+external sharing. The image `src`, PDF preview source, **Open**, **Copy link**,
+and ordinary download behavior all resolve through that same public URL. The UI
+must not substitute an authenticated preview URL, short-lived signed URL, local
+storage path, provider URL, or separate thumbnail URL. Consequently, a user who
+right-clicks a rendered image and copies its image address receives the same
+durable link that Syndicatum intentionally exposes for sharing.
+
 Every file surface displays the notice:
 
 > Anyone with this link can access the file.

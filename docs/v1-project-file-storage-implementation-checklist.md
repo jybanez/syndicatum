@@ -129,6 +129,10 @@ as toggles:
 
 - [ ] Anyone possessing a permanent public link can read its file without
   signing in; every attachment surface states this plainly.
+- [ ] One canonical permanent URL is used for both internal rendering and
+  external sharing. Image/PDF sources, **Open**, **Copy link**, browser save,
+  and agent responses must not substitute an authenticated preview, signed,
+  local-path, provider, or thumbnail URL.
 - [ ] Public IDs are cryptographically unguessable and never expose sequential
   database IDs, local paths, or provider URLs.
 - [ ] No uploaded content executes under the Syndicatum application origin.
@@ -243,6 +247,10 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
 
 - [ ] Add `GET` and `HEAD` handling for
   `/files/{public_id}/{cosmetic_filename}` without authentication.
+- [ ] Use that exact canonical route for rendered image sources and supported
+  document previews as well as externally shared links. Right-clicking a
+  rendered image and copying its address must produce the intended permanent
+  public URL.
 - [ ] Resolve only the opaque public ID; the filename segment must not select a
   physical file or change authorization.
 - [ ] Return a clear unavailable response for deleted or invalidated links
@@ -305,6 +313,8 @@ OpenAPI contract suites pass.
   is cancelled or fails.
 - [ ] Render compact attachment metadata, safe inline image/PDF preview, copy-
   link, and download actions in timeline cards and message detail.
+- [ ] Set rendered media sources and copy/open actions to the same canonical
+  public URL; do not introduce an internal-only preview or thumbnail URL.
 - [ ] Preserve reply, revision, deletion, pagination, virtualization, and
   realtime reconciliation behavior.
 
@@ -333,7 +343,7 @@ OpenAPI contract suites pass.
 - [ ] Update installed Syndicatum skills with the public-link security model,
   supported targets, idempotency guidance, and no-path/no-credential rules.
 - [ ] Ensure agents can return the permanent Syndicatum URL and canonical file
-  metadata after confirmed upload.
+  metadata after confirmed upload; it must be the same URL the human UI renders.
 - [ ] Verify at least one human upload and one agent upload end to end.
 
 **Exit evidence:** browser and agent acceptance passes for every required
@@ -419,6 +429,9 @@ after cutover.
 - [ ] An authorized agent uploads a file and receives the same canonical
   metadata and URL model.
 - [ ] The URL opens without authentication in a clean browser session.
+- [ ] Right-clicking an internally rendered image and choosing **Copy image
+  address** yields that same URL, which opens outside Syndicatum without
+  authentication.
 - [ ] The URL survives logout, restart, deployment, and complete backup/restore.
 - [ ] Supported images and PDFs render inline; active/unknown formats cannot
   execute under the application origin.
