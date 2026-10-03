@@ -976,6 +976,11 @@ try {
             && strpos($app, 'layout: "wrap"') !== false
             && strpos($app, 'attachmentMediaStrip?.destroy()') !== false,
             'Timeline messages must render image and video attachments first through Helper media strip and clean up its viewer lifecycle.');
+        $suite->true(strpos($app, 'function renderMessageAttachmentIndicator(host, message)') !== false
+            && strpos($app, 'state.factories.createIcon("actions.attach"') !== false
+            && strpos($app, 'timestamp.parentElement.insertBefore(indicator, timestamp)') !== false
+            && strpos($appCss, '.message-attachment-indicator { display: inline-flex;') !== false,
+            'Messages with attachments must show an accessible Helper paperclip immediately before the timeline timestamp.');
         $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
             && strpos($appCss, '.message-attachment-files { display: flex;') !== false
             && strpos($appCss, 'flex: 0 1 210px;') !== false

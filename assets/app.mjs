@@ -2507,6 +2507,24 @@ function renderMessageHeaderSeverity(host, message, severityLabel) {
   title.appendChild(severity);
 }
 
+function renderMessageAttachmentIndicator(host, message) {
+  const row = host.closest(".ui-timeline-item");
+  row?.querySelector(".message-attachment-indicator")?.remove();
+  const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+  const timestamp = row?.querySelector(".ui-timeline-time");
+  if (!count || !timestamp?.parentElement) return;
+  const label = `${count} attached ${count === 1 ? "file" : "files"}`;
+  const indicator = document.createElement("span");
+  indicator.className = "message-attachment-indicator";
+  indicator.title = label;
+  indicator.appendChild(state.factories.createIcon("actions.attach", {
+    size: 13,
+    decorative: false,
+    ariaLabel: label,
+  }));
+  timestamp.parentElement.insertBefore(indicator, timestamp);
+}
+
 function canAcknowledgeMessage(message) {
   return state.mode === "expanded"
     && message.current_participant_state?.is_addressee
@@ -2544,6 +2562,7 @@ function mountMessageCard(host, item) {
     }
     const severityLabel = messageSeverityLabel(current.severity);
     renderMessageHeaderSeverity(host, current, severityLabel);
+    renderMessageAttachmentIndicator(host, current);
     if (severityLabel && current.message_kind !== "system") {
       const severity = document.createElement("span");
       severity.className = `message-severity is-${current.severity}`;

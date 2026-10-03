@@ -270,6 +270,7 @@ button, input, textarea { font: inherit; }
 .message-composer-modal #composer-host .ui-chat-composer-controls { grid-template-columns: minmax(0, 1fr); }
 .message-composer-modal #composer-host .ui-chat-composer-send { display: none; }
 .message-composer-modal .ui-action-modal-button-icon svg.ui-icon { fill: none; stroke: currentColor; }
+.message-attachment-indicator { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; color: var(--ui-muted, #9fb2d8); line-height: 0; }
 .message-attachments { display: grid; min-width: 0; gap: 5px; margin-top: 7px; }
 .message-attachment-media { min-width: 0; }
 .message-attachment-media .ui-media-strip { max-width: 100%; }
