@@ -429,6 +429,7 @@ button, input, textarea { font: inherit; }
 .project-plan-row-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
 .project-plan-icon-action { width: 34px; min-width: 34px; height: 34px; padding: 0; }
 .project-plan-icon-action .ui-icon { width: 17px; height: 17px; }
+.project-plan-icon-action.is-danger { color: var(--ui-danger, #ff7b87); }
 .project-plan-standalone-copy { display: grid; grid-column: 1 / 5; gap: 2px; }
 .project-plan-standalone-copy span { color: var(--app-muted); font-size: 12px; }
 .project-plan-status-stats { min-width: 0; }

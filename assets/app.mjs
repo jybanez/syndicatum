@@ -4543,6 +4543,60 @@ function openProjectPlanModal() {
     control.innerHTML = helperIconHtml(icon, 17);
     return control;
   };
+  const deletePlanItem = async (kind, item) => {
+    if (persistencePending || disposed) return;
+    if (hasActiveDraft()) {
+      await state.factories.uiAlert("Save or cancel the active field edit before deleting a plan item.", {
+        title: "Finish editing first", variant: "warning",
+      });
+      return;
+    }
+    const isMilestone = kind === "milestone";
+    const childCount = isMilestone
+      ? (currentPlan.deliverables || []).filter((candidate) => Number(candidate.milestone_id) === Number(item.id)).length
+      : Number(item.task_count || 0);
+    if (childCount > 0) {
+      await state.factories.uiAlert(
+        isMilestone
+          ? "Move or delete every deliverable in this milestone before deleting the milestone."
+          : "Unlink every task from this deliverable before deleting the deliverable.",
+        { title: `${isMilestone ? "Milestone" : "Deliverable"} cannot be deleted`, variant: "warning" },
+      );
+      return;
+    }
+    const confirmed = await state.factories.uiConfirm(
+      `Delete ${isMilestone ? "milestone" : "deliverable"} “${item.title}”? This cannot be undone.`,
+      { title: `Delete ${isMilestone ? "milestone" : "deliverable"}?`, variant: "danger",
+        confirmText: `Delete ${isMilestone ? "milestone" : "deliverable"}`, confirmVariant: "danger" },
+    );
+    if (!confirmed || disposed) return;
+    const latest = isMilestone ? milestoneById(item.id) : deliverableById(item.id);
+    if (!latest) {
+      setFeedback(`This ${kind} is no longer available. Reconcile the project plan and try again.`, "error");
+      return;
+    }
+    persistencePending = true; board?.setInteractionLocked(true); setFeedback(`Deleting ${kind}…`);
+    const endpoint = isMilestone ? API.projectMilestone : API.projectDeliverable;
+    try {
+      const plan = unwrap(await request(`${endpoint}?${new URLSearchParams({ project_id: projectId, id: latest.id })}`, {
+        method: "DELETE", headers: csrfHeaders(), body: JSON.stringify({ version: latest.version }),
+      })) || {};
+      if (disposed || selectedProjectId() !== projectId) return;
+      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+      board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+      setFeedback(`${isMilestone ? "Milestone" : "Deliverable"} deleted.`, "success");
+    } catch (error) {
+      if (disposed) return;
+      if (error.status && error.status < 500) {
+        persistencePending = false; board?.setInteractionLocked(false);
+        setFeedback(`The ${kind} was not deleted. ${error.message}`, "error");
+        return;
+      }
+      const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile deletion"); reconcileButton.type = "button";
+      reconcileButton.addEventListener("click", () => { void reconcile(); });
+      setFeedback("The deletion outcome is unknown. Reconcile with the server before changing the plan.", "error", reconcileButton);
+    }
+  };
   const renderGroupHeader = (host, group) => {
     const cleanups = [];
     const layout = projectInfoElement("div", `project-plan-group-header${group.milestone ? ` is-${group.milestone.status}` : ""}`);
@@ -4591,9 +4645,11 @@ function openProjectPlanModal() {
     if (currentPlan.can_manage) {
       const add = projectPlanIconAction("Add deliverable", "actions.add");
       const details = projectPlanIconAction("Edit milestone details", "actions.edit");
+      const remove = projectPlanIconAction("Delete milestone", "actions.delete"); remove.classList.add("is-danger");
       add.addEventListener("click", () => openDeliverableForm(null, milestoneId, load));
       details.addEventListener("click", () => openMilestoneForm(milestoneById(milestoneId), load));
-      actions.append(add, details);
+      remove.addEventListener("click", () => { void deletePlanItem("milestone", milestoneById(milestoneId)); });
+      actions.append(add, details, remove);
     }
     layout.append(meta, actions);
     return () => cleanups.forEach((component) => component.destroy());
@@ -4653,7 +4709,10 @@ function openProjectPlanModal() {
     }
     if (currentPlan.can_manage) {
       const details = projectPlanIconAction("Edit deliverable details", "actions.edit");
-      details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load)); actions.append(details);
+      const remove = projectPlanIconAction("Delete deliverable", "actions.delete"); remove.classList.add("is-danger");
+      details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load));
+      remove.addEventListener("click", () => { void deletePlanItem("deliverable", deliverableById(item.id)); });
+      actions.append(details, remove);
     }
     row.append(meta, actions);
     return () => cleanups.forEach((component) => component.destroy());

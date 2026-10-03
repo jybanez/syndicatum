@@ -151,6 +151,48 @@ class ProjectPlanService
         return $this->deliverable($projectId, (int) $id);
     }
 
+    public function deleteMilestone(array $access, $id, array $input)
+    {
+        $this->requireManager($access);
+        $projectId = (int) $access['project_id'];
+        $this->pdo->beginTransaction();
+        try {
+            $this->lockMilestone($projectId, (int) $id);
+            $current = $this->milestone($projectId, (int) $id);
+            $this->requireVersion($input, $current['version'], 'MILESTONE_VERSION_CONFLICT');
+            $children = $this->pdo->prepare('SELECT COUNT(*) FROM project_deliverables WHERE project_id = ? AND milestone_id = ?');
+            $children->execute([$projectId, (int) $id]);
+            if ((int) $children->fetchColumn() > 0) { throw new RuntimeException('MILESTONE_DELETE_HAS_DELIVERABLES'); }
+            $delete = $this->pdo->prepare('DELETE FROM project_milestones WHERE project_id = ? AND id = ? AND version = ?');
+            $delete->execute([$projectId, (int) $id, (int) $current['version']]);
+            if ($delete->rowCount() !== 1) { throw new RuntimeException('MILESTONE_VERSION_CONFLICT'); }
+            $this->recordDeletionAudit($access, 'milestone', $current);
+            $this->outbox->enqueueProjectPlanChanged($projectId, 'milestone', (int) $id, (int) $current['version'], 'deleted');
+            $this->pdo->commit();
+        } catch (Exception $error) { if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); } throw $error; }
+        return $this->plan($access);
+    }
+
+    public function deleteDeliverable(array $access, $id, array $input)
+    {
+        $this->requireManager($access);
+        $projectId = (int) $access['project_id'];
+        $this->pdo->beginTransaction();
+        try {
+            $this->lockDeliverable($projectId, (int) $id);
+            $current = $this->deliverable($projectId, (int) $id);
+            $this->requireVersion($input, $current['version'], 'DELIVERABLE_VERSION_CONFLICT');
+            if ((int) $current['task_count'] > 0) { throw new RuntimeException('DELIVERABLE_DELETE_HAS_TASKS'); }
+            $delete = $this->pdo->prepare('DELETE FROM project_deliverables WHERE project_id = ? AND id = ? AND version = ?');
+            $delete->execute([$projectId, (int) $id, (int) $current['version']]);
+            if ($delete->rowCount() !== 1) { throw new RuntimeException('DELIVERABLE_VERSION_CONFLICT'); }
+            $this->recordDeletionAudit($access, 'deliverable', $current);
+            $this->outbox->enqueueProjectPlanChanged($projectId, 'deliverable', (int) $id, (int) $current['version'], 'deleted');
+            $this->pdo->commit();
+        } catch (Exception $error) { if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); } throw $error; }
+        return $this->plan($access);
+    }
+
     /** Status-only stewardship surface. It intentionally cannot change plan structure, names, owners, or ordering. */
     public function updateMilestoneProgress(array $access, $id, array $input)
     {
@@ -359,6 +401,13 @@ class ProjectPlanService
         if (!$statement->fetchColumn()) { throw new RuntimeException('DELIVERABLE_NOT_FOUND'); }
     }
 
+    private function lockMilestone($projectId, $id)
+    {
+        $statement = $this->pdo->prepare('SELECT id FROM project_milestones WHERE project_id = ? AND id = ? FOR UPDATE');
+        $statement->execute([(int) $projectId, (int) $id]);
+        if (!$statement->fetchColumn()) { throw new RuntimeException('MILESTONE_NOT_FOUND'); }
+    }
+
     private function normalizeMilestone(array $row)
     {
         foreach (['id', 'project_id', 'position', 'created_by_participant_id', 'version', 'deliverable_count', 'ready_deliverable_count', 'blocked_deliverable_count'] as $field) {
@@ -421,6 +470,14 @@ class ProjectPlanService
             (string) $updated['id'], ['project_id' => (int) $access['project_id'],
                 'participant_id' => (int) $access['participant_id'], 'actor_kind' => $access['identity']['kind'],
                 'from_status' => $fromStatus, 'to_status' => $updated['status'], 'note' => $note]);
+    }
+    private function recordDeletionAudit(array $access, $kind, array $deleted)
+    {
+        $actorUserId = ($access['identity']['kind'] ?? '') === 'human' ? (int) $access['identity']['user']['id'] : null;
+        (new AuthService($this->pdo))->audit($actorUserId, 'project.plan_item_deleted', 'project_' . $kind,
+            (string) $deleted['id'], ['project_id' => (int) $access['project_id'],
+                'participant_id' => (int) $access['participant_id'], 'actor_kind' => $access['identity']['kind'],
+                'title' => $deleted['title'], 'status' => $deleted['status'], 'version' => (int) $deleted['version']]);
     }
     private function isManager(array $access) { return $access['identity']['kind'] === 'human' && in_array($access['role'], ['owner', 'admin'], true); }
     private function requireVersion(array $input, $current, $error) { if (!isset($input['version']) || (int) $input['version'] !== (int) $current) { throw new RuntimeException($error); } }

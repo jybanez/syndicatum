@@ -82,6 +82,8 @@ function projectApiError(Exception $exception)
         'DELIVERABLE_NOT_FOUND' => [404, 'Deliverable not found.'],
         'MILESTONE_VERSION_CONFLICT' => [409, 'This milestone changed. Reload it before trying again.'],
         'DELIVERABLE_VERSION_CONFLICT' => [409, 'This deliverable changed. Reload it before trying again.'],
+        'MILESTONE_DELETE_HAS_DELIVERABLES' => [409, 'Move or delete every deliverable in this milestone before deleting it.'],
+        'DELIVERABLE_DELETE_HAS_TASKS' => [409, 'Unlink every task from this deliverable before deleting it.'],
         'PROJECT_PLAN_REORDER_CONFLICT' => [409, 'The project plan changed. Reload it before trying the move again.'],
         'RATE_LIMITED' => [429, 'Too many requests. Try again later.'],
     ];

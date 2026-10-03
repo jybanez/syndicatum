@@ -288,9 +288,9 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-task-deliverable.php` | PATCH | Permissioned, version-checked task-to-deliverable link update with evidence |
 | `/api/v1/project-plan.php` | GET | Read milestones, deliverables, and computed task-backed progress |
 | `/api/v1/project-milestones.php` | POST | Owner/admin milestone creation |
-| `/api/v1/project-milestone.php` | PATCH | Owner/admin version-checked milestone update |
+| `/api/v1/project-milestone.php` | PATCH, DELETE | Owner/admin version-checked milestone update or empty-milestone deletion |
 | `/api/v1/project-deliverables.php` | POST | Owner/admin standalone or milestone-bound deliverable creation |
-| `/api/v1/project-deliverable.php` | PATCH | Owner/admin version-checked deliverable update |
+| `/api/v1/project-deliverable.php` | PATCH, DELETE | Owner/admin version-checked deliverable update or unlinked-deliverable deletion |
 | `/api/v1/project-milestone-progress.php` | PATCH | Permissioned, version-checked milestone-status update with evidence |
 | `/api/v1/project-deliverable-progress.php` | PATCH | Permissioned, version-checked deliverable-status update with evidence |
 | `/api/v1/project-plan-order.php` | PATCH | Owner/admin atomic milestone reorder or deliverable membership-and-order move |

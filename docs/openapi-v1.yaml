@@ -270,6 +270,26 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Milestone version conflict }
         '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      summary: Delete an empty milestone with an exact version
+      description: Requires an owner or administrator. A milestone containing any deliverable must be emptied first. Successful deletion is audited and broadcast.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties: { version: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated project plan after deletion }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Version conflict or milestone still contains deliverables }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-deliverables.php:
     post:
       summary: Create a standalone or milestone-bound deliverable
@@ -290,6 +310,26 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Deliverable version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      summary: Delete an unlinked deliverable with an exact version
+      description: Requires an owner or administrator. A deliverable linked from any task must be unlinked first. Successful deletion is audited and broadcast.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties: { version: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated project plan after deletion }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Version conflict or deliverable still has linked tasks }
         '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-milestone-progress.php:
     patch:

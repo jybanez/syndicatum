@@ -19,9 +19,9 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project-change-proposals.php?project_id={project}` | POST | `/api/v1/projects/{project}/change-proposals` |
 | `/api/v1/project-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/plan` |
 | `/api/v1/project-milestones.php?project_id={project}` | POST | `/api/v1/projects/{project}/milestones` |
-| `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
+| `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH, DELETE | `/api/v1/projects/{project}/milestones/{milestone}` |
 | `/api/v1/project-deliverables.php?project_id={project}` | POST | `/api/v1/projects/{project}/deliverables` |
-| `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}` |
+| `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH, DELETE | `/api/v1/projects/{project}/deliverables/{deliverable}` |
 | `/api/v1/project-milestone-progress.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}/progress` |
 | `/api/v1/project-deliverable-progress.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}/progress` |
 | `/api/v1/project-plan-order.php?project_id={project}` | PATCH | `/api/v1/projects/{project}/plan/order` |

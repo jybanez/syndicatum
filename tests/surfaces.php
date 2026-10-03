@@ -1168,6 +1168,8 @@ try {
     $suite->test('project planning distinguishes milestones, deliverables, and linked tasks', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $service = file_get_contents($root . '/src/ProjectPlanService.php');
+        $milestoneApi = file_get_contents($root . '/api/v1/project-milestone.php');
+        $deliverableApi = file_get_contents($root . '/api/v1/project-deliverable.php');
         $orderApi = file_get_contents($root . '/api/v1/project-plan-order.php');
         $suite->true(strpos($source, 'label: "Project plan"') !== false
             && strpos($source, 'title: "Project plan"') !== false
@@ -1207,6 +1209,13 @@ try {
         $suite->true(strpos($source, 'projectPlanIconAction("Add deliverable", "actions.add")') !== false
             && strpos($source, 'projectPlanIconAction("Edit milestone details", "actions.edit")') !== false
             && strpos($source, 'projectPlanIconAction("Edit deliverable details", "actions.edit")') !== false
+            && strpos($source, 'projectPlanIconAction("Delete milestone", "actions.delete")') !== false
+            && strpos($source, 'projectPlanIconAction("Delete deliverable", "actions.delete")') !== false
+            && strpos($source, 'The deletion outcome is unknown. Reconcile with the server before changing the plan.') !== false
+            && strpos($milestoneApi, "projectApiRequireMethod(['PATCH', 'DELETE'])") !== false
+            && strpos($deliverableApi, "projectApiRequireMethod(['PATCH', 'DELETE'])") !== false
+            && strpos($service, 'MILESTONE_DELETE_HAS_DELIVERABLES') !== false
+            && strpos($service, 'DELIVERABLE_DELETE_HAS_TASKS') !== false
             && strpos($source, 'ui-button-borderless project-plan-icon-action') !== false
             && strpos($styles, '.project-plan-icon-action') !== false,
             'Row-level project-plan actions must use compact accessible borderless icon controls.');
