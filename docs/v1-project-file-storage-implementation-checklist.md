@@ -37,7 +37,7 @@ directory browsing, or desktop folder synchronization.
 ## 3. Delivery gates and dependencies
 
 ```text
-Gate A: owner decisions
+Gate A: global settings and fixed rules
   -> Gate B: storage and data contracts
     -> Gate C: upload and public delivery
       -> Gate D: product surfaces and agent access
@@ -76,34 +76,89 @@ reported complete until its dependency gates have passed.
 **Exit evidence:** PR #84, repository tests, canonical-release checks, and the
 owner-confirmed saved setting.
 
-## 5. Gate A — Product and policy decisions
+## 5. Gate A — Global storage settings and fixed rules
 
-The following recommended V1 decisions require explicit owner approval before
-schema or API implementation begins.
+Most installation-level choices belong in the **Storage** tab so an
+administrator can change them without a deployment. Defaults must make a new
+installation usable without requiring technical tuning. Server-side security
+ceilings still apply even when an administrator chooses a more permissive
+value.
 
-| Decision | Recommended V1 rule | Approval |
-| --- | --- | --- |
-| Public access | Anyone possessing the permanent link can read the file without signing in. Every attachment surface displays this plainly. | [ ] |
-| Upload limit | Default maximum of 25 MiB per file, configurable by a controlled setting with a conservative server hard ceiling. | [ ] |
-| Upload count | Maximum 10 files in one user action; each file is an independent canonical record. | [ ] |
-| File types | Accept ordinary file types for download after content inspection. Inline only verified PNG, JPEG, GIF, WebP, PDF, and plain text. Never execute HTML or SVG under the Syndicatum origin. | [ ] |
-| Initial surfaces | Deliver reusable attachments in order: timeline messages; tasks and task activity; deliverables; project description/instructions. All are required before V1 is complete. | [ ] |
-| Deletion | Remove public availability explicitly, retain an auditable metadata tombstone, and return a clear unavailable response from the former URL. | [ ] |
-| Replacement | Preserve a URL only when an authorized user explicitly chooses **Replace published file**; ordinary uploads always receive a new public ID. | [ ] |
-| Link regeneration | Treat regeneration as an explicit destructive sharing action: issue a new public ID and invalidate the old link after confirmation. | [ ] |
-| Quotas | Enforce the per-file limit in V1. Defer configurable project and installation quotas/reporting to Phase 2 unless the owner promotes them. | [ ] |
-| Malware scanning | Keep an extension point, but defer a scanner integration. Never label an unscanned file as safe. | [ ] |
-| CDN dependency | Do not require a CDN for V1. Use origin delivery and standards-based cache headers so a CDN can be added later without changing URLs. | [ ] |
-| Retention | No automatic expiry. Deleted content follows the approved deletion/tombstone rule; orphan cleanup is report-first and never silently destructive. | [ ] |
+Do not expose an inert setting. A field appears only when its behavior is fully
+implemented, validated, enforced by every applicable upload path, audited where
+appropriate, and documented.
 
-- [ ] Record the approved values and any revisions in the storage proposal.
-- [ ] Confirm whether upload and deletion permissions follow existing project
-  message/task edit authority or require a narrower capability.
+### 5.1 Recommended global settings
+
+| Controlled setting | User-facing field | Recommended default | Required guardrail | Approval |
+| --- | --- | --- | --- | --- |
+| `storage.local_base_path` | Storage location | No portable default; administrator must supply an absolute server path | Private, writable, and outside the public application root | [x] Implemented |
+| `storage.max_upload_bytes` | Maximum file size | 25 MiB | Integer range with a server hard ceiling; enforced while streaming before storage is committed | [ ] |
+| `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [ ] |
+| `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [ ] |
+| `storage.inline_preview_types` | Inline preview types | PNG, JPEG, GIF, WebP, PDF, and plain text | Administrators may select a subset only; the hard safe-preview allowlist cannot be expanded from Settings | [ ] |
+| `storage.installation_quota_bytes` | Installation storage quota | Unlimited (`0`) | Nonzero values must exceed the per-file maximum and are enforced before committing an upload | [ ] |
+| `storage.default_project_quota_bytes` | Default project storage quota | Unlimited (`0`) | Nonzero values must exceed the per-file maximum; project usage is calculated from canonical live file records | [ ] |
+| `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [ ] |
+| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [ ] |
+
+- [ ] Add these fields to the existing canonical Storage tab, grouped into
+  **Location**, **Uploads**, **Capacity**, and **Delivery** sections.
+- [ ] Load the modal before settings data, retain canonical busy/loading
+  behavior, and disable only controls whose data or authorization is not ready.
+- [ ] Validate all applicable fields before busy state or requests. Cross-field
+  errors—such as a quota below the maximum file size—must appear beside the
+  fields and in the structured multi-error summary.
+- [ ] Store byte values canonically while presenting ordinary MiB/GiB units to
+  administrators.
+- [ ] Lock environment-overridden settings visibly and omit them from browser
+  mutations.
+- [ ] Audit changes without recording file content, private paths beyond the
+  setting value already authorized for administration, or other secrets.
+- [ ] Apply one backend policy service to human, agent, and future provider
+  upload paths so settings cannot be bypassed.
+
+Settings for malware scanners, CDN credentials, S3 providers, reconciliation
+schedules, and project-specific quota overrides are not shown until their later
+capabilities exist.
+
+### 5.2 Fixed product and security rules
+
+These are contracts, not administrator preferences, and must not be presented
+as toggles:
+
+- [ ] Anyone possessing a permanent public link can read its file without
+  signing in; every attachment surface states this plainly.
+- [ ] Public IDs are cryptographically unguessable and never expose sequential
+  database IDs, local paths, or provider URLs.
+- [ ] No uploaded content executes under the Syndicatum application origin.
+  HTML, SVG, and other active formats are either excluded by the administrator's
+  allowed-type selection or forced to download under a safe content type.
+- [ ] Every accepted type is server-inspected. Browser filenames, extensions,
+  and MIME claims are never trusted as the safety decision.
+- [ ] Ordinary uploads receive a new public ID. A URL is preserved only through
+  an explicit **Replace published file** action.
+- [ ] Deletion invalidates public access immediately, returns a clear unavailable
+  response, and retains the approved metadata tombstone/audit evidence.
+- [ ] Link regeneration is an explicit confirmed action that creates a new
+  public ID and invalidates the former link.
+- [ ] Active participants may upload only where they already have authority to
+  create or update the target record. The uploader and project owner/admin may
+  manage the canonical file subject to reference and lifecycle safeguards.
+- [ ] V1 uses local storage and origin delivery. It has no CDN dependency and
+  makes no claim that an unscanned file is malware-free.
+- [ ] Deliver reusable attachments in order: timeline messages; tasks and task
+  activity; deliverables; project description/instructions. All remain required
+  before V1 is complete.
+
+- [ ] Record the approved settings, defaults, ranges, and fixed rules in the
+  storage proposal.
 - [ ] Confirm whether public-link regeneration is included in V1 or moved to
-  Phase 2 with replacement/deletion hardening.
+  Phase 2 while preserving the fixed rule for its eventual behavior.
 
-**Exit evidence:** owner-approved decisions recorded in the proposal and an
-authoritative Syndicatum project-plan/task record for implementation.
+**Exit evidence:** owner-approved global setting catalog and fixed rules are
+recorded in the proposal, followed by an authoritative Syndicatum project-plan
+proposal for implementation.
 
 ## 6. Gate B — Storage, schema, and service contracts
 
@@ -380,7 +435,8 @@ after cutover.
 
 ## 11. Phase 2 — Operational hardening after local-storage V1
 
-- [ ] Add project and installation quotas plus administrator storage reporting.
+- [ ] Add administrator storage reporting and optional per-project quota
+  overrides; retain the V1 installation quota and default-project quota.
 - [ ] Add report-first orphan reconciliation and explicit cleanup approval.
 - [ ] Add scheduled checksum/integrity verification and safe repair guidance.
 - [ ] Add optimized Nginx `X-Accel-Redirect` delivery on supported Linux
@@ -411,16 +467,15 @@ after cutover.
 
 ## 13. Review questions for the project owner
 
-1. Do you approve all recommended decisions in Gate A, including the 25 MiB
-   default and 10-file action limit?
-2. Should project and installation quotas remain Phase 2, or must either ship in
-   V1?
-3. Should public-link regeneration ship in V1, or is explicit deletion plus
-   replacement sufficient initially?
-4. Do you approve the surface order while still requiring all four surface
-   groups before V1 completion?
-5. Should HTML and SVG be accepted only as forced downloads, or rejected at
-   upload entirely?
+1. Do you approve the proposed global setting catalog, validation rules, and
+   defaults—particularly 25 MiB per file and 10 files per action?
+2. Do you approve unlimited-by-default installation and project quotas, with
+   immediate enforcement whenever an administrator sets a nonzero value?
+3. Should HTML and SVG be included among supported downloads but always forced
+   to download, or omitted from the default allowed-type selection entirely?
+4. Should public-link regeneration ship in V1, or should it remain Phase 2 while
+   deletion and explicit replacement ship first?
+5. Do you approve the fixed authority and surface-delivery rules in section 5.2?
 6. After approval, should this checklist be translated into formal Syndicatum
    milestones and deliverables for owner approval before engineering tasks are
    created?
