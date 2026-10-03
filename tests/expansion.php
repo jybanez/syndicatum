@@ -5,6 +5,7 @@ require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/AdminService.php';
 require_once dirname(__DIR__) . '/src/SettingsService.php';
+require_once dirname(__DIR__) . '/src/ProjectFileStorage.php';
 require_once dirname(__DIR__) . '/src/ExpansionMigrator.php';
 require_once dirname(__DIR__) . '/src/RateLimiter.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
@@ -119,6 +120,28 @@ try {
         $suite->throws('general.default_timezone must be a valid IANA timezone identifier', function () use ($settings, $administrator) {
             $settings->update(['general.default_timezone' => 'UTC+08:00'], $administrator['id']);
         });
+        $suite->throws('storage.local_base_path must be an absolute server filesystem path', function () use ($settings, $administrator) {
+            $settings->update(['storage.local_base_path' => 'relative/project-files'], $administrator['id']);
+        });
+    });
+
+    $suite->test('project file storage prepares a private root outside the application', function () use ($suite) {
+        $parent = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-file-storage-' . bin2hex(random_bytes(6));
+        $candidate = $parent . DIRECTORY_SEPARATOR . 'content';
+        try {
+            $storage = new ProjectFileStorage(dirname(__DIR__), $candidate);
+            $suite->same(realpath($candidate), $storage->base());
+            $suite->truthy(is_dir($candidate) && is_writable($candidate));
+            $suite->throws('absolute server filesystem path', function () {
+                new ProjectFileStorage(dirname(__DIR__), 'relative/project-files');
+            });
+            $suite->throws('public application root', function () {
+                new ProjectFileStorage(dirname(__DIR__), dirname(__DIR__));
+            });
+        } finally {
+            if (is_dir($candidate)) { rmdir($candidate); }
+            if (is_dir($parent)) { rmdir($parent); }
+        }
     });
 
     $now = Db::now();

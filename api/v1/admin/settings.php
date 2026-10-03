@@ -5,6 +5,7 @@ require_once dirname(dirname(dirname(__DIR__))) . '/src/Db.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/AuthService.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/SettingsService.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/CurrentBackupStorage.php';
+require_once dirname(dirname(dirname(__DIR__))) . '/src/ProjectFileStorage.php';
 
 try {
     $pdo = Db::pdo();
@@ -60,6 +61,14 @@ try {
         $changes = isset($body['settings']) && is_array($body['settings']) ? $body['settings'] : [];
         if (empty($changes)) {
             throw new InvalidArgumentException('At least one setting change is required.');
+        }
+        if (array_key_exists('storage.local_base_path', $changes)) {
+            try {
+                $storage = new ProjectFileStorage(dirname(dirname(dirname(__DIR__))), $changes['storage.local_base_path']);
+                $changes['storage.local_base_path'] = $storage->base();
+            } catch (Throwable $error) {
+                throw new InvalidArgumentException('Storage location is invalid or unavailable: ' . $error->getMessage());
+            }
         }
         if (array_key_exists('recovery.backup_base_path', $changes)) {
             try {
