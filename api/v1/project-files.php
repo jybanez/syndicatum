@@ -20,6 +20,7 @@ try {
             'project_id' => $projectId,
             'root' => ['id' => 'root', 'label' => (string) $access['project_name'], 'selected' => true, 'hasChildren' => false, 'children' => []],
             'current_folder' => ['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0],
+            'breadcrumbs' => [['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0]],
             'folders' => [], 'files' => [],
             'capabilities' => ['create_folder' => false, 'upload' => false, 'rename' => false, 'move' => false, 'copy_link' => false, 'download' => false, 'delete' => false],
             'storage' => ['configured' => false, 'ready' => false, 'metadata_ready' => Db::tableExists($pdo, 'project_files')],

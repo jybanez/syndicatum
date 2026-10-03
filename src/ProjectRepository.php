@@ -12,6 +12,8 @@ require_once __DIR__ . '/MessageSeverity.php';
 
 class ProjectRepository
 {
+    const MAX_MESSAGE_ATTACHMENTS = 20;
+
     private $pdo;
     private $settings;
     private $outbox;
@@ -492,10 +494,15 @@ class ProjectRepository
             throw new InvalidArgumentException(
                 'action_request_type is valid only when action_requested is true.');
         }
+        $attachmentPublicIds = $isResponsibilityEvent
+            ? [] : $this->normalizeMessageAttachmentIds($input);
+        $input['attachment_file_ids'] = $attachmentPublicIds;
         $requestFingerprint = $idempotencyKey === '' ? null
             : $this->messageRequestFingerprint($senderId, $body, $input);
+        $preAttachmentRequestFingerprint = $idempotencyKey === '' ? null
+            : $this->messageRequestFingerprint($senderId, $body, $input, true, false);
         $legacyRequestFingerprint = $idempotencyKey === '' ? null
-            : $this->messageRequestFingerprint($senderId, $body, $input, false);
+            : $this->messageRequestFingerprint($senderId, $body, $input, false, false);
 
         if ($idempotencyKey !== '') {
             $existing = $this->pdo->prepare(
@@ -505,7 +512,7 @@ class ProjectRepository
             $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
             if ($existingRow !== false) {
                 $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
-                    $legacyRequestFingerprint);
+                    [$preAttachmentRequestFingerprint, $legacyRequestFingerprint]);
                 return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
             }
         }
@@ -550,6 +557,8 @@ class ProjectRepository
 
         $this->pdo->beginTransaction();
         try {
+            $attachmentFiles = $this->resolveMessageAttachmentFiles(
+                $projectId, $attachmentPublicIds);
             $sequence = $this->nextSequence($projectId);
             $uuid = $this->uuidV4();
             $now = Db::now();
@@ -615,6 +624,18 @@ class ProjectRepository
                     $participantId, $projectId]);
             }
 
+            if ($attachmentFiles) {
+                $attach = $this->pdo->prepare(
+                    'INSERT INTO message_file_attachments
+                     (project_id, message_id, project_file_id, attached_by_participant_id, position, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                foreach ($attachmentFiles as $position => $file) {
+                    $attach->execute([$projectId, $messageId, (int) $file['id'],
+                        $senderId, $position, $now]);
+                }
+            }
+
             $message = $this->messagesByIds($projectId, [$messageId]);
             $message = $message[0];
             if ($this->settings->get('realtime.enabled') === true) {
@@ -637,7 +658,7 @@ class ProjectRepository
                 $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
                 if ($existingRow !== false) {
                     $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
-                        $legacyRequestFingerprint);
+                        [$preAttachmentRequestFingerprint, $legacyRequestFingerprint]);
                     return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
                 }
             }
@@ -651,20 +672,27 @@ class ProjectRepository
     }
 
     private function assertMatchingMessageRequest(array $existing, $requestFingerprint,
-        $legacyRequestFingerprint = null)
+        array $legacyRequestFingerprints = [])
     {
         // Pre-migration messages have no original request fingerprint. Preserve
         // their historical replay behavior rather than comparing edited content.
         if ($existing['request_fingerprint'] !== null
             && !hash_equals($existing['request_fingerprint'], $requestFingerprint)
-            && ($legacyRequestFingerprint === null
-                || !hash_equals($existing['request_fingerprint'], $legacyRequestFingerprint))) {
+            && !$this->matchesAnyFingerprint($existing['request_fingerprint'], $legacyRequestFingerprints)) {
             throw new RuntimeException('IDEMPOTENCY_KEY_CONFLICT');
         }
     }
 
+    private function matchesAnyFingerprint($existing, array $candidates)
+    {
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && hash_equals($existing, $candidate)) { return true; }
+        }
+        return false;
+    }
+
     private function messageRequestFingerprint($senderId, $body, array $input,
-        $includeActionRequested = true)
+        $includeActionRequested = true, $includeAttachments = true)
     {
         $broadcast = !empty($input['broadcast']);
         $direct = [];
@@ -692,6 +720,11 @@ class ProjectRepository
             'direct_participant_ids' => $broadcast ? [] : array_values($direct),
             'mention_participant_ids' => $broadcast ? [] : array_values($mention),
         ];
+        if ($includeAttachments) {
+            $fingerprintInput['attachment_file_ids'] = isset($input['attachment_file_ids'])
+                && is_array($input['attachment_file_ids'])
+                ? array_values($input['attachment_file_ids']) : [];
+        }
         if ($includeActionRequested) {
             $fingerprintInput['action_requested'] = !isset($input['responsibility_event'])
                 && !empty($input['action_requested']);
@@ -810,7 +843,8 @@ class ProjectRepository
         $rows = $statement->fetchAll();
         $messageIds = array_map(function ($row) { return (int) $row['id']; }, $rows);
         $addressees = $this->loadAddressees($messageIds);
-        return array_map(function ($row) use ($addressees) {
+        $attachments = $this->loadMessageAttachments($messageIds);
+        return array_map(function ($row) use ($addressees, $attachments) {
             $id = (int) $row['id'];
             return [
                 'id' => $id,
@@ -832,6 +866,8 @@ class ProjectRepository
                 'reply_to_message_id' => $row['reply_to_message_id'] === null ? null : (int) $row['reply_to_message_id'],
                 'body' => $row['deleted_at'] === null ? $row['body'] : null,
                 'addressees' => isset($addressees[$id]) ? $addressees[$id] : [],
+                'attachments' => $row['deleted_at'] === null && isset($attachments[$id])
+                    ? $attachments[$id] : [],
                 'correlation_id' => $row['correlation_id'],
                  'reply_depth' => (int) $row['reply_depth'],
                 'action_requested' => (bool) $row['action_requested'],
@@ -844,6 +880,106 @@ class ProjectRepository
                 'revision_count' => (int) $row['revision_count'],
             ];
         }, $rows);
+    }
+
+    private function normalizeMessageAttachmentIds(array $input)
+    {
+        if (!array_key_exists('attachment_file_ids', $input)
+            || $input['attachment_file_ids'] === null) {
+            return [];
+        }
+        if (!is_array($input['attachment_file_ids'])) {
+            throw new InvalidArgumentException('attachment_file_ids must be an array.');
+        }
+        if (count($input['attachment_file_ids']) > self::MAX_MESSAGE_ATTACHMENTS) {
+            throw new InvalidArgumentException('A message supports at most '
+                . self::MAX_MESSAGE_ATTACHMENTS . ' attachments.');
+        }
+        $result = [];
+        foreach ($input['attachment_file_ids'] as $value) {
+            $publicId = strtolower(trim((string) $value));
+            if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $publicId)) {
+                throw new InvalidArgumentException(
+                    'Each attachment_file_ids value must be a canonical project file ID.');
+            }
+            if (isset($result[$publicId])) {
+                throw new InvalidArgumentException('A file can be attached to a message only once.');
+            }
+            $result[$publicId] = $publicId;
+        }
+        return array_values($result);
+    }
+
+    private function resolveMessageAttachmentFiles($projectId, array $publicIds)
+    {
+        if (!$publicIds) {
+            return [];
+        }
+        if (!Db::tableExists($this->pdo, 'message_file_attachments')) {
+            throw new RuntimeException('MESSAGE_ATTACHMENTS_NOT_INSTALLED');
+        }
+        $placeholders = implode(',', array_fill(0, count($publicIds), '?'));
+        $statement = $this->pdo->prepare(
+            "SELECT id, public_id FROM project_files
+             WHERE project_id = ? AND public_id IN ($placeholders)
+               AND state = 'available' AND deleted_at IS NULL FOR UPDATE"
+        );
+        $statement->execute(array_merge([(int) $projectId], $publicIds));
+        $byPublicId = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $byPublicId[strtolower($row['public_id'])] = $row;
+        }
+        $ordered = [];
+        foreach ($publicIds as $publicId) {
+            if (!isset($byPublicId[$publicId])) {
+                throw new InvalidArgumentException(
+                    'An attachment is unavailable or does not belong to this project.');
+            }
+            $ordered[] = $byPublicId[$publicId];
+        }
+        return $ordered;
+    }
+
+    private function loadMessageAttachments(array $messageIds)
+    {
+        if (!$messageIds || !Db::tableExists($this->pdo, 'message_file_attachments')) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+        $statement = $this->pdo->prepare(
+            "SELECT mfa.message_id, mfa.position, pf.public_id, pf.display_name,
+                    pf.original_name, pf.mime_type, pf.size_bytes, pf.sha256,
+                    pf.state, pf.version, pf.created_at, pf.updated_at, pf.deleted_at
+             FROM message_file_attachments mfa
+             JOIN project_files pf ON pf.id = mfa.project_file_id
+             WHERE mfa.message_id IN ($placeholders)
+             ORDER BY mfa.message_id, mfa.position, mfa.id"
+        );
+        $statement->execute($messageIds);
+        $result = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $messageId = (int) $row['message_id'];
+            if (!isset($result[$messageId])) {
+                $result[$messageId] = [];
+            }
+            $available = $row['state'] === 'available' && $row['deleted_at'] === null;
+            $result[$messageId][] = [
+                'id' => $row['public_id'],
+                'name' => $row['display_name'],
+                'original_name' => $row['original_name'],
+                'url' => $available ? 'files/' . $row['public_id'] : null,
+                'mime_type' => $row['mime_type'],
+                'size_bytes' => (int) $row['size_bytes'],
+                'sha256' => $row['sha256'],
+                'state' => $row['state'],
+                'available' => $available,
+                'version' => (int) $row['version'],
+                'position' => (int) $row['position'],
+                'created_at' => $row['created_at'],
+                'updated_at' => $row['updated_at'],
+            ];
+        }
+        return $result;
     }
 
     private function loadAddressees(array $messageIds)

@@ -1,5 +1,5 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.223";
-import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.223";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.224";
+import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.224";
 import {
   createResponsibilityInbox,
   responsibilityActions,
@@ -147,7 +147,7 @@ const state = {
   aiIconPackAvailable: false,
   timelineDefaultCollapsed: false,
   filters: { primary: "all", kind: "all", q: "", sender: [], from: "", to: "" },
-  draft: { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
+  draft: { mode: "direct", intent: "update", addressees: [], attachments: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
   newestCursor: "",
   hasOlder: false,
@@ -182,7 +182,7 @@ const el = Object.fromEntries([
   "participant-search", "new-message-trigger", "new-message-icon", "project-files-trigger", "project-files-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
-  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-host",
+  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-attachments", "composer-host",
   "project-view-switch", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
   "admin-eyebrow", "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
@@ -320,6 +320,19 @@ function normalizeMessage(source = {}) {
   const created = normalizeUtcTimestamp(source.created_at || source.timestamp || source.message_timestamp) || new Date().toISOString();
   const currentParticipantId = id(state.project?.current_participant?.id || state.session?.participant?.id);
   const ownAddress = addressees.find((entry) => entry.participant_id === currentParticipantId);
+  const attachments = (Array.isArray(source.attachments) ? source.attachments : []).map((file, position) => ({
+    id: id(file.id),
+    name: String(file.name || file.original_name || "Project file"),
+    original_name: String(file.original_name || file.name || "Project file"),
+    url: file.url ? String(file.url) : "",
+    mime_type: String(file.mime_type || "application/octet-stream"),
+    size_bytes: Number(file.size_bytes || 0),
+    sha256: String(file.sha256 || ""),
+    state: String(file.state || "unavailable"),
+    available: Boolean(file.available && file.url),
+    version: Number(file.version || 0),
+    position: Number(file.position ?? position),
+  }));
   return {
     ...source,
     id: id(source.id ?? source.entry_uuid ?? source.db_id),
@@ -333,6 +346,7 @@ function normalizeMessage(source = {}) {
     updated_at: normalizeUtcTimestamp(source.updated_at) || created,
     sender: participantFrom(senderSource),
     addressees,
+    attachments,
     reply_to: source.reply_to || source.reply || null,
     reply_to_message_id: id(source.reply_to_message_id || source.reply_to?.id || ""),
     revision_count: Number(source.revision_count || 0),
@@ -1343,7 +1357,6 @@ function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes,
   let confirmationQueue = Promise.resolve();
   const idempotencyKeys = new Map();
   const uploadIds = new Map();
-  const chunkBytes = 1024 * 1024;
   const refreshFiles = () => {
     if (!refreshPending) return;
     refreshPending = false;
@@ -1358,49 +1371,20 @@ function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes,
     startText: "Upload files",
     dropText: "Drop files here or choose Browse.",
     async onUpload(item, controls) {
-      const existing = (Array.isArray(existingFiles) ? existingFiles : []).find((file) =>
-        String(file.name || "").trim().toLocaleLowerCase() === String(item.name || "").trim().toLocaleLowerCase());
-      if (existing) {
-        const confirmation = confirmationQueue.then(() => state.factories.uiConfirm(
-          `${existing.name} already exists in ${folder?.name || "this folder"}. Replace its contents with the selected file?`,
-          { title: "Replace existing file?", variant: "warning", confirmText: "Replace", confirmVariant: "danger" },
-        ));
-        confirmationQueue = confirmation.catch(() => false);
-        if (!(await confirmation)) throw new Error("Upload cancelled. The existing file was not changed.");
-      }
       const uploadIdentity = `${item.name}:${item.file?.size || item.size || 0}:${item.file?.lastModified || 0}`;
       if (!idempotencyKeys.has(uploadIdentity)) idempotencyKeys.set(uploadIdentity, makeIdempotencyKey());
       if (!uploadIds.has(uploadIdentity)) uploadIds.set(uploadIdentity, crypto.randomUUID());
-      const controller = new AbortController();
-      controls.signal.addEventListener("abort", () => controller.abort(), { once: true });
-      const chunkCount = Math.ceil(item.file.size / chunkBytes);
-      for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-        const start = chunkIndex * chunkBytes;
-        const end = Math.min(item.file.size, start + chunkBytes);
-        const form = new FormData();
-        form.append("operation", "upload_chunk");
-        form.append("target_operation", existing ? "replace_file" : "upload");
-        form.append("upload_id", uploadIds.get(uploadIdentity));
-        form.append("chunk_index", String(chunkIndex));
-        form.append("chunk_count", String(chunkCount));
-        form.append("total_size", String(item.file.size));
-        form.append("original_name", item.name);
-        if (existing) {
-          form.append("file_id", existing.id);
-          form.append("version", String(existing.version));
-        } else {
-          form.append("folder_id", folder?.id || "root");
-        }
-        form.append("file", item.file.slice(start, end), item.name);
-        const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
-          method: "POST", credentials: "same-origin", cache: "no-store", signal: controller.signal,
-          headers: projectFileMutationHeaders(idempotencyKeys.get(uploadIdentity)), body: form,
-        });
-        let payload = null;
-        try { payload = await response.json(); } catch (_error) { payload = null; }
-        if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
-        controls.report(Math.min(100, (end / item.file.size) * 100));
-      }
+      await uploadProjectFile(projectId, folder, existingFiles, item.file, {
+        signal: controls.signal,
+        idempotencyKey: idempotencyKeys.get(uploadIdentity),
+        uploadId: uploadIds.get(uploadIdentity),
+        onProgress: controls.report,
+        confirmReplacement(existing, targetFolder) {
+          const confirmation = confirmationQueue.then(() => confirmProjectFileReplacement(existing, targetFolder));
+          confirmationQueue = confirmation.catch(() => false);
+          return confirmation;
+        },
+      });
       refreshPending = true;
     },
     onComplete(value) {
@@ -1425,6 +1409,81 @@ function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes,
     },
   });
   modal.open();
+}
+
+function projectFileNameKey(value) {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+async function confirmProjectFileReplacement(existing, folder) {
+  return state.factories.uiConfirm(
+    `${existing.name} already exists in ${folder?.name || "this folder"}. Replace its contents with the selected file?`,
+    { title: "Replace existing file?", variant: "warning", confirmText: "Replace", confirmVariant: "danger" },
+  );
+}
+
+async function uploadProjectFile(projectId, folder, existingFiles, file, {
+  signal, idempotencyKey = makeIdempotencyKey(), uploadId = crypto.randomUUID(), onProgress = () => {},
+  confirmReplacement = confirmProjectFileReplacement,
+} = {}) {
+  const existing = (Array.isArray(existingFiles) ? existingFiles : []).find((candidate) =>
+    projectFileNameKey(candidate.name) === projectFileNameKey(file.name));
+  if (existing && !(await confirmReplacement(existing, folder))) {
+    throw new Error("Upload cancelled. The existing file was not changed.");
+  }
+  const chunkBytes = 1024 * 1024;
+  const chunkCount = Math.max(1, Math.ceil(file.size / chunkBytes));
+  let result = null;
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+    const start = chunkIndex * chunkBytes;
+    const end = Math.min(file.size, start + chunkBytes);
+    const form = new FormData();
+    form.append("operation", "upload_chunk");
+    form.append("target_operation", existing ? "replace_file" : "upload");
+    form.append("upload_id", uploadId);
+    form.append("chunk_index", String(chunkIndex));
+    form.append("chunk_count", String(chunkCount));
+    form.append("total_size", String(file.size));
+    form.append("original_name", file.name);
+    if (existing) {
+      form.append("file_id", existing.id);
+      form.append("version", String(existing.version));
+    } else {
+      form.append("folder_id", folder?.id || "root");
+    }
+    form.append("file", file.slice(start, end), file.name);
+    const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+      method: "POST", credentials: "same-origin", cache: "no-store", signal,
+      headers: projectFileMutationHeaders(idempotencyKey), body: form,
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (_error) { payload = null; }
+    if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+    result = unwrap(payload) || result;
+    onProgress(Math.min(100, file.size ? (end / file.size) * 100 : 100));
+  }
+  const uploaded = result?.file;
+  if (!uploaded?.id) throw new Error("The server did not return the uploaded file record.");
+  return uploaded;
+}
+
+async function uploadProjectFilesForPicker(projectId, folder, existingFiles, files, limits, signal) {
+  const selected = Array.from(files || []);
+  const maximumFiles = Math.max(1, Number(limits?.maximumFiles || 10));
+  const maximumBytes = Number(limits?.maximumBytes || 25 * 1024 * 1024);
+  if (selected.length > maximumFiles) throw new Error(`Choose no more than ${maximumFiles} files at a time.`);
+  const oversized = selected.find((file) => file.size > maximumBytes);
+  if (oversized) throw new Error(`${oversized.name} exceeds the configured upload limit.`);
+  const known = [...(Array.isArray(existingFiles) ? existingFiles : [])];
+  const uploaded = [];
+  for (const file of selected) {
+    if (signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+    const record = await uploadProjectFile(projectId, folder, known, file, { signal });
+    uploaded.push(record);
+    const index = known.findIndex((candidate) => projectFileNameKey(candidate.name) === projectFileNameKey(record.name));
+    if (index === -1) known.push(record); else known[index] = record;
+  }
+  return uploaded;
 }
 
 function validProjectFileName(value) {
@@ -2348,7 +2407,35 @@ function setAllMessagesCollapsed(collapsed) {
 
 function messageCardPreview(message) {
   if (message.deleted_at) return "This message was removed.";
-  return String(message.body || "").replace(/\s+/g, " ").trim() || "Empty message";
+  const copy = String(message.body || "").replace(/\s+/g, " ").trim();
+  if (copy) return copy;
+  const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+  return count ? `${count} attached ${count === 1 ? "file" : "files"}` : "Empty message";
+}
+
+function renderMessageAttachments(message) {
+  const files = Array.isArray(message.attachments) ? message.attachments : [];
+  if (!files.length || message.deleted_at) return null;
+  const list = document.createElement("div");
+  list.className = "message-attachments";
+  list.setAttribute("aria-label", `${files.length} attached ${files.length === 1 ? "file" : "files"}`);
+  files.forEach((file) => {
+    const item = document.createElement(file.available ? "button" : "div");
+    if (file.available) item.type = "button";
+    item.className = `message-attachment${file.available ? "" : " is-unavailable"}`;
+    const icon = state.factories.createIcon(projectFileIconName(file), { size: 18, fallback: "data.file" });
+    const copy = document.createElement("span");
+    copy.className = "message-attachment-copy";
+    const name = document.createElement("strong");
+    name.textContent = file.name;
+    const meta = document.createElement("span");
+    meta.textContent = file.available ? recoverySize(file.size_bytes) : "File unavailable";
+    copy.append(name, meta);
+    item.append(icon, copy);
+    if (file.available) item.addEventListener("click", () => openProjectFilePreview(file));
+    list.appendChild(item);
+  });
+  return list;
 }
 
 function messageSeverityLabel(severity) {
@@ -2422,6 +2509,8 @@ function mountMessageCard(host, item) {
       linkTarget: "_blank", emptyText: "Empty message",
     });
     details.appendChild(body);
+    const attachments = renderMessageAttachments(current);
+    if (attachments) details.appendChild(attachments);
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
     const actions = document.createElement("div");
@@ -3024,7 +3113,7 @@ function timelineItems(messages) {
     iconHtml: timelineMarkerHtml(message.sender, message.message_kind),
     contextMenu: messageContextMenu(message),
     raw: message,
-    contentKey: `${message.updated_at}|severity:${message.severity}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
+    contentKey: `${message.updated_at}|severity:${message.severity}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|attachments:${(message.attachments || []).map((file) => `${file.id}:${file.version}:${file.state}`).join(",")}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
   }));
 }
 
@@ -7929,7 +8018,11 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.hasOlder = false;
   state.pendingOlderLoad = false;
   dismissMessageComposerModal();
-  state.draft = { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
+  state.draft = { mode: "direct", intent: "update", addressees: [], attachments: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
+  state.components.messageAttachmentPicker?.destroy?.();
+  state.components.messageAttachmentPicker = null;
+  state.components.messageAttachmentQueue?.destroy?.();
+  state.components.messageAttachmentQueue = null;
   state.components.timeline?.destroy();
   state.components.timeline = null;
   el.timeline_host.replaceChildren();
@@ -8070,16 +8163,121 @@ function renderComposerControls() {
     },
   });
   state.components.composer?.destroy();
+  state.components.messageAttachmentPicker?.destroy?.();
+  state.components.messageAttachmentQueue?.destroy?.();
+  const projectId = selectedProjectId();
+  state.components.messageAttachmentPicker = createMessageAttachmentPicker(projectId);
   state.components.composer = state.factories.createChatComposer(el.composer_host, { value: "" }, {
     placeholder: "Write to the project timeline…",
     helperText: "Visible to all participants · Shift+Enter for a new line",
-    showAttachmentButton: false,
+    showAttachmentButton: true,
+    multiple: true,
+    attachmentAdapter: {
+      mode: "custom",
+      open: ({ signal }) => state.components.messageAttachmentPicker.pick({ signal }),
+    },
+    onAttachmentsSelected(records) { void addDraftAttachments(records); },
+    onAttachmentError(error) {
+      if (error?.name !== "AbortError") state.components.toast.warn(error?.message || "Unable to choose project files.", { title: "Attachments unavailable" });
+    },
     maxLength: Number(state.project?.message_max_length || 24000),
     onSend: sendMessage,
   });
+  state.components.messageAttachmentQueue = state.factories.createChatUploadQueue(el.composer_attachments, { items: [] }, {
+    onRemove(item) {
+      state.draft.attachments = state.draft.attachments.filter((attachment) => attachment.id !== item.id);
+      renderDraftAttachments();
+    },
+    onOpen(item) { if (item?.url) openProjectFilePreview(item); },
+  });
+  renderDraftAttachments();
   enableCompactComposerAutosize();
   syncAddressingControls();
   renderReplyContext();
+}
+
+function messageAttachmentRecord(file) {
+  return {
+    ...file,
+    id: id(file?.id),
+    name: String(file?.name || file?.original_name || "Project file"),
+    mime_type: String(file?.mime_type || file?.mimeType || "application/octet-stream"),
+    mimeType: String(file?.mime_type || file?.mimeType || "application/octet-stream"),
+    size_bytes: Number(file?.size_bytes || 0),
+    url: file?.url ? String(file.url) : "",
+    selectable: file?.selectable !== false && String(file?.state || "available") === "available",
+  };
+}
+
+async function loadMessageAttachmentFolder(projectId, folderId, signal) {
+  const requestedId = folderId == null ? "root" : String(folderId);
+  const response = await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId, folder_id: requestedId })}`, {
+    signal, requireJson: true,
+  });
+  const payload = unwrap(response) || {};
+  const current = payload.current_folder || { id: requestedId, name: "Project files" };
+  return {
+    folder: { id: String(current.id || "root"), name: String(current.name || "Project files") },
+    breadcrumbs: (Array.isArray(payload.breadcrumbs) ? payload.breadcrumbs : [current]).map((folder) => ({
+      id: String(folder.id || "root"), name: String(folder.name || "Project files"),
+    })),
+    folders: (Array.isArray(payload.folders) ? payload.folders : []).map((folder) => ({
+      ...folder, id: String(folder.id), name: String(folder.name || "Folder"),
+    })),
+    files: (Array.isArray(payload.files) ? payload.files : []).map(messageAttachmentRecord),
+    permissions: {
+      showUpload: Boolean(payload.capabilities?.upload),
+      canUpload: Boolean(payload.capabilities?.upload && payload.storage?.ready),
+    },
+    storage: payload.storage || {},
+  };
+}
+
+function createMessageAttachmentPicker(projectId) {
+  return state.factories.createRepositoryPicker({
+    title: "Attach project files",
+    context: projectId,
+    folderId: "root",
+    multiple: true,
+    loadFolder: ({ folderId, signal }) => loadMessageAttachmentFolder(projectId, folderId, signal),
+    async onUpload(files, { folderId, signal }) {
+      const listing = await loadMessageAttachmentFolder(projectId, folderId, signal);
+      const uploaded = await uploadProjectFilesForPicker(projectId, listing.folder, listing.files, files, {
+        maximumBytes: listing.storage?.max_upload_bytes,
+        maximumFiles: listing.storage?.max_files_per_action,
+      }, signal);
+      state.components.toast.success(`${uploaded.length} ${uploaded.length === 1 ? "file" : "files"} uploaded.`);
+      return uploaded.map(messageAttachmentRecord);
+    },
+  });
+}
+
+async function addDraftAttachments(records) {
+  const merged = new Map(state.draft.attachments.map((attachment) => [attachment.id, attachment]));
+  for (const record of Array.isArray(records) ? records : []) {
+    const attachment = messageAttachmentRecord(record);
+    if (attachment.id) merged.set(attachment.id, attachment);
+  }
+  if (merged.size > 20) {
+    await state.factories.uiAlert("A message can include no more than 20 project files. Remove some attachments or select fewer files.", {
+      title: "Too many attachments", variant: "warning",
+    });
+    return;
+  }
+  state.draft.attachments = [...merged.values()];
+  state.draft.idempotencyKey = "";
+  renderDraftAttachments();
+}
+
+function renderDraftAttachments() {
+  const items = state.draft.attachments.map((attachment) => ({
+    ...attachment,
+    kind: projectFilePreviewType(attachment) || "file",
+    status: "uploaded",
+    previewUrl: attachment.url ? new URL(attachment.url, document.baseURI).href : "",
+    sizeLabel: recoverySize(Number(attachment.size_bytes || 0)),
+  }));
+  state.components.messageAttachmentQueue?.setItems(items);
 }
 
 function openMessageComposerModal() {
@@ -8245,6 +8443,7 @@ async function sendMessage({ text }) {
       action_requested: state.draft.mode === "direct" && state.draft.intent !== "update",
       action_request_type: state.draft.mode === "direct" && state.draft.intent !== "update"
         ? state.draft.intent : null,
+      attachment_file_ids: state.draft.attachments.map((attachment) => attachment.id),
       idempotency_key: state.draft.idempotencyKey,
     };
     const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: selectedProjectId() })}`, {
@@ -8257,6 +8456,8 @@ async function sendMessage({ text }) {
     }
     state.components.responsibilityInbox?.refreshFromRealtime(message.id);
     state.components.composer.clear();
+    state.draft.attachments = [];
+    renderDraftAttachments();
     enableCompactComposerAutosize();
     state.draft.idempotencyKey = "";
     restoreNormalAddressing();
@@ -9416,7 +9617,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.viewer", "ui.pdf.viewer", "ui.json.viewer", "ui.markdown.viewer", "ui.csv.viewer"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.chat.upload.queue", "ui.repository.picker", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.viewer", "ui.pdf.viewer", "ui.json.viewer", "ui.markdown.viewer", "ui.csv.viewer"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -9440,6 +9641,8 @@ async function bootstrap() {
     createSelect: await uiLoader.get("ui.select", options),
     createToggleGroup: await uiLoader.get("ui.toggle.group", options),
     createChatComposer: await uiLoader.get("ui.chat.composer", options),
+    createChatUploadQueue: await uiLoader.get("ui.chat.upload.queue", options),
+    createRepositoryPicker: await uiLoader.get("ui.repository.picker", options),
     createActionModal: await uiLoader.get("ui.action.modal", options),
     createFormModal: await uiLoader.get("ui.form.modal", options),
     createLoginFormModal: await uiLoader.get("ui.form.modal.login", options),

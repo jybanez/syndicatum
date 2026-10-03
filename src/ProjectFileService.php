@@ -51,6 +51,7 @@ final class ProjectFileService
             'project_id' => $projectId,
             'root' => $this->folderTree($projectId, (int) $folder['id']),
             'current_folder' => $this->folderView($folder),
+            'breadcrumbs' => $this->folderBreadcrumbs($projectId, $folder),
             'folders' => array_map([$this, 'folderView'], $folders->fetchAll()),
             'files' => array_map([$this, 'fileView'], $files->fetchAll()),
             'capabilities' => $this->capabilities(),
@@ -418,12 +419,29 @@ final class ProjectFileService
             'hasChildren' => !empty($nodes), 'children' => $nodes];
     }
 
+    private function folderBreadcrumbs($projectId, array $folder)
+    {
+        $breadcrumbs = [];
+        $cursor = $folder;
+        while ($cursor) {
+            array_unshift($breadcrumbs, $this->folderView($cursor));
+            if (empty($cursor['parent_folder_id'])) { break; }
+            $statement = $this->pdo->prepare(
+                'SELECT * FROM project_file_folders WHERE project_id = ? AND id = ? AND deleted_at IS NULL LIMIT 1'
+            );
+            $statement->execute([(int) $projectId, (int) $cursor['parent_folder_id']]);
+            $cursor = $statement->fetch() ?: null;
+        }
+        return $breadcrumbs;
+    }
+
     private function emptyBrowse(array $access)
     {
         $projectId = (int) $access['project_id'];
         return ['project_id' => $projectId,
             'root' => ['id' => 'root', 'label' => (string) $access['project_name'], 'selected' => true, 'hasChildren' => false, 'children' => []],
             'current_folder' => ['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0],
+            'breadcrumbs' => [['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0]],
             'folders' => [], 'files' => [], 'capabilities' => $this->capabilities(), 'storage' => $this->storageSummary($projectId), 'notice' => ''];
     }
 

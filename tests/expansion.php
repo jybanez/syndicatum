@@ -336,6 +336,9 @@ try {
             $archiveFolder = $service->createFolder($access, ['name' => 'Archive'], 'test-folder-create-0002');
             $replayedFolder = $service->createFolder($access, ['name' => 'Board'], 'test-folder-create-0001');
             $suite->same(true, $replayedFolder['replayed']);
+            $boardBrowse = $service->browse($access, $folder['folder']['id']);
+            $suite->same('root', $boardBrowse['breadcrumbs'][0]['id']);
+            $suite->same($folder['folder']['id'], $boardBrowse['breadcrumbs'][1]['id']);
 
             $stream = fopen('php://temp', 'w+b'); fwrite($stream, "%PDF-1.4\nfirst\n"); rewind($stream);
             $uploaded = $service->uploadStream($access, $stream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
@@ -391,7 +394,44 @@ try {
             $suite->same(4, $moved['file']['version']);
             $suite->same([], $service->browse($access, $folder['folder']['id'])['files']);
             $suite->same(1, count($service->browse($access, $archiveFolder['folder']['id'])['files']));
+
+            $messages = new ProjectRepository($pdo);
+            $attached = $messages->createMessage($access, [
+                'body' => 'Please review the attached project file.',
+                'broadcast' => true,
+                'attachment_file_ids' => [$moved['file']['id']],
+                'idempotency_key' => 'test-message-attachment-0001',
+            ]);
+            $suite->same(true, $attached['created']);
+            $suite->same($moved['file']['id'], $attached['message']['attachments'][0]['id']);
+            $suite->same('files/' . $moved['file']['id'], $attached['message']['attachments'][0]['url']);
+            $suite->same(0, $attached['message']['attachments'][0]['position']);
+            $replayedMessage = $messages->createMessage($access, [
+                'body' => 'Please review the attached project file.',
+                'broadcast' => true,
+                'attachment_file_ids' => [$moved['file']['id']],
+                'idempotency_key' => 'test-message-attachment-0001',
+            ]);
+            $suite->same(false, $replayedMessage['created']);
+            $suite->throws('IDEMPOTENCY_KEY_CONFLICT', function () use ($messages, $access) {
+                $messages->createMessage($access, [
+                    'body' => 'Please review the attached project file.',
+                    'broadcast' => true,
+                    'attachment_file_ids' => [],
+                    'idempotency_key' => 'test-message-attachment-0001',
+                ]);
+            });
+            $suite->throws('unavailable or does not belong', function () use ($messages, $otherAccess, $moved) {
+                $messages->createMessage($otherAccess, [
+                    'body' => 'Cross-project attachment attempt.',
+                    'broadcast' => true,
+                    'attachment_file_ids' => [$moved['file']['id']],
+                ]);
+            });
             $service->deleteFile($access, ['file_id' => $moved['file']['id'], 'version' => 4], 'test-file-delete-000001');
+            $deletedAttachmentMessage = $messages->message($access, $attached['message']['id']);
+            $suite->same(false, $deletedAttachmentMessage['attachments'][0]['available']);
+            $suite->same(null, $deletedAttachmentMessage['attachments'][0]['url']);
             $browsed = $service->browse($access, $archiveFolder['folder']['id']);
             $suite->same([], $browsed['files']);
             $events = $pdo->prepare('SELECT COUNT(*) FROM project_file_events WHERE project_id = ?');

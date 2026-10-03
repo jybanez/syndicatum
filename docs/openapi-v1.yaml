@@ -173,7 +173,7 @@ paths:
         - $ref: '#/components/parameters/ProjectId'
         - { name: folder_id, in: query, description: Folder UUID; omit or use root for the project root., schema: { type: string } }
       responses:
-        '200': { description: Current folder, folder tree, immediate files, capabilities, and project quota summary }
+        '200': { description: Current folder, root-to-current breadcrumbs, folder tree, immediate files, capabilities, and project quota summary }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Invalid' }
@@ -1045,7 +1045,7 @@ components:
         editor: { $ref: '#/components/schemas/MessageSender' }
     Message:
       type: object
-      required: [id, uuid, project_id, project_sequence, message_kind, severity, system_event, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, action_requested, action_request_type, created_at, updated_at, deleted_at, edited, revision_count]
+      required: [id, uuid, project_id, project_sequence, message_kind, severity, system_event, sender, reply_to_message_id, body, addressees, attachments, correlation_id, reply_depth, action_requested, action_request_type, created_at, updated_at, deleted_at, edited, revision_count]
       properties:
         id: { type: integer, minimum: 1 }
         uuid: { type: string, format: uuid }
@@ -1058,6 +1058,7 @@ components:
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
         body: { type: string, nullable: true, description: Null for a soft-deleted message. }
         addressees: { type: array, items: { $ref: '#/components/schemas/MessageAddressee' } }
+        attachments: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/MessageAttachment' }, description: Ordered canonical project-file references. Empty for soft-deleted messages. }
         correlation_id: { type: string, nullable: true }
         reply_depth: { type: integer, minimum: 0 }
         action_requested: { type: boolean, description: True only when this direct message explicitly creates Responsibility Inbox work. }
@@ -1068,6 +1069,23 @@ components:
         edited: { type: boolean }
         revision_count: { type: integer, minimum: 0 }
         revisions: { type: array, description: Present only when include=revisions is requested., items: { $ref: '#/components/schemas/MessageRevision' } }
+    MessageAttachment:
+      type: object
+      required: [id, name, original_name, url, mime_type, size_bytes, sha256, state, available, version, position, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid, description: Permanent canonical project-file identifier. }
+        name: { type: string }
+        original_name: { type: string }
+        url: { type: string, nullable: true, description: Permanent canonical file URL; null when the file is unavailable or deleted. }
+        mime_type: { type: string }
+        size_bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        state: { type: string, enum: [pending, available, unavailable, deleted, integrity_failed] }
+        available: { type: boolean }
+        version: { type: integer, minimum: 1 }
+        position: { type: integer, minimum: 0, maximum: 19 }
+        created_at: { $ref: '#/components/schemas/UtcTimestamp' }
+        updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
     MessagePage:
       type: object
       required: [limit, has_more, newer_cursor, older_cursor, order, mode, continuation_cursor]
@@ -1308,6 +1326,7 @@ components:
         action_request_type: { type: string, enum: [work, approval, review], description: Required conceptually when action_requested is true; omitted requests default to work for backward compatibility and it is invalid otherwise. }
         severity: { type: string, enum: [neutral, info, success, warning, error, critical], default: neutral, description: Canonical importance independent from addressing and action-request state. }
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
+        attachment_file_ids: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, format: uuid }, description: Ordered canonical file IDs from this project. Every file must still be available when the message transaction commits. }
         idempotency_key: { type: string, maxLength: 160 }
         correlation_id: { type: string, nullable: true, maxLength: 160 }
         responsibility_event: { $ref: '#/components/schemas/ResponsibilityEventWrite' }

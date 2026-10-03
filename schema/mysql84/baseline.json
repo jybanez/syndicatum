@@ -3,7 +3,7 @@
     "format_version": "1.0",
     "baseline_id": "syndicatum-mysql84-1.0.0-baseline.1",
     "application_version": "1.0.0",
-    "schema_head": "202610030001",
+    "schema_head": "202610040001",
     "migration_cutover": "202609180004",
     "source_commit": "8d8cfb12aff96ac1a7ce7ce1a8ad05c6c5e5ec9d",
     "schema_sha256": "95a65dde9c480363fee04a18e5a742ae2c93402da2795f86d3463491d736d54e",
@@ -127,6 +127,10 @@
         {
             "id": "202610030001",
             "sha256": "a7c5c2c73e8e261ca5fcf330114822a43560fbf88da4753c8031ad216052ecfa"
+        },
+        {
+            "id": "202610040001",
+            "sha256": "3ba2e5d623f3c9483898c43799857e6996cc4096355195279a548785d5483f2f"
         }
     ],
     "tables": [
@@ -783,6 +787,15 @@
             "identity_columns": [],
             "integrity_checks": [],
             "reset_strategy": "truncate"
+        },
+        {
+            "name": "message_file_attachments",
+            "backup_policy": "durable",
+            "restore_order": 600,
+            "columns": ["id", "project_id", "message_id", "project_file_id", "attached_by_participant_id", "position", "created_at"],
+            "identity_columns": ["id"],
+            "sequence_state": "preserve",
+            "integrity_checks": ["row_count", "identity_uniqueness", "foreign_key_consistency"]
         },
         {
             "name": "message_revisions",

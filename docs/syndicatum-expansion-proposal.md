@@ -37,14 +37,14 @@ The first expansion will not add:
 - Private or hidden direct messages inside a project.
 - Workspace membership or workspace-wide communication.
 - Topics or topic subscriptions.
-- General-purpose message file storage, attachments, previews, or external-provider permission management. The narrowly scoped avatar upload service is profile media, not a message attachment system.
+- External-provider file permission management. Message attachments are now implemented as bounded references to canonical local Project Files; avatar storage remains a separate profile-media service.
 - Provider-specific model execution adapters.
 - Automatic creation or waking of provider tasks.
 - Cross-project message visibility by default.
 - Organization-level workspaces, billing, or complex enterprise policy.
 - Workflow automation or a plugin marketplace.
 
-Google Drive, Dropbox, and other file links remain ordinary clickable text in messages. File access stays entirely with the external provider.
+Google Drive, Dropbox, and other external file links remain ordinary clickable text in messages. Canonical Project Files use Syndicatum's local storage and permanent delivery URLs.
 
 ## 4. Core Domain Model
 
@@ -210,7 +210,7 @@ Both humans and agents may have uploaded avatars and display profiles. The norma
 
 Human avatars are global user profile media. Agent avatars belong to their project agent identity. `avatar_url` is read-only output pointing to Syndicatum-managed media; profile forms and project-agent forms must not accept arbitrary remote URL input. Missing or failed images fall back to initials or a deterministic placeholder. The interface must always show a clear agent indicator so an automated participant cannot be mistaken for a human.
 
-Avatar upload is a narrow media capability, not general file sharing. Upload endpoints must require the same human/project authorization and CSRF protections as the corresponding profile mutation. They accept a bounded set of raster image formats, verify content from decoded bytes rather than filename or submitted MIME type, reject oversized files and dimensions, re-encode or otherwise strip active metadata, and store an opaque generated media identifier outside any executable path. Replacing or deleting an avatar must clean up superseded media safely. PBB Account avatar data must be imported through the same validation pipeline rather than persisted as an arbitrary remote URL. Messages continue to support external file links only as ordinary text; they do not accept attachments.
+Avatar upload is a narrow profile-media capability, separate from Project Files. Upload endpoints must require the same human/project authorization and CSRF protections as the corresponding profile mutation. They accept a bounded set of raster image formats, verify content from decoded bytes rather than filename or submitted MIME type, reject oversized files and dimensions, re-encode or otherwise strip active metadata, and store an opaque generated media identifier outside any executable path. Replacing or deleting an avatar must clean up superseded media safely. PBB Account avatar data must be imported through the same validation pipeline rather than persisted as an arbitrary remote URL. Messages may reference bounded canonical same-project file IDs, but never embed file bodies or accept arbitrary attachment URLs.
 
 ## 8. Application Surfaces and Navigation
 
@@ -557,7 +557,7 @@ The expansion is ready when:
 - Realtime can be enabled or disabled without changing message correctness;
 - PBB Account can be enabled or disabled without removing native recovery access;
 - per-agent webhooks notify only addressed agents and remain independent of Realtime;
-- avatars are validated Syndicatum-managed profile uploads and never message attachments;
+- avatars are validated Syndicatum-managed profile uploads and remain separate from canonical Project File message attachments;
 - global settings and administrative actions are authorized and audited;
 - topics and topic-dependent behavior are fully removed;
 - current pagination and measured-height timeline virtualization remain correct.

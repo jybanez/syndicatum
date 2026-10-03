@@ -300,20 +300,20 @@ OpenAPI contract suites pass.
 
 ### 8.1 Reusable Helper attachment component
 
-- [ ] Inspect Helper's complete upload/attachment components and supported
+- [x] Inspect Helper's complete upload/attachment components and supported
   loading, progress, validation, cancellation, preview, and error APIs before
   adding application-specific UI.
-- [ ] Coordinate a shared Helper enhancement only for a verified component gap.
-- [ ] Open attachment modals immediately in their canonical loading state and
+- [x] Coordinate a shared Helper enhancement only for a verified component gap.
+- [x] Open attachment modals immediately in their canonical loading state and
   load target metadata afterward.
-- [ ] Validate applicable fields and files before entering busy state or making
+- [x] Validate applicable fields and files before entering busy state or making
   a mutation.
 - [ ] Keep invalid modals open, preserve chosen files/entered labels, focus the
   first invalid field, and present multiple errors using the required
   structured summary.
-- [ ] Permit cancellation during read-only loading, abort where supported, and
+- [x] Permit cancellation during read-only loading, abort where supported, and
   ignore late responses after dismissal or target changes.
-- [ ] Show per-file progress, success, failure, retry guidance, and an explicit
+- [x] Show per-file progress, success, failure, retry guidance, and an explicit
   uncertain-outcome state without automatic mutation replay.
 - [ ] Display **Anyone with this link can access the file** wherever a public
   link can be copied or opened.
@@ -350,17 +350,26 @@ delivery route is active.
 
 ### 8.3 Timeline message attachments
 
-- [ ] Attach files during message composition without sending a message before
+- [x] Attach files during message composition without sending a message before
   all selected attachment records are confirmed.
-- [ ] Define and test cleanup behavior when uploads succeed but message creation
+- [x] Define and test cleanup behavior when uploads succeed but message creation
   is cancelled or fails.
-- [ ] Render compact attachment metadata; inline only supported image, audio,
+- [x] Render compact attachment metadata; inline only supported image, audio,
   and video media; and provide **Open in new tab** or **Download** for all other
   files.
-- [ ] Set rendered media sources and copy/open actions to the same canonical
+- [x] Set rendered media sources and copy/open actions to the same canonical
   public URL; do not introduce an internal-only preview or thumbnail URL.
-- [ ] Preserve reply, revision, deletion, pagination, virtualization, and
+- [x] Preserve reply, revision, deletion, pagination, virtualization, and
   realtime reconciliation behavior.
+
+Delivery update (October 4, 2026): Helper `0.21.224` supplies the complete
+repository picker and composer's custom attachment adapter. Syndicatum opens the
+picker immediately in its loading state, supports cross-folder multi-selection,
+uploads into the current folder through the existing chunked transport, and
+renders selected files with Helper's upload queue. Message creation reauthorizes
+up to 20 same-project file IDs and commits the message and ordered associations
+atomically. Cancelling or failing a message does not delete already-confirmed
+canonical uploads; the files remain available in Project Files.
 
 ### 8.4 Deferred attachment surfaces
 

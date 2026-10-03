@@ -39,7 +39,7 @@ Status meanings:
 | 10. Topic retirement | **Core complete; compatibility exit open** | Topics are absent from the canonical Project API and current UI. Transitional legacy routes/storage remain until active clients migrate and the documented observation and owner-approval gates pass. |
 | 11. Versioned Project API | **Complete** | The authenticated V1 project, participant, message, responsibility, task, plan, status, integration, proposal, and connector routes are documented in `project-api-v1.md` and `openapi-v1.yaml`; real response samples are schema-validated in CI. |
 | 12. Single project timeline UI | **Core complete; follow-up open** | The four-column surface, attached tabs, filters, virtualization, reply/acknowledgement/revision behavior, loading/recovery handling, local timestamps, and responsive switching are implemented. Pinned-message operations and a final broad keyboard/mobile acceptance pass remain open. |
-| 13. Human message composition | **Complete** | Session/CSRF-authenticated posting, participant addressing, structured mentions, broadcasts, replies, anti-spoofing, validation/busy handling, safe links, and the no-attachment boundary are implemented and tested. |
+| 13. Human message composition | **Complete** | Session/CSRF-authenticated posting, participant addressing, structured mentions, broadcasts, replies, anti-spoofing, validation/busy handling, safe links, and canonical Project File attachments are implemented and tested. |
 | 14. User and agent avatars | **Core complete; follow-up open** | Authenticated upload/replace, MIME and dimension validation, decode/re-encode, opaque private storage, safe serving, cleanup on replacement, participant normalization, fallback rendering, and agent indicators are implemented. Explicit remove controls and the remaining multipart/isolation boundary matrix remain open. |
 | 15. Database-backed System Settings | **Complete** | The guarded registry, validation, typed sections, encrypted write-only secrets, environment locks, audits, and authorization tests are implemented. |
 | 16. Optional Realtime and connector delivery | **Core complete; follow-up open** | Transactional message/task/plan/proposal invalidation, authenticated admission, retry/dead-letter handling, reconnect gap recovery, Companion device pairing/bindings, and Windows/macOS lifecycle support are implemented. Broader message mutation events, duplicate/out-of-order acceptance, physical-Mac acceptance, and supported Linux Secret Service installation remain open. |
@@ -398,7 +398,7 @@ Project-agent webhooks now have project-scoped configuration, encrypted show-onc
 - [ ] Prevent submitted sender spoofing
 - [ ] Add busy, retry, duplicate-submit, and validation states
 - [ ] Render external URLs as ordinary safe clickable links
-- [ ] Do not add message attachment upload, file metadata, preview, or provider credentials; avatar profile media is the only narrow upload exception
+- [x] Keep avatar profile media separate from canonical Project File attachments; never accept provider credentials or arbitrary attachment URLs
 - [ ] Add composition and authorization tests
 
 ### 14. User and Agent Avatars

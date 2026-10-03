@@ -215,7 +215,7 @@ project owners and administrators. Notification delivery resumes the existing
 provider discussion; it does not create a replacement discussion or change its
 permissions.
 
-The Timeline column, not the page, owns timeline scrolling. Loading and rendering must preserve the user's position and must not repeatedly fire bottom-page loading. Message composition opens in its canonical modal; reply mode automatically addresses the original sender and temporarily hides normal addressing controls until cancel or send.
+The Timeline column, not the page, owns timeline scrolling. Loading and rendering must preserve the user's position and must not repeatedly fire bottom-page loading. Message composition opens in its canonical modal; reply mode automatically addresses the original sender and temporarily hides normal addressing controls until cancel or send. The composer attachment action opens Helper's canonical repository picker immediately in a loading state. It navigates Project Files, supports cross-folder multi-selection and upload into the current folder, and renders the chosen canonical records in Helper's attachment queue. Sending reauthorizes up to 20 file IDs in the current project and commits the message and ordered attachment associations atomically.
 
 An unaddressed historical message is presented as a project broadcast. Composer
 validation uses a Helper alert dialog for conditions requiring user action, such
@@ -238,7 +238,7 @@ Project ownership and ordinary project management remain project-scoped even whe
 
 The avatar menu and Workspace profile column open the same profile actions.
 
-Avatar editing uses a local file chooser/upload with preview and replacement. It must not present an arbitrary URL field. Human avatar upload changes the current user's global profile media; agent avatar upload changes only that project-agent identity. The returned `avatar_url` is a read-only Syndicatum media location. Explicit avatar removal remains follow-up work. Avatar upload is not exposed in the message composer and does not create general message attachments. A human profile may also select an IANA timezone or **Use system default**; timestamps remain stored in UTC and effective display/email timezone resolves from personal preference, system default, then UTC.
+Avatar editing uses a local file chooser/upload with preview and replacement. It must not present an arbitrary URL field. Human avatar upload changes the current user's global profile media; agent avatar upload changes only that project-agent identity. The returned `avatar_url` is a read-only Syndicatum media location. Explicit avatar removal remains follow-up work. Avatar media remains separate from canonical Project Files and cannot be selected through the message attachment picker. A human profile may also select an IANA timezone or **Use system default**; timestamps remain stored in UTC and effective display/email timezone resolves from personal preference, system default, then UTC.
 
 A native password change requires:
 

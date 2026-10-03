@@ -12,7 +12,7 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `032099da77c9da671457c1567d45ce977340d453`
+- Pinned commit: `739dfd9c62978dd32e2354c60544b31d63e739ed` (Helper `0.21.224`)
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
@@ -43,6 +43,8 @@ This first implementation uses the helper library for:
 - production-safe Markdown rendering through `ui.markdown` for authored messages and task details.
 - complete modal-based JSON, Markdown, and CSV project-file previews through
   `ui.json.viewer`, `ui.markdown.viewer`, and `ui.csv.viewer`.
+- canonical project-file selection through `ui.repository.picker`, including the
+  chat composer's custom attachment adapter and selected-attachment queue.
 
 The current upstream helper line also includes newer primitives that should be preferred during the DB-backed refactor:
 

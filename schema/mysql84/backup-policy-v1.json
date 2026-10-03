@@ -29,6 +29,7 @@
     "mcp_service_tokens": {"backup_policy": "reset", "reset_strategy": "reissue_credentials"},
     "message_addressees": {"backup_policy": "durable"},
     "message_events_outbox": {"backup_policy": "reset", "reset_strategy": "truncate"},
+    "message_file_attachments": {"backup_policy": "durable"},
     "message_revisions": {"backup_policy": "durable"},
     "messages": {"backup_policy": "durable"},
     "oauth_access_tokens": {"backup_policy": "reset", "reset_strategy": "truncate"},

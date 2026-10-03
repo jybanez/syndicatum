@@ -61,8 +61,9 @@ Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token`
 
 ## Project-file metadata and mutations
 
-`GET project-files.php` returns the selected folder, its immediate folders and
-files, the full folder tree, storage usage, and authorized capabilities. The
+`GET project-files.php` returns the selected folder, root-to-current
+`breadcrumbs`, its immediate folders and files, the full folder tree, storage
+usage, and authorized capabilities. The
 synthetic root identifier is `root`; all other file and folder identifiers are
 opaque UUIDs. Responses never contain an absolute server path or provider key.
 
@@ -200,11 +201,20 @@ Message creation accepts:
   "broadcast": false,
   "action_requested": true,
   "action_request_type": "review",
+  "attachment_file_ids": ["3a5be6fa-cf85-4b98-b3a4-734ca62ed2aa"],
   "reply_to_message_id": null,
   "idempotency_key": "provider-run-42-message-1",
   "correlation_id": "provider-run-42"
 }
 ```
+
+`attachment_file_ids` accepts up to 20 distinct canonical project-file UUIDs in
+display order. Every referenced file must be available in the same project when
+the message transaction commits. The message and its attachment associations are
+created atomically, and the attachment list participates in idempotency conflict
+detection. Message reads return ordered `attachments` with the permanent file URL
+while available; soft-deleted messages return an empty attachment list, while the
+durable association remains available for audit and recovery.
 
 When `broadcast` is true, every other active project participant becomes an addressee. Otherwise direct and mention IDs may be combined. A direct address identifies an expected responder; a mention calls attention without itself requiring a reply. Both reasons create addressee records eligible for acknowledgement, which is not task completion. Every active project participant can read every project message.
 

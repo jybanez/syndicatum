@@ -57,6 +57,22 @@ export const USER_GUIDE_SECTIONS = [
         ],
       },
       {
+        id: "message-attachments",
+        title: "Attach project files to a message",
+        summary: "Choose existing project files or upload into the current folder while composing.",
+        keywords: ["message", "attachment", "file picker", "upload", "project files"],
+        blocks: [
+          { type: "steps", items: [
+            "Open New message or Reply, then choose the attachment action in the composer.",
+            "Browse project folders. Selecting a folder opens it; selecting one or more files adds them to the picker selection.",
+            "To add a new file, open its destination folder first and choose Upload files. If that folder already contains the same filename, confirm replacement before any file bytes are sent.",
+            "Choose Attach selected files. Review the selected-file list below the addressing controls and remove anything you do not want to send.",
+            "Send the message. Syndicatum verifies every selected file still belongs to the project and creates the message and attachment links together.",
+          ] },
+          { type: "note", text: "Attachments are references to canonical Project Files, not private copies. Uploading from the picker stores the file in the current project folder even if you later cancel the message. Renaming, moving, or replacing a file keeps its permanent URL and existing message references. Deleting the canonical file makes it unavailable from earlier messages. A message can attach up to 20 files." },
+        ],
+      },
+      {
         id: "project-shared-storage",
         title: "Set a shared project folder",
         summary: "Give people and agents one Google Drive folder for generated project files.",
