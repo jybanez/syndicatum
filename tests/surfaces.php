@@ -969,11 +969,19 @@ try {
         $suite->true(strpos($app, 'getFileIconName(file.name, file.mime_type)') !== false
             && strpos($app, 'projectFileIconName(file)') === false,
             'Timeline attachment cards must resolve Helper file icons through the imported file-icon API.');
-        $suite->true(strpos($appCss, '.message-attachments { display: flex; flex-wrap: wrap;') !== false
+        $suite->true(strpos($app, 'createMediaStrip: await uiLoader.get("ui.media.strip", options)') !== false
+            && strpos($app, 'function messageAttachmentMediaType(file)') !== false
+            && strpos($app, 'mediaHost.className = "message-attachment-media"') !== false
+            && strpos($app, 'fileList.className = "message-attachment-files"') !== false
+            && strpos($app, 'layout: "wrap"') !== false
+            && strpos($app, 'attachmentMediaStrip?.destroy()') !== false,
+            'Timeline messages must render image and video attachments first through Helper media strip and clean up its viewer lifecycle.');
+        $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
+            && strpos($appCss, '.message-attachment-files { display: flex;') !== false
             && strpos($appCss, 'flex: 0 1 210px;') !== false
             && strpos($appCss, 'min-height: 36px;') !== false
             && strpos($app, 'size: 15,') !== false,
-            'Timeline attachments must use compact wrapping cards with a small file icon and accessible target height.');
+            'Non-media timeline attachments must follow the media strip as compact wrapping cards with a small file icon and accessible target height.');
         $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
             && strpos($bundleJs, 'aria-pressed') !== false
             && strpos($bundleJs, 'files.folder') !== false

@@ -384,6 +384,10 @@ queue. Message creation reauthorizes
 up to 20 same-project file IDs and commits the message and ordered associations
 atomically. Cancelling or failing a message does not delete already-confirmed
 canonical uploads; the files remain available in Project Files.
+Timeline messages render available image and video attachments first through
+Helper's wrapping media strip and shared gallery viewer. Other file types and
+unavailable media follow as compact file cards. The media-strip lifecycle is
+bound to the virtualized message card so rerendering cannot leave hidden viewers.
 
 ### 8.4 Deferred attachment surfaces
 

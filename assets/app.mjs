@@ -2413,33 +2413,76 @@ function messageCardPreview(message) {
   return count ? `${count} attached ${count === 1 ? "file" : "files"}` : "Empty message";
 }
 
+function messageAttachmentMediaType(file) {
+  const mimeType = String(file?.mime_type || "").trim().toLowerCase();
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  return "";
+}
+
 function renderMessageAttachments(message) {
   const files = Array.isArray(message.attachments) ? message.attachments : [];
   if (!files.length || message.deleted_at) return null;
   const list = document.createElement("div");
   list.className = "message-attachments";
   list.setAttribute("aria-label", `${files.length} attached ${files.length === 1 ? "file" : "files"}`);
+  const mediaFiles = [];
+  const otherFiles = [];
   files.forEach((file) => {
-    const item = document.createElement(file.available ? "button" : "div");
-    if (file.available) item.type = "button";
-    item.className = `message-attachment${file.available ? "" : " is-unavailable"}`;
-    const icon = state.factories.createIcon(getFileIconName(file.name, file.mime_type), {
-      size: 15,
-      fallback: "data.file",
-      decorative: true,
-    });
-    const copy = document.createElement("span");
-    copy.className = "message-attachment-copy";
-    const name = document.createElement("strong");
-    name.textContent = file.name;
-    const meta = document.createElement("span");
-    meta.textContent = file.available ? recoverySize(file.size_bytes) : "File unavailable";
-    copy.append(name, meta);
-    item.append(icon, copy);
-    if (file.available) item.addEventListener("click", () => openProjectFilePreview(file));
-    list.appendChild(item);
+    const mediaType = messageAttachmentMediaType(file);
+    if (mediaType && file.available && file.url) mediaFiles.push({ file, mediaType });
+    else otherFiles.push(file);
   });
-  return list;
+  let mediaStrip = null;
+  if (mediaFiles.length) {
+    const mediaHost = document.createElement("div");
+    mediaHost.className = "message-attachment-media";
+    list.appendChild(mediaHost);
+    mediaStrip = state.factories.createMediaStrip(mediaHost, mediaFiles.map(({ file, mediaType }) => {
+      const url = new URL(file.url, document.baseURI).href;
+      return {
+        id: file.id,
+        type: mediaType,
+        src: url,
+        thumb: mediaType === "image" ? url : "",
+        title: file.name,
+        alt: file.name,
+      };
+    }), {
+      layout: "wrap",
+      autoplay: false,
+      muted: true,
+      loop: false,
+      viewerAriaLabel: "Message attachments",
+      viewerFit: "contain",
+    });
+  }
+  if (otherFiles.length) {
+    const fileList = document.createElement("div");
+    fileList.className = "message-attachment-files";
+    otherFiles.forEach((file) => {
+      const item = document.createElement(file.available ? "button" : "div");
+      if (file.available) item.type = "button";
+      item.className = `message-attachment${file.available ? "" : " is-unavailable"}`;
+      const icon = state.factories.createIcon(getFileIconName(file.name, file.mime_type), {
+        size: 15,
+        fallback: "data.file",
+        decorative: true,
+      });
+      const copy = document.createElement("span");
+      copy.className = "message-attachment-copy";
+      const name = document.createElement("strong");
+      name.textContent = file.name;
+      const meta = document.createElement("span");
+      meta.textContent = file.available ? recoverySize(file.size_bytes) : "File unavailable";
+      copy.append(name, meta);
+      item.append(icon, copy);
+      if (file.available) item.addEventListener("click", () => openProjectFilePreview(file));
+      fileList.appendChild(item);
+    });
+    list.appendChild(fileList);
+  }
+  return { node: list, mediaStrip };
 }
 
 function messageSeverityLabel(severity) {
@@ -2476,6 +2519,7 @@ function mountMessageCard(host, item) {
   let renderedMessage = null;
   let renderedContentKey = null;
   let markdownView = null;
+  let attachmentMediaStrip = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
@@ -2483,6 +2527,8 @@ function mountMessageCard(host, item) {
     renderedContentKey = nextItem.contentKey;
     markdownView?.destroy();
     markdownView = null;
+    attachmentMediaStrip?.destroy();
+    attachmentMediaStrip = null;
     destroyTimelineResponsibilityActions(host);
     host.replaceChildren();
     const details = document.createElement("div");
@@ -2514,7 +2560,10 @@ function mountMessageCard(host, item) {
     });
     details.appendChild(body);
     const attachments = renderMessageAttachments(current);
-    if (attachments) details.appendChild(attachments);
+    if (attachments) {
+      attachmentMediaStrip = attachments.mediaStrip;
+      details.appendChild(attachments.node);
+    }
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
     const actions = document.createElement("div");
@@ -2562,6 +2611,8 @@ function mountMessageCard(host, item) {
     destroyTimelineResponsibilityActions(host);
     markdownView?.destroy();
     markdownView = null;
+    attachmentMediaStrip?.destroy();
+    attachmentMediaStrip = null;
   } };
 }
 
@@ -9621,7 +9672,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.chat.upload.queue", "ui.repository.picker", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.viewer", "ui.pdf.viewer", "ui.json.viewer", "ui.markdown.viewer", "ui.csv.viewer"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.chat.upload.queue", "ui.repository.picker", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.strip", "ui.media.viewer", "ui.pdf.viewer", "ui.json.viewer", "ui.markdown.viewer", "ui.csv.viewer"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -9663,6 +9714,7 @@ async function bootstrap() {
     createPopover: await uiLoader.get("ui.popover", options),
     createTabs: await uiLoader.get("ui.tabs", options),
     createFileUploader: await uiLoader.get("ui.file.uploader", options),
+    createMediaStrip: await uiLoader.get("ui.media.strip", options),
     createMediaViewer: await uiLoader.get("ui.media.viewer", options),
     createPdfViewer: await uiLoader.get("ui.pdf.viewer", options),
     createJsonViewer: await uiLoader.get("ui.json.viewer", options),
