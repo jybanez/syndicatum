@@ -11,7 +11,7 @@ import {
   settleResponsibilityAction,
   validationAlertItems,
 } from "./responsibility-action-flow.mjs?v=20261003051000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003043000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003091500";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 

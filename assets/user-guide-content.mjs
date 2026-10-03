@@ -343,6 +343,7 @@ export const USER_GUIDE_SECTIONS = [
           ] },
           { type: "steps", items: [
             "Use the actions shown for the request type. The first successful responder action also acknowledges the originating request; there is no separate acknowledgement step.",
+            "For Work requests, Start work changes Awaiting work to In progress. When the result is ready, Submit for review changes the request to Awaiting review. The requester then chooses Accept work or Request changes.",
             "Syndicatum does not offer work-production actions on Approval or Review requests.",
             "Offer handoff when another active participant should own the response. Responsibility changes only after they accept.",
             "Start work records the responder and start time without asking for a note. Submit for review requires a completion note or evidence. Deny, Request revision, and other work updates require a concrete reason or evidence note. Approve and Accept may be submitted without a note; add context when it will help the requester understand the decision.",

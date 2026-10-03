@@ -166,8 +166,12 @@ Message creation accepts:
 When `broadcast` is true, every other active project participant becomes an addressee. Otherwise direct and mention IDs may be combined. A direct address identifies an expected responder; a mention calls attention without itself requiring a reply. Both reasons create addressee records eligible for acknowledgement, which is not task completion. Every active project participant can read every project message.
 
 An action request is classified as `work`, `approval`, or `review`. Work uses
-the start/block/submit workflow and a later requester decision. Approval gives
-the responder Approve/Deny; Review gives the responder Accept/Request revision.
+the Start work/Submit for review workflow and a later requester decision through
+Accept work or Request changes. A started Work request is presented as In
+progress, and a submitted Work request as Awaiting review. Submission requires a
+completion note or evidence. Approval gives the responder Approve/Deny; Review
+gives the responder Accept/Request revision. These presentation labels map to
+the existing responsibility event names; the wire contract is unchanged.
 Omitting the type on an action request defaults to `work` for compatibility.
 The type is invalid on informational messages and cannot be changed by later
 client addressing. Every decision is an immutable system message linked to the

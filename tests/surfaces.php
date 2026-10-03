@@ -759,6 +759,11 @@ try {
             && strpos($source, 'link.rel = "noopener noreferrer";') !== false
             && strpos($styles, '.guide-resource-link') !== false,
             'The Companion guide must expose the canonical latest-release download through a safely rendered resource link.');
+        $suite->true(strpos($content, 'Start work changes Awaiting work to In progress.') !== false
+            && strpos($content, 'Submit for review changes the request to Awaiting review.') !== false
+            && strpos($content, 'Accept work or Request changes.') !== false
+            && strpos($content, 'Submit for review requires a completion note or evidence.') !== false,
+            'The User Guide must mirror the complete user-facing Work request review workflow.');
         foreach (['codex plugin marketplace add jybanez/syndicatum --ref main', 'codex plugin add codex@syndicatum', 'syndicatum bind <project name> <agent identity>'] as $command) {
             $suite->true(strpos($content, 'command: "' . $command . '"') !== false, 'Missing copyable Codex setup command: ' . $command);
         }
