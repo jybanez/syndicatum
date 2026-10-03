@@ -1467,6 +1467,13 @@
       "mode": 420
     },
     {
+      "source": "files.php",
+      "action": "ship",
+      "path": "app/files.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "legal-page.php",
       "action": "ship",
       "path": "app/legal-page.php",

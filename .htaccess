@@ -1,4 +1,5 @@
 RewriteEngine On
+Options -MultiViews
 AddType application/manifest+json .webmanifest
 
 # Deny operational material before the existing file/directory passthrough and
@@ -23,6 +24,7 @@ RewriteRule ^oauth/token/?$ oauth/token.php [L,QSA]
 RewriteRule ^oauth/register/?$ oauth/register.php [L,QSA]
 RewriteRule ^oauth/revoke/?$ oauth/revoke.php [L,QSA]
 RewriteRule ^mcp/?$ mcp.php [L,QSA]
+RewriteRule ^files/([a-f0-9-]{36})/?$ files.php?id=$1 [L,NC,QSA]
 # Capability URLs contain a one-time-issued secret. The application never logs
 # it; production access logs must exclude requests marked by this environment.
 SetEnvIf Request_URI "/api/v1/integration-events/" syndicatum_sensitive_webhook=1

@@ -1171,9 +1171,10 @@ function projectFilesContent(payload, handlers = {}) {
         key: "actions", label: "", width: "48px", sortable: false, resizable: false,
         renderCell({ row }) {
           const items = [
+            ...(payload.capabilities?.copy_link ? [{ id: "copy-link", label: "Copy link", icon: helperIconHtml("actions.copy") }] : []),
+            ...(payload.capabilities?.move ? [{ id: "move", label: "Move to", icon: helperIconHtml("navigation.arrow-right") }] : []),
+            ...(payload.capabilities?.download ? [{ id: "download", label: "Download", icon: helperIconHtml("actions.download") }] : []),
             ...(payload.capabilities?.rename ? [{ id: "rename", label: "Rename", icon: helperIconHtml("actions.edit") }] : []),
-            ...(payload.capabilities?.replace ? [{ id: "replace", label: "Replace file", icon: helperIconHtml("actions.refresh") }] : []),
-            ...(payload.capabilities?.regenerate_link ? [{ id: "regenerate-link", label: "Regenerate public link", icon: helperIconHtml("actions.rotate-right") }] : []),
             ...(payload.capabilities?.delete ? [{ id: "delete", label: "Delete", icon: helperIconHtml("actions.delete"), danger: true }] : []),
           ];
           if (!items.length) return "";
@@ -1245,12 +1246,13 @@ function openCreateProjectFolder(projectId, folder, onCreated) {
   modal.open();
 }
 
-function openProjectFileUploader(projectId, folder, maximumBytes, maximumFiles, onUploaded) {
+function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes, maximumFiles, onUploaded) {
   const content = document.createElement("div");
   const mount = document.createElement("div");
   content.append(mount);
   let modal;
   let refreshPending = false;
+  let confirmationQueue = Promise.resolve();
   const idempotencyKeys = new Map();
   const refreshFiles = () => {
     if (!refreshPending) return;
@@ -1266,9 +1268,24 @@ function openProjectFileUploader(projectId, folder, maximumBytes, maximumFiles, 
     startText: "Upload files",
     dropText: "Drop files here or choose Browse.",
     async onUpload(item, controls) {
+      const existing = (Array.isArray(existingFiles) ? existingFiles : []).find((file) =>
+        String(file.name || "").trim().toLocaleLowerCase() === String(item.name || "").trim().toLocaleLowerCase());
+      if (existing) {
+        const confirmation = confirmationQueue.then(() => state.factories.uiConfirm(
+          `${existing.name} already exists in ${folder?.name || "this folder"}. Replace its contents with the selected file?`,
+          { title: "Replace existing file?", variant: "warning", confirmText: "Replace", confirmVariant: "danger" },
+        ));
+        confirmationQueue = confirmation.catch(() => false);
+        if (!(await confirmation)) throw new Error("Upload cancelled. The existing file was not changed.");
+      }
       const form = new FormData();
-      form.append("operation", "upload");
-      form.append("folder_id", folder?.id || "root");
+      form.append("operation", existing ? "replace_file" : "upload");
+      if (existing) {
+        form.append("file_id", existing.id);
+        form.append("version", String(existing.version));
+      } else {
+        form.append("folder_id", folder?.id || "root");
+      }
       form.append("file", item.file, item.name);
       const uploadIdentity = `${item.name}:${item.file?.size || item.size || 0}:${item.file?.lastModified || 0}`;
       if (!idempotencyKeys.has(uploadIdentity)) idempotencyKeys.set(uploadIdentity, makeIdempotencyKey());
@@ -1353,73 +1370,18 @@ function openRenameProjectFile(projectId, file, onChanged) {
   modal.open();
 }
 
-function openReplaceProjectFile(projectId, file, maximumBytes, onChanged) {
-  const content = document.createElement("div");
-  const mount = document.createElement("div");
-  content.appendChild(mount);
-  let modal;
-  let replaced = false;
-  const idempotencyKeys = new Map();
-  const uploader = state.factories.createFileUploader(mount, {
-    ariaLabel: `Replace ${file.name}`,
-    dropzoneAriaLabel: `Choose a replacement for ${file.name}`,
-    multiple: false,
-    maxFiles: 1,
-    maxFileSize: Number(maximumBytes || 25 * 1024 * 1024),
-    startText: "Replace file",
-    dropText: "Drop one replacement file here or choose Browse.",
-    async onUpload(item, controls) {
-      const form = new FormData();
-      form.append("operation", "replace_file");
-      form.append("file_id", file.id);
-      form.append("version", String(file.version));
-      form.append("file", item.file, item.name);
-      const replacementIdentity = `${item.name}:${item.file?.size || item.size || 0}:${item.file?.lastModified || 0}`;
-      if (!idempotencyKeys.has(replacementIdentity)) idempotencyKeys.set(replacementIdentity, makeIdempotencyKey());
-      const controller = new AbortController();
-      controls.signal.addEventListener("abort", () => controller.abort(), { once: true });
-      const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
-        method: "POST", credentials: "same-origin", cache: "no-store", signal: controller.signal,
-        headers: projectFileMutationHeaders(idempotencyKeys.get(replacementIdentity)), body: form,
-      });
-      let payload = null;
-      try { payload = await response.json(); } catch (_error) { payload = null; }
-      if (!response.ok) throw new Error(payload?.message || `Replacement failed with status ${response.status}`);
-      replaced = true;
-      controls.report(100);
-    },
-    onComplete(value) {
-      if (!replaced || !value.items?.some((item) => item.status === "success")) return;
-      state.components.toast.success("File replaced.");
-      onChanged?.();
-      void modal.close({ reason: "replaced" });
-    },
-  });
-  modal = state.factories.createActionModal({
-    title: `Replace ${file.name}`, size: "lg", content,
-    actions: [{ id: "close", label: "Close" }],
-    onClose() { uploader.destroy?.(); },
-  });
-  modal.open();
-}
-
 function confirmProjectFileMutation(projectId, file, action, onChanged) {
-  const deleting = action === "delete_file";
   const idempotencyKey = makeIdempotencyKey();
   const modal = state.factories.createFormModal({
-    title: deleting ? `Delete ${file.name}?` : `Regenerate the public link for ${file.name}?`,
+    title: `Delete ${file.name}?`,
     size: "sm",
-    submitLabel: deleting ? "Delete file" : "Regenerate link",
+    submitLabel: "Delete file",
     submitVariant: "danger",
     context: {
-      badge: deleting ? "Permanent deletion" : "Link replacement",
-      summary: deleting
-        ? "The file content and its current public link will no longer be available."
-        : "The current public link will stop working immediately.",
+      badge: "Permanent deletion",
+      summary: "The file content and its permanent public link will no longer be available.",
     },
-    rows: [[{ type: "text", content: deleting
-      ? "This action is logged and cannot be undone."
-      : "Use the newly generated canonical link anywhere this file is shared." }]],
+    rows: [[{ type: "text", content: "This action is logged and cannot be undone." }]],
     async onSubmit(_values, context) {
       try {
         await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
@@ -1428,7 +1390,7 @@ function confirmProjectFileMutation(projectId, file, action, onChanged) {
           body: JSON.stringify({ operation: action, file_id: file.id, version: file.version }),
           requireJson: true,
         });
-        state.components.toast.success(deleting ? "File deleted." : "Public link regenerated.");
+        state.components.toast.success("File deleted.");
         onChanged?.();
         return true;
       } catch (error) {
@@ -1438,6 +1400,73 @@ function confirmProjectFileMutation(projectId, file, action, onChanged) {
     },
   });
   modal.open();
+}
+
+function projectFileFolderOptions(root, currentFolderId) {
+  const options = [{ value: "", label: "Select a destination" }];
+  const visit = (node, depth = 0) => {
+    if (!node) return;
+    if (node.id !== currentFolderId) options.push({ value: node.id, label: `${"— ".repeat(depth)}${node.label}` });
+    (Array.isArray(node.children) ? node.children : []).forEach((child) => visit(child, depth + 1));
+  };
+  visit(root);
+  return options;
+}
+
+function openMoveProjectFile(projectId, file, currentFolder, root, onChanged) {
+  const options = projectFileFolderOptions(root, currentFolder?.id);
+  const modal = state.factories.createFormModal({
+    title: `Move ${file.name}`,
+    submitLabel: "Move file",
+    manageBusyOnSubmit: false,
+    initialValues: { destination_folder_id: "" },
+    rows: [[{ type: "select", name: "destination_folder_id", label: "Destination folder", required: true, options }]],
+    validate(values) {
+      return values.destination_folder_id ? {} : { destination_folder_id: "Destination folder — required" };
+    },
+    async onInvalid(result, context) {
+      await showFormValidationSummary(result, context, { destination_folder_id: "Destination folder" });
+    },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Moving file…" });
+      try {
+        await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: projectFileMutationHeaders(makeIdempotencyKey(), { "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: "move_file", file_id: file.id, version: file.version,
+            destination_folder_id: values.destination_folder_id }),
+          requireJson: true,
+        });
+        state.components.toast.success("File moved.");
+        onChanged?.();
+        return true;
+      } catch (error) {
+        context.setBusy(false);
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  modal.open();
+}
+
+async function copyProjectFileLink(file) {
+  try {
+    await navigator.clipboard.writeText(new URL(file.url, document.baseURI).href);
+    state.components.toast.success("Permanent file link copied.");
+  } catch (_error) {
+    state.components.toast.error("The file link could not be copied.");
+  }
+}
+
+function downloadProjectFile(file) {
+  const link = document.createElement("a");
+  link.href = new URL(file.url, document.baseURI).href;
+  link.download = file.name || "download";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function openProjectFilesModal() {
@@ -1488,13 +1517,14 @@ function openProjectFilesModal() {
     mounted = projectFilesContent(payload, {
       onFolderSelect: (nextFolderId) => { modal.setBusy(true, { message: "Loading folder…" }); void loadFolder(nextFolderId); },
       onCreateFolder: (folder) => openCreateProjectFolder(projectId, folder, () => { modal.setBusy(true, { message: "Refreshing folders…" }); void loadFolder(folder?.id || "root"); }),
-      onUpload: (folder) => openProjectFileUploader(projectId, folder, payload.storage?.max_upload_bytes,
+      onUpload: (folder) => openProjectFileUploader(projectId, folder, payload.files, payload.storage?.max_upload_bytes,
         payload.storage?.max_files_per_action,
         () => { modal.setBusy(true, { message: "Refreshing files…" }); void loadFolder(folder?.id || "root"); }),
       onFileAction(action, file) {
+        if (action === "copy-link") void copyProjectFileLink(file);
+        if (action === "move") openMoveProjectFile(projectId, file, payload.current_folder, payload.root, refreshCurrentFolder);
+        if (action === "download") downloadProjectFile(file);
         if (action === "rename") openRenameProjectFile(projectId, file, refreshCurrentFolder);
-        if (action === "replace") openReplaceProjectFile(projectId, file, payload.storage?.max_upload_bytes, refreshCurrentFolder);
-        if (action === "regenerate-link") confirmProjectFileMutation(projectId, file, "regenerate_link", refreshCurrentFolder);
         if (action === "delete") confirmProjectFileMutation(projectId, file, "delete_file", refreshCurrentFolder);
       },
     });

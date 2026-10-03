@@ -123,6 +123,11 @@ final class ProjectFileService
                     return $replay;
                 }
                 $folder = $this->resolveFolderForWrite($access, $folderPublicId);
+                $duplicate = $this->pdo->prepare(
+                    "SELECT id FROM project_files WHERE project_id = ? AND folder_id = ? AND normalized_name = ? AND deleted_at IS NULL AND state = 'available' LIMIT 1"
+                );
+                $duplicate->execute([(int) $access['project_id'], (int) $folder['id'], $this->normalizeName($originalName)]);
+                if ($duplicate->fetch()) { throw new RuntimeException('FILE_NAME_CONFLICT'); }
                 $this->assertQuota((int) $access['project_id'], (int) $staged['size_bytes'], 0);
                 $publishedKey = $this->storage->publish($staged['staging_key'], $this->projectStorageNamespace((int) $access['project_id']));
                 $publicId = Db::uuidV4();
@@ -163,6 +168,11 @@ final class ProjectFileService
     {
         $name = $this->validName(isset($input['name']) ? $input['name'] : '', 'File name');
         return $this->mutateFile($access, $input, $idempotencyKey, 'rename_file', function ($file) use ($name, $access) {
+            $duplicate = $this->pdo->prepare(
+                "SELECT id FROM project_files WHERE project_id = ? AND folder_id = ? AND normalized_name = ? AND id <> ? AND deleted_at IS NULL AND state = 'available' LIMIT 1"
+            );
+            $duplicate->execute([(int) $access['project_id'], (int) $file['folder_id'], $this->normalizeName($name), (int) $file['id']]);
+            if ($duplicate->fetch()) { throw new RuntimeException('FILE_NAME_CONFLICT'); }
             $update = $this->pdo->prepare(
                 'UPDATE project_files SET display_name = ?, normalized_name = ?, version = version + 1, updated_at = ?
                  WHERE id = ? AND version = ? AND state = ? AND deleted_at IS NULL'
@@ -173,17 +183,26 @@ final class ProjectFileService
         });
     }
 
-    public function regeneratePublicId(array $access, array $input, $idempotencyKey)
+    public function moveFile(array $access, array $input, $idempotencyKey)
     {
-        return $this->mutateFile($access, $input, $idempotencyKey, 'regenerate_link', function ($file) use ($access) {
-            $next = Db::uuidV4();
-            $update = $this->pdo->prepare(
-                'UPDATE project_files SET public_id = ?, version = version + 1, updated_at = ?
-                 WHERE id = ? AND version = ? AND state = ? AND deleted_at IS NULL'
+        $destinationPublicId = trim((string) (isset($input['destination_folder_id']) ? $input['destination_folder_id'] : ''));
+        if ($destinationPublicId === '') { throw new InvalidArgumentException('Destination folder — required.'); }
+        return $this->mutateFile($access, $input, $idempotencyKey, 'move_file', function ($file) use ($access, $destinationPublicId) {
+            $destination = $this->resolveFolderForWrite($access, $destinationPublicId);
+            if ((int) $destination['id'] === (int) $file['folder_id']) { throw new RuntimeException('FILE_MOVE_SAME_FOLDER'); }
+            $duplicate = $this->pdo->prepare(
+                "SELECT id FROM project_files WHERE project_id = ? AND folder_id = ? AND normalized_name = ? AND deleted_at IS NULL AND state = 'available' LIMIT 1"
             );
-            $update->execute([$next, Db::now(), (int) $file['id'], (int) $file['version'], 'available']);
+            $duplicate->execute([(int) $access['project_id'], (int) $destination['id'], $file['normalized_name']]);
+            if ($duplicate->fetch()) { throw new RuntimeException('FILE_NAME_CONFLICT'); }
+            $update = $this->pdo->prepare(
+                "UPDATE project_files SET folder_id = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND state = 'available' AND deleted_at IS NULL"
+            );
+            $update->execute([(int) $destination['id'], Db::now(), (int) $file['id'], (int) $file['version']]);
             if ($update->rowCount() !== 1) { throw new RuntimeException('FILE_VERSION_CONFLICT'); }
-            $this->event($access, 'file.public_id_regenerated', (int) $file['id'], (int) $file['folder_id'], ['previous_public_id' => $file['public_id'], 'public_id' => $next]);
+            $this->event($access, 'file.moved', (int) $file['id'], (int) $destination['id'], [
+                'from_folder_id' => (int) $file['folder_id'], 'to_folder_id' => (int) $destination['id'], 'name' => $file['display_name'],
+            ]);
         });
     }
 
@@ -288,12 +307,13 @@ final class ProjectFileService
             if ((int) $file['version'] !== $version) { throw new RuntimeException('FILE_VERSION_CONFLICT'); }
             $mutation($file);
             $reload = $this->pdo->prepare(
-                'SELECT public_id, display_name, original_name, mime_type, size_bytes, sha256, state, version, created_at, updated_at
+                'SELECT public_id, folder_id, display_name, original_name, mime_type, size_bytes, sha256, state, version, created_at, updated_at
                  FROM project_files WHERE id = ?'
             );
             $reload->execute([(int) $file['id']]);
-            $result = ['file' => $this->fileView($reload->fetch()), 'replayed' => false];
-            $this->finishOperation($access, $idempotencyKey, $result, (int) $file['id'], (int) $file['folder_id']);
+            $reloaded = $reload->fetch();
+            $result = ['file' => $this->fileView($reloaded), 'replayed' => false];
+            $this->finishOperation($access, $idempotencyKey, $result, (int) $file['id'], (int) $reloaded['folder_id']);
             $this->pdo->commit();
             return $result;
         } catch (Exception $exception) {
@@ -417,6 +437,7 @@ final class ProjectFileService
     private function fileView($row)
     {
         return ['id' => $row['public_id'], 'name' => $row['display_name'], 'original_name' => $row['original_name'],
+            'url' => 'files/' . $row['public_id'],
             'mime_type' => $row['mime_type'], 'size_bytes' => (int) $row['size_bytes'], 'sha256' => $row['sha256'],
             'state' => $row['state'], 'version' => (int) $row['version'], 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at']];
     }
@@ -442,7 +463,7 @@ final class ProjectFileService
             'project_quota_bytes' => (int) $this->settings->get('storage.default_project_quota_bytes')];
     }
 
-    private function capabilities() { return ['create_folder' => true, 'upload' => true, 'rename' => true, 'replace' => true, 'regenerate_link' => true, 'delete' => true]; }
+    private function capabilities() { return ['create_folder' => true, 'upload' => true, 'rename' => true, 'move' => true, 'copy_link' => true, 'download' => true, 'delete' => true]; }
 
     private function assertQuota($projectId, $incomingBytes, $replacedBytes)
     {

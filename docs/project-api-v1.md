@@ -68,15 +68,18 @@ opaque UUIDs. Responses never contain an absolute server path or provider key.
 
 `POST project-files.php` requires a 16–160 character `Idempotency-Key`. Human
 callers also require CSRF. JSON operations are `create_folder`, `rename_file`,
-`delete_file`, and `regenerate_link`. Multipart operations are `upload` and
-`replace_file`, with the upload in the `file` part. Rename, replacement,
-deletion, and regeneration require the current optimistic `version`.
+`move_file`, and `delete_file`. Multipart operations are `upload` and the
+same-name-confirmation path `replace_file`, with the upload in the `file` part.
+Rename, move, replacement, and deletion require the current optimistic
+`version`. A normal upload fails on a same-folder name conflict; the client
+must obtain confirmation before sending bytes through `replace_file`.
 
 The server streams uploads to private staging, calculates SHA-256, inspects the
 bytes for their MIME type, enforces configured size/type and per-project quota
 policy, and then atomically publishes the object. Every successful mutation has
-an idempotency receipt and immutable audit event. The permanent public read URL
-is intentionally not returned until the public-delivery phase is implemented.
+an idempotency receipt and immutable audit event. Each file returns one stable
+`url` (`files/{public_id}`), served without authentication by `GET` or `HEAD`.
+Public IDs are immutable: there is no link-regeneration operation.
 
 Project context and bootstrap include the optional canonical
 `project.google_drive_url`. When configured, `effective_instructions` also tells

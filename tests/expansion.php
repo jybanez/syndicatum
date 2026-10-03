@@ -333,6 +333,7 @@ try {
                 'participant_id' => (int) $participant->fetchColumn(), 'participant_status' => 'active'];
             $service = new ProjectFileService($pdo, new LocalFileStorage(dirname(__DIR__), $root), $settings);
             $folder = $service->createFolder($access, ['name' => 'Board'], 'test-folder-create-0001');
+            $archiveFolder = $service->createFolder($access, ['name' => 'Archive'], 'test-folder-create-0002');
             $replayedFolder = $service->createFolder($access, ['name' => 'Board'], 'test-folder-create-0001');
             $suite->same(true, $replayedFolder['replayed']);
 
@@ -340,6 +341,7 @@ try {
             $uploaded = $service->uploadStream($access, $stream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
             fclose($stream);
             $suite->same('application/pdf', $uploaded['file']['mime_type']);
+            $suite->same('files/' . $uploaded['file']['id'], $uploaded['file']['url']);
             $suite->truthy(!isset($uploaded['file']['storage_key']) && !isset($uploaded['file']['path']), 'Storage internals leaked through metadata.');
             $storedKey = $pdo->prepare('SELECT storage_key FROM project_files WHERE project_id = ? AND public_id = ?');
             $storedKey->execute([$project['id'], $uploaded['file']['id']]);
@@ -349,6 +351,11 @@ try {
             $replayedUpload = $service->uploadStream($access, $replayStream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
             fclose($replayStream);
             $suite->same(true, $replayedUpload['replayed']);
+            $duplicateStream = fopen('php://temp', 'w+b'); fwrite($duplicateStream, "%PDF-1.4\nduplicate\n"); rewind($duplicateStream);
+            $suite->throws('FILE_NAME_CONFLICT', function () use ($service, $access, $folder, $duplicateStream) {
+                $service->uploadStream($access, $duplicateStream, 'INFOGRAPHIC.PDF', $folder['folder']['id'], 'test-file-upload-duplicate');
+            });
+            fclose($duplicateStream);
             $suite->throws('slashes or control characters', function () use ($service, $access) {
                 $service->createFolder($access, ['name' => '../escape'], 'test-folder-traversal-01');
             });
@@ -371,23 +378,28 @@ try {
 
             $renamed = $service->renameFile($access, ['file_id' => $uploaded['file']['id'], 'version' => 1, 'name' => 'board-infographic.pdf'], 'test-file-rename-000001');
             $suite->same(2, $renamed['file']['version']);
-            $regenerated = $service->regeneratePublicId($access, ['file_id' => $renamed['file']['id'], 'version' => 2], 'test-file-regenerate-001');
-            $suite->truthy($regenerated['file']['id'] !== $renamed['file']['id']);
 
             $replacement = fopen('php://temp', 'w+b'); fwrite($replacement, "%PDF-1.4\nreplacement\n"); rewind($replacement);
             $replaced = $service->replaceFileStream($access, $replacement, 'replacement.pdf',
-                ['file_id' => $regenerated['file']['id'], 'version' => 3], 'test-file-replace-00001');
+                ['file_id' => $renamed['file']['id'], 'version' => 2], 'test-file-replace-00001');
             fclose($replacement);
-            $suite->same(4, $replaced['file']['version']);
-            $service->deleteFile($access, ['file_id' => $replaced['file']['id'], 'version' => 4], 'test-file-delete-000001');
-            $browsed = $service->browse($access, $folder['folder']['id']);
+            $suite->same($uploaded['file']['id'], $replaced['file']['id']);
+            $suite->same(3, $replaced['file']['version']);
+            $moved = $service->moveFile($access, ['file_id' => $replaced['file']['id'], 'version' => 3,
+                'destination_folder_id' => $archiveFolder['folder']['id']], 'test-file-move-0000001');
+            $suite->same($uploaded['file']['id'], $moved['file']['id']);
+            $suite->same(4, $moved['file']['version']);
+            $suite->same([], $service->browse($access, $folder['folder']['id'])['files']);
+            $suite->same(1, count($service->browse($access, $archiveFolder['folder']['id'])['files']));
+            $service->deleteFile($access, ['file_id' => $moved['file']['id'], 'version' => 4], 'test-file-delete-000001');
+            $browsed = $service->browse($access, $archiveFolder['folder']['id']);
             $suite->same([], $browsed['files']);
             $events = $pdo->prepare('SELECT COUNT(*) FROM project_file_events WHERE project_id = ?');
             $events->execute([$project['id']]);
-            $suite->same(6, (int) $events->fetchColumn());
+            $suite->same(7, (int) $events->fetchColumn());
             $operations = $pdo->prepare('SELECT COUNT(*) FROM project_file_operations WHERE project_id = ?');
             $operations->execute([$project['id']]);
-            $suite->same(6, (int) $operations->fetchColumn());
+            $suite->same(7, (int) $operations->fetchColumn());
 
             $settings->update(['storage.max_upload_bytes' => 1048576, 'storage.default_project_quota_bytes' => 2097152], $administrator['id']);
             $quotaProject = $management->createProject($administrator['id'], ['name' => 'Quota File Project']);

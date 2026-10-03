@@ -106,7 +106,7 @@ secure file management to Google Drive or another dedicated service.
 | `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [x] Owner-approved |
 | `storage.default_project_quota_bytes` | Default project storage quota | 64 GB per project | Must exceed the per-file maximum; each project's canonical live-file usage is enforced independently before committing an upload | [x] Owner-approved |
 | `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [x] Owner-approved |
-| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [x] Owner-approved |
+| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement and deletion must use the approved cache behavior | [x] Owner-approved |
 
 - [x] Add these fields to the existing canonical Storage tab, grouped into
   **Location**, **Uploads**, **Capacity**, and **Delivery** sections.
@@ -146,14 +146,15 @@ as toggles:
   allowed-type selection or forced to download under a safe content type.
 - [ ] Every accepted type is server-inspected. Browser filenames, extensions,
   and MIME claims are never trusted as the safety decision.
-- [ ] Ordinary uploads receive a new public ID. A URL is preserved only through
-  an explicit **Replace published file** action.
+- [x] Ordinary uploads receive a new immutable public ID. When a filename
+  already exists in the selected folder, Helper confirms replacement before
+  any bytes are sent; the confirmed replacement preserves that public ID.
 - [ ] Deletion invalidates public access immediately, returns a clear unavailable
   response, and retains the approved metadata tombstone/audit evidence.
-- [ ] Link regeneration is an explicit confirmed action that creates a new
-  public ID and invalidates the former link.
-- [ ] Every active human and agent project participant can upload, rename,
-  replace, regenerate the public link for, and delete every file in that
+- [x] Public IDs cannot be regenerated. A file's generated canonical URL is
+  permanent for the lifetime of the file record.
+- [ ] Every active human and agent project participant can upload, move, rename,
+  download, copy the public link for, and delete every file in that
   project. Every operation records the actor and immutable audit evidence.
   External integration participants receive no file-management authority
   unless a later explicit capability is approved.
@@ -168,7 +169,8 @@ as toggles:
 
 - [ ] Record the approved settings, defaults, ranges, and fixed rules in the
   storage proposal.
-- [x] Include public-link regeneration in V1, using the one canonical URL model.
+- [x] Exclude public-link regeneration permanently; use one immutable canonical
+  URL for internal and external use.
 
 **Exit evidence:** owner-approved global setting catalog and fixed rules are
 recorded in the proposal, followed by an authoritative Syndicatum project-plan
@@ -189,7 +191,7 @@ proposal for implementation. Gate A was approved October 3, 2026.
   do not copy storage paths or provider URLs into messages, tasks, activities,
   deliverables, or project records.
 - [x] Preserve immutable authorship and audit evidence for upload,
-  replacement, deletion, and link-regeneration events.
+  same-name replacement, move, and deletion events.
 - [x] Add the new durable tables and columns to backup metadata, baseline drift
   checks, clean-install schema, migration reconciliation, and package tests.
 - [ ] Verify clean MySQL 8.4 installation and supported MySQL 5.7-to-8.4
@@ -223,7 +225,7 @@ proposal for implementation. Gate A was approved October 3, 2026.
   dedicated service rather than duplicating it across routes.
 - [x] Validate that every uploader and file target is an active participant
   or project record in the same project.
-- [x] Make create, upload, replace, delete, and regenerate operations audited and
+- [x] Make create, upload, confirmed same-name replacement, move, and delete operations audited and
   idempotent where retries are supported.
 - [x] Use optimistic versions for mutable metadata and replacement state.
 - [x] Define safe reconciliation states for pending, available, unavailable,
@@ -238,15 +240,15 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
 
 - [x] Add project-qualified upload and list routes using stable project public
   identifiers where the current API contract requires them.
-- [x] Add metadata rename, explicit replacement, deletion, and public-link
-  regeneration routes in V1.
+- [x] Add metadata rename, move, confirmed same-name replacement, and deletion
+  routes in V1. Do not expose a public-link regeneration route.
 - [x] Require the existing human session/CSRF boundary or project-agent bearer
   boundary as appropriate; never accept caller-supplied uploader identity.
 - [x] Parse multipart uploads with explicit limits before mutation and reject
   missing, empty, oversized, truncated, or malformed files visibly.
 - [x] Support a stable idempotency key for upload mutations and reconcile an
   uncertain result before any replay.
-- [ ] Return canonical metadata and a Syndicatum-owned public URL, never the
+- [x] Return canonical metadata and a Syndicatum-owned public URL, never the
   local path or a provider URL.
 - [ ] Add pagination and bounded filters for project file lists.
 - [x] Add consistent error codes without leaking another project's file
@@ -255,22 +257,22 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
 
 ### 7.2 Public read route
 
-- [ ] Add `GET` and `HEAD` handling for
-  `/files/{public_id}/{cosmetic_filename}` without authentication.
+- [x] Add unauthenticated `GET` and `HEAD` handling for the immutable,
+  rename-safe `/files/{public_id}` route.
 - [ ] Use that exact canonical route for rendered image sources and supported
   document previews as well as externally shared links. Right-clicking a
   rendered image and copying its address must produce the intended permanent
   public URL.
-- [ ] Resolve only the opaque public ID; the filename segment must not select a
-  physical file or change authorization.
-- [ ] Return a clear unavailable response for deleted or invalidated links
+- [x] Resolve only the opaque public ID; display names never select a physical
+  file or change authorization.
+- [x] Return a clear unavailable response for deleted or invalid links
   without exposing storage internals.
 - [ ] Stream local bytes and support safe range requests where required for PDF
   usability.
-- [ ] Set verified `Content-Type`, safe `Content-Disposition`,
+- [x] Set verified `Content-Type`, safe `Content-Disposition`,
   `X-Content-Type-Options: nosniff`, search-engine exclusion, ETag/checksum, and
   the approved cache policy.
-- [ ] Force potentially active or unknown formats to download; do not render
+- [x] Force potentially active or unknown formats to download; do not render
   HTML or SVG under the Syndicatum origin.
 - [ ] Normalize response filenames safely against control characters, header
   injection, invalid Unicode, and platform-specific separators.
@@ -322,10 +324,10 @@ OpenAPI contract suites pass.
 - [ ] List filename, type, size, uploader, creation/update time, and availability
   with bounded pagination, search, sort, loading skeletons, empty state, and
   recoverable error state.
-- [ ] Let every active human and agent participant upload, open, copy, download,
-  rename, replace, regenerate, and delete files in that project.
-- [ ] Require explicit confirmation for replacement, public-link regeneration,
-  and deletion, describing the effect on previously shared URLs.
+- [x] Let every active human and agent participant upload, copy, move, download,
+  rename, and delete files in that project.
+- [x] Require Helper confirmation before a same-name replacement sends bytes,
+  and confirmation before deletion. Replacement preserves the immutable URL.
 - [ ] Record the actor, file, action, prior/current identifiers or metadata as
   appropriate, and timestamp for every mutation without logging file bodies or
   local paths.
@@ -339,9 +341,10 @@ OpenAPI contract suites pass.
 
 Foundation update (October 3, 2026): the project action opens a large canonical
 loading modal and mounts Helper's complete tree, grid, form-modal, and uploader
-components. **Create folder** and **Upload files** now use the participant-
-authorized, CSRF-protected, idempotent mutation service. Remaining row actions
-and the permanent public delivery route stay in their later checklist slices.
+components. **Create folder** and **Upload files** use the participant-authorized,
+CSRF-protected, idempotent mutation service. File rows now provide **Copy link**,
+**Move to**, **Download**, **Rename**, and **Delete**, and the immutable public
+delivery route is active.
 
 ### 8.3 Timeline message attachments
 
@@ -442,7 +445,7 @@ after cutover.
 
 - [ ] Update application surfaces, architecture inventory, Project API,
   OpenAPI, backup/restore, deployment, security, and operations documentation.
-- [ ] Update the in-app User Guide for upload, sharing, deletion/replacement,
+- [ ] Update the in-app User Guide for upload, sharing, deletion/same-name replacement,
   public-link risk, administrator storage setup, and recovery.
 - [ ] Add every new runtime source, route, migration, asset, skill, and document
   to canonical release packaging.
@@ -475,8 +478,8 @@ after cutover.
 - [ ] Supported images, audio, and video render or play inline. Other files open
   in a new tab/window or download; active/unknown formats cannot execute under
   the application origin.
-- [ ] Every active human and agent project participant can upload, rename,
-  replace, regenerate, and delete project files, with attributable audit
+- [ ] Every active human and agent project participant can upload, move, rename,
+  download, copy links, and delete project files, with attributable audit
   evidence for every action.
 - [ ] Files cannot be enumerated through directory listing or predictable IDs.
 - [ ] Cross-project listing, attachment, replacement, and deletion fail safely.
@@ -497,8 +500,7 @@ after cutover.
 - [ ] Add scheduled checksum/integrity verification and safe repair guidance.
 - [ ] Add optimized Nginx `X-Accel-Redirect` delivery on supported Linux
   deployments without changing URLs.
-- [ ] Complete replacement, deletion, and link-regeneration safeguards deferred
-  from V1, if any.
+- [ ] Complete replacement and deletion safeguards deferred from V1, if any.
 - [ ] Extend attachments to tasks, task activity, deliverables, and project
   details.
 - [ ] Exercise large, concurrent, and interrupted file sets through upload,
@@ -530,7 +532,7 @@ Gate A was approved by the project owner on October 3, 2026:
 - 25 MiB maximum file size and 10 files per action;
 - a 64 GB default storage quota for each project;
 - one canonical permanent URL for internal and external use;
-- public-link regeneration included in V1;
+- immutable public IDs with no regeneration action;
 - inline rendering limited to safe image, audio, and video media;
 - equal audited file-management authority for every active human and agent
   project participant;

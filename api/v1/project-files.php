@@ -20,7 +20,7 @@ try {
             'root' => ['id' => 'root', 'label' => (string) $access['project_name'], 'selected' => true, 'hasChildren' => false, 'children' => []],
             'current_folder' => ['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0],
             'folders' => [], 'files' => [],
-            'capabilities' => ['create_folder' => false, 'upload' => false, 'rename' => false, 'replace' => false, 'regenerate_link' => false, 'delete' => false],
+            'capabilities' => ['create_folder' => false, 'upload' => false, 'rename' => false, 'move' => false, 'copy_link' => false, 'download' => false, 'delete' => false],
             'storage' => ['configured' => false, 'ready' => false, 'metadata_ready' => Db::tableExists($pdo, 'project_files')],
             'notice' => 'Ask an administrator to configure an available private storage location.',
         ]]);
@@ -59,8 +59,8 @@ try {
     $operation = isset($body['operation']) ? trim((string) $body['operation']) : '';
     if ($operation === 'create_folder') { $result = $service->createFolder($access, $body, Api::idempotencyKey()); }
     elseif ($operation === 'rename_file') { $result = $service->renameFile($access, $body, Api::idempotencyKey()); }
+    elseif ($operation === 'move_file') { $result = $service->moveFile($access, $body, Api::idempotencyKey()); }
     elseif ($operation === 'delete_file') { $result = $service->deleteFile($access, $body, Api::idempotencyKey()); }
-    elseif ($operation === 'regenerate_link') { $result = $service->regeneratePublicId($access, $body, Api::idempotencyKey()); }
     else { throw new InvalidArgumentException('Unsupported file operation.'); }
     Api::json(['data' => $result], $result['replayed'] ? 200 : ($operation === 'create_folder' ? 201 : 200));
 } catch (Exception $exception) {

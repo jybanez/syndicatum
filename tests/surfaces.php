@@ -1039,6 +1039,8 @@ try {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
         $filesApi = file_get_contents($root . '/api/v1/project-files.php');
+        $publicFiles = file_get_contents($root . '/files.php');
+        $htaccess = file_get_contents($root . '/.htaccess');
         $suite->true(strpos($index, 'id="project-actions-trigger"') !== false, 'The project overview action-menu trigger is missing.');
         $filesAction = strpos($index, 'id="project-files-trigger"');
         $projectMenu = strpos($index, 'id="project-actions-trigger"');
@@ -1066,14 +1068,25 @@ try {
             && strpos($source, '{ icon: "data.upload" }') !== false
             && strpos($source, 'ui-button-borderless') !== false
             && strpos($source, 'className = "ui-button ui-button-sm ui-button-borderless project-file-row-actions"') !== false
+            && strpos($source, 'label: "Copy link"') !== false
+            && strpos($source, 'label: "Move to"') !== false
+            && strpos($source, 'label: "Download"') !== false
             && strpos($source, 'label: "Rename"') !== false
-            && strpos($source, 'label: "Replace file"') !== false
-            && strpos($source, 'label: "Regenerate public link"') !== false
             && strpos($source, 'label: "Delete"') !== false
             && strpos($source, 'openRenameProjectFile') !== false
-            && strpos($source, 'openReplaceProjectFile') !== false
+            && strpos($source, 'openMoveProjectFile') !== false
+            && strpos($source, 'state.factories.uiConfirm(') !== false
+            && strpos($source, 'form.append("operation", existing ? "replace_file" : "upload")') !== false
             && strpos($source, 'confirmProjectFileMutation') !== false,
             'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
+        $suite->true(strpos($htaccess, 'Options -MultiViews') !== false
+            && strpos($htaccess, 'files.php?id=$1') !== false
+            && strpos($publicFiles, "['GET', 'HEAD']") !== false
+            && strpos($publicFiles, "header('X-Robots-Tag: noindex, nofollow, noarchive')") !== false
+            && strpos($publicFiles, "get('storage.inline_preview_types')") !== false
+            && strpos($filesApi, 'regenerate_link') === false
+            && strpos($source, 'Regenerate public link') === false,
+            'Project files must use one immutable anonymous public URL with safe delivery headers and no regeneration operation.');
         $suite->true(strpos($styles, '.project-files-layout') !== false
             && strpos($styles, 'height: min(66vh, 660px)') !== false
             && strpos($styles, '.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none;') !== false,
