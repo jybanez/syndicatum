@@ -11,7 +11,7 @@ import {
   settleResponsibilityAction,
   validationAlertItems,
 } from "./responsibility-action-flow.mjs?v=20261003051000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003143000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003150000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -1202,7 +1202,7 @@ function openCreateProjectFolder(projectId, folder, onCreated) {
   modal.open();
 }
 
-function openProjectFileUploader(projectId, folder, maximumBytes, onUploaded) {
+function openProjectFileUploader(projectId, folder, maximumBytes, maximumFiles, onUploaded) {
   const content = document.createElement("div");
   const mount = document.createElement("div");
   content.append(mount);
@@ -1211,11 +1211,11 @@ function openProjectFileUploader(projectId, folder, maximumBytes, onUploaded) {
   const uploader = state.factories.createFileUploader(mount, {
     ariaLabel: "Upload project file",
     dropzoneAriaLabel: "Choose a project file",
-    multiple: false,
-    maxFiles: 1,
+    multiple: true,
+    maxFiles: Math.max(1, Number(maximumFiles || 10)),
     maxFileSize: Number(maximumBytes || 25 * 1024 * 1024),
-    startText: "Upload file",
-    dropText: "Drop one file here or choose Browse.",
+    startText: "Upload files",
+    dropText: "Drop files here or choose Browse.",
     async onUpload(item, controls) {
       const form = new FormData();
       form.append("operation", "upload");
@@ -1235,8 +1235,9 @@ function openProjectFileUploader(projectId, folder, maximumBytes, onUploaded) {
       controls.report(100);
     },
     onComplete(value) {
-      if (!value.items.some((item) => item.status === "success")) return;
-      state.components.toast.success("File uploaded.");
+      const items = Array.isArray(value.items) ? value.items : [];
+      if (!items.length || items.some((item) => item.status !== "success")) return;
+      state.components.toast.success(`${items.length} ${items.length === 1 ? "file" : "files"} uploaded.`);
       onUploaded?.();
       void modal.close({ reason: "uploaded" });
     },
@@ -1295,6 +1296,7 @@ function openProjectFilesModal() {
       onFolderSelect: (nextFolderId) => { modal.setBusy(true, { message: "Loading folder…" }); void loadFolder(nextFolderId); },
       onCreateFolder: (folder) => openCreateProjectFolder(projectId, folder, () => { modal.setBusy(true, { message: "Refreshing folders…" }); void loadFolder(folder?.id || "root"); }),
       onUpload: (folder) => openProjectFileUploader(projectId, folder, payload.storage?.max_upload_bytes,
+        payload.storage?.max_files_per_action,
         () => { modal.setBusy(true, { message: "Refreshing files…" }); void loadFolder(folder?.id || "root"); }),
     });
     modal.setContent(mounted.content);
