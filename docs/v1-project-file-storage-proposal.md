@@ -4,6 +4,8 @@ Status: Proposed; configuration foundation implemented
 Created: October 2, 2026  
 Audience: Product, engineering, operations, security, and support
 
+Implementation planning: [V1 Project File Storage Implementation Checklist](v1-project-file-storage-implementation-checklist.md)
+
 ## 1. Summary
 
 Add simple, durable project file storage to Syndicatum. The first release stores
