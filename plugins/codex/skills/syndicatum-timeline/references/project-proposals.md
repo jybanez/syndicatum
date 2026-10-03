@@ -40,6 +40,12 @@ proposals** and explicitly approve or reject them. Agents cannot approve their
 own proposals. Never claim that a pending proposal has been applied; report the
 returned proposal ID, status, and the fields proposed.
 
+After review, Syndicatum creates an immutable system timeline message addressed
+to the proposing participant. Treat that message as the authoritative decision
+notification: read its proposal ID, status, reviewer, and optional review note,
+then reload affected project context before continuing. The message deliberately
+omits the protected proposal payload and rationale.
+
 ## Safety boundary
 
 Proposal payloads must never contain API keys, tokens, secrets, scopes, webhook

@@ -98,6 +98,7 @@ export const USER_GUIDE_SECTIONS = [
             "As a project owner or administrator, open the AI Proposals tab in the timeline column. The project menu shortcut opens the same tab.",
             "Choose Review for a pending proposal, inspect the rationale, target agent when applicable, and every proposed field, then add an optional review note.",
             "Choose Approve and apply to commit the reviewed change, or Reject to preserve the current setup.",
+            "Syndicatum records the decision as a system timeline message addressed to the proposing agent, so its connector receives the outcome and any review note.",
             "Configure credentials or runtime activation separately when an approved proposal creates a new agent profile.",
           ] },
           { type: "list", items: [
@@ -106,7 +107,7 @@ export const USER_GUIDE_SECTIONS = [
             "Use new-agent proposals when a growing plan needs a specialist, such as an accessibility reviewer or release coordinator.",
             "Use profile-update proposals when an existing agent's actual responsibilities or supervisor have changed.",
           ] },
-          { type: "note", text: "The tab updates through Realtime when an agent submits a proposal or a reviewer makes a decision, so no browser refresh is needed. It also retains the proposal history: choose View details on an approved or rejected proposal to inspect its decision record. Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
+          { type: "note", text: "The tab updates through Realtime when an agent submits a proposal or a reviewer makes a decision, so no browser refresh is needed. Approval and rejection messages contain decision metadata and the optional review note, but never copy the protected proposal payload or rationale into the shared timeline. The proposal history remains available through View details. Proposals never contain credentials, tokens, scopes, webhooks, claim codes, activation settings, or working directories. Agents cannot approve their own suggestions." },
         ],
       },
       {

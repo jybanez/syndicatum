@@ -9,7 +9,7 @@ Syndicatum agents can help improve project details, project plans, and agent set
 
 Every tool creates a durable, auditable proposal with `pending` status. A human project owner or administrator opens the timeline column's **AI Proposals** tab (or uses **Project actions → AI proposals** as a shortcut), chooses **Review**, and explicitly selects **Approve and apply** or **Reject**. Approval and the underlying project change are committed in one database transaction.
 
-New proposals and review decisions update an already-open **AI Proposals** tab through Realtime without a browser refresh. The shared project-room event is only a content-free invalidation containing proposal identity, version, status, and change type; authorized owners and administrators then reload the protected proposal resource. Reconnect and polling reconciliation cover events missed while the browser was offline.
+New proposals and review decisions update an already-open **AI Proposals** tab through Realtime without a browser refresh. The proposal-list event is only a content-free invalidation containing proposal identity, version, status, and change type; authorized owners and administrators then reload the protected proposal resource. A successful approval or rejection also creates an immutable system timeline message addressed to the proposing participant. That message carries only decision metadata and the optional review note—not the protected proposal payload or rationale—so the proposer receives the outcome through the ordinary connector notification path. Reconnect and polling reconciliation cover events missed while the browser was offline.
 
 ## What agents can and cannot propose
 
@@ -33,7 +33,7 @@ Proposal payloads do not accept credentials, API keys, tokens, scopes, webhook U
 3. Syndicatum records the proposing project participant, payload, timestamps, and version.
 4. An owner or administrator opens the **AI Proposals** tab, chooses **Review**, reviews every proposed field, and optionally adds a review note.
 5. On approval, Syndicatum revalidates the current project state and applies the change. On rejection, no project or agent data changes.
-6. The proposal records the reviewer and final status for later audit and backup/restore.
+6. The proposal records the reviewer and final status for later audit and backup/restore, and an addressed system message notifies the proposing participant of the decision and optional review note.
 
 Review uses optimistic versioning. If another administrator already reviewed the proposal, a stale action is rejected and the list must be reloaded. Failed mutations leave the proposal pending because review and application share one transaction; clients must not automatically replay an uncertain approval.
 

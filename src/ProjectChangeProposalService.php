@@ -5,6 +5,7 @@ require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/ProjectManagementService.php';
 require_once __DIR__ . '/ProjectPlanService.php';
 require_once __DIR__ . '/MessageOutbox.php';
+require_once __DIR__ . '/SystemMessageService.php';
 
 class ProjectChangeProposalService
 {
@@ -13,6 +14,7 @@ class ProjectChangeProposalService
     private $management;
     private $plan;
     private $outbox;
+    private $systemMessages;
 
     public function __construct(PDO $pdo)
     {
@@ -21,6 +23,7 @@ class ProjectChangeProposalService
         $this->management = new ProjectManagementService($pdo);
         $this->plan = new ProjectPlanService($pdo);
         $this->outbox = new MessageOutbox($pdo);
+        $this->systemMessages = new SystemMessageService($pdo);
     }
 
     public function proposeProjectDetails(array $access, array $input)
@@ -181,12 +184,30 @@ class ProjectChangeProposalService
             $reviewed = $this->proposal($proposalId);
             $this->outbox->enqueueProjectProposalsChanged((int) $projectId, $proposalId,
                 (int) $reviewed['version'], (string) $reviewed['status'], $status);
+            $reviewerParticipantId = $this->humanParticipantId((int) $projectId, (int) $userId);
+            $this->systemMessages->projectChangeProposalReviewed([
+                'project_id' => (int) $projectId,
+                'participant_id' => $reviewerParticipantId,
+            ], $reviewed);
             $this->pdo->commit();
             return $reviewed;
         } catch (Exception $exception) {
             if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $exception;
         }
+    }
+
+    private function humanParticipantId($projectId, $userId)
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT id FROM project_participants
+             WHERE project_id = ? AND kind = 'human' AND user_id = ? AND status = 'active'
+             LIMIT 1"
+        );
+        $statement->execute([(int) $projectId, (int) $userId]);
+        $participantId = (int) $statement->fetchColumn();
+        if ($participantId < 1) { throw new RuntimeException('PROJECT_PARTICIPANT_NOT_FOUND'); }
+        return $participantId;
     }
 
     private function create(array $access, $type, $targetAgentId, array $payload, $rationale, $basePlanFingerprint = null)
