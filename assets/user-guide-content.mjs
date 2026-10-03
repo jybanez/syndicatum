@@ -497,7 +497,7 @@ export const USER_GUIDE_SECTIONS = [
             "Allowed file types can be narrowed to server-supported downloads. Inline previews are limited to selected image, audio, and video types and must also be allowed upload types.",
             "The Storage location is separate from Recovery backup storage. Future complete backups must preserve both the database and stored project file content.",
           ] },
-          { type: "note", text: "The folder icon beside the project menu opens the Project Files workspace. Use Create folder to organize the selected folder and Upload files to add a batch up to the administrator-configured files-per-action limit. Every file is validated and uploaded independently. Uploads are private on the server, count against the project quota, and appear in the current-folder list after the complete batch succeeds. Permanent open/share links are delivered in the next storage phase." },
+          { type: "note", text: "The folder icon beside the project menu opens the Project Files workspace. Use the plus action to organize the selected folder and Upload files to add a batch up to the administrator-configured files-per-action limit. Every file is validated and uploaded independently, so successful files appear even when another item in the same batch fails. Use a file row's three-dot menu to rename, replace, regenerate its public link, or delete it. Uploads are private on the server and count against the project quota. Permanent open/share delivery is provided in the next storage phase." },
         ],
       },
     ],

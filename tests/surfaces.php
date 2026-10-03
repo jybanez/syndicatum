@@ -1064,7 +1064,15 @@ try {
             && strpos($source, '{ key: "mime_type", label: "Type" }') === false
             && strpos($source, '{ icon: "actions.add", iconOnly: true }') !== false
             && strpos($source, '{ icon: "data.upload" }') !== false
-            && strpos($source, 'ui-button-borderless') !== false,
+            && strpos($source, 'ui-button-borderless') !== false
+            && strpos($source, 'className = "ui-button ui-button-sm ui-button-borderless project-file-row-actions"') !== false
+            && strpos($source, 'label: "Rename"') !== false
+            && strpos($source, 'label: "Replace file"') !== false
+            && strpos($source, 'label: "Regenerate public link"') !== false
+            && strpos($source, 'label: "Delete"') !== false
+            && strpos($source, 'openRenameProjectFile') !== false
+            && strpos($source, 'openReplaceProjectFile') !== false
+            && strpos($source, 'confirmProjectFileMutation') !== false,
             'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
         $suite->true(strpos($styles, '.project-files-layout') !== false
             && strpos($styles, 'height: min(66vh, 660px)') !== false
