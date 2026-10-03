@@ -4564,38 +4564,65 @@ function openProjectPlanModal() {
       );
       return;
     }
-    const confirmed = await state.factories.uiConfirm(
-      `Delete ${isMilestone ? "milestone" : "deliverable"} “${item.title}”? This cannot be undone.`,
-      { title: `Delete ${isMilestone ? "milestone" : "deliverable"}?`, variant: "danger",
-        confirmText: `Delete ${isMilestone ? "milestone" : "deliverable"}`, confirmVariant: "danger" },
-    );
-    if (!confirmed || disposed) return;
-    const latest = isMilestone ? milestoneById(item.id) : deliverableById(item.id);
-    if (!latest) {
-      setFeedback(`This ${kind} is no longer available. Reconcile the project plan and try again.`, "error");
-      return;
-    }
-    persistencePending = true; board?.setInteractionLocked(true); setFeedback(`Deleting ${kind}…`);
-    const endpoint = isMilestone ? API.projectMilestone : API.projectDeliverable;
-    try {
-      const plan = unwrap(await request(`${endpoint}?${new URLSearchParams({ project_id: projectId, id: latest.id })}`, {
-        method: "DELETE", headers: csrfHeaders(), body: JSON.stringify({ version: latest.version }),
-      })) || {};
-      if (disposed || selectedProjectId() !== projectId) return;
-      currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
-      board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
-      setFeedback(`${isMilestone ? "Milestone" : "Deliverable"} deleted.`, "success");
-    } catch (error) {
-      if (disposed) return;
-      if (error.status && error.status < 500) {
-        persistencePending = false; board?.setInteractionLocked(false);
-        setFeedback(`The ${kind} was not deleted. ${error.message}`, "error");
-        return;
-      }
-      const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile deletion"); reconcileButton.type = "button";
-      reconcileButton.addEventListener("click", () => { void reconcile(); });
-      setFeedback("The deletion outcome is unknown. Reconcile with the server before changing the plan.", "error", reconcileButton);
-    }
+    const itemLabel = isMilestone ? "milestone" : "deliverable";
+    const dialogBody = projectInfoElement("div", "ui-dialog-text");
+    dialogBody.append(projectInfoElement("p", "ui-dialog-message", `Delete ${itemLabel} “${item.title}”? This cannot be undone.`));
+    const dialogError = projectInfoElement("p", "project-plan-feedback is-error");
+    dialogError.setAttribute("role", "alert");
+    dialogError.hidden = true;
+    dialogBody.append(dialogError);
+    const showDialogError = (message = "") => {
+      dialogError.textContent = message;
+      dialogError.hidden = !message;
+    };
+    let confirmationModal = null;
+    const closeOnlyActions = () => [{ id: "close", label: "Close" }];
+    confirmationModal = state.factories.createActionModal({
+      title: `Delete ${itemLabel}?`, size: "sm", className: "ui-dialog ui-dialog--warning", content: dialogBody,
+      actions: [
+        { id: "cancel", label: "Cancel" },
+        { id: "delete", label: `Delete ${itemLabel}`, variant: "danger", busyMessage: `Deleting ${itemLabel}…`,
+          async onClick() {
+            if (disposed || persistencePending) return false;
+            const latest = isMilestone ? milestoneById(item.id) : deliverableById(item.id);
+            if (!latest) {
+              const message = `This ${itemLabel} is no longer available. Reconcile the project plan and try again.`;
+              showDialogError(message); setFeedback(message, "error");
+              return false;
+            }
+            showDialogError();
+            persistencePending = true; board?.setInteractionLocked(true); setFeedback(`Deleting ${itemLabel}…`);
+            const endpoint = isMilestone ? API.projectMilestone : API.projectDeliverable;
+            try {
+              const plan = unwrap(await request(`${endpoint}?${new URLSearchParams({ project_id: projectId, id: latest.id })}`, {
+                method: "DELETE", headers: csrfHeaders(), body: JSON.stringify({ version: latest.version }),
+              })) || {};
+              if (disposed || selectedProjectId() !== projectId) return true;
+              currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+              board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+              setFeedback(`${isMilestone ? "Milestone" : "Deliverable"} deleted.`, "success");
+              return true;
+            } catch (error) {
+              if (disposed) return true;
+              if (error.status && error.status < 500) {
+                persistencePending = false; board?.setInteractionLocked(false);
+                const message = `The ${itemLabel} was not deleted. ${error.message}`;
+                showDialogError(message); setFeedback(message, "error");
+                return false;
+              }
+              const message = "The deletion outcome is unknown. Close this dialog and reconcile with the server before changing the plan.";
+              showDialogError(message);
+              confirmationModal.setActions(closeOnlyActions());
+              const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile deletion"); reconcileButton.type = "button";
+              reconcileButton.addEventListener("click", () => { void reconcile(); });
+              setFeedback("The deletion outcome is unknown. Reconcile with the server before changing the plan.", "error", reconcileButton);
+              return false;
+            }
+          } },
+      ],
+      onClose() { confirmationModal.destroy(); },
+    });
+    confirmationModal.open();
   };
   const renderGroupHeader = (host, group) => {
     const cleanups = [];

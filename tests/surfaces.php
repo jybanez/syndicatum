@@ -1219,6 +1219,11 @@ try {
             && strpos($source, 'ui-button-borderless project-plan-icon-action') !== false
             && strpos($styles, '.project-plan-icon-action') !== false,
             'Row-level project-plan actions must use compact accessible borderless icon controls.');
+        $suite->true(strpos($source, 'confirmationModal = state.factories.createActionModal({') !== false
+            && strpos($source, 'busyMessage: `Deleting ${itemLabel}…`') !== false
+            && strpos($source, 'showDialogError(message); setFeedback(message, "error");') !== false
+            && strpos($source, 'confirmationModal.setActions(closeOnlyActions())') !== false,
+            'Milestone and deliverable deletion confirmation must remain visible and busy during the mutation, surface recoverable errors, and prevent replay after an unknown outcome.');
         $suite->true(strpos($source, 'if (targetValue)') !== false
             && strpos($source, 'if (dueValue)') !== false
             && strpos($source, 'placeholder: "No target date"') === false
