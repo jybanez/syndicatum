@@ -37,15 +37,15 @@ try {
     $storage = new LocalFileStorage(__DIR__, trim((string) $settings->get('storage.local_base_path')));
     if (!$storage->exists($file['storage_key'])) { projectFileNotFound(); }
     $mime = strtolower(trim((string) $file['mime_type']));
-    $inline = in_array($mime, (array) $settings->get('storage.inline_preview_types'), true);
+    $inline = $mime === 'application/pdf' || in_array($mime, (array) $settings->get('storage.inline_preview_types'), true);
     $asciiName = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $file['display_name']);
     if ($asciiName === '') { $asciiName = 'download'; }
     $disposition = $inline ? 'inline' : 'attachment';
     $etag = '"' . strtolower((string) $file['sha256']) . '"';
     header('Content-Type: ' . $mime);
-    header('Content-Length: ' . (int) $file['size_bytes']);
     header('Content-Disposition: ' . $disposition . '; filename="' . addcslashes($asciiName, '"\\') . '"; filename*=UTF-8\'\'' . rawurlencode((string) $file['display_name']));
     header('ETag: ' . $etag);
+    header('Accept-Ranges: bytes');
     header('Cache-Control: public, max-age=' . (int) $settings->get('storage.public_cache_max_age_seconds'));
     header('X-Content-Type-Options: nosniff');
     header('X-Robots-Tag: noindex, nofollow, noarchive');
@@ -53,12 +53,43 @@ try {
         http_response_code(304);
         exit;
     }
+    $size = (int) $file['size_bytes'];
+    $start = 0;
+    $end = max(0, $size - 1);
+    $range = trim((string) (isset($_SERVER['HTTP_RANGE']) ? $_SERVER['HTTP_RANGE'] : ''));
+    $ifRange = trim((string) (isset($_SERVER['HTTP_IF_RANGE']) ? $_SERVER['HTTP_IF_RANGE'] : ''));
+    if ($range !== '' && ($ifRange === '' || $ifRange === $etag)) {
+        if (!preg_match('/\Abytes=(\d*)-(\d*)\z/', $range, $matches) || ($matches[1] === '' && $matches[2] === '')) {
+            http_response_code(416);
+            header('Content-Range: bytes */' . $size);
+            exit;
+        }
+        if ($matches[1] === '') {
+            $suffix = (int) $matches[2];
+            if ($suffix < 1) { http_response_code(416); header('Content-Range: bytes */' . $size); exit; }
+            $start = max(0, $size - $suffix);
+        } else {
+            $start = (int) $matches[1];
+            $end = $matches[2] === '' ? $end : min($end, (int) $matches[2]);
+        }
+        if ($start >= $size || $end < $start) {
+            http_response_code(416);
+            header('Content-Range: bytes */' . $size);
+            exit;
+        }
+        http_response_code(206);
+        header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+    }
+    $remaining = $end - $start + 1;
+    header('Content-Length: ' . $remaining);
     if (strtoupper((string) (isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET')) === 'HEAD') { exit; }
     $stream = $storage->openReadStream($file['storage_key']);
-    while (!feof($stream)) {
-        $chunk = fread($stream, 1024 * 1024);
+    if ($start > 0 && fseek($stream, $start) !== 0) { throw new RuntimeException('FILE_STORAGE_READ_FAILED'); }
+    while ($remaining > 0 && !feof($stream)) {
+        $chunk = fread($stream, min(1024 * 1024, $remaining));
         if ($chunk === false) { break; }
         echo $chunk;
+        $remaining -= strlen($chunk);
     }
     fclose($stream);
 } catch (Exception $exception) {

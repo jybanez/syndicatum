@@ -17,8 +17,8 @@ V1 provides ordinary, durable project file sharing:
 - canonical metadata and project associations are stored in MySQL;
 - Syndicatum issues permanent, unguessable public URLs that do not require
   authentication;
-- supported images, audio, and video render or play inline, while other files
-  open in a new tab/window or download;
+- supported images and video render in Helper's Media Viewer, PDFs render in
+  Helper's PDF Viewer, and other files open in a new tab/window or download;
 - the public URL remains stable across logout, restart, deployment, backup and
   restore, and later storage-provider migration; and
 - a complete Syndicatum backup includes both database records and file bytes.
@@ -103,7 +103,7 @@ secure file management to Google Drive or another dedicated service.
 | `storage.max_upload_bytes` | Maximum file size | 25 MiB | Integer range with a server hard ceiling; enforced while streaming before storage is committed | [x] Owner-approved |
 | `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [x] Owner-approved |
 | `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [x] Owner-approved |
-| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [x] Owner-approved |
+| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a media subset only; PDF uses its separately fixed viewer policy, while other documents, archives, text, HTML, and SVG cannot be added | [x] Owner-approved |
 | `storage.default_project_quota_bytes` | Default project storage quota | 64 GB per project | Must exceed the per-file maximum; each project's canonical live-file usage is enforced independently before committing an upload | [x] Owner-approved |
 | `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [x] Owner-approved |
 | `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement and deletion must use the approved cache behavior | [x] Owner-approved |
@@ -267,7 +267,7 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
   file or change authorization.
 - [x] Return a clear unavailable response for deleted or invalid links
   without exposing storage internals.
-- [ ] Stream local bytes and support safe range requests where required for PDF
+- [x] Stream local bytes and support safe single-range requests for PDF and video
   usability.
 - [x] Set verified `Content-Type`, safe `Content-Disposition`,
   `X-Content-Type-Options: nosniff`, search-engine exclusion, ETag/checksum, and
@@ -331,9 +331,9 @@ OpenAPI contract suites pass.
 - [ ] Record the actor, file, action, prior/current identifiers or metadata as
   appropriate, and timestamp for every mutation without logging file bodies or
   local paths.
-- [ ] Render only supported images, audio, and video inside the modal. Other
-  files expose **Open in new tab** or **Download** according to safe delivery
-  headers.
+- [x] Open supported images and video in Helper's Media Viewer and PDFs in
+  Helper's PDF Viewer from the filename. Audio-player integration remains a
+  separate media slice; other files expose **Download**.
 - [ ] Set rendered media sources and copy/open actions to the same canonical
   public URL; do not introduce an internal-only preview or thumbnail URL.
 - [ ] Reconcile remote file changes through the established realtime/refresh
@@ -475,8 +475,9 @@ after cutover.
   address** yields that same URL, which opens outside Syndicatum without
   authentication.
 - [ ] The URL survives logout, restart, deployment, and complete backup/restore.
-- [ ] Supported images, audio, and video render or play inline. Other files open
-  in a new tab/window or download; active/unknown formats cannot execute under
+- [ ] Supported images and video render in Helper's Media Viewer and PDFs in
+  Helper's PDF Viewer. Other files open in a new tab/window or download;
+  active/unknown formats cannot execute under
   the application origin.
 - [ ] Every active human and agent project participant can upload, move, rename,
   download, copy links, and delete project files, with attributable audit
@@ -533,7 +534,7 @@ Gate A was approved by the project owner on October 3, 2026:
 - a 64 GB default storage quota for each project;
 - one canonical permanent URL for internal and external use;
 - immutable public IDs with no regeneration action;
-- inline rendering limited to safe image, audio, and video media;
+- inline rendering limited to safe media plus the dedicated PDF Viewer policy;
 - equal audited file-management authority for every active human and agent
   project participant;
 - project Files management modal first, followed by timeline attachments; and

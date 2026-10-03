@@ -1168,8 +1168,14 @@ function projectFilesContent(payload, handlers = {}) {
       {
         key: "name", label: "Name", width: "180px",
         renderCell({ row }) {
-          const cell = document.createElement("span");
-          cell.className = "project-file-name-cell";
+          const previewable = projectFilePreviewType(row) !== "";
+          const cell = document.createElement(previewable ? "button" : "span");
+          cell.className = `project-file-name-cell${previewable ? " project-file-name-action" : ""}`;
+          if (previewable) {
+            cell.type = "button";
+            cell.title = `Preview ${row.name}`;
+            cell.addEventListener("click", () => handlers.onFileOpen?.(row));
+          }
           const icon = state.factories.createIcon(getFileIconName(row.name, row.mime_type), { size: 18, decorative: true });
           icon.classList.add("project-file-type-icon");
           const label = document.createElement("span");
@@ -1218,6 +1224,53 @@ function projectFilesContent(payload, handlers = {}) {
       grid?.destroy?.();
     },
   };
+}
+
+function projectFilePreviewType(file) {
+  const mime = String(file?.mime_type || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "application/pdf") return "pdf";
+  return "";
+}
+
+function closeProjectFilePreview() {
+  const active = state.components.projectFilePreview;
+  if (!active) return;
+  state.components.projectFilePreview = null;
+  active.viewer?.destroy?.();
+  active.host?.remove?.();
+}
+
+function openProjectFilePreview(file) {
+  const type = projectFilePreviewType(file);
+  if (!type) return;
+  closeProjectFilePreview();
+  const url = new URL(file.url, document.baseURI).href;
+  if (type === "pdf") {
+    const viewer = state.factories.createPdfViewer({
+      url,
+      title: file.name || "PDF document",
+      open: true,
+      fullscreen: true,
+      onClose() { window.setTimeout(closeProjectFilePreview, 0); },
+    });
+    state.components.projectFilePreview = { viewer, host: null };
+    return;
+  }
+  const host = document.createElement("div");
+  host.className = "project-file-media-viewer-host";
+  document.body.appendChild(host);
+  const viewer = state.factories.createMediaViewer(host, {
+    items: [{ type, srcUrl: url, title: file.name || "Project media", alt: file.name || "Project media" }],
+    open: true,
+    fit: "contain",
+    showHeader: true,
+    showToolbar: type === "image",
+    showVideoControls: true,
+    onClose() { window.setTimeout(closeProjectFilePreview, 0); },
+  });
+  state.components.projectFilePreview = { viewer, host };
 }
 
 function projectFileMutationHeaders(idempotencyKey, extra = {}) {
@@ -1500,6 +1553,7 @@ function openProjectFilesModal() {
     actions: [{ id: "close", label: "Close" }],
     onClose() {
       controller.abort();
+      closeProjectFilePreview();
       skeleton?.destroy?.();
       mounted?.destroy?.();
       if (state.components.projectFilesModal === modal) state.components.projectFilesModal = null;
@@ -1541,6 +1595,7 @@ function openProjectFilesModal() {
         if (action === "rename") openRenameProjectFile(projectId, file, refreshCurrentFolder);
         if (action === "delete") confirmProjectFileMutation(projectId, file, "delete_file", refreshCurrentFolder);
       },
+      onFileOpen: openProjectFilePreview,
     });
     modal.setContent(mounted.content);
     modal.setBusy(false);
@@ -9240,7 +9295,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.viewer", "ui.pdf.viewer"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -9280,6 +9335,8 @@ async function bootstrap() {
     createPopover: await uiLoader.get("ui.popover", options),
     createTabs: await uiLoader.get("ui.tabs", options),
     createFileUploader: await uiLoader.get("ui.file.uploader", options),
+    createMediaViewer: await uiLoader.get("ui.media.viewer", options),
+    createPdfViewer: await uiLoader.get("ui.pdf.viewer", options),
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
     createSplitter: await uiLoader.get("ui.splitter", options),
     createNavigationStack: await uiLoader.get("ui.navigation.stack", options),

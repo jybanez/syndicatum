@@ -1065,7 +1065,10 @@ try {
             && strpos($source, 'enableColumnResize: true') !== false
             && strpos($source, 'iconModule.registerIconPack(FILE_ICONS)') !== false
             && strpos($source, 'getFileIconName(row.name, row.mime_type)') !== false
-            && strpos($source, 'className = "project-file-name-cell"') !== false
+            && strpos($source, 'project-file-name-cell') !== false
+            && strpos($source, 'projectFilePreviewType(row)') !== false
+            && strpos($source, 'createMediaViewer(host') !== false
+            && strpos($source, 'createPdfViewer({') !== false
             && strpos($source, '{ key: "mime_type", label: "Type" }') === false
             && strpos($source, '{ icon: "actions.add", iconOnly: true }') !== false
             && strpos($source, '{ icon: "data.upload" }') !== false
@@ -1087,6 +1090,8 @@ try {
             && strpos($publicFiles, "['GET', 'HEAD']") !== false
             && strpos($publicFiles, "header('X-Robots-Tag: noindex, nofollow, noarchive')") !== false
             && strpos($publicFiles, "get('storage.inline_preview_types')") !== false
+            && strpos($publicFiles, "header('Accept-Ranges: bytes')") !== false
+            && strpos($publicFiles, "http_response_code(206)") !== false
             && strpos($filesApi, 'regenerate_link') === false
             && strpos($source, 'Regenerate public link') === false,
             'Project files must use one immutable anonymous public URL with safe delivery headers and no regeneration operation.');

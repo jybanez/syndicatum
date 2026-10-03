@@ -168,6 +168,9 @@ button, input, textarea { font: inherit; }
 .project-files-grid .ui-grid { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none; overflow: auto; border: 0; border-radius: 0; }
 .project-file-name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.project-file-name-action { width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.project-file-name-action:hover .project-file-name-label { color: var(--ui-accent); text-decoration: underline; text-underline-offset: 2px; }
+.project-file-name-action:focus-visible { border-radius: 4px; outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 .project-file-type-icon { flex: 0 0 auto; color: var(--ui-muted); }
 .project-file-name-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-files-current-folder-grid .ui-grid-cell:last-child { padding: 2px 6px; text-align: center; }
