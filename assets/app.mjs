@@ -1,4 +1,5 @@
 import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.222";
+import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.222";
 import {
   createResponsibilityInbox,
   responsibilityActions,
@@ -1164,7 +1165,20 @@ function projectFilesContent(payload, handlers = {}) {
     minColumnWidth: 90,
     emptyText: payload.notice || "This folder is empty.",
     columns: [
-      { key: "name", label: "Name", width: "180px" },
+      {
+        key: "name", label: "Name", width: "180px",
+        renderCell({ row }) {
+          const cell = document.createElement("span");
+          cell.className = "project-file-name-cell";
+          const icon = state.factories.createIcon(getFileIconName(row.name, row.mime_type), { size: 18, decorative: true });
+          icon.classList.add("project-file-type-icon");
+          const label = document.createElement("span");
+          label.className = "project-file-name-label";
+          label.textContent = row.name || "Unnamed file";
+          cell.append(icon, label);
+          return cell;
+        },
+      },
       { key: "size_bytes", label: "Size", width: "90px", format: (value) => recoverySize(Number(value || 0)) },
       { key: "updated_at", label: "Modified", width: "160px", format: (value) => value ? formatDate(value) : "" },
       {
@@ -9232,6 +9246,7 @@ async function bootstrap() {
   try {
     if (typeof iconModule.registerIconPack === "function") {
       iconModule.registerIconPack(AI_ICONS);
+      iconModule.registerIconPack(FILE_ICONS);
       state.aiIconPackAvailable = true;
     } else {
       console.warn("[Syndicatum] Helper icon pack API is unavailable; using core agent markers.");

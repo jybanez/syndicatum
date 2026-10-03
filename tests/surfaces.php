@@ -1063,6 +1063,9 @@ try {
             && strpos($source, 'const successful = items.filter((item) => item.status === "success");') !== false
             && strpos($source, 'refreshFiles();') !== false
             && strpos($source, 'enableColumnResize: true') !== false
+            && strpos($source, 'iconModule.registerIconPack(FILE_ICONS)') !== false
+            && strpos($source, 'getFileIconName(row.name, row.mime_type)') !== false
+            && strpos($source, 'className = "project-file-name-cell"') !== false
             && strpos($source, '{ key: "mime_type", label: "Type" }') === false
             && strpos($source, '{ icon: "actions.add", iconOnly: true }') !== false
             && strpos($source, '{ icon: "data.upload" }') !== false

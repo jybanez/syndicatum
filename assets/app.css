@@ -167,6 +167,9 @@ button, input, textarea { font: inherit; }
 .project-files-tree .ui-tree, .project-files-tree .ui-tree-viewport { height: 100% !important; min-height: 0; }
 .project-files-grid .ui-grid { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none; overflow: auto; border: 0; border-radius: 0; }
+.project-file-name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.project-file-type-icon { flex: 0 0 auto; color: var(--ui-muted); }
+.project-file-name-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-files-current-folder-grid .ui-grid-cell:last-child { padding: 2px 6px; text-align: center; }
 .project-file-row-actions { display: inline-grid; width: 34px; min-width: 34px; height: 34px; place-items: center; padding: 0; }
 .project-files-load-error { min-height: 240px; display: grid; place-items: center; padding: 24px; color: var(--ui-danger, #ff8f9c); text-align: center; }
