@@ -64,7 +64,7 @@ export const USER_GUIDE_SECTIONS = [
         blocks: [
           { type: "steps", items: [
             "Open New message or Reply, then choose the attachment action in the composer.",
-            "Browse project folders. Selecting a folder opens it; selecting one or more files adds them to the picker selection.",
+            "Use the breadcrumbs to move through project folders. Folders appear before files with distinct icons. Selecting a file highlights its full row; select it again to remove it from the picker selection.",
             "To add a new file, open its destination folder first and choose Upload files. If that folder already contains the same filename, confirm replacement before any file bytes are sent.",
             "Choose Attach selected files. Review the selected-file list below the addressing controls and remove anything you do not want to send.",
             "Send the message. Syndicatum verifies every selected file still belongs to the project and creates the message and attachment links together.",

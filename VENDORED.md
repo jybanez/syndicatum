@@ -12,13 +12,14 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `739dfd9c62978dd32e2354c60544b31d63e739ed` (Helper `0.21.224`)
+- Pinned commit: `f6e25f50cf38dd53639ba87195e16ae028dfa5ef` (Helper `0.21.225`)
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
 ## Vendored Paths
 
 - `vendor/pbb-helper/js/ui/ui.loader.js`
+- `vendor/pbb-helper/js/ui/ui.icons.files.js`
 - `vendor/pbb-helper/dist/helpers.ui.bundle.min.js`
 - `vendor/pbb-helper/dist/helpers.ui.bundle.min.css`
 - `vendor/pbb-realtime/js/sdk/`
