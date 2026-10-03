@@ -964,6 +964,8 @@ try {
             'The message composer must place a compact paperclip and visible Attach files label in the helper row below the input.');
         $suite->true(strpos($app, 'status: "uploaded"') === false,
             'Selected project-file attachments must not render a redundant Uploaded status badge.');
+        $suite->true(strpos($app, 'onOpen(item) { if (item?.url) openProjectFilePreview(item); }') === false,
+            'Composer attachment thumbnails must rely on the queue media strip viewer instead of opening a duplicate application viewer.');
         $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
             && strpos($bundleJs, 'aria-pressed') !== false
             && strpos($bundleJs, 'files.folder') !== false

@@ -8190,7 +8190,6 @@ function renderComposerControls() {
       state.draft.attachments = state.draft.attachments.filter((attachment) => attachment.id !== item.id);
       renderDraftAttachments();
     },
-    onOpen(item) { if (item?.url) openProjectFilePreview(item); },
   });
   renderDraftAttachments();
   enableCompactComposerAutosize();
