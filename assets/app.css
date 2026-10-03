@@ -270,14 +270,15 @@ button, input, textarea { font: inherit; }
 .message-composer-modal #composer-host .ui-chat-composer-controls { grid-template-columns: minmax(0, 1fr); }
 .message-composer-modal #composer-host .ui-chat-composer-send { display: none; }
 .message-composer-modal .ui-action-modal-button-icon svg.ui-icon { fill: none; stroke: currentColor; }
-.message-attachments { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 8px; margin-top: 10px; }
-.message-attachment { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid rgba(89, 116, 163, .52); border-radius: 8px; background: rgba(17, 29, 49, .72); color: inherit; text-align: left; font: inherit; }
+.message-attachments { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 5px; margin-top: 7px; }
+.message-attachment { display: flex; flex: 0 1 210px; min-width: 0; max-width: min(100%, 210px); min-height: 36px; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid rgba(89, 116, 163, .44); border-radius: 6px; background: rgba(17, 29, 49, .58); color: inherit; text-align: left; font: inherit; font-size: 12px; }
 button.message-attachment { cursor: pointer; }
 button.message-attachment:hover, button.message-attachment:focus-visible { border-color: var(--ui-accent, #78a7ff); background: rgba(24, 42, 70, .86); }
 .message-attachment.is-unavailable { opacity: .72; }
-.message-attachment-copy { display: grid; min-width: 0; gap: 2px; }
+.message-attachment-copy { display: grid; min-width: 0; gap: 1px; }
 .message-attachment-copy strong, .message-attachment-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.message-attachment-copy span { color: var(--ui-muted, #9fb2d8); font-size: 11px; }
+.message-attachment-copy strong { font-size: 12px; font-weight: 650; }
+.message-attachment-copy span { color: var(--ui-muted, #9fb2d8); font-size: 10px; }
 
 .ui-form-modal-text { color: var(--app-accent); font-weight: 750; }
 .agent-credential-copy-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }

@@ -2424,7 +2424,7 @@ function renderMessageAttachments(message) {
     if (file.available) item.type = "button";
     item.className = `message-attachment${file.available ? "" : " is-unavailable"}`;
     const icon = state.factories.createIcon(getFileIconName(file.name, file.mime_type), {
-      size: 18,
+      size: 15,
       fallback: "data.file",
       decorative: true,
     });
