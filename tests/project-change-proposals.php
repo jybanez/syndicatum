@@ -36,6 +36,8 @@ try {
     $ownerParticipant->execute([$project['id'], $owner['id']]);
     $ownerAccess = ['project_id' => (int) $project['id'], 'participant_id' => (int) $ownerParticipant->fetchColumn(),
         'project_status' => 'active', 'role' => 'owner', 'identity' => ['kind' => 'human']];
+    $pdo->prepare('INSERT INTO system_settings (setting_key, value_json, updated_at) VALUES (?, ?, ?)')
+        ->execute(['realtime.enabled', 'true', Db::now()]);
 
     $details = $service->proposeProjectDetails($agentAccess, ['description' => 'A reviewed project description.', 'rationale' => 'The original brief is incomplete.']);
     $test('agents submit durable pending project proposals', function () use ($same, $details, $service, $project, $owner) {
@@ -56,7 +58,7 @@ try {
         $same(false, array_key_exists('rationale', $payload));
     });
 
-    $test('approval atomically applies project details and records the reviewer', function () use ($same, $details, $service, $project, $owner, $pdo) {
+    $test('approval atomically applies project details and notifies the proposer', function () use ($same, $details, $service, $project, $owner, $pdo, $agentAccess, $ownerAccess) {
         $reviewed = $service->review($project['id'], $owner['id'], $details['id'], $details['version'], 'approve', 'Approved for clarity.');
         $same('approved', $reviewed['status']); $same('Proposal Owner', $reviewed['reviewer_name']);
         $query = $pdo->prepare('SELECT description FROM projects WHERE id = ?'); $query->execute([$project['id']]);
@@ -65,6 +67,23 @@ try {
         $eventQuery->execute([MessageOutbox::EVENT_PROJECT_PROPOSALS_CHANGED]);
         $eventPayload = json_decode($eventQuery->fetchColumn(), true);
         $same('approved', $eventPayload['status']); $same(2, (int) $eventPayload['version']);
+        $messageQuery = $pdo->prepare("SELECT id FROM messages WHERE project_id = ? AND event_type = 'project.change_proposal_approved' ORDER BY id DESC LIMIT 1");
+        $messageQuery->execute([$project['id']]);
+        $message = (new ProjectRepository($pdo))->message($ownerAccess, (int) $messageQuery->fetchColumn());
+        $same('system', $message['message_kind']);
+        $same('success', $message['severity']);
+        $same((int) $details['id'], (int) $message['system_event']['data']['proposal_id']);
+        $same('project_details', $message['system_event']['data']['proposal_type']);
+        $same('approved', $message['system_event']['data']['status']);
+        $same('Approved for clarity.', $message['system_event']['data']['review_note']);
+        $same((int) $ownerAccess['participant_id'], (int) $message['sender']['participant_id']);
+        $same((int) $agentAccess['participant_id'], (int) $message['addressees'][0]['participant_id']);
+        if (array_key_exists('payload', $message['system_event']['data']) || array_key_exists('rationale', $message['system_event']['data'])) {
+            throw new RuntimeException('Protected proposal content escaped into the timeline event.');
+        }
+        $messageEvent = $pdo->prepare('SELECT COUNT(*) FROM message_events_outbox WHERE event_type = ? AND message_id = ?');
+        $messageEvent->execute([MessageOutbox::EVENT_MESSAGE_CREATED, $message['id']]);
+        $same(1, (int) $messageEvent->fetchColumn());
         try { $service->review($project['id'], $owner['id'], $details['id'], $details['version'], 'approve'); }
         catch (RuntimeException $error) { $same('PROPOSAL_VERSION_CONFLICT', $error->getMessage()); return; }
         throw new RuntimeException('Expected stale proposal review rejection.');
@@ -82,11 +101,18 @@ try {
     });
 
     $profile = $service->proposeAgentProfileUpdate($agentAccess, ['target_agent_id' => $sourceAgent['agent_id'], 'role_title' => 'Release coordinator']);
-    $test('profile proposals can be rejected without changing the target agent', function () use ($same, $profile, $service, $project, $owner, $pdo, $sourceAgent) {
+    $test('profile proposals can be rejected without changing the target agent and notify the proposer', function () use ($same, $profile, $service, $project, $owner, $pdo, $sourceAgent, $agentAccess, $ownerAccess) {
         $reviewed = $service->review($project['id'], $owner['id'], $profile['id'], $profile['version'], 'reject', 'Not needed yet.');
         $same('rejected', $reviewed['status']);
         $query = $pdo->prepare('SELECT role_title FROM project_agents WHERE project_id = ? AND agent_id = ?');
         $query->execute([$project['id'], $sourceAgent['agent_id']]); $same(null, $query->fetchColumn());
+        $messageQuery = $pdo->prepare("SELECT id FROM messages WHERE project_id = ? AND event_type = 'project.change_proposal_rejected' ORDER BY id DESC LIMIT 1");
+        $messageQuery->execute([$project['id']]);
+        $message = (new ProjectRepository($pdo))->message($ownerAccess, (int) $messageQuery->fetchColumn());
+        $same('warning', $message['severity']);
+        $same('rejected', $message['system_event']['data']['status']);
+        $same('Not needed yet.', $message['system_event']['data']['review_note']);
+        $same((int) $agentAccess['participant_id'], (int) $message['addressees'][0]['participant_id']);
     });
 
     $plan = $service->proposeProjectPlan($agentAccess, [

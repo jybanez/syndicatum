@@ -74,6 +74,38 @@ class SystemMessageService
             ]);
     }
 
+    public function projectChangeProposalReviewed(array $access, array $proposal)
+    {
+        $status = trim((string) ($proposal['status'] ?? ''));
+        if (!in_array($status, ['approved', 'rejected'], true)) {
+            throw new InvalidArgumentException('A reviewed proposal must be approved or rejected.');
+        }
+        $proposalId = (int) ($proposal['id'] ?? 0);
+        $proposerParticipantId = (int) ($proposal['proposer']['participant_id'] ?? 0);
+        if ($proposalId < 1 || $proposerParticipantId < 1) {
+            throw new InvalidArgumentException('A reviewed proposal and its proposer are required.');
+        }
+        $type = trim((string) ($proposal['proposal_type'] ?? 'proposal'));
+        $reviewerName = trim((string) ($proposal['reviewer_name'] ?? 'Project reviewer'));
+        $note = trim((string) ($proposal['review_note'] ?? ''));
+        $label = $this->proposalTypeLabel($type) . ' proposal #' . $proposalId;
+        $body = $label . ' was ' . $status . ' by ' . $reviewerName . '.';
+        if ($note !== '') { $body .= ' Review note: ' . $note; }
+
+        return $this->record($access, 'project.change_proposal_' . $status,
+            $status === 'approved' ? 'success' : 'warning', $body, [
+                'subject_type' => 'project_change_proposal',
+                'proposal_id' => $proposalId,
+                'proposal_public_id' => $proposal['public_id'] ?? null,
+                'proposal_type' => $type,
+                'status' => $status,
+                'proposed_by_participant_id' => $proposerParticipantId,
+                'reviewed_by_participant_id' => (int) $access['participant_id'],
+                'reviewer_name' => $reviewerName,
+                'review_note' => $note === '' ? null : $note,
+            ], [$proposerParticipantId]);
+    }
+
     private function record(array $access, $eventType, $severity, $body, array $eventData, array $notificationParticipantIds = [])
     {
         if (!$this->pdo->inTransaction()) {
@@ -131,6 +163,11 @@ class SystemMessageService
     private function statusLabel($status)
     {
         return ucwords(str_replace('_', ' ', (string) $status));
+    }
+
+    private function proposalTypeLabel($type)
+    {
+        return ucfirst(str_replace('_', ' ', (string) $type));
     }
 
     private function nextSequence($projectId)
