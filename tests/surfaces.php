@@ -966,6 +966,9 @@ try {
             'Selected project-file attachments must not render a redundant Uploaded status badge.');
         $suite->true(strpos($app, 'onOpen(item) { if (item?.url) openProjectFilePreview(item); }') === false,
             'Composer attachment thumbnails must rely on the queue media strip viewer instead of opening a duplicate application viewer.');
+        $suite->true(strpos($app, 'getFileIconName(file.name, file.mime_type)') !== false
+            && strpos($app, 'projectFileIconName(file)') === false,
+            'Timeline attachment cards must resolve Helper file icons through the imported file-icon API.');
         $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
             && strpos($bundleJs, 'aria-pressed') !== false
             && strpos($bundleJs, 'files.folder') !== false

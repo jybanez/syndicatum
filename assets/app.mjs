@@ -2423,7 +2423,11 @@ function renderMessageAttachments(message) {
     const item = document.createElement(file.available ? "button" : "div");
     if (file.available) item.type = "button";
     item.className = `message-attachment${file.available ? "" : " is-unavailable"}`;
-    const icon = state.factories.createIcon(projectFileIconName(file), { size: 18, fallback: "data.file" });
+    const icon = state.factories.createIcon(getFileIconName(file.name, file.mime_type), {
+      size: 18,
+      fallback: "data.file",
+      decorative: true,
+    });
     const copy = document.createElement("span");
     copy.className = "message-attachment-copy";
     const name = document.createElement("strong");
