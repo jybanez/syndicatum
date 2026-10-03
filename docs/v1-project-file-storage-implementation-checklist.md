@@ -104,7 +104,7 @@ secure file management to Google Drive or another dedicated service.
 | `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [x] Owner-approved |
 | `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [x] Owner-approved |
 | `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [x] Owner-approved |
-| `storage.installation_quota_bytes` | Storage quota | 64 GB | Must exceed the per-file maximum and is enforced before committing an upload | [x] Owner-approved |
+| `storage.default_project_quota_bytes` | Default project storage quota | 64 GB per project | Must exceed the per-file maximum; each project's canonical live-file usage is enforced independently before committing an upload | [x] Owner-approved |
 | `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [x] Owner-approved |
 | `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [x] Owner-approved |
 
@@ -168,8 +168,7 @@ as toggles:
 
 - [ ] Record the approved settings, defaults, ranges, and fixed rules in the
   storage proposal.
-- [ ] Confirm whether public-link regeneration is included in V1 or moved to
-  Phase 2 while preserving the fixed rule for its eventual behavior.
+- [x] Include public-link regeneration in V1, using the one canonical URL model.
 
 **Exit evidence:** owner-approved global setting catalog and fixed rules are
 recorded in the proposal, followed by an authoritative Syndicatum project-plan
@@ -239,8 +238,8 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
 
 - [ ] Add project-qualified upload and list routes using stable project public
   identifiers where the current API contract requires them.
-- [ ] Add metadata rename, explicit replacement, deletion, and—if approved for
-  V1—public-link regeneration routes.
+- [ ] Add metadata rename, explicit replacement, deletion, and public-link
+  regeneration routes in V1.
 - [ ] Require the existing human session/CSRF boundary or project-agent bearer
   boundary as appropriate; never accept caller-supplied uploader identity.
 - [ ] Parse multipart uploads with explicit limits before mutation and reject
@@ -486,8 +485,8 @@ after cutover.
 
 ## 11. Phase 2 — Operational hardening after local-storage V1
 
-- [ ] Add administrator storage reporting and optional per-project quota
-  overrides; retain the V1 installation-wide 64 GB default quota.
+- [ ] Add administrator storage reporting and optional project-specific quota
+  overrides; retain the V1 global default of 64 GB per project.
 - [ ] Add report-first orphan reconciliation and explicit cleanup approval.
 - [ ] Add scheduled checksum/integrity verification and safe repair guidance.
 - [ ] Add optimized Nginx `X-Accel-Redirect` delivery on supported Linux
@@ -523,7 +522,7 @@ after cutover.
 Gate A was approved by the project owner on October 3, 2026:
 
 - 25 MiB maximum file size and 10 files per action;
-- one installation-wide storage quota with a 64 GB default;
+- a 64 GB default storage quota for each project;
 - one canonical permanent URL for internal and external use;
 - public-link regeneration included in V1;
 - inline rendering limited to safe image, audio, and video media;

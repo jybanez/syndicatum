@@ -254,7 +254,7 @@ Configuration should support:
 
 - a 25 MiB default maximum upload size;
 - a maximum of 10 files per action;
-- an installation-wide storage quota with a 64 GB default;
+- a default storage quota of 64 GB for each project;
 - allowed or blocked content types;
 - upload rate limits;
 - filename normalization;
