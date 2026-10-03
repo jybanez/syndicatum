@@ -1,5 +1,5 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.227";
-import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.227";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.228";
+import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.228";
 import {
   createResponsibilityInbox,
   responsibilityActions,
@@ -8171,6 +8171,8 @@ function renderComposerControls() {
     placeholder: "Write to the project timeline…",
     helperText: "Visible to all participants · Shift+Enter for a new line",
     showAttachmentButton: true,
+    attachmentPlacement: "helper",
+    attachmentLabel: "Attach files",
     multiple: true,
     attachmentAdapter: {
       mode: "custom",

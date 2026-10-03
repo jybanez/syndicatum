@@ -263,7 +263,8 @@ button, input, textarea { font: inherit; }
 #composer-host .ui-chat-composer { gap: 4px; }
 #composer-host .ui-chat-composer-controls { gap: 6px; align-items: flex-end; }
 #composer-host .ui-chat-composer-input { height: 140px; min-height: 140px; max-height: 320px; padding: 10px 12px; resize: none; }
-#composer-host .ui-chat-composer-helper { font-size: 11px; line-height: 1.2; }
+#composer-host .ui-chat-composer-helper,
+#composer-host .ui-chat-composer-attach.is-helper-action { font-size: 11px; line-height: 1.2; }
 .message-composer-modal .ui-modal-body { align-content: start; padding: 18px 22px; }
 .message-composer-modal .composer-shell { height: auto; align-self: start; align-content: start; margin: 0; padding: 0; overflow: visible; border: 0; }
 .message-composer-modal #composer-host .ui-chat-composer-controls { grid-template-columns: minmax(0, 1fr); }
