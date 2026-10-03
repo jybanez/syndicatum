@@ -65,11 +65,11 @@ export const USER_GUIDE_SECTIONS = [
           { type: "steps", items: [
             "Open New message or Reply, then choose the attachment action in the composer.",
             "Use the breadcrumbs to move through project folders. Folders appear before files with distinct icons. Selecting a file highlights its full row; select it again to remove it from the picker selection.",
-            "To add a new file, open its destination folder first and choose Upload files. If that folder already contains the same filename, confirm replacement before any file bytes are sent.",
+            "Use the borderless Reload and Upload icons in the picker header when you need to refresh the current folder or add a new file. Uploads go to the folder shown in the breadcrumbs; if it already contains the same filename, confirm replacement before any file bytes are sent.",
             "Choose Attach selected files. Review the selected-file list below the addressing controls and remove anything you do not want to send.",
             "Send the message. Syndicatum verifies every selected file still belongs to the project and creates the message and attachment links together.",
           ] },
-          { type: "note", text: "Attachments are references to canonical Project Files, not private copies. Uploading from the picker stores the file in the current project folder even if you later cancel the message. Renaming, moving, or replacing a file keeps its permanent URL and existing message references. Deleting the canonical file makes it unavailable from earlier messages. A message can attach up to 20 files." },
+          { type: "note", text: "Press Escape once to clear all selected files without closing the picker; press Escape again when nothing is selected to close it. Cancel and the close button always close directly. Attachments are references to canonical Project Files, not private copies. Uploading from the picker stores the file in the current project folder even if you later cancel the message. Renaming, moving, or replacing a file keeps its permanent URL and existing message references. Deleting the canonical file makes it unavailable from earlier messages. A message can attach up to 20 files." },
         ],
       },
       {

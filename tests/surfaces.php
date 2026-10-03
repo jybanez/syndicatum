@@ -716,7 +716,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.222";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.225";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.226";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -883,7 +883,7 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.225 retains planning contracts and provides canonical file viewers and picker rows', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.226 retains planning contracts and provides canonical file viewers and picker controls', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $appCss = file_get_contents($root . '/assets/app.css');
         $setup = file_get_contents($root . '/assets/setup.mjs');
@@ -891,13 +891,13 @@ try {
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.225') !== false,
-                'Every Helper entry point must use the canonical 0.21.225 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.226') !== false,
+                'Every Helper entry point must use the canonical 0.21.226 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.225') !== false,
-                $surface . ' must use the matching canonical 0.21.225 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.226') !== false,
+                $surface . ' must use the matching canonical 0.21.226 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -957,22 +957,29 @@ try {
         $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
             && strpos($bundleJs, 'aria-pressed') !== false
             && strpos($bundleJs, 'files.folder') !== false
-            && strpos($bundleJs, 'Clear selection') !== false
+            && strpos($bundleJs, 'ui-repository-picker-header-actions') !== false
+            && strpos($bundleJs, 'headerActions:') !== false
+            && strpos($bundleJs, 'Reload folder') !== false
+            && strpos($bundleJs, 'Upload files') !== false
+            && strpos($bundleJs, '?.reason==="escape"') !== false
+            && strpos($bundleJs, '==="ready"') !== false
             && strpos($bundleCss, '.ui-repository-picker-row.is-selected') !== false
-            && strpos($bundleCss, '.ui-repository-picker .ui-breadcrumbs-link') !== false,
-            'The repository picker must use Helper breadcrumbs, folder-first icon rows, and whole-row accessible selection.');
-        $suite->same('5b02efd1ab842a83a6e6be49312a440c6369697d285adb25eb06a589ddeaca4e',
+            && strpos($bundleCss, '.ui-repository-picker .ui-breadcrumbs-link') !== false
+            && strpos($bundleCss, '.ui-repository-picker-header-actions') !== false
+            && strpos($bundleCss, '.ui-repository-picker-selection') === false,
+            'The repository picker must use Helper breadcrumbs, accessible icon rows, header actions, and two-stage Escape selection clearing without a summary footer.');
+        $suite->same('f21c90c1db24cf49f233eb7d9c9cf523e09d325b9bba327e92b4a2163cfeec7b',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match canonical release 0.21.225 exactly.');
-        $suite->same('09af58197beb8964f0d16ae8fce3f2af7f429ac92a8ecfaa4d35b59732178245',
+            'The vendored Helper JavaScript must match canonical release 0.21.226 exactly.');
+        $suite->same('b9ad1581da1f83961ad2f4c34d547b890a398da2bb409e209b9ba18583b747d2',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match canonical release 0.21.225 exactly.');
-        $suite->same('0c69a1372682766633e227d4a7f03e4890c78d8990edba616b7b6f3a7cf06ed3',
+            'The vendored Helper stylesheet must match canonical release 0.21.226 exactly.');
+        $suite->same('c30de071adbbb487a2bc862a557981f8d59bb7742a878c4dd2ab9eebfa34afdb',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match canonical release 0.21.225 exactly.');
+            'The vendored Helper loader must match canonical release 0.21.226 exactly.');
         $suite->same('a7c5be8b0f91e81d4765b3583390ba99a3596c8091304fe4e1c01c29d591e7f1',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.icons.files.js'),
-            'The vendored Helper file icon pack must match canonical release 0.21.225 exactly.');
+            'The vendored Helper file icon pack must match canonical release 0.21.226 exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {

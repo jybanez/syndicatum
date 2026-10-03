@@ -1,5 +1,5 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.225";
-import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.225";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.226";
+import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.226";
 import {
   createResponsibilityInbox,
   responsibilityActions,

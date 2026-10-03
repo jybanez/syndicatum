@@ -12,7 +12,7 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `f6e25f50cf38dd53639ba87195e16ae028dfa5ef` (Helper `0.21.225`)
+- Pinned commit: `22b943a071700773fe950f65c03b60daf11e3358` (Helper `0.21.226`)
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 

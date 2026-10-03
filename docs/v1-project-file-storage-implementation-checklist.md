@@ -362,14 +362,16 @@ delivery route is active.
 - [x] Preserve reply, revision, deletion, pagination, virtualization, and
   realtime reconciliation behavior.
 
-Delivery update (October 4, 2026): Helper `0.21.225` supplies the complete
+Delivery update (October 4, 2026): Helper `0.21.226` supplies the complete
 repository picker and composer's custom attachment adapter. Syndicatum opens the
 picker immediately in its loading state, supports cross-folder multi-selection,
 uploads into the current folder through the existing chunked transport, and
 uses visible breadcrumbs plus a folder-first icon row list. File selection is
 shown through a whole-row highlight rather than checkboxes or a duplicate
-selected-file list; a compact count and Clear selection action cover selections
-retained across folders. The picker renders selected files with Helper's upload
+selected-file list. Reload and Upload are borderless icon actions in the modal
+header. Escape clears selections retained across folders on its first press and
+closes the picker when no selection remains; Cancel and Close dismiss directly.
+The picker renders selected files with Helper's upload
 queue. Message creation reauthorizes
 up to 20 same-project file IDs and commits the message and ordered associations
 atomically. Cancelling or failing a message does not delete already-confirmed
