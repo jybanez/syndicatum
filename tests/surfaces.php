@@ -1059,10 +1059,16 @@ try {
             && strpos($source, 'multiple: true') !== false
             && strpos($source, 'payload.storage?.max_files_per_action') !== false
             && strpos($source, 'const successful = items.filter((item) => item.status === "success");') !== false
-            && strpos($source, 'refreshFiles();') !== false,
+            && strpos($source, 'refreshFiles();') !== false
+            && strpos($source, 'enableColumnResize: true') !== false
+            && strpos($source, '{ key: "mime_type", label: "Type" }') === false
+            && strpos($source, '{ icon: "actions.add", iconOnly: true }') !== false
+            && strpos($source, '{ icon: "data.upload" }') !== false
+            && strpos($source, 'ui-button-borderless') !== false,
             'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
         $suite->true(strpos($styles, '.project-files-layout') !== false
-            && strpos($styles, 'height: min(66vh, 660px)') !== false,
+            && strpos($styles, 'height: min(66vh, 660px)') !== false
+            && strpos($styles, '.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none;') !== false,
             'The Project Files modal needs a fixed-height two-column workspace.');
         $suite->true(strpos($index, '<p class="ui-eyebrow">Project</p>') === false, 'The redundant Project eyebrow must not render.');
         $suite->true(strpos($index, 'class="ui-badge" id="status-badge"') === false, 'Realtime state must not render as a visible pill.');

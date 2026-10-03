@@ -1083,11 +1083,17 @@ function renderIdentity() {
   mountNavbar();
 }
 
-function projectFilesButton(label, disabled, title) {
+function projectFilesButton(label, disabled, title, { icon = "", iconOnly = false } = {}) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "ui-button ui-button-sm";
-  button.textContent = label;
+  button.className = `ui-button ui-button-sm ui-button-borderless${iconOnly ? " project-files-icon-action" : ""}`;
+  button.setAttribute("aria-label", label);
+  if (icon) button.innerHTML = helperIconHtml(icon, 18);
+  if (!iconOnly) {
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.appendChild(text);
+  }
   button.disabled = Boolean(disabled);
   if (title) button.title = title;
   return button;
@@ -1110,7 +1116,8 @@ function projectFilesContent(payload, handlers = {}) {
   const folderTitle = document.createElement("h3");
   folderTitle.textContent = "Folders";
   const createFolder = projectFilesButton("Create folder", !payload.capabilities?.create_folder,
-    payload.capabilities?.create_folder ? "Create a folder" : (payload.notice || "Folder creation is not available yet."));
+    payload.capabilities?.create_folder ? "Create a folder" : (payload.notice || "Folder creation is not available yet."),
+    { icon: "actions.add", iconOnly: true });
   if (payload.capabilities?.create_folder) createFolder.addEventListener("click", () => handlers.onCreateFolder?.(payload.current_folder));
   folderHeader.append(folderTitle, createFolder);
   const treeHost = document.createElement("div");
@@ -1125,7 +1132,8 @@ function projectFilesContent(payload, handlers = {}) {
   const fileTitle = document.createElement("h3");
   fileTitle.textContent = payload.current_folder?.name || "Files";
   const upload = projectFilesButton("Upload files", !payload.capabilities?.upload,
-    payload.capabilities?.upload ? "Upload files" : (payload.notice || "File uploads are not available yet."));
+    payload.capabilities?.upload ? "Upload files" : (payload.notice || "File uploads are not available yet."),
+    { icon: "data.upload" });
   if (payload.capabilities?.upload) upload.addEventListener("click", () => handlers.onUpload?.(payload.current_folder));
   fileHeader.append(fileTitle, upload);
   const gridHost = document.createElement("div");
@@ -1151,13 +1159,16 @@ function projectFilesContent(payload, handlers = {}) {
     enableSearch: false,
     enableSort: true,
     enablePagination: false,
+    enableColumnResize: true,
+    minColumnWidth: 90,
     emptyText: payload.notice || "This folder is empty.",
     columns: [
       { key: "name", label: "Name" },
-      { key: "mime_type", label: "Type" },
       { key: "size_bytes", label: "Size", format: (value) => recoverySize(Number(value || 0)) },
       { key: "updated_at", label: "Modified", format: (value) => value ? formatDate(value) : "" },
     ],
+    onColumnResize({ columnWidths }) { state.projectFileGridColumnWidths = columnWidths; },
+    ...(state.projectFileGridColumnWidths ? { columnWidths: state.projectFileGridColumnWidths } : {}),
   });
   return { content, tree, grid };
 }
