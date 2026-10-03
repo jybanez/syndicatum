@@ -1,6 +1,6 @@
 # V1 Project File Storage Proposal
 
-Status: Proposed  
+Status: Proposed; configuration foundation implemented
 Created: October 2, 2026  
 Audience: Product, engineering, operations, security, and support
 
@@ -15,6 +15,13 @@ Files are intended for dependable, low-friction sharing. Every stored file
 receives a permanent, unguessable public Syndicatum URL that works without
 authentication until an authorized user deletes the file or regenerates its
 public identifier.
+
+The configuration foundation is now present: administrators can set
+`storage.local_base_path` from the **Storage** tab in System Settings. Saving
+validates and prepares a private, writable absolute directory outside the
+public application root. This does not yet enable uploads, file records,
+previews, downloads, or permanent public links; those remain implementation
+work described below.
 
 ## 2. Product principles
 

@@ -410,6 +410,9 @@ System Settings
 │  ├─ PBB Account
 │  ├─ Google sign-in
 │  └─ Native login and self-registration
+├─ Mail
+├─ Storage
+│  └─ Local project file storage
 └─ Recovery
    └─ Backup storage
 ```

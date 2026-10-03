@@ -11,7 +11,7 @@ import {
   settleResponsibilityAction,
   validationAlertItems,
 } from "./responsibility-action-flow.mjs?v=20261003051000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003091500";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003103000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -7997,6 +7997,15 @@ async function openSettings() {
       ],
     },
     {
+      id: "storage",
+      label: "Storage",
+      rows: [
+        [{ type: "text", content: "Local project file storage" }],
+        [{ type: "input", name: "file_storage_location", label: "Storage location", placeholder: "/srv/syndicatum/files", required: true, disabled: locked("storage.local_base_path") }],
+        [{ type: "text", content: "Absolute directory on the Syndicatum server, outside the public web root. Syndicatum will store project file content here; this is not a browser folder." }],
+      ],
+    },
+    {
       id: "recovery",
       label: "Recovery",
       rows: [
@@ -8021,18 +8030,19 @@ async function openSettings() {
     mail_enabled: "mail", mail_smtp_host: "mail", mail_smtp_port: "mail",
     mail_encryption: "mail", mail_username: "mail", mail_password: "mail",
     mail_sender_name: "mail", mail_sender_address: "mail", mail_reply_to_address: "mail",
-    mail_timeout_seconds: "mail", backup_base_location: "recovery",
+    mail_timeout_seconds: "mail", file_storage_location: "storage", backup_base_location: "recovery",
   };
   const fieldLabels = {
     site_name: "Installation name", public_origin: "Public Syndicatum URL", default_timezone: "Default timezone",
     message_max_length: "Maximum message length", mail_sender_address: "Sender email address",
-    backup_base_location: "Base location for generated backups",
+    file_storage_location: "Storage location", backup_base_location: "Base location for generated backups",
   };
   const initialValues = () => ({
     site_name: value("general.installation_name", "Syndicatum"),
     public_origin: value("general.public_origin"),
     default_timezone: value("general.default_timezone", "UTC"),
     message_max_length: value("messaging.max_message_bytes", 24000),
+    file_storage_location: String(value("storage.local_base_path") || "").trim(),
     backup_base_location: String(value("recovery.backup_base_path") || "").trim(),
     realtime_enabled: Boolean(value("realtime.enabled", false)),
     realtime_base_url: value("realtime.base_url"),
@@ -8139,6 +8149,27 @@ async function openSettings() {
     onChange(values) {
       syncRealtimeTestButton(values);
     },
+    validate(values) {
+      const errors = {};
+      const absoluteServerPath = (candidate) => /^[A-Za-z]:[\\/]/.test(candidate)
+        || /^\\\\[^\\/]+[\\/][^\\/]+/.test(candidate)
+        || candidate.startsWith("/");
+      const storagePath = String(values.file_storage_location || "").trim();
+      if (!absoluteServerPath(storagePath)) {
+        errors.file_storage_location = "Storage location: enter an absolute server path, such as C:\\private\\syndicatum-files or /srv/syndicatum/files.";
+      }
+      const backupPath = String(values.backup_base_location || "").trim();
+      if (!absoluteServerPath(backupPath)) {
+        errors.backup_base_location = "Base location for generated backups: enter an absolute server path, such as C:\\private\\syndicatum-backups or /srv/syndicatum/backups.";
+      }
+      if (values.mail_enabled) {
+        const senderAddress = String(values.mail_sender_address || "").trim();
+        if (!senderAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderAddress)) {
+          errors.mail_sender_address = "Sender email address: enter a valid address before enabling invitation email capture.";
+        }
+      }
+      return errors;
+    },
     async onInvalid(result, context) {
       const tabId = fieldTabs[result.firstInvalidField] || "general";
       settingsTabs?.setActive(tabId, false);
@@ -8164,27 +8195,8 @@ async function openSettings() {
         context.setFormError("System settings are not available. Close this dialog and try again.");
         return false;
       }
+      const storagePath = String(values.file_storage_location || "").trim();
       const backupPath = String(values.backup_base_location || "").trim();
-      const absoluteBackupPath = /^[A-Za-z]:[\\/]/.test(backupPath)
-        || /^\\\\[^\\/]+[\\/][^\\/]+/.test(backupPath)
-        || backupPath.startsWith("/");
-      if (!absoluteBackupPath) {
-        settingsTabs?.setActive("recovery", false);
-        activeTabId = "recovery";
-        context.setErrors({ backup_base_location: "Enter an absolute server path, such as C:\\private\\syndicatum-backups or /srv/syndicatum/backups." });
-        context.setFormError("Base location for generated backups must be an absolute server filesystem path.");
-        return false;
-      }
-      if (values.mail_enabled) {
-        const senderAddress = String(values.mail_sender_address || "").trim();
-        if (!senderAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderAddress)) {
-          settingsTabs?.setActive("mail", false);
-          activeTabId = "mail";
-          context.setErrors({ mail_sender_address: "Enter a valid sender email address before enabling invitation email capture." });
-          context.setFormError("Sender email address is required when invitation email capture is enabled.");
-          return false;
-        }
-      }
       const updates = {
         "general.installation_name": values.site_name,
         "general.public_origin": values.public_origin,
@@ -8194,6 +8206,7 @@ async function openSettings() {
         "mail.sender_name": values.mail_sender_name,
         "mail.sender_address": values.mail_sender_address,
         "mail.reply_to_address": values.mail_reply_to_address,
+        "storage.local_base_path": storagePath,
         "recovery.backup_base_path": backupPath,
         "realtime.enabled": Boolean(values.realtime_enabled),
         "realtime.base_url": values.realtime_base_url,

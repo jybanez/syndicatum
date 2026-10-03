@@ -25,6 +25,7 @@ class SettingsService
             'mail.sender_name' => ['section' => 'mail', 'type' => 'string', 'default' => 'Syndicatum', 'max' => 160],
             'mail.sender_address' => ['section' => 'mail', 'type' => 'email', 'default' => ''],
             'mail.reply_to_address' => ['section' => 'mail', 'type' => 'email', 'default' => ''],
+            'storage.local_base_path' => ['section' => 'storage', 'type' => 'path', 'default' => '', 'max' => 2048],
             'recovery.backup_base_path' => ['section' => 'recovery', 'type' => 'path', 'default' => '', 'max' => 2048],
             'realtime.enabled' => ['section' => 'integrations', 'type' => 'boolean', 'default' => false],
             'realtime.base_url' => ['section' => 'integrations', 'type' => 'url', 'default' => ''],

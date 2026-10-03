@@ -369,9 +369,16 @@ try {
             && strpos($settingsEndpoint, "'settings.secrets_viewed'") !== false
             && strpos($settingsEndpoint, "'Cache-Control' => 'no-store, private'") !== false,
             'Plaintext secret reads must use an administrator-only, CSRF-protected, audited, non-cacheable request.');
-        foreach (['General', 'Realtime', 'Authentication', 'Mail', 'Recovery'] as $label) {
+        foreach (['General', 'Realtime', 'Authentication', 'Mail', 'Storage', 'Recovery'] as $label) {
             $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing System Settings tab: ' . $label);
         }
+        $suite->true(strpos($settings, 'name: "file_storage_location"') !== false
+            && strpos($settings, '"storage.local_base_path": storagePath') !== false
+            && strpos($settings, 'Storage location: enter an absolute server path') !== false,
+            'The Storage tab must expose, validate, and persist the local project-file root.');
+        $suite->true(strpos($settingsEndpoint, "new ProjectFileStorage") !== false
+            && strpos($settingsEndpoint, "Storage location is invalid or unavailable") !== false,
+            'The settings endpoint must validate and prepare the configured project-file root.');
         foreach (['SMTP host', 'SMTP port', 'Encryption', 'SMTP username', 'SMTP password', 'Sender name', 'Sender email address', 'Reply-to address', 'Connection timeout (seconds)'] as $label) {
             $suite->true(strpos($settings, 'label: "' . $label . '"') !== false, 'Missing SMTP preview field: ' . $label);
         }
@@ -408,6 +415,10 @@ try {
         $suite->true(strpos($proposal, 'Separate recipient-specific outbox') !== false
             && strpos($proposal, 'Recommended first implementation slice') !== false,
             'The deferred email notification proposal is incomplete.');
+        $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
+        $suite->true(strpos($guide, 'id: "configure-local-storage"') !== false
+            && strpos($guide, 'This setting prepares the storage foundation only.') !== false,
+            'The user guide must explain local storage configuration and its current scope.');
     });
 
     $suite->test('Realtime-enabled timeline reconnects and reconciles missed task events', function () use ($suite, $root) {
