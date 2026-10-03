@@ -252,14 +252,21 @@ its prior provider and must not produce a broken public link.
 
 Configuration should support:
 
-- maximum upload size;
+- a 25 MiB default maximum upload size;
+- a maximum of 10 files per action;
+- an installation-wide storage quota with a 64 GB default;
 - allowed or blocked content types;
-- per-project and installation-wide storage quotas;
 - upload rate limits;
 - filename normalization;
 - orphan-file reconciliation;
 - checksum verification; and
 - explicit confirmation before deleting or regenerating a shared link.
+
+The approved V1 defaults also use zero days of deleted-byte retention and a
+300-second public cache duration. Public access ends immediately at the origin
+when a file is deleted or its link is regenerated; cache behavior must follow
+the documented invalidation contract. Project-specific quota overrides and
+storage reporting remain Phase 2.
 
 Malware scanning may be introduced later through the storage interface without
 blocking the local-storage foundation.
@@ -282,7 +289,7 @@ blocking the local-storage foundation.
 
 ### Phase 2 — Operational hardening
 
-- Add quotas and administrative storage reporting.
+- Add per-project quota overrides and administrative storage reporting.
 - Add orphan reconciliation and integrity verification.
 - Add optimized Nginx delivery for Linux deployments.
 - Harden replacement, deletion, and public-link regeneration for large and

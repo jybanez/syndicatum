@@ -100,14 +100,13 @@ secure file management to Google Drive or another dedicated service.
 | Controlled setting | User-facing field | Recommended default | Required guardrail | Approval |
 | --- | --- | --- | --- | --- |
 | `storage.local_base_path` | Storage location | No portable default; administrator must supply an absolute server path | Private, writable, and outside the public application root | [x] Implemented |
-| `storage.max_upload_bytes` | Maximum file size | 25 MiB | Integer range with a server hard ceiling; enforced while streaming before storage is committed | [ ] |
-| `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [ ] |
-| `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [ ] |
-| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [ ] |
-| `storage.installation_quota_bytes` | Installation storage quota | Unlimited (`0`) | Nonzero values must exceed the per-file maximum and are enforced before committing an upload | [ ] |
-| `storage.default_project_quota_bytes` | Default project storage quota | Unlimited (`0`) | Nonzero values must exceed the per-file maximum; project usage is calculated from canonical live file records | [ ] |
-| `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [ ] |
-| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [ ] |
+| `storage.max_upload_bytes` | Maximum file size | 25 MiB | Integer range with a server hard ceiling; enforced while streaming before storage is committed | [x] Owner-approved |
+| `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [x] Owner-approved |
+| `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [x] Owner-approved |
+| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [x] Owner-approved |
+| `storage.installation_quota_bytes` | Storage quota | 64 GB | Must exceed the per-file maximum and is enforced before committing an upload | [x] Owner-approved |
+| `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [x] Owner-approved |
+| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [x] Owner-approved |
 
 - [ ] Add these fields to the existing canonical Storage tab, grouped into
   **Location**, **Uploads**, **Capacity**, and **Delivery** sections.
@@ -174,7 +173,7 @@ as toggles:
 
 **Exit evidence:** owner-approved global setting catalog and fixed rules are
 recorded in the proposal, followed by an authoritative Syndicatum project-plan
-proposal for implementation.
+proposal for implementation. Gate A was approved October 3, 2026.
 
 ## 6. Gate B — Storage, schema, and service contracts
 
@@ -488,7 +487,7 @@ after cutover.
 ## 11. Phase 2 — Operational hardening after local-storage V1
 
 - [ ] Add administrator storage reporting and optional per-project quota
-  overrides; retain the V1 installation quota and default-project quota.
+  overrides; retain the V1 installation-wide 64 GB default quota.
 - [ ] Add report-first orphan reconciliation and explicit cleanup approval.
 - [ ] Add scheduled checksum/integrity verification and safe repair guidance.
 - [ ] Add optimized Nginx `X-Accel-Redirect` delivery on supported Linux
@@ -519,15 +518,18 @@ after cutover.
 - [ ] Extend backup/restore acceptance to S3-backed installations without
   assuming the external bucket will remain available.
 
-## 13. Review questions for the project owner
+## 13. Owner approval record
 
-1. Do you approve the proposed global setting catalog, validation rules, and
-   defaults—particularly 25 MiB per file and 10 files per action?
-2. Do you approve unlimited-by-default installation and project quotas, with
-   immediate enforcement whenever an administrator sets a nonzero value?
-3. Should public-link regeneration ship in V1, or should it remain Phase 2 while
-   deletion and explicit replacement ship first?
-4. After approval, should this checklist be translated into formal Syndicatum
-   milestones and deliverables for owner approval before engineering tasks are
-   created?
+Gate A was approved by the project owner on October 3, 2026:
+
+- 25 MiB maximum file size and 10 files per action;
+- one installation-wide storage quota with a 64 GB default;
+- one canonical permanent URL for internal and external use;
+- public-link regeneration included in V1;
+- inline rendering limited to safe image, audio, and video media;
+- equal audited file-management authority for every active human and agent
+  project participant;
+- project Files management modal first, followed by timeline attachments; and
+- conversion of the approved checklist into formal Syndicatum milestones and
+  deliverables before engineering tasks are created.
 
