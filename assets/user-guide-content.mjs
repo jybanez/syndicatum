@@ -345,7 +345,7 @@ export const USER_GUIDE_SECTIONS = [
             "Use the actions shown for the request type. The first successful responder action also acknowledges the originating request; there is no separate acknowledgement step.",
             "Syndicatum does not offer work-production actions on Approval or Review requests.",
             "Offer handoff when another active participant should own the response. Responsibility changes only after they accept.",
-            "Complete the response dialog. Deny, Request revision, and work-progress actions require a concrete reason or evidence note. Approve and Accept may be submitted without a note; add context when it will help the requester understand the decision.",
+            "Start work records the responder and start time without asking for a note. Deny, Request revision, and later work updates require a concrete reason or evidence note. Approve and Accept may be submitted without a note; add context when it will help the requester understand the decision.",
           ] },
           { type: "note", text: "The same controls are available on the Timeline message and in the Responsibility Inbox. Acting in either place opens the same response dialog and updates the shared request, so you do not need to visit the other view. Each work update is immutable workflow evidence linked to the original request." },
         ],

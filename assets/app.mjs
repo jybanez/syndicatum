@@ -30,7 +30,9 @@ const TASK_RECONCILIATION_INTERVAL_MS = 60000;
 const TIMELINE_MARKER_ICONS = new Map();
 const MESSAGE_SEVERITIES = new Set(["neutral", "info", "success", "warning", "error", "critical"]);
 const RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS = new Set(["approval_approved", "review_accepted"]);
+const RESPONSIBILITY_NO_NOTE_ACTIONS = new Set(["work_started"]);
 const RESPONSIBILITY_DEFAULT_NOTES = {
+  work_started: "Work started.",
   approval_approved: "Approved.",
   review_accepted: "Accepted.",
 };
@@ -2060,7 +2062,9 @@ function responsibilityActionRows(item, kind) {
   const optionalNote = RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind);
   const rows = [
     [{ type: "text", content: `This response will be recorded as a project timeline message for request #${item.request_message_id}.` }],
-    [{
+  ];
+  if (!RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind)) {
+    rows.push([{
       type: "textarea",
       name: "note",
       label: optionalNote ? "Note (optional)" : "Reason or evidence note",
@@ -2070,8 +2074,8 @@ function responsibilityActionRows(item, kind) {
       help: optionalNote
         ? "Optional. Add context when it will help the requester understand the decision."
         : "Explain the decision or provide the evidence the requester needs.",
-    }],
-  ];
+    }]);
+  }
   if (kind === "transfer_offered") {
     rows.push([{
       type: "select",
@@ -2134,7 +2138,9 @@ function openResponsibilityActionModal(item, kind, hooks = {}) {
     escapeCloseWhileBusy: false,
     validate(values) {
       const errors = {};
-      if (!RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind) && !String(values.note || "").trim()) {
+      if (!RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind)
+          && !RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind)
+          && !String(values.note || "").trim()) {
         errors.note = "Reason or evidence note — required";
       }
       if (kind === "transfer_offered" && !Number(values.target_participant_id || 0)) {

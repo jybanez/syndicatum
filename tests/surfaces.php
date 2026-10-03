@@ -1290,6 +1290,11 @@ try {
             && strpos($app, 'approval_approved: "Approved."') !== false
             && strpos($app, 'review_accepted: "Accepted."') !== false,
             'Positive approval and review decisions must allow an optional note while retaining a valid canonical message body.');
+        $suite->true(strpos($app, 'RESPONSIBILITY_NO_NOTE_ACTIONS = new Set(["work_started"])') !== false
+            && strpos($app, 'work_started: "Work started."') !== false
+            && strpos($app, 'if (!RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind))') !== false
+            && strpos($workflow, '&& !RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind)') !== false,
+            'Starting work must use a canonical message body without showing or requiring a reason/evidence field.');
         $suite->true(strpos($workflow, 'result.outcome === "conflict"') !== false
             && strpos($workflow, 'Nothing was posted.') !== false
             && strpos($workflow, 'idempotencyKey = makeIdempotencyKey()') !== false,

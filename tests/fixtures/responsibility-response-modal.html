@@ -18,6 +18,7 @@
     <strong>Approval request #6790</strong>
     <span>Requested by Syndicatum Developer · Assigned to Jonathan Anthony Ybañez</span>
     <div class="fixture-actions">
+      <button class="ui-button" type="button" data-action="work_started">Start work</button>
       <button class="ui-button" type="button" data-action="approval_approved">Approve</button>
       <button class="ui-button" type="button" data-action="approval_denied">Deny</button>
       <button class="ui-button" type="button" data-action="transfer_offered">Offer handoff</button>
@@ -37,6 +38,7 @@
   const createFormModal = await uiLoader.get("ui.form.modal");
   const uiAlert = await uiLoader.get("ui.dialog.alert");
   const labels = {
+    work_started: "Start work",
     approval_approved: "Approve",
     approval_denied: "Deny",
     transfer_offered: "Offer handoff",
@@ -44,6 +46,7 @@
     delayed_conflict: "Delayed conflict",
   };
   const optional = new Set(["approval_approved", "delayed_success", "delayed_conflict"]);
+  const noNote = new Set(["work_started"]);
   const status = document.querySelector("[data-fixture-status]");
   const metrics = { requests: 0, successHooks: 0, conflictHooks: 0 };
   const renderMetrics = () => {
@@ -84,11 +87,13 @@
   function openModal(kind) {
     const rows = [
       [{ type: "text", content: "This response will be recorded as a project timeline message for request #6790." }],
+    ];
+    if (!noNote.has(kind)) rows.push(
       [{ type: "textarea", name: "note", label: optional.has(kind) ? "Note (optional)" : "Reason or evidence note",
         required: !optional.has(kind), maxLength: 10000, rows: 5,
         help: optional.has(kind) ? "Optional. Add context when it will help the requester understand the decision."
           : "Explain the decision or provide the evidence the requester needs." }],
-    ];
+    );
     if (kind === "transfer_offered") rows.push([{
       type: "select", name: "target_participant_id", label: "Active handoff target", required: true,
       options: [{ value: "", label: "Choose a participant" }, { value: "30", label: "New responder" }],
@@ -101,7 +106,7 @@
       rows, initialValues: { note: "", target_participant_id: "" }, manageBusyOnSubmit: false,
       validate(values) {
         const errors = {};
-        if (!optional.has(kind) && !String(values.note || "").trim()) errors.note = "Reason or evidence note — required";
+        if (!optional.has(kind) && !noNote.has(kind) && !String(values.note || "").trim()) errors.note = "Reason or evidence note — required";
         if (kind === "transfer_offered" && !values.target_participant_id) errors.target_participant_id = "Active handoff target — required";
         return errors;
       },
