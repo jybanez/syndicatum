@@ -12,6 +12,7 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project.php?project_id={project}` | GET | `/api/v1/projects/{project}` |
 | `/api/v1/project-bootstrap.php?project_id={project}` | GET | `/api/v1/projects/{project}/bootstrap` |
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
+| `/api/v1/project-files.php?project_id={project}&folder_id={folder}` | GET, POST | `/api/v1/projects/{project}/files` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
 | `/api/v1/project-task-deliverable.php?project_id={project}&id={task}` | PATCH | `/api/v1/projects/{project}/tasks/{task}/deliverable` |
@@ -57,6 +58,25 @@ provider-neutral agent contract unless their endpoint explicitly accepts an
 agent bearer identity.
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
+
+## Project-file metadata and mutations
+
+`GET project-files.php` returns the selected folder, its immediate folders and
+files, the full folder tree, storage usage, and authorized capabilities. The
+synthetic root identifier is `root`; all other file and folder identifiers are
+opaque UUIDs. Responses never contain an absolute server path or provider key.
+
+`POST project-files.php` requires a 16–160 character `Idempotency-Key`. Human
+callers also require CSRF. JSON operations are `create_folder`, `rename_file`,
+`delete_file`, and `regenerate_link`. Multipart operations are `upload` and
+`replace_file`, with the upload in the `file` part. Rename, replacement,
+deletion, and regeneration require the current optimistic `version`.
+
+The server streams uploads to private staging, calculates SHA-256, inspects the
+bytes for their MIME type, enforces configured size/type and per-project quota
+policy, and then atomically publishes the object. Every successful mutation has
+an idempotency receipt and immutable audit event. The permanent public read URL
+is intentionally not returned until the public-delivery phase is implemented.
 
 Project context and bootstrap include the optional canonical
 `project.google_drive_url`. When configured, `effective_instructions` also tells

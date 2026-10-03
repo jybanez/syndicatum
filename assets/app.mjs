@@ -11,7 +11,7 @@ import {
   settleResponsibilityAction,
   validationAlertItems,
 } from "./responsibility-action-flow.mjs?v=20261003051000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003103000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003143000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -1093,7 +1093,7 @@ function projectFilesButton(label, disabled, title) {
   return button;
 }
 
-function projectFilesContent(payload) {
+function projectFilesContent(payload, handlers = {}) {
   const content = document.createElement("div");
   content.className = "project-files-layout";
   const notice = document.createElement("p");
@@ -1111,6 +1111,7 @@ function projectFilesContent(payload) {
   folderTitle.textContent = "Folders";
   const createFolder = projectFilesButton("Create folder", !payload.capabilities?.create_folder,
     payload.capabilities?.create_folder ? "Create a folder" : (payload.notice || "Folder creation is not available yet."));
+  if (payload.capabilities?.create_folder) createFolder.addEventListener("click", () => handlers.onCreateFolder?.(payload.current_folder));
   folderHeader.append(folderTitle, createFolder);
   const treeHost = document.createElement("div");
   treeHost.className = "project-files-tree";
@@ -1125,6 +1126,7 @@ function projectFilesContent(payload) {
   fileTitle.textContent = payload.current_folder?.name || "Files";
   const upload = projectFilesButton("Upload files", !payload.capabilities?.upload,
     payload.capabilities?.upload ? "Upload files" : (payload.notice || "File uploads are not available yet."));
+  if (payload.capabilities?.upload) upload.addEventListener("click", () => handlers.onUpload?.(payload.current_folder));
   fileHeader.append(fileTitle, upload);
   const gridHost = document.createElement("div");
   gridHost.className = "project-files-grid";
@@ -1137,7 +1139,10 @@ function projectFilesContent(payload) {
     expandAll: true,
     enableVirtualization: true,
     virtualHeight: 520,
-    onSelect(node) { fileTitle.textContent = node.label || "Files"; },
+    onSelect(node) {
+      fileTitle.textContent = node.label || "Files";
+      if (node.id && node.id !== payload.current_folder?.id) handlers.onFolderSelect?.(node.id);
+    },
   });
   tree.setSelected?.(payload.current_folder?.id || "root");
   const grid = state.factories.createGrid(gridHost, Array.isArray(payload.files) ? payload.files : [], {
@@ -1149,12 +1154,98 @@ function projectFilesContent(payload) {
     emptyText: payload.notice || "This folder is empty.",
     columns: [
       { key: "name", label: "Name" },
-      { key: "type", label: "Type" },
+      { key: "mime_type", label: "Type" },
       { key: "size_bytes", label: "Size", format: (value) => recoverySize(Number(value || 0)) },
       { key: "updated_at", label: "Modified", format: (value) => value ? formatDate(value) : "" },
     ],
   });
   return { content, tree, grid };
+}
+
+function projectFileMutationHeaders(idempotencyKey, extra = {}) {
+  const token = state.session?.csrf_token || state.session?.csrfToken || "";
+  return { "Idempotency-Key": idempotencyKey, ...(token ? { "X-CSRF-Token": token } : {}), ...extra };
+}
+
+function openCreateProjectFolder(projectId, folder, onCreated) {
+  const modal = state.factories.createFormModal({
+    title: "Create folder",
+    submitLabel: "Create folder",
+    manageBusyOnSubmit: false,
+    initialValues: { name: "" },
+    rows: [[modalTextField("name", "Folder name", { required: true, maxlength: 255, autocomplete: "off" })]],
+    validate(values) {
+      const name = String(values.name || "").trim();
+      if (!name) return { name: "Folder name — required" };
+      if (name.length > 255) return { name: "Folder name — use no more than 255 characters." };
+      if (/[\\/\u0000-\u001f\u007f]/.test(name) || name === "." || name === "..") {
+        return { name: "Folder name — remove slashes, control characters, or reserved dot names." };
+      }
+      return {};
+    },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, { name: "Folder name" }); },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Creating folder…" });
+      try {
+        await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: projectFileMutationHeaders(makeIdempotencyKey(), { "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: "create_folder", parent_folder_id: folder?.id || "root", name: String(values.name).trim() }),
+          requireJson: true,
+        });
+        state.components.toast.success("Folder created.");
+        onCreated?.();
+        return true;
+      } catch (error) { context.setBusy(false); context.setFormError(error.message); return false; }
+    },
+  });
+  modal.open();
+}
+
+function openProjectFileUploader(projectId, folder, maximumBytes, onUploaded) {
+  const content = document.createElement("div");
+  const mount = document.createElement("div");
+  content.append(mount);
+  let modal;
+  const idempotencyKeys = new Map();
+  const uploader = state.factories.createFileUploader(mount, {
+    ariaLabel: "Upload project file",
+    dropzoneAriaLabel: "Choose a project file",
+    multiple: false,
+    maxFiles: 1,
+    maxFileSize: Number(maximumBytes || 25 * 1024 * 1024),
+    startText: "Upload file",
+    dropText: "Drop one file here or choose Browse.",
+    async onUpload(item, controls) {
+      const form = new FormData();
+      form.append("operation", "upload");
+      form.append("folder_id", folder?.id || "root");
+      form.append("file", item.file, item.name);
+      const uploadIdentity = `${item.name}:${item.file?.size || item.size || 0}:${item.file?.lastModified || 0}`;
+      if (!idempotencyKeys.has(uploadIdentity)) idempotencyKeys.set(uploadIdentity, makeIdempotencyKey());
+      const controller = new AbortController();
+      controls.signal.addEventListener("abort", () => controller.abort(), { once: true });
+      const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+        method: "POST", credentials: "same-origin", cache: "no-store", signal: controller.signal,
+        headers: projectFileMutationHeaders(idempotencyKeys.get(uploadIdentity)), body: form,
+      });
+      let payload = null;
+      try { payload = await response.json(); } catch (_error) { payload = null; }
+      if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+      controls.report(100);
+    },
+    onComplete(value) {
+      if (!value.items.some((item) => item.status === "success")) return;
+      state.components.toast.success("File uploaded.");
+      onUploaded?.();
+      void modal.close({ reason: "uploaded" });
+    },
+  });
+  modal = state.factories.createActionModal({
+    title: `Upload to ${folder?.name || "Project files"}`, size: "lg", content,
+    actions: [{ id: "close", label: "Close" }], onClose() { uploader.destroy?.(); },
+  });
+  modal.open();
 }
 
 function openProjectFilesModal() {
@@ -1188,9 +1279,8 @@ function openProjectFilesModal() {
     cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancel-loading" }) },
   });
 
-  void request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
-    signal: controller.signal,
-    requireJson: true,
+  const loadFolder = (folderId = "root") => request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId, folder_id: folderId })}`, {
+    signal: controller.signal, requireJson: true,
   }).then((response) => {
     if (!modal.getState().open) return;
     if (generation !== state.generation || projectId !== selectedProjectId()) {
@@ -1199,7 +1289,14 @@ function openProjectFilesModal() {
     }
     const payload = unwrap(response) || {};
     skeleton?.destroy?.();
-    mounted = projectFilesContent(payload);
+    mounted?.tree?.destroy?.();
+    mounted?.grid?.destroy?.();
+    mounted = projectFilesContent(payload, {
+      onFolderSelect: (nextFolderId) => { modal.setBusy(true, { message: "Loading folder…" }); void loadFolder(nextFolderId); },
+      onCreateFolder: (folder) => openCreateProjectFolder(projectId, folder, () => { modal.setBusy(true, { message: "Refreshing folders…" }); void loadFolder(folder?.id || "root"); }),
+      onUpload: (folder) => openProjectFileUploader(projectId, folder, payload.storage?.max_upload_bytes,
+        () => { modal.setBusy(true, { message: "Refreshing files…" }); void loadFolder(folder?.id || "root"); }),
+    });
     modal.setContent(mounted.content);
     modal.setBusy(false);
   }).catch((error) => {
@@ -1217,6 +1314,7 @@ function openProjectFilesModal() {
       { id: "close", label: "Close" },
     ]);
   });
+  void loadFolder();
 }
 
 function renderProjectHeader() {

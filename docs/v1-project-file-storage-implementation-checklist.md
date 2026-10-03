@@ -178,55 +178,55 @@ proposal for implementation. Gate A was approved October 3, 2026.
 
 ### 6.1 Schema and migration
 
-- [ ] Add a forward-only migration for canonical `project_files` metadata.
-- [ ] Store project ownership, unguessable public ID, storage driver, provider-
+- [x] Add a forward-only migration for canonical `project_files` metadata.
+- [x] Store project ownership, unguessable public ID, storage driver, provider-
   neutral storage key, original/display name, server-verified MIME type, byte
   size, SHA-256 digest, uploader participant, timestamps, and deletion state.
-- [ ] Add unique constraints for public IDs and provider/storage keys.
-- [ ] Add indexes for project listing, creation order, deletion state, and
+- [x] Add unique constraints for public IDs and provider/storage keys.
+- [x] Add indexes for project listing, creation order, deletion state, and
   integrity/reconciliation operations.
 - [ ] Model attachments with explicit project-qualified foreign-key integrity;
   do not copy storage paths or provider URLs into messages, tasks, activities,
   deliverables, or project records.
-- [ ] Preserve immutable authorship and audit evidence for attachment,
+- [x] Preserve immutable authorship and audit evidence for upload,
   replacement, deletion, and link-regeneration events.
-- [ ] Add the new durable tables and columns to backup metadata, baseline drift
+- [x] Add the new durable tables and columns to backup metadata, baseline drift
   checks, clean-install schema, migration reconciliation, and package tests.
 - [ ] Verify clean MySQL 8.4 installation and supported MySQL 5.7-to-8.4
   migration paths.
 
 ### 6.2 Provider-neutral storage service
 
-- [ ] Define a `FileStorage` contract for streaming writes, reads, existence,
+- [x] Define a `FileStorage` contract for streaming writes, reads, existence,
   size, checksum, deletion, and provider-to-provider copy/migration.
-- [ ] Implement the local driver using only generated provider-neutral keys;
+- [x] Implement the local driver using only generated provider-neutral keys;
   never use the original filename as a physical path.
-- [ ] Keep temporary and final objects inside the validated storage root and
+- [x] Keep temporary and final objects inside the validated storage root and
   prevent traversal, separator injection, symlink escape, and path aliasing.
-- [ ] Stream uploads while enforcing the byte limit and calculating SHA-256;
+- [x] Stream uploads while enforcing the byte limit and calculating SHA-256;
   do not load complete files into PHP memory.
-- [ ] Inspect content using server-side bytes rather than trusting browser
+- [x] Inspect content using server-side bytes rather than trusting browser
   filename extensions or `Content-Type` headers.
-- [ ] Write to a private temporary object and atomically publish the final local
+- [x] Write to a private temporary object and atomically publish the final local
   object only after validation succeeds.
-- [ ] Define compensation for filesystem-success/database-failure and database-
+- [x] Define compensation for filesystem-success/database-failure and database-
   success/filesystem-failure cases without automatically replaying an
   uncertain mutation.
-- [ ] Return storage keys and canonical metadata internally; never return an
+- [x] Return storage keys and canonical metadata internally; never return an
   absolute server path to a browser or agent.
 - [ ] Add test doubles that exercise the same interface used by the local and
   future S3 drivers.
 
 ### 6.3 Authorization and service layer
 
-- [ ] Centralize project-file authorization and cross-project concealment in a
+- [x] Centralize project-file authorization and cross-project concealment in a
   dedicated service rather than duplicating it across routes.
-- [ ] Validate that every uploader and attachment target is an active participant
+- [x] Validate that every uploader and file target is an active participant
   or project record in the same project.
-- [ ] Make create, attach, replace, delete, and regenerate operations audited and
+- [x] Make create, upload, replace, delete, and regenerate operations audited and
   idempotent where retries are supported.
-- [ ] Use optimistic versions for mutable metadata and replacement state.
-- [ ] Define safe reconciliation states for pending, available, unavailable,
+- [x] Use optimistic versions for mutable metadata and replacement state.
+- [x] Define safe reconciliation states for pending, available, unavailable,
   deleted, and integrity-failed objects.
 
 **Exit evidence:** migration, schema, storage-service, authorization, isolation,
@@ -236,20 +236,20 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
 
 ### 7.1 Permissioned project API
 
-- [ ] Add project-qualified upload and list routes using stable project public
+- [x] Add project-qualified upload and list routes using stable project public
   identifiers where the current API contract requires them.
-- [ ] Add metadata rename, explicit replacement, deletion, and public-link
+- [x] Add metadata rename, explicit replacement, deletion, and public-link
   regeneration routes in V1.
-- [ ] Require the existing human session/CSRF boundary or project-agent bearer
+- [x] Require the existing human session/CSRF boundary or project-agent bearer
   boundary as appropriate; never accept caller-supplied uploader identity.
-- [ ] Parse multipart uploads with explicit limits before mutation and reject
+- [x] Parse multipart uploads with explicit limits before mutation and reject
   missing, empty, oversized, truncated, or malformed files visibly.
-- [ ] Support a stable idempotency key for upload mutations and reconcile an
+- [x] Support a stable idempotency key for upload mutations and reconcile an
   uncertain result before any replay.
 - [ ] Return canonical metadata and a Syndicatum-owned public URL, never the
   local path or a provider URL.
 - [ ] Add pagination and bounded filters for project file lists.
-- [ ] Add consistent error codes without leaking another project's file
+- [x] Add consistent error codes without leaking another project's file
   existence.
 - [ ] Add request and response schemas to OpenAPI and the Project API guide.
 
@@ -337,11 +337,11 @@ OpenAPI contract suites pass.
 - [ ] Reconcile remote file changes through the established realtime/refresh
   model without silently discarding an in-progress local action.
 
-Foundation note (October 3, 2026): the project action now opens a large
-canonical modal, loads a participant-authorized read contract, and mounts
-Helper's complete tree and grid components in fixed-height panes. **Create
-folder** and **Upload files** are intentionally disabled until the Gate B
-metadata and mutation services exist.
+Foundation update (October 3, 2026): the project action opens a large canonical
+loading modal and mounts Helper's complete tree, grid, form-modal, and uploader
+components. **Create folder** and **Upload files** now use the participant-
+authorized, CSRF-protected, idempotent mutation service. Remaining row actions
+and the permanent public delivery route stay in their later checklist slices.
 
 ### 8.3 Timeline message attachments
 

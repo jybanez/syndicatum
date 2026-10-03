@@ -1052,9 +1052,11 @@ try {
             && strpos($source, 'state.factories.createGrid(gridHost') !== false,
             'Project Files must open a loading canonical modal and use Helper tree/grid components.');
         $suite->true(strpos($filesApi, "projectAccess(\$projectId, 'profile:read')") !== false
-            && strpos($filesApi, "'create_folder' => \$operationsReady") !== false
-            && strpos($filesApi, "'upload' => \$operationsReady") !== false,
-            'The Project Files read contract must authorize the participant and keep unavailable mutations disabled.');
+            && strpos($filesApi, 'requireCsrfForHuman') !== false
+            && strpos($filesApi, 'new ProjectFileService') !== false
+            && strpos($source, 'openCreateProjectFolder') !== false
+            && strpos($source, 'openProjectFileUploader') !== false,
+            'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
         $suite->true(strpos($styles, '.project-files-layout') !== false
             && strpos($styles, 'height: min(66vh, 660px)') !== false,
             'The Project Files modal needs a fixed-height two-column workspace.');

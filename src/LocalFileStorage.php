@@ -1,0 +1,225 @@
+<?php
+
+require_once __DIR__ . '/FileStorage.php';
+require_once __DIR__ . '/ProjectFileStorage.php';
+
+/** Private local implementation with staged streaming and atomic publication. */
+final class LocalFileStorage implements FileStorage
+{
+    private $root;
+    private $temporaryRoot;
+    private $objectRoot;
+
+    public function __construct($applicationRoot, $configuredBase)
+    {
+        $this->root = (new ProjectFileStorage($applicationRoot, $configuredBase))->base();
+        $this->temporaryRoot = $this->ensureDirectory($this->root . DIRECTORY_SEPARATOR . '.tmp');
+        $this->objectRoot = $this->ensureDirectory($this->root . DIRECTORY_SEPARATOR . 'objects');
+    }
+
+    public function driver()
+    {
+        return 'local';
+    }
+
+    public function stageStream($stream, $maximumBytes)
+    {
+        if (!is_resource($stream) || get_resource_type($stream) !== 'stream') {
+            throw new InvalidArgumentException('A readable upload stream is required.');
+        }
+        $maximumBytes = (int) $maximumBytes;
+        if ($maximumBytes < 1) {
+            throw new InvalidArgumentException('The upload byte limit is invalid.');
+        }
+        $key = 'stage-' . bin2hex(random_bytes(24));
+        $path = $this->temporaryRoot . DIRECTORY_SEPARATOR . $key;
+        $output = @fopen($path, 'xb');
+        if (!is_resource($output)) {
+            throw new RuntimeException('FILE_STORAGE_WRITE_FAILED');
+        }
+        @chmod($path, 0600);
+        $hash = hash_init('sha256');
+        $bytes = 0;
+        try {
+            while (!feof($stream)) {
+                $chunk = fread($stream, 1024 * 1024);
+                if ($chunk === false) {
+                    throw new RuntimeException('FILE_UPLOAD_READ_FAILED');
+                }
+                if ($chunk === '') {
+                    continue;
+                }
+                $bytes += strlen($chunk);
+                if ($bytes > $maximumBytes) {
+                    throw new RuntimeException('FILE_TOO_LARGE');
+                }
+                if (fwrite($output, $chunk) !== strlen($chunk)) {
+                    throw new RuntimeException('FILE_STORAGE_WRITE_FAILED');
+                }
+                hash_update($hash, $chunk);
+            }
+            if ($bytes < 1) {
+                throw new RuntimeException('FILE_EMPTY');
+            }
+            if (!fflush($output)) {
+                throw new RuntimeException('FILE_STORAGE_WRITE_FAILED');
+            }
+            fclose($output);
+            $output = null;
+            return ['staging_key' => $key, 'size_bytes' => $bytes, 'sha256' => hash_final($hash)];
+        } catch (Exception $exception) {
+            if (is_resource($output)) {
+                fclose($output);
+            }
+            @unlink($path);
+            throw $exception;
+        }
+    }
+
+    public function detectMimeType($stagingKey)
+    {
+        $path = $this->stagingPath($stagingKey, true);
+        if (!class_exists('finfo')) {
+            throw new RuntimeException('FILE_TYPE_INSPECTION_UNAVAILABLE');
+        }
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($path);
+        if (!is_string($mime) || trim($mime) === '') {
+            throw new RuntimeException('FILE_TYPE_INSPECTION_FAILED');
+        }
+        return strtolower(trim($mime));
+    }
+
+    public function publish($stagingKey)
+    {
+        $source = $this->stagingPath($stagingKey, true);
+        $random = bin2hex(random_bytes(32));
+        $prefix = substr($random, 0, 2);
+        $directory = $this->ensureDirectory($this->objectRoot . DIRECTORY_SEPARATOR . $prefix);
+        $destination = $directory . DIRECTORY_SEPARATOR . $random;
+        if (is_link($directory) || !@rename($source, $destination)) {
+            throw new RuntimeException('FILE_STORAGE_PUBLISH_FAILED');
+        }
+        @chmod($destination, 0600);
+        return 'objects/' . $prefix . '/' . $random;
+    }
+
+    public function discard($stagingKey)
+    {
+        $path = $this->stagingPath($stagingKey, false);
+        return !file_exists($path) || @unlink($path);
+    }
+
+    public function openReadStream($storageKey)
+    {
+        $path = $this->objectPath($storageKey, true);
+        $stream = @fopen($path, 'rb');
+        if (!is_resource($stream)) {
+            throw new RuntimeException('FILE_STORAGE_READ_FAILED');
+        }
+        return $stream;
+    }
+
+    public function exists($storageKey)
+    {
+        try {
+            return is_file($this->objectPath($storageKey, false));
+        } catch (Exception $exception) {
+            return false;
+        }
+    }
+
+    public function size($storageKey)
+    {
+        $size = filesize($this->objectPath($storageKey, true));
+        if ($size === false) {
+            throw new RuntimeException('FILE_STORAGE_READ_FAILED');
+        }
+        return (int) $size;
+    }
+
+    public function checksum($storageKey)
+    {
+        $checksum = hash_file('sha256', $this->objectPath($storageKey, true));
+        if (!is_string($checksum)) {
+            throw new RuntimeException('FILE_STORAGE_READ_FAILED');
+        }
+        return $checksum;
+    }
+
+    public function delete($storageKey)
+    {
+        $path = $this->objectPath($storageKey, false);
+        return !file_exists($path) || @unlink($path);
+    }
+
+    public function copyTo($storageKey, FileStorage $destination)
+    {
+        $stream = $this->openReadStream($storageKey);
+        $staged = null;
+        try {
+            $staged = $destination->stageStream($stream, $this->size($storageKey));
+            return $destination->publish($staged['staging_key']);
+        } catch (Exception $exception) {
+            if (is_array($staged) && isset($staged['staging_key'])) {
+                $destination->discard($staged['staging_key']);
+            }
+            throw $exception;
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    private function stagingPath($key, $mustExist)
+    {
+        if (!preg_match('/\Astage-[a-f0-9]{48}\z/', (string) $key)) {
+            throw new InvalidArgumentException('Invalid staging key.');
+        }
+        $path = $this->temporaryRoot . DIRECTORY_SEPARATOR . $key;
+        if ($mustExist && (!is_file($path) || is_link($path))) {
+            throw new RuntimeException('FILE_STORAGE_OBJECT_MISSING');
+        }
+        return $path;
+    }
+
+    private function objectPath($key, $mustExist)
+    {
+        if (!preg_match('#\Aobjects/([a-f0-9]{2})/([a-f0-9]{64})\z#', (string) $key, $matches)
+            || substr($matches[2], 0, 2) !== $matches[1]) {
+            throw new InvalidArgumentException('Invalid storage key.');
+        }
+        $directory = $this->objectRoot . DIRECTORY_SEPARATOR . $matches[1];
+        $path = $directory . DIRECTORY_SEPARATOR . $matches[2];
+        if (is_link($directory) || is_link($path)) {
+            throw new RuntimeException('FILE_STORAGE_PATH_UNSAFE');
+        }
+        if ($mustExist && !is_file($path)) {
+            throw new RuntimeException('FILE_STORAGE_OBJECT_MISSING');
+        }
+        return $path;
+    }
+
+    private function ensureDirectory($path)
+    {
+        if (is_link($path)) {
+            throw new RuntimeException('FILE_STORAGE_PATH_UNSAFE');
+        }
+        if (!is_dir($path) && !@mkdir($path, 0700, true)) {
+            throw new RuntimeException('FILE_STORAGE_DIRECTORY_FAILED');
+        }
+        @chmod($path, 0700);
+        $resolved = realpath($path);
+        if (!is_string($resolved) || !$this->inside($resolved, $this->root)) {
+            throw new RuntimeException('FILE_STORAGE_PATH_UNSAFE');
+        }
+        return $resolved;
+    }
+
+    private function inside($path, $root)
+    {
+        $path = DIRECTORY_SEPARATOR === '\\' ? strtolower($path) : $path;
+        $root = DIRECTORY_SEPARATOR === '\\' ? strtolower($root) : $root;
+        return $path === $root || strpos($path, $root . DIRECTORY_SEPARATOR) === 0;
+    }
+}
+
