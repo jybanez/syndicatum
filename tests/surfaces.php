@@ -1111,6 +1111,10 @@ try {
             && strpos($styles, 'height: min(66vh, 660px)') !== false
             && strpos($styles, '.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none;') !== false,
             'The Project Files modal needs a fixed-height two-column workspace.');
+        $suite->true(strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv { display: flex; flex-direction: column; height: 100%; min-height: 0; }') !== false
+            && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid { flex: 1 1 auto; width: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }') !== false
+            && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid-table-wrap { min-height: 0; height: 100%; max-height: none; }') !== false,
+            'The fullscreen CSV viewer must give its Helper grid the available modal height without nested overflow gaps.');
         $suite->true(strpos($index, '<p class="ui-eyebrow">Project</p>') === false, 'The redundant Project eyebrow must not render.');
         $suite->true(strpos($index, 'class="ui-badge" id="status-badge"') === false, 'Realtime state must not render as a visible pill.');
         $suite->true(strpos($source, 'state.components.projectActions = state.factories.createDropdown') !== false, 'Project management actions must use the supported Helper dropdown.');
