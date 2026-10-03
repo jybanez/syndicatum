@@ -65,7 +65,7 @@ export const USER_GUIDE_SECTIONS = [
           { type: "steps", items: [
             "Open New message or Reply, then choose the paperclip Attach files action below the message field, beside the delivery and keyboard instructions.",
             "Use the breadcrumbs to move through project folders. Folders appear before files with distinct icons. Selecting a file highlights its full row; select it again to remove it from the picker selection.",
-            "Use the borderless Reload and Upload icons in the picker header when you need to refresh the current folder or add a new file. Uploads go to the folder shown in the breadcrumbs; if it already contains the same filename, confirm replacement before any file bytes are sent.",
+            "Use the borderless Reload and Upload icons in the picker header when you need to refresh the current folder or add a new file. Uploads go to the folder shown in the breadcrumbs; if it already contains the same filename, confirm replacement before any file bytes are sent. A success toast confirms a completed upload without changing the picker layout.",
             "Choose Attach selected files. Review the selected-file list below the addressing controls and remove anything you do not want to send.",
             "Send the message. Syndicatum verifies every selected file still belongs to the project and creates the message and attachment links together.",
           ] },
