@@ -23,6 +23,7 @@ const timeline = new ProfileTimelineClient();
 const localReadAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const remoteReadAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 const remoteWriteAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+const remoteDestructiveAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const tools = [
   {
@@ -96,6 +97,48 @@ const tools = [
     description: "Read the current milestone and deliverable hierarchy, task-backed progress, statuses, versions, and this agent's plan-stewardship permission.",
     annotations: remoteReadAnnotations,
     inputSchema: profileSchema(),
+  },
+  {
+    name: "syndicatum_list_project_files",
+    description: "List folders and files in the selected project folder. Returned URLs are the permanent canonical public URLs; server filesystem paths are never returned.",
+    annotations: remoteReadAnnotations,
+    inputSchema: { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty(), folder_id: { type: "string", description: "Folder UUID, or root when omitted" } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_create_project_folder",
+    description: "Create a project folder through the canonical audited storage service.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "name"], properties: { profile_id: profileIdProperty(), name: { type: "string", minLength: 1, maxLength: 255 }, parent_folder_id: { type: "string" }, idempotency_key: { type: "string", minLength: 16, maxLength: 160 } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_upload_project_file",
+    description: "Upload one local file in resumable 1 MiB chunks. The local path is used only by this device and is never sent to Syndicatum or returned. Supply replace_file_id and its latest version only after an explicit same-name replacement decision.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: { type: "object", required: ["profile_id", "source_path"], properties: { profile_id: profileIdProperty(), source_path: { type: "string", description: "Absolute local source file path; never sent to Syndicatum" }, file_name: { type: "string", minLength: 1, maxLength: 255 }, folder_id: { type: "string" }, replace_file_id: { type: "string" }, version: { type: ["integer", "string"] }, idempotency_key: { type: "string", minLength: 16, maxLength: 160 } }, additionalProperties: false },
+  },
+  {
+    name: "syndicatum_rename_project_file",
+    description: "Rename a project file using its latest optimistic version while preserving its permanent URL.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: fileMutationSchema({ name: { type: "string", minLength: 1, maxLength: 255 } }, ["name"]),
+  },
+  {
+    name: "syndicatum_move_project_file",
+    description: "Move a project file to another project folder using its latest optimistic version while preserving its permanent URL.",
+    annotations: remoteWriteAnnotations,
+    inputSchema: fileMutationSchema({ destination_folder_id: { type: "string", description: "Folder UUID, or root" } }, ["destination_folder_id"]),
+  },
+  {
+    name: "syndicatum_delete_project_file",
+    description: "Permanently make a project file unavailable and record the audited deletion. Read the latest file version and obtain explicit user authority before calling.",
+    annotations: remoteDestructiveAnnotations,
+    inputSchema: fileMutationSchema(),
+  },
+  {
+    name: "syndicatum_download_project_file",
+    description: "Download a project file from its permanent public URL to an explicit absolute local path. Existing files are preserved unless overwrite is true; the local destination is never sent to Syndicatum or returned.",
+    annotations: { ...remoteWriteAnnotations, idempotentHint: true },
+    inputSchema: { type: "object", required: ["profile_id", "file_id", "destination_path"], properties: { profile_id: profileIdProperty(), file_id: { type: "string" }, destination_path: { type: "string", description: "Absolute local destination path; never sent to Syndicatum" }, overwrite: { type: "boolean", default: false } }, additionalProperties: false },
   },
   {
     name: "syndicatum_update_task_deliverable",
@@ -305,6 +348,13 @@ async function callTool(name, args) {
   if (name === "syndicatum_list_tasks") return textResult(await timeline.tasks(args.profile_id, args));
   if (name === "syndicatum_get_task") return textResult(await timeline.task(args.profile_id, args.task_id));
   if (name === "syndicatum_get_project_plan") return textResult(await timeline.projectPlan(args.profile_id));
+  if (name === "syndicatum_list_project_files") return textResult(await timeline.projectFiles(args.profile_id, args));
+  if (name === "syndicatum_create_project_folder") return textResult(await timeline.createProjectFolder(args.profile_id, args));
+  if (name === "syndicatum_upload_project_file") return textResult(await timeline.uploadProjectFile(args.profile_id, args));
+  if (name === "syndicatum_rename_project_file") return textResult(await timeline.renameProjectFile(args.profile_id, args));
+  if (name === "syndicatum_move_project_file") return textResult(await timeline.moveProjectFile(args.profile_id, args));
+  if (name === "syndicatum_delete_project_file") return textResult(await timeline.deleteProjectFile(args.profile_id, args));
+  if (name === "syndicatum_download_project_file") return textResult(await timeline.downloadProjectFile(args.profile_id, args));
   if (name === "syndicatum_update_task_deliverable") return textResult(await timeline.updateTaskDeliverable(args.profile_id, args.task_id, args));
   if (name === "syndicatum_update_milestone_progress") return textResult(await timeline.updateMilestoneProgress(args.profile_id, args.milestone_id, args));
   if (name === "syndicatum_update_deliverable_progress") return textResult(await timeline.updateDeliverableProgress(args.profile_id, args.deliverable_id, args));
@@ -338,3 +388,8 @@ function send(message) { process.stdout.write(`${JSON.stringify(message)}\n`); }
 
 function profileIdProperty() { return { type: "string", description: "Exact non-secret profile ID supplied by the connector notification or claim result" }; }
 function profileSchema() { return { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty() }, additionalProperties: false }; }
+function fileMutationSchema(extra = {}, extraRequired = []) {
+  return { type: "object", required: ["profile_id", "file_id", "version", ...extraRequired], additionalProperties: false,
+    properties: { profile_id: profileIdProperty(), file_id: { type: "string" }, version: { type: ["integer", "string"] },
+      idempotency_key: { type: "string", minLength: 16, maxLength: 160 }, ...extra } };
+}

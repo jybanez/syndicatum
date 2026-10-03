@@ -382,11 +382,11 @@ delivery route is active.
 - [ ] Add permissioned Project API/MCP tools for upload, file lookup, and
   attachment association using streams or supported content transfer—not local
   filesystem paths from an agent machine.
-- [ ] Bound encoded or multipart agent uploads so transport expansion cannot
+- [x] Bound encoded or multipart agent uploads so transport expansion cannot
   bypass the server byte limit.
-- [ ] Update installed Syndicatum skills with the public-link security model,
+- [x] Update installed Syndicatum skills with the public-link security model,
   supported targets, idempotency guidance, and no-path/no-credential rules.
-- [ ] Ensure agents can return the permanent Syndicatum URL and canonical file
+- [x] Ensure agents can return the permanent Syndicatum URL and canonical file
   metadata after confirmed upload; it must be the same URL the human UI renders.
 - [ ] Verify at least one human upload and one agent upload end to end.
 

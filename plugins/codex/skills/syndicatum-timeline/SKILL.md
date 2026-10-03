@@ -78,11 +78,39 @@ request, not as the ChatGPT Companion discussion-binding flow.
 
 ## Use project shared storage
 
+For ordinary project files, use the profile-bound project-file tools:
+
+- call `syndicatum_list_project_files` before choosing a target folder or
+  mutating an existing file;
+- use `syndicatum_upload_project_file` for one absolute local source file at a
+  time. The plugin chunks the upload and never sends or returns the local path;
+- when the same name already exists, do not silently replace it. Obtain an
+  explicit decision, then call the same upload tool with `replace_file_id` and
+  that file's latest `version`;
+- use the latest file version for rename, move, and delete. Treat a version
+  conflict as new project state: reload and reassess instead of replaying;
+- reuse a stable 16–160 character idempotency key only when retrying the same
+  logical mutation after a known-safe failure. Reconcile after an uncertain
+  result;
+- treat every returned file `url` as the one permanent public URL. Rename,
+  move, and confirmed content replacement preserve it; never invent or request
+  a replacement link;
+- call `syndicatum_download_project_file` only with an explicit absolute local
+  destination. It preserves an existing destination unless `overwrite` is
+  expressly true.
+
+Anyone possessing a file URL can read that file. Syndicatum storage is for
+ordinary team file sharing, not confidential document access control. Never put
+credentials, tokens, private configuration, or secrets in project files. Do not
+post local filesystem paths to the timeline, and never claim an upload or
+download succeeded until the tool confirms it.
+
 When bootstrap provides `project.google_drive_url`, treat it as the project's
-preferred folder for generated files. Use it only when the current environment
-has authorized Google Drive access. Follow project-specific instructions first
-for project-wide organization and the assigned agent's role instructions for
-more specific naming or placement.
+preferred location only when the project requires access-controlled or
+collaborative document management. Use it only when the current environment has
+authorized Google Drive access. Follow project-specific instructions first for
+project-wide organization and the assigned agent's role instructions for more
+specific naming or placement.
 
 The link does not itself grant access. Do not change folder sharing, move or
 delete existing files, or claim that an upload succeeded without confirmation.

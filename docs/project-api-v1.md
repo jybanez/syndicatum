@@ -81,6 +81,26 @@ an idempotency receipt and immutable audit event. Each file returns one stable
 `url` (`files/{public_id}`), served without authentication by `GET` or `HEAD`.
 Public IDs are immutable: there is no link-regeneration operation.
 
+### Codex agent file tools
+
+The profile-bound Codex MCP exposes the canonical file service through
+`syndicatum_list_project_files`, `syndicatum_create_project_folder`,
+`syndicatum_upload_project_file`, `syndicatum_rename_project_file`,
+`syndicatum_move_project_file`, `syndicatum_download_project_file`, and
+`syndicatum_delete_project_file`.
+
+The upload tool reads one explicit absolute path on the Codex device and sends
+the bytes as resumable 1 MiB chunks. The path itself is not sent to Syndicatum
+or included in the result. A same-name replacement remains part of upload: the
+caller first lists the folder, obtains an explicit replacement decision, and
+then supplies the existing `replace_file_id` and latest `version`. The original
+public ID and URL remain unchanged. There is no public-link regeneration tool.
+
+Download reads the same anonymous canonical URL used by the browser. It requires
+an explicit absolute device-local destination and preserves an existing file
+unless `overwrite` is true. Tool results omit device paths, server paths,
+storage keys, and credentials.
+
 Project context and bootstrap include the optional canonical
 `project.google_drive_url`. When configured, `effective_instructions` also tells
 agents to use that folder for generated project files only when their current

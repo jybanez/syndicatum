@@ -165,6 +165,83 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-files.php:
+    get:
+      summary: List folders and files in one authorized project folder
+      description: Returns provider-neutral metadata and each file's permanent canonical public URL. Filesystem paths and storage keys are never returned.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: folder_id, in: query, description: Folder UUID; omit or use root for the project root., schema: { type: string } }
+      responses:
+        '200': { description: Current folder, folder tree, immediate files, capabilities, and project quota summary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    post:
+      summary: Mutate project folders or files through the canonical audited storage service
+      description: JSON operations create folders, rename, move, or delete files. Multipart upload_chunk requests provide resumable 1 MiB upload or explicitly confirmed same-name replacement. Human sessions require CSRF; agents use their project-scoped bearer identity. Every mutation requires a stable Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 16, maxLength: 160 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operation]
+              properties:
+                operation: { type: string, enum: [create_folder, rename_file, move_file, delete_file] }
+                name: { type: string, maxLength: 255 }
+                parent_folder_id: { type: string }
+                file_id: { type: string, format: uuid }
+                destination_folder_id: { type: string }
+                version: { type: integer, minimum: 1 }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [operation, upload_id, chunk_index, chunk_count, total_size, target_operation, original_name, file]
+              properties:
+                operation: { type: string, enum: [upload_chunk] }
+                upload_id: { type: string, format: uuid }
+                chunk_index: { type: integer, minimum: 0 }
+                chunk_count: { type: integer, minimum: 1 }
+                total_size: { type: integer, minimum: 1 }
+                target_operation: { type: string, enum: [upload, replace_file] }
+                original_name: { type: string, maxLength: 255 }
+                folder_id: { type: string }
+                file_id: { type: string, format: uuid, description: Required only for explicitly confirmed replacement. }
+                version: { type: integer, minimum: 1, description: Required only for explicitly confirmed replacement. }
+                file: { type: string, format: binary, description: One upload chunk; clients should use 1 MiB chunks. }
+      responses:
+        '200': { description: Replayed or completed mutation result }
+        '201': { description: Created folder or newly uploaded file }
+        '202': { description: Upload chunk accepted; additional chunks remain }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Name, idempotency, upload-session, or optimistic-version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /files/{file_id}:
+    get:
+      security: []
+      summary: Read a file from its permanent unguessable public URL
+      parameters:
+        - { name: file_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Range, in: header, schema: { type: string }, description: Optional single byte range. }
+      responses:
+        '200': { description: Complete file content with verified Content-Type and safe Content-Disposition }
+        '206': { description: Requested byte range }
+        '404': { description: File is unavailable }
+        '416': { description: Requested range is not satisfiable }
+    head:
+      security: []
+      summary: Read public file metadata headers without a response body
+      parameters:
+        - { name: file_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Public file response headers }
+        '404': { description: File is unavailable }
   /api/v1/project-tasks.php:
     get:
       summary: List shared project tasks

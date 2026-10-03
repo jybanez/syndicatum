@@ -1,4 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { open, stat } from "node:fs/promises";
+import path from "node:path";
 import { loadAgentProfile, publicAgentProfile } from "./agent-profile-store.mjs";
 import { SyndicatumClient } from "./syndicatum-client.mjs";
 
@@ -76,6 +78,133 @@ export class ProfileTimelineClient {
     const { profile, client } = await this.context(profileId);
     const result = await client.request(`/api/v1/project-plan.php?project_id=${encodeURIComponent(profile.project_id)}`);
     return { profile: publicAgentProfile(profile), plan: result.data ?? result };
+  }
+
+  async projectFiles(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const query = new URLSearchParams({ project_id: String(profile.project_id) });
+    const folderId = String(input.folder_id || "root").trim();
+    if (folderId !== "root") query.set("folder_id", projectFileId(folderId, "folder"));
+    const result = await client.request(`/api/v1/project-files.php?${query}`);
+    const data = result.data ?? result;
+    return { profile: publicAgentProfile(profile), files: publicFilePayload(client, data) };
+  }
+
+  async createProjectFolder(profileId, input = {}) {
+    return this.projectFileMutation(profileId, {
+      operation: "create_folder", name: requiredText(input.name, "Folder name"),
+      parent_folder_id: optionalFolderId(input.parent_folder_id),
+    }, input.idempotency_key);
+  }
+
+  async renameProjectFile(profileId, input = {}) {
+    return this.projectFileMutation(profileId, {
+      operation: "rename_file", file_id: projectFileId(input.file_id, "file"),
+      version: positiveId(input.version, "file version"), name: requiredText(input.name, "File name"),
+    }, input.idempotency_key);
+  }
+
+  async moveProjectFile(profileId, input = {}) {
+    return this.projectFileMutation(profileId, {
+      operation: "move_file", file_id: projectFileId(input.file_id, "file"),
+      version: positiveId(input.version, "file version"),
+      destination_folder_id: optionalFolderId(input.destination_folder_id),
+    }, input.idempotency_key);
+  }
+
+  async deleteProjectFile(profileId, input = {}) {
+    return this.projectFileMutation(profileId, {
+      operation: "delete_file", file_id: projectFileId(input.file_id, "file"),
+      version: positiveId(input.version, "file version"),
+    }, input.idempotency_key);
+  }
+
+  async projectFileMutation(profileId, payload, idempotencyKey) {
+    const { profile, client } = await this.context(profileId);
+    const key = normalizedIdempotencyKey(idempotencyKey);
+    const result = await client.request(`/api/v1/project-files.php?project_id=${encodeURIComponent(profile.project_id)}`, {
+      method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify(payload),
+    });
+    return { profile: publicAgentProfile(profile), result: publicFilePayload(client, result.data ?? result) };
+  }
+
+  async uploadProjectFile(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const sourcePath = String(input.source_path || "").trim();
+    if (!path.isAbsolute(sourcePath)) throw new Error("Source path must be an absolute local file path.");
+    const source = await stat(sourcePath);
+    if (!source.isFile()) throw new Error("Source path must identify a regular file.");
+    if (source.size < 1) throw new Error("The source file is empty.");
+    const fileName = requiredText(input.file_name || path.basename(sourcePath), "File name");
+    const key = normalizedIdempotencyKey(input.idempotency_key);
+    const uploadId = stableUploadId(profile.profile_id, key);
+    const chunkBytes = 1024 * 1024;
+    const chunkCount = Math.ceil(source.size / chunkBytes);
+    const folderId = optionalFolderId(input.folder_id);
+    const replaceId = input.replace_file_id === undefined || input.replace_file_id === null || input.replace_file_id === ""
+      ? null : projectFileId(input.replace_file_id, "replacement file");
+    const replacementVersion = replaceId ? positiveId(input.version, "file version") : null;
+    const folderQuery = new URLSearchParams({ project_id: String(profile.project_id) });
+    if (folderId !== "root") folderQuery.set("folder_id", folderId);
+    const folderResult = await client.request(`/api/v1/project-files.php?${folderQuery}`);
+    const existingFiles = Array.isArray((folderResult.data ?? folderResult)?.files) ? (folderResult.data ?? folderResult).files : [];
+    const duplicate = existingFiles.find(file => String(file?.name || "").localeCompare(fileName, undefined, { sensitivity: "accent" }) === 0);
+    if (duplicate && !replaceId) {
+      throw new Error("A file with that name already exists in the selected folder. Obtain an explicit replacement decision, then retry with replace_file_id and its latest version.");
+    }
+    if (replaceId && (!duplicate || String(duplicate.id) !== replaceId || String(duplicate.version) !== String(replacementVersion))) {
+      throw new Error("Replacement target does not match the same-name file and latest version in the selected folder. Reload the folder and reassess.");
+    }
+    const handle = await open(sourcePath, "r");
+    let finalResult = null;
+    try {
+      for (let index = 0; index < chunkCount; index += 1) {
+        const length = Math.min(chunkBytes, source.size - (index * chunkBytes));
+        const bytes = Buffer.allocUnsafe(length);
+        let filled = 0;
+        while (filled < length) {
+          const read = await handle.read(bytes, filled, length - filled, (index * chunkBytes) + filled);
+          if (read.bytesRead < 1) throw new Error("The local source file changed or could not be read completely.");
+          filled += read.bytesRead;
+        }
+        const form = new FormData();
+        form.set("operation", "upload_chunk");
+        form.set("upload_id", uploadId);
+        form.set("chunk_index", String(index));
+        form.set("chunk_count", String(chunkCount));
+        form.set("total_size", String(source.size));
+        form.set("target_operation", replaceId ? "replace_file" : "upload");
+        form.set("original_name", fileName);
+        form.set("folder_id", folderId);
+        if (replaceId) { form.set("file_id", replaceId); form.set("version", String(replacementVersion)); }
+        form.set("file", new Blob([bytes]), fileName);
+        finalResult = await client.request(`/api/v1/project-files.php?project_id=${encodeURIComponent(profile.project_id)}`, {
+          method: "POST", headers: { "Idempotency-Key": key }, body: form,
+        });
+      }
+    } finally {
+      await handle.close();
+    }
+    return { profile: publicAgentProfile(profile), upload: publicFilePayload(client, finalResult?.data ?? finalResult ?? {}) };
+  }
+
+  async downloadProjectFile(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const fileId = projectFileId(input.file_id, "file");
+    const destination = String(input.destination_path || "").trim();
+    if (!path.isAbsolute(destination)) throw new Error("Destination path must be an absolute local file path.");
+    const parent = await stat(path.dirname(destination));
+    if (!parent.isDirectory()) throw new Error("Destination directory does not exist.");
+    const url = client.publicUrl(`/files/${encodeURIComponent(fileId)}`);
+    const response = await this.fetchImpl(url, { headers: { Accept: "*/*" } });
+    if (!response.ok) throw Object.assign(new Error(`Project file download failed with HTTP ${response.status}.`), { status: response.status });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const destinationHandle = await open(destination, input.overwrite === true ? "w" : "wx");
+    try { await destinationHandle.writeFile(bytes); } finally { await destinationHandle.close(); }
+    return { profile: publicAgentProfile(profile), download: {
+      saved: true, file_id: fileId, url, size_bytes: bytes.length,
+      content_type: response.headers.get("content-type") || "application/octet-stream",
+    } };
   }
 
   async updateTaskDeliverable(profileId, taskId, input = {}) {
@@ -219,6 +348,46 @@ function positiveId(value, label) {
   const normalized = String(value ?? "").trim();
   if (!/^[1-9][0-9]*$/.test(normalized)) throw new Error(`A valid Syndicatum ${label} ID is required.`);
   return normalized;
+}
+
+function projectFileId(value, label) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+    throw new Error(`A valid Syndicatum ${label} ID is required.`);
+  }
+  return normalized;
+}
+
+function optionalFolderId(value) {
+  const normalized = String(value ?? "root").trim();
+  return normalized === "" || normalized === "root" ? "root" : projectFileId(normalized, "folder");
+}
+
+function requiredText(value, label) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  return normalized;
+}
+
+function normalizedIdempotencyKey(value) {
+  const normalized = String(value || `project-file:${randomUUID()}`).trim();
+  if (!/^[\x20-\x7e]{16,160}$/.test(normalized)) throw new Error("Idempotency key must contain 16–160 printable characters.");
+  return normalized;
+}
+
+function stableUploadId(profileId, idempotencyKey) {
+  const hex = createHash("sha256").update(`${profileId}\0${idempotencyKey}`).digest("hex").slice(0, 32).split("");
+  hex[12] = "4";
+  hex[16] = ["8", "9", "a", "b"][Number.parseInt(hex[16], 16) % 4];
+  const value = hex.join("");
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+function publicFilePayload(client, value) {
+  if (Array.isArray(value)) return value.map(item => publicFilePayload(client, item));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !["storage_key", "path", "source_path", "destination_path"].includes(key))
+    .map(([key, item]) => [key, key === "url" && typeof item === "string" ? client.publicUrl(`/${item.replace(/^\/+/, "")}`) : publicFilePayload(client, item)]));
 }
 
 function numericIds(values) {
