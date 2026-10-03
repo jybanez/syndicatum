@@ -18,7 +18,8 @@ V1 provides ordinary, durable project file sharing:
 - Syndicatum issues permanent, unguessable public URLs that do not require
   authentication;
 - supported images and video render in Helper's Media Viewer, PDFs render in
-  Helper's PDF Viewer, and other files open in a new tab/window or download;
+  Helper's PDF Viewer, JSON/Markdown/CSV use their complete canonical Helper
+  viewers, and other files open in a new tab/window or download;
 - the public URL remains stable across logout, restart, deployment, backup and
   restore, and later storage-provider migration; and
 - a complete Syndicatum backup includes both database records and file bytes.
@@ -331,9 +332,10 @@ OpenAPI contract suites pass.
 - [ ] Record the actor, file, action, prior/current identifiers or metadata as
   appropriate, and timestamp for every mutation without logging file bodies or
   local paths.
-- [x] Open supported images and video in Helper's Media Viewer and PDFs in
-  Helper's PDF Viewer from the filename. Audio-player integration remains a
-  separate media slice; other files expose **Download**.
+- [x] Open supported images and video in Helper's Media Viewer, PDFs in Helper's
+  PDF Viewer, and JSON/Markdown/CSV in their complete bounded Helper viewers
+  from the filename. Audio-player integration remains a separate media slice;
+  files without an assigned viewer open in a new browser tab.
 - [ ] Set rendered media sources and copy/open actions to the same canonical
   public URL; do not introduce an internal-only preview or thumbnail URL.
 - [ ] Reconcile remote file changes through the established realtime/refresh
@@ -475,10 +477,10 @@ after cutover.
   address** yields that same URL, which opens outside Syndicatum without
   authentication.
 - [ ] The URL survives logout, restart, deployment, and complete backup/restore.
-- [ ] Supported images and video render in Helper's Media Viewer and PDFs in
-  Helper's PDF Viewer. Other files open in a new tab/window or download;
-  active/unknown formats cannot execute under
-  the application origin.
+- [ ] Supported images and video render in Helper's Media Viewer, PDFs in
+  Helper's PDF Viewer, and JSON/Markdown/CSV in their dedicated safe viewers.
+  Other files open in a new tab/window or download; active/unknown formats
+  cannot execute under the application origin.
 - [ ] Every active human and agent project participant can upload, move, rename,
   download, copy links, and delete project files, with attributable audit
   evidence for every action.

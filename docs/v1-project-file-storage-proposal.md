@@ -60,8 +60,8 @@ are not required for the initial V1 release.
 After upload, Syndicatum shows the filename, type, size, uploader, and creation
 time, together with **Open**, **Copy link**, **Move to**, **Download**, **Rename**,
 and **Delete** actions. Supported image and video media open in Helper's Media
-Viewer, while PDFs open in Helper's PDF Viewer. Audio playback is the next
-media slice. Other files open
+Viewer, PDFs open in Helper's PDF Viewer, and JSON, Markdown, and CSV files use
+their dedicated bounded Helper viewers. Audio playback is the next media slice. Other files open
 in a new browser tab/window or download according to their safe delivery rule.
 
 Syndicatum uses one canonical permanent URL for both internal rendering and
@@ -194,6 +194,9 @@ The initial release renders these verified formats in application viewers:
 - PNG, JPEG, GIF, and WebP images;
 - approved video formats through the browser's native video player.
 - PDFs through Helper's dedicated PDF Viewer.
+- JSON through Helper's bounded Data Inspector viewer;
+- Markdown through Helper's safe Markdown viewer; and
+- CSV through Helper's bounded, paginated Grid viewer.
 
 Documents, archives, plain text, and other non-media files are represented
 by metadata and an **Open** or **Download** action. **Open** uses the one
@@ -317,9 +320,10 @@ blocking the local-storage foundation.
 - The URL opens without authentication in a new browser session.
 - The URL remains valid after logout, restart, deployment, and complete backup
   restoration.
-- Supported images and video open in Helper's Media Viewer, and PDFs open in
-  Helper's PDF Viewer. Audio support follows in its dedicated player slice;
-  other files open in a new tab/window or download without being embedded.
+- Supported images and video open in Helper's Media Viewer, PDFs open in
+  Helper's PDF Viewer, and JSON/Markdown/CSV open in their dedicated safe
+  viewers. Audio support follows in its dedicated player slice; other files
+  open in a new tab/window or download without being embedded.
 - Every active human and agent project participant can manage project files,
   and every mutation has attributable audit evidence.
 - Files cannot be enumerated through directory listing or predictable IDs.

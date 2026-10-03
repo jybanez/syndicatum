@@ -1,5 +1,5 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.222";
-import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.222";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.223";
+import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.223";
 import {
   createResponsibilityInbox,
   responsibilityActions,
@@ -1226,9 +1226,13 @@ function projectFilesContent(payload, handlers = {}) {
 
 function projectFilePreviewType(file) {
   const mime = String(file?.mime_type || "").toLowerCase();
+  const name = String(file?.name || "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   if (mime === "application/pdf") return "pdf";
+  if (mime === "application/json" || mime === "text/json" || mime.endsWith("+json") || name.endsWith(".json")) return "json";
+  if (["text/markdown", "text/x-markdown"].includes(mime) || name.endsWith(".md") || name.endsWith(".markdown")) return "markdown";
+  if (["text/csv", "application/csv", "text/comma-separated-values"].includes(mime) || name.endsWith(".csv")) return "csv";
   return "";
 }
 
@@ -1248,6 +1252,22 @@ function openProjectFilePreview(file) {
     return;
   }
   closeProjectFilePreview();
+  if (["json", "markdown", "csv"].includes(type)) {
+    const factory = {
+      json: state.factories.createJsonViewer,
+      markdown: state.factories.createMarkdownViewer,
+      csv: state.factories.createCsvViewer,
+    }[type];
+    const viewer = factory({
+      url,
+      title: file.name || `${type === "markdown" ? "Markdown" : type.toUpperCase()} file`,
+      open: true,
+      fullscreen: true,
+      onClose() { window.setTimeout(closeProjectFilePreview, 0); },
+    });
+    state.components.projectFilePreview = { viewer, host: null };
+    return;
+  }
   if (type === "pdf") {
     const viewer = state.factories.createPdfViewer({
       url,
@@ -9396,7 +9416,7 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.viewer", "ui.pdf.viewer"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.viewer", "ui.pdf.viewer", "ui.json.viewer", "ui.markdown.viewer", "ui.csv.viewer"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
@@ -9438,6 +9458,9 @@ async function bootstrap() {
     createFileUploader: await uiLoader.get("ui.file.uploader", options),
     createMediaViewer: await uiLoader.get("ui.media.viewer", options),
     createPdfViewer: await uiLoader.get("ui.pdf.viewer", options),
+    createJsonViewer: await uiLoader.get("ui.json.viewer", options),
+    createMarkdownViewer: await uiLoader.get("ui.markdown.viewer", options),
+    createCsvViewer: await uiLoader.get("ui.csv.viewer", options),
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
     createSplitter: await uiLoader.get("ui.splitter", options),
     createNavigationStack: await uiLoader.get("ui.navigation.stack", options),

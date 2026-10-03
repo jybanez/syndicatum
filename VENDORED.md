@@ -12,7 +12,7 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `766df8c17a129206652c174f4f185700a65ad746`
+- Pinned commit: `032099da77c9da671457c1567d45ce977340d453`
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
@@ -41,6 +41,8 @@ This first implementation uses the helper library for:
 - in-place project-plan editing via `ui.inline.text`, `ui.inline.select`, and `ui.inline.date`, including overlay action placement,
 - milestone-grouped native form choices through `ui.form.modal` select option groups, and
 - production-safe Markdown rendering through `ui.markdown` for authored messages and task details.
+- complete modal-based JSON, Markdown, and CSV project-file previews through
+  `ui.json.viewer`, `ui.markdown.viewer`, and `ui.csv.viewer`.
 
 The current upstream helper line also includes newer primitives that should be preferred during the DB-backed refactor:
 
