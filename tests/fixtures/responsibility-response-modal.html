@@ -19,6 +19,7 @@
     <span>Requested by Syndicatum Developer · Assigned to Jonathan Anthony Ybañez</span>
     <div class="fixture-actions">
       <button class="ui-button" type="button" data-action="work_started">Start work</button>
+      <button class="ui-button" type="button" data-action="resolution_proposed">Submit for review</button>
       <button class="ui-button" type="button" data-action="approval_approved">Approve</button>
       <button class="ui-button" type="button" data-action="approval_denied">Deny</button>
       <button class="ui-button" type="button" data-action="transfer_offered">Offer handoff</button>
@@ -39,6 +40,7 @@
   const uiAlert = await uiLoader.get("ui.dialog.alert");
   const labels = {
     work_started: "Start work",
+    resolution_proposed: "Submit for review",
     approval_approved: "Approve",
     approval_denied: "Deny",
     transfer_offered: "Offer handoff",
@@ -53,10 +55,10 @@
     status.textContent = `Requests: ${metrics.requests} · Success hooks: ${metrics.successHooks} · Conflict hooks: ${metrics.conflictHooks}`;
   };
 
-  async function showSummary(result, context) {
+  async function showSummary(result, context, noteLabel = "Reason or evidence note") {
     const entries = Object.entries(result.errors || {});
     const items = validationAlertItems(result, {
-      note: "Reason or evidence note",
+      note: noteLabel,
       target_participant_id: "Active handoff target",
     });
     if (entries.length > 1) {
@@ -85,14 +87,17 @@
   }
 
   function openModal(kind) {
+    const submittingWork = kind === "resolution_proposed";
     const rows = [
       [{ type: "text", content: "This response will be recorded as a project timeline message for request #6790." }],
     ];
     if (!noNote.has(kind)) rows.push(
-      [{ type: "textarea", name: "note", label: optional.has(kind) ? "Note (optional)" : "Reason or evidence note",
+      [{ type: "textarea", name: "note", label: optional.has(kind) ? "Note (optional)"
+        : submittingWork ? "Completion note or evidence" : "Reason or evidence note",
         required: !optional.has(kind), maxLength: 10000, rows: 5,
         help: optional.has(kind) ? "Optional. Add context when it will help the requester understand the decision."
-          : "Explain the decision or provide the evidence the requester needs." }],
+          : submittingWork ? "Summarize what was completed and include any relevant links or evidence."
+            : "Explain the decision or provide the evidence the requester needs." }],
     );
     if (kind === "transfer_offered") rows.push([{
       type: "select", name: "target_participant_id", label: "Active handoff target", required: true,
@@ -106,11 +111,16 @@
       rows, initialValues: { note: "", target_participant_id: "" }, manageBusyOnSubmit: false,
       validate(values) {
         const errors = {};
-        if (!optional.has(kind) && !noNote.has(kind) && !String(values.note || "").trim()) errors.note = "Reason or evidence note — required";
+        if (!optional.has(kind) && !noNote.has(kind) && !String(values.note || "").trim()) {
+          errors.note = submittingWork ? "Completion note or evidence — required" : "Reason or evidence note — required";
+        }
         if (kind === "transfer_offered" && !values.target_participant_id) errors.target_participant_id = "Active handoff target — required";
         return errors;
       },
-      onInvalid: showSummary,
+      onInvalid(result, context) {
+        return showSummary(result, context,
+          submittingWork ? "Completion note or evidence" : "Reason or evidence note");
+      },
       async onSubmit(_values, context) {
         metrics.requests += 1;
         renderMetrics();

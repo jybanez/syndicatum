@@ -99,6 +99,13 @@ test("resolved work labels a retained block as history rather than a current blo
     ["Previously blocked"]);
 });
 
+test("work requests use familiar progress and review labels", () => {
+  assert.equal(responsibilityStateLabel(request), "Awaiting work");
+  assert.equal(responsibilityStateLabel({ ...request, work_started: true }), "In progress");
+  assert.equal(responsibilityStateLabel({ ...request, state: "resolution_pending",
+    work_started: true }), "Awaiting review");
+});
+
 test("classified requests expose only their decision vocabulary", () => {
   const active = [10, 20];
   const approval = { ...request, request_type: "approval" };

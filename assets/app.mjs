@@ -5,7 +5,7 @@ import {
   responsibilityEvent,
   RESPONSIBILITY_ACTIONS,
   RESPONSIBILITY_DIRECT_DECISIONS,
-} from "./responsibility-inbox.mjs?v=20261003043000";
+} from "./responsibility-inbox.mjs?v=20261003090000";
 import { evidenceDetails } from "./responsibility-evidence.mjs?v=20260925160000";
 import {
   settleResponsibilityAction,
@@ -2060,6 +2060,7 @@ function responsibilityActionContext(item, kind) {
 
 function responsibilityActionRows(item, kind) {
   const optionalNote = RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind);
+  const submittingWork = kind === "resolution_proposed";
   const rows = [
     [{ type: "text", content: `This response will be recorded as a project timeline message for request #${item.request_message_id}.` }],
   ];
@@ -2067,13 +2068,16 @@ function responsibilityActionRows(item, kind) {
     rows.push([{
       type: "textarea",
       name: "note",
-      label: optionalNote ? "Note (optional)" : "Reason or evidence note",
+      label: optionalNote ? "Note (optional)"
+        : submittingWork ? "Completion note or evidence" : "Reason or evidence note",
       required: !optionalNote,
       maxLength: 10000,
       rows: 5,
       help: optionalNote
         ? "Optional. Add context when it will help the requester understand the decision."
-        : "Explain the decision or provide the evidence the requester needs.",
+        : submittingWork
+          ? "Summarize what was completed and include any relevant links or evidence."
+          : "Explain the decision or provide the evidence the requester needs.",
     }]);
   }
   if (kind === "transfer_offered") {
@@ -2108,7 +2112,10 @@ function openResponsibilityActionModal(item, kind, hooks = {}) {
   }
   const projectId = selectedProjectId();
   const projectGeneration = state.generation;
-  const labels = { note: "Reason or evidence note", target_participant_id: "Active handoff target" };
+  const labels = {
+    note: kind === "resolution_proposed" ? "Completion note or evidence" : "Reason or evidence note",
+    target_participant_id: "Active handoff target",
+  };
   let currentItem = item;
   let initialized = false;
   let disposed = false;
@@ -2141,7 +2148,9 @@ function openResponsibilityActionModal(item, kind, hooks = {}) {
       if (!RESPONSIBILITY_OPTIONAL_NOTE_ACTIONS.has(kind)
           && !RESPONSIBILITY_NO_NOTE_ACTIONS.has(kind)
           && !String(values.note || "").trim()) {
-        errors.note = "Reason or evidence note — required";
+        errors.note = kind === "resolution_proposed"
+          ? "Completion note or evidence — required"
+          : "Reason or evidence note — required";
       }
       if (kind === "transfer_offered" && !Number(values.target_participant_id || 0)) {
         errors.target_participant_id = "Active handoff target — required";
