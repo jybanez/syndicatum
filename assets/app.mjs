@@ -1169,13 +1169,11 @@ function projectFilesContent(payload, handlers = {}) {
         key: "name", label: "Name", width: "180px",
         renderCell({ row }) {
           const previewable = projectFilePreviewType(row) !== "";
-          const cell = document.createElement(previewable ? "button" : "span");
-          cell.className = `project-file-name-cell${previewable ? " project-file-name-action" : ""}`;
-          if (previewable) {
-            cell.type = "button";
-            cell.title = `Preview ${row.name}`;
-            cell.addEventListener("click", () => handlers.onFileOpen?.(row));
-          }
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "project-file-name-cell project-file-name-action";
+          cell.title = `${previewable ? "Preview" : "Open"} ${row.name}`;
+          cell.addEventListener("click", () => handlers.onFileOpen?.(row));
           const icon = state.factories.createIcon(getFileIconName(row.name, row.mime_type), { size: 18, decorative: true });
           icon.classList.add("project-file-type-icon");
           const label = document.createElement("span");
@@ -1244,9 +1242,12 @@ function closeProjectFilePreview() {
 
 function openProjectFilePreview(file) {
   const type = projectFilePreviewType(file);
-  if (!type) return;
-  closeProjectFilePreview();
   const url = new URL(file.url, document.baseURI).href;
+  if (!type) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  closeProjectFilePreview();
   if (type === "pdf") {
     const viewer = state.factories.createPdfViewer({
       url,

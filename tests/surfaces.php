@@ -1069,6 +1069,7 @@ try {
             && strpos($source, 'projectFilePreviewType(row)') !== false
             && strpos($source, 'createMediaViewer(host') !== false
             && strpos($source, 'createPdfViewer({') !== false
+            && strpos($source, 'window.open(url, "_blank", "noopener,noreferrer")') !== false
             && strpos($source, '{ key: "mime_type", label: "Type" }') === false
             && strpos($source, '{ icon: "actions.add", iconOnly: true }') !== false
             && strpos($source, '{ icon: "data.upload" }') !== false
