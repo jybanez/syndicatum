@@ -17,7 +17,8 @@ V1 provides ordinary, durable project file sharing:
 - canonical metadata and project associations are stored in MySQL;
 - Syndicatum issues permanent, unguessable public URLs that do not require
   authentication;
-- images and PDFs render safely where supported, while other files download;
+- supported images, audio, and video render or play inline, while other files
+  open in a new tab/window or download;
 - the public URL remains stable across logout, restart, deployment, backup and
   restore, and later storage-provider migration; and
 - a complete Syndicatum backup includes both database records and file bytes.
@@ -88,6 +89,12 @@ Do not expose an inert setting. A field appears only when its behavior is fully
 implemented, validated, enforced by every applicable upload path, audited where
 appropriate, and documented.
 
+Owner decisions recorded October 3, 2026: render only supported image, audio,
+and video media inline; give every active human and agent project participant
+the same audited file-management actions; deliver the project Files modal
+before timeline message attachments; and direct projects needing restricted or
+secure file management to Google Drive or another dedicated service.
+
 ### 5.1 Recommended global settings
 
 | Controlled setting | User-facing field | Recommended default | Required guardrail | Approval |
@@ -96,7 +103,7 @@ appropriate, and documented.
 | `storage.max_upload_bytes` | Maximum file size | 25 MiB | Integer range with a server hard ceiling; enforced while streaming before storage is committed | [ ] |
 | `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [ ] |
 | `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [ ] |
-| `storage.inline_preview_types` | Inline preview types | PNG, JPEG, GIF, WebP, PDF, and plain text | Administrators may select a subset only; the hard safe-preview allowlist cannot be expanded from Settings | [ ] |
+| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [ ] |
 | `storage.installation_quota_bytes` | Installation storage quota | Unlimited (`0`) | Nonzero values must exceed the per-file maximum and are enforced before committing an upload | [ ] |
 | `storage.default_project_quota_bytes` | Default project storage quota | Unlimited (`0`) | Nonzero values must exceed the per-file maximum; project usage is calculated from canonical live file records | [ ] |
 | `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [ ] |
@@ -130,7 +137,7 @@ as toggles:
 - [ ] Anyone possessing a permanent public link can read its file without
   signing in; every attachment surface states this plainly.
 - [ ] One canonical permanent URL is used for both internal rendering and
-  external sharing. Image/PDF sources, **Open**, **Copy link**, browser save,
+  external sharing. Media sources, **Open**, **Copy link**, browser save,
   and agent responses must not substitute an authenticated preview, signed,
   local-path, provider, or thumbnail URL.
 - [ ] Public IDs are cryptographically unguessable and never expose sequential
@@ -146,14 +153,19 @@ as toggles:
   response, and retains the approved metadata tombstone/audit evidence.
 - [ ] Link regeneration is an explicit confirmed action that creates a new
   public ID and invalidates the former link.
-- [ ] Active participants may upload only where they already have authority to
-  create or update the target record. The uploader and project owner/admin may
-  manage the canonical file subject to reference and lifecycle safeguards.
+- [ ] Every active human and agent project participant can upload, rename,
+  replace, regenerate the public link for, and delete every file in that
+  project. Every operation records the actor and immutable audit evidence.
+  External integration participants receive no file-management authority
+  unless a later explicit capability is approved.
 - [ ] V1 uses local storage and origin delivery. It has no CDN dependency and
   makes no claim that an unscanned file is malware-free.
-- [ ] Deliver reusable attachments in order: timeline messages; tasks and task
-  activity; deliverables; project description/instructions. All remain required
-  before V1 is complete.
+- [ ] Deliver the project **Files** management modal first, then timeline message
+  attachments. Task, activity, deliverable, and project-detail attachments are
+  follow-up scope and do not block initial V1 acceptance.
+- [ ] Syndicatum storage is deliberately simple team storage. Projects requiring
+  restricted team permissions or secure document management use Google Drive
+  or another dedicated service and link it from Syndicatum.
 
 - [ ] Record the approved settings, defaults, ranges, and fixed rules in the
   storage proposal.
@@ -305,35 +317,58 @@ OpenAPI contract suites pass.
 - [ ] Display **Anyone with this link can access the file** wherever a public
   link can be copied or opened.
 
-### 8.2 Timeline messages
+### 8.2 Project Files management modal
+
+- [ ] Add a project-level **Files** action that opens the canonical modal
+  immediately in its loading state, then loads the first file page.
+- [ ] List filename, type, size, uploader, creation/update time, and availability
+  with bounded pagination, search, sort, loading skeletons, empty state, and
+  recoverable error state.
+- [ ] Let every active human and agent participant upload, open, copy, download,
+  rename, replace, regenerate, and delete files in that project.
+- [ ] Require explicit confirmation for replacement, public-link regeneration,
+  and deletion, describing the effect on previously shared URLs.
+- [ ] Record the actor, file, action, prior/current identifiers or metadata as
+  appropriate, and timestamp for every mutation without logging file bodies or
+  local paths.
+- [ ] Render only supported images, audio, and video inside the modal. Other
+  files expose **Open in new tab** or **Download** according to safe delivery
+  headers.
+- [ ] Set rendered media sources and copy/open actions to the same canonical
+  public URL; do not introduce an internal-only preview or thumbnail URL.
+- [ ] Reconcile remote file changes through the established realtime/refresh
+  model without silently discarding an in-progress local action.
+
+### 8.3 Timeline message attachments
 
 - [ ] Attach files during message composition without sending a message before
   all selected attachment records are confirmed.
 - [ ] Define and test cleanup behavior when uploads succeed but message creation
   is cancelled or fails.
-- [ ] Render compact attachment metadata, safe inline image/PDF preview, copy-
-  link, and download actions in timeline cards and message detail.
+- [ ] Render compact attachment metadata; inline only supported image, audio,
+  and video media; and provide **Open in new tab** or **Download** for all other
+  files.
 - [ ] Set rendered media sources and copy/open actions to the same canonical
   public URL; do not introduce an internal-only preview or thumbnail URL.
 - [ ] Preserve reply, revision, deletion, pagination, virtualization, and
   realtime reconciliation behavior.
 
-### 8.3 Tasks, task activity, deliverables, and project details
+### 8.4 Deferred attachment surfaces
 
-- [ ] Support attachment upload and display on task records.
-- [ ] Support attachment upload and display on immutable task activity/evidence
+- [ ] In Phase 2, support attachment upload and display on task records.
+- [ ] In Phase 2, support attachment upload and display on immutable task activity/evidence
   records without weakening lifecycle authorization.
-- [ ] Support attachment upload and display on deliverables while retaining the
+- [ ] In Phase 2, support attachment upload and display on deliverables while retaining the
   existing external `artifact_url` compatibility boundary until migration is
   explicitly approved.
-- [ ] Support attachment upload and display for project description/instruction
+- [ ] In Phase 2, support attachment upload and display for project description/instruction
   resources without embedding binary data into those text fields.
 - [ ] Ensure removal from one surface does not delete a canonical file still
   referenced by another surface.
 - [ ] Provide accessible preview labels, keyboard operation, loading skeletons,
   empty states, and responsive layouts.
 
-### 8.4 Agent access and skills
+### 8.5 Agent access and skills
 
 - [ ] Add permissioned Project API/MCP tools for upload, file lookup, and
   attachment association using streams or supported content transfer—not local
@@ -346,9 +381,9 @@ OpenAPI contract suites pass.
   metadata after confirmed upload; it must be the same URL the human UI renders.
 - [ ] Verify at least one human upload and one agent upload end to end.
 
-**Exit evidence:** browser and agent acceptance passes for every required
-surface, including accessibility, responsive behavior, cancellation, partial
-failure, and uncertain-outcome recovery.
+**Exit evidence:** browser and agent acceptance passes for the project Files
+modal and timeline attachments, including accessibility, responsive behavior,
+cancellation, partial failure, and uncertain-outcome recovery.
 
 ## 9. Gate E — Backup, restore, and recovery completeness
 
@@ -433,8 +468,12 @@ after cutover.
   address** yields that same URL, which opens outside Syndicatum without
   authentication.
 - [ ] The URL survives logout, restart, deployment, and complete backup/restore.
-- [ ] Supported images and PDFs render inline; active/unknown formats cannot
-  execute under the application origin.
+- [ ] Supported images, audio, and video render or play inline. Other files open
+  in a new tab/window or download; active/unknown formats cannot execute under
+  the application origin.
+- [ ] Every active human and agent project participant can upload, rename,
+  replace, regenerate, and delete project files, with attributable audit
+  evidence for every action.
 - [ ] Files cannot be enumerated through directory listing or predictable IDs.
 - [ ] Cross-project listing, attachment, replacement, and deletion fail safely.
 - [ ] Deletion makes the old URL clearly unavailable and retains the approved
@@ -456,6 +495,8 @@ after cutover.
   deployments without changing URLs.
 - [ ] Complete replacement, deletion, and link-regeneration safeguards deferred
   from V1, if any.
+- [ ] Extend attachments to tasks, task activity, deliverables, and project
+  details.
 - [ ] Exercise large, concurrent, and interrupted file sets through upload,
   delivery, backup, and restore.
 - [ ] Evaluate optional malware-scanner integration through the storage
@@ -484,12 +525,9 @@ after cutover.
    defaults—particularly 25 MiB per file and 10 files per action?
 2. Do you approve unlimited-by-default installation and project quotas, with
    immediate enforcement whenever an administrator sets a nonzero value?
-3. Should HTML and SVG be included among supported downloads but always forced
-   to download, or omitted from the default allowed-type selection entirely?
-4. Should public-link regeneration ship in V1, or should it remain Phase 2 while
+3. Should public-link regeneration ship in V1, or should it remain Phase 2 while
    deletion and explicit replacement ship first?
-5. Do you approve the fixed authority and surface-delivery rules in section 5.2?
-6. After approval, should this checklist be translated into formal Syndicatum
+4. After approval, should this checklist be translated into formal Syndicatum
    milestones and deliverables for owner approval before engineering tasks are
    created?
 

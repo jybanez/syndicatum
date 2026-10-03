@@ -38,25 +38,32 @@ work described below.
   file.
 
 This feature is for convenient, durable sharing rather than confidential file
-distribution. Projects requiring recipient authentication, fine-grained file
-permissions, or regulated document controls should use a service designed for
-that purpose, such as Google Drive, and link it from Syndicatum.
+distribution. Every active human and agent project participant can manage the
+project's Syndicatum files. Projects requiring recipient authentication,
+fine-grained file permissions, restricted team operations, or regulated
+document controls should use a service designed for that purpose, such as
+Google Drive, and link it from Syndicatum.
 
 ## 3. User experience
 
-Authorized users and agents can attach files to:
+The first delivery surface is a project-level **Files** management modal. Every
+active human and agent project participant can upload, list, open, copy, rename,
+replace, regenerate the public link for, and delete project files. Every
+mutation is attributed and recorded in the project audit history.
 
-- Timeline messages;
-- tasks and task activity;
-- deliverables; and
-- project descriptions or instructions where applicable.
+After project file management is complete, the next delivery surface adds file
+attachments to timeline messages. Task, activity, deliverable, and project-
+detail attachments are later expansions of the same canonical file records and
+are not required for the initial V1 release.
 
 After upload, Syndicatum shows the filename, type, size, uploader, and creation
-time, together with **Copy link**, **Download**, and authorized deletion or
-replacement actions. Supported images and PDFs receive an inline preview.
+time, together with **Open**, **Copy link**, **Download**, **Rename**,
+**Replace**, **Regenerate public link**, and **Delete** actions. Supported image,
+audio, and video media receive inline rendering or playback. Other files open
+in a new browser tab/window or download according to their safe delivery rule.
 
 Syndicatum uses one canonical permanent URL for both internal rendering and
-external sharing. The image `src`, PDF preview source, **Open**, **Copy link**,
+external sharing. Media sources, **Open**, **Copy link**,
 and ordinary download behavior all resolve through that same public URL. The UI
 must not substitute an authenticated preview URL, short-lived signed URL, local
 storage path, provider URL, or separate thumbnail URL. Consequently, a user who
@@ -160,9 +167,12 @@ DELETE /api/v1/files/{file}
 GET    /files/{public_id}/{filename}
 ```
 
-Upload, mutation, and project-list operations require existing project
-authorization. The permanent public read route does not require authentication.
-Agent integrations receive equivalent permissioned upload and attachment
+Upload, mutation, and project-list operations require an active human or agent
+participant in the owning project. All such participants can upload, rename,
+replace, regenerate, and delete. Every operation is audited. External
+integration participants receive no file-management authority unless a later
+explicit capability is approved. The permanent public read route does not
+require authentication. Agent participants receive equivalent file-management
 capabilities through the Project API and installed skills.
 
 Deletion and public-ID regeneration are explicit, audited operations. Replacing
@@ -171,15 +181,17 @@ chooses to replace the published file.
 
 ## 7. Rendering and delivery rules
 
-The initial release may render the following formats inline after validating
-their content type:
+The initial release renders only verified media formats inline:
 
 - PNG, JPEG, GIF, and WebP images;
-- PDF; and
-- plain text where appropriate.
+- approved audio formats through the browser's native audio player; and
+- approved video formats through the browser's native video player.
 
-Other formats download as attachments. Potentially active formats, including
-HTML and SVG, must not execute under the Syndicatum application origin.
+PDFs, documents, archives, plain text, and other non-media files are represented
+by metadata and an **Open** or **Download** action. **Open** uses the one
+canonical public URL in a new browser tab/window when safe. Potentially active
+formats, including HTML and SVG, are forced to download and must not execute
+under the Syndicatum application origin.
 
 Responses should include appropriate content type, content disposition,
 `X-Content-Type-Options: nosniff`, caching, and search-engine exclusion headers.
@@ -257,10 +269,14 @@ blocking the local-storage foundation.
 ### Phase 1 — Local storage foundation
 
 - Add the storage abstraction and local driver.
-- Add the canonical database records and attachment associations.
+- Add the canonical database records.
 - Implement uploads and permanent public delivery.
-- Add safe image and PDF previews.
-- Support message, task, activity, and deliverable attachments.
+- Add the project **Files** management modal for every active human and agent
+  participant, with fully audited rename, replace, regenerate, and delete
+  operations.
+- Add safe image, audio, and video rendering/playback.
+- Support timeline message attachments after project file management is
+  complete.
 - Add permissioned agent upload capability.
 - Extend backup and restore to include local file content.
 
@@ -269,7 +285,9 @@ blocking the local-storage foundation.
 - Add quotas and administrative storage reporting.
 - Add orphan reconciliation and integrity verification.
 - Add optimized Nginx delivery for Linux deployments.
-- Add replacement, deletion, and public-link regeneration safeguards.
+- Harden replacement, deletion, and public-link regeneration for large and
+  interrupted operations.
+- Extend attachments to tasks, task activity, deliverables, and project details.
 - Exercise backup and restore with large and interrupted file sets.
 
 ### Phase 3 — S3 progression
@@ -285,7 +303,10 @@ blocking the local-storage foundation.
 - The URL opens without authentication in a new browser session.
 - The URL remains valid after logout, restart, deployment, and complete backup
   restoration.
-- Supported images and PDFs render inline.
+- Supported images, audio, and video render or play inline. Other files open in
+  a new tab/window or download without being embedded in Syndicatum.
+- Every active human and agent project participant can manage project files,
+  and every mutation has attributable audit evidence.
 - Files cannot be enumerated through directory listing or predictable IDs.
 - Deleting a file causes its URL to return a clear unavailable response.
 - A complete backup contains and restores both metadata and file content.
