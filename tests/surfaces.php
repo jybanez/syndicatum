@@ -962,6 +962,8 @@ try {
             && strpos($app, 'attachmentLabel: "Attach files"') !== false
             && strpos($appCss, '#composer-host .ui-chat-composer-attach.is-helper-action') !== false,
             'The message composer must place a compact paperclip and visible Attach files label in the helper row below the input.');
+        $suite->true(strpos($app, 'status: "uploaded"') === false,
+            'Selected project-file attachments must not render a redundant Uploaded status badge.');
         $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
             && strpos($bundleJs, 'aria-pressed') !== false
             && strpos($bundleJs, 'files.folder') !== false

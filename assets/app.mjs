@@ -8275,7 +8275,6 @@ function renderDraftAttachments() {
   const items = state.draft.attachments.map((attachment) => ({
     ...attachment,
     kind: projectFilePreviewType(attachment) || "file",
-    status: "uploaded",
     previewUrl: attachment.url ? new URL(attachment.url, document.baseURI).href : "",
     sizeLabel: recoverySize(Number(attachment.size_bytes || 0)),
   }));
