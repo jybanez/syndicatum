@@ -337,6 +337,7 @@ jobs:
           set -euo pipefail
           php tests/migrations.php | tee ci-evidence/migrations.txt
           php tests/expansion.php | tee ci-evidence/expansion.txt
+          php tests/project-file-chunk-upload-store.php | tee ci-evidence/project-file-chunk-upload-store.txt
           php tests/responsibility-reducer.php | tee ci-evidence/responsibility-reducer.txt
           php tests/responsibility-events.php | tee ci-evidence/responsibility-events.txt
           node --test tests/responsibility-client.mjs tests/responsibility-action-flow.mjs | tee ci-evidence/responsibility-client.txt

@@ -1082,7 +1082,9 @@ try {
             && strpos($source, 'openRenameProjectFile') !== false
             && strpos($source, 'openMoveProjectFile') !== false
             && strpos($source, 'state.factories.uiConfirm(') !== false
-            && strpos($source, 'form.append("operation", existing ? "replace_file" : "upload")') !== false
+            && strpos($source, 'form.append("operation", "upload_chunk")') !== false
+            && strpos($source, 'const chunkBytes = 1024 * 1024;') !== false
+            && strpos($filesApi, 'new ProjectFileChunkUploadStore') !== false
             && strpos($source, 'confirmProjectFileMutation') !== false,
             'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
         $suite->true(strpos($htaccess, 'Options -MultiViews') !== false

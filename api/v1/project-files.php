@@ -5,6 +5,7 @@ require_once dirname(dirname(__DIR__)) . '/src/SettingsService.php';
 require_once dirname(dirname(__DIR__)) . '/src/RateLimiter.php';
 require_once dirname(dirname(__DIR__)) . '/src/LocalFileStorage.php';
 require_once dirname(dirname(__DIR__)) . '/src/ProjectFileService.php';
+require_once dirname(dirname(__DIR__)) . '/src/ProjectFileChunkUploadStore.php';
 
 try {
     projectApiRequireMethod(['GET', 'POST']);
@@ -33,9 +34,37 @@ try {
     }
 
     $auth->requireCsrfForHuman($access['identity']);
-    (new RateLimiter($pdo))->hit('project-files.write', $projectId . ':' . $access['participant_id'], 120, 60, 60);
     if (strpos(strtolower((string) Api::header('Content-Type')), 'multipart/form-data') === 0) {
         $operation = isset($_POST['operation']) ? trim((string) $_POST['operation']) : 'upload';
+        if ($operation === 'upload_chunk') {
+            (new RateLimiter($pdo))->hit('project-files.chunk', $projectId . ':' . $access['participant_id'], 2400, 600, 300);
+            if (!isset($_FILES['file']) || !is_array($_FILES['file']) || (int) $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                $error = isset($_FILES['file']['error']) ? (int) $_FILES['file']['error'] : UPLOAD_ERR_NO_FILE;
+                if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) { throw new RuntimeException('FILE_CHUNK_TOO_LARGE'); }
+                throw new InvalidArgumentException('Choose one upload chunk.');
+            }
+            $temporary = (string) $_FILES['file']['tmp_name'];
+            if (!is_uploaded_file($temporary)) { throw new InvalidArgumentException('The upload chunk could not be verified.'); }
+            $idempotencyKey = Api::idempotencyKey();
+            $_POST['idempotency_key'] = $idempotencyKey;
+            $store = new ProjectFileChunkUploadStore(dirname(dirname(__DIR__)), $configuredPath);
+            $received = $store->receive($access, $_POST, $temporary, (int) $_FILES['file']['size'],
+                (int) $settings->get('storage.max_upload_bytes'), function ($stream, $session) use ($service, $access) {
+                    if ($session['target_operation'] === 'upload') {
+                        return $service->uploadStream($access, $stream, $session['original_name'], $session['folder_id'], $session['idempotency_key']);
+                    }
+                    return $service->replaceFileStream($access, $stream, $session['original_name'], [
+                        'file_id' => $session['file_id'], 'version' => $session['version'],
+                    ], $session['idempotency_key']);
+                });
+            if (!$received['complete']) {
+                Api::json(['data' => ['upload' => $received]], 202);
+            }
+            $result = $received['result'];
+            Api::json(['data' => $result], ($received['replayed'] || !empty($result['replayed'])) ? 200
+                : ($_POST['target_operation'] === 'upload' ? 201 : 200));
+        }
+        (new RateLimiter($pdo))->hit('project-files.write', $projectId . ':' . $access['participant_id'], 120, 60, 60);
         if (!isset($_FILES['file']) || !is_array($_FILES['file']) || (int) $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
             $error = isset($_FILES['file']['error']) ? (int) $_FILES['file']['error'] : UPLOAD_ERR_NO_FILE;
             if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) { throw new RuntimeException('FILE_TOO_LARGE'); }
@@ -55,6 +84,7 @@ try {
         Api::json(['data' => $result], $result['replayed'] ? 200 : ($operation === 'upload' ? 201 : 200));
     }
 
+    (new RateLimiter($pdo))->hit('project-files.write', $projectId . ':' . $access['participant_id'], 120, 60, 60);
     $body = Api::body();
     $operation = isset($body['operation']) ? trim((string) $body['operation']) : '';
     if ($operation === 'create_folder') { $result = $service->createFolder($access, $body, Api::idempotencyKey()); }

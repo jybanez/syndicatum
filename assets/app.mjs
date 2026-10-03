@@ -1321,6 +1321,8 @@ function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes,
   let refreshPending = false;
   let confirmationQueue = Promise.resolve();
   const idempotencyKeys = new Map();
+  const uploadIds = new Map();
+  const chunkBytes = 1024 * 1024;
   const refreshFiles = () => {
     if (!refreshPending) return;
     refreshPending = false;
@@ -1345,28 +1347,40 @@ function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes,
         confirmationQueue = confirmation.catch(() => false);
         if (!(await confirmation)) throw new Error("Upload cancelled. The existing file was not changed.");
       }
-      const form = new FormData();
-      form.append("operation", existing ? "replace_file" : "upload");
-      if (existing) {
-        form.append("file_id", existing.id);
-        form.append("version", String(existing.version));
-      } else {
-        form.append("folder_id", folder?.id || "root");
-      }
-      form.append("file", item.file, item.name);
       const uploadIdentity = `${item.name}:${item.file?.size || item.size || 0}:${item.file?.lastModified || 0}`;
       if (!idempotencyKeys.has(uploadIdentity)) idempotencyKeys.set(uploadIdentity, makeIdempotencyKey());
+      if (!uploadIds.has(uploadIdentity)) uploadIds.set(uploadIdentity, crypto.randomUUID());
       const controller = new AbortController();
       controls.signal.addEventListener("abort", () => controller.abort(), { once: true });
-      const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
-        method: "POST", credentials: "same-origin", cache: "no-store", signal: controller.signal,
-        headers: projectFileMutationHeaders(idempotencyKeys.get(uploadIdentity)), body: form,
-      });
-      let payload = null;
-      try { payload = await response.json(); } catch (_error) { payload = null; }
-      if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+      const chunkCount = Math.ceil(item.file.size / chunkBytes);
+      for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+        const start = chunkIndex * chunkBytes;
+        const end = Math.min(item.file.size, start + chunkBytes);
+        const form = new FormData();
+        form.append("operation", "upload_chunk");
+        form.append("target_operation", existing ? "replace_file" : "upload");
+        form.append("upload_id", uploadIds.get(uploadIdentity));
+        form.append("chunk_index", String(chunkIndex));
+        form.append("chunk_count", String(chunkCount));
+        form.append("total_size", String(item.file.size));
+        form.append("original_name", item.name);
+        if (existing) {
+          form.append("file_id", existing.id);
+          form.append("version", String(existing.version));
+        } else {
+          form.append("folder_id", folder?.id || "root");
+        }
+        form.append("file", item.file.slice(start, end), item.name);
+        const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST", credentials: "same-origin", cache: "no-store", signal: controller.signal,
+          headers: projectFileMutationHeaders(idempotencyKeys.get(uploadIdentity)), body: form,
+        });
+        let payload = null;
+        try { payload = await response.json(); } catch (_error) { payload = null; }
+        if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+        controls.report(Math.min(100, (end / item.file.size) * 100));
+      }
       refreshPending = true;
-      controls.report(100);
     },
     onComplete(value) {
       const items = Array.isArray(value.items) ? value.items : [];
