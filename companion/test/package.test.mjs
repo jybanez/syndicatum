@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.6");
+  assert.equal(manifest.version, "0.10.7");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -182,13 +182,16 @@ test("release archives are deterministic and updates are recoverable", async () 
   assert.doesNotMatch(updater.match(/param\([\s\S]*?\n\)/)?.[0] || "", /\$MyInvocation/);
 });
 
-test("ChatGPT adapter confirms the exact injected turn without capturing its response", async () => {
+test("ChatGPT adapter confirms the uniquely identified injected turn without capturing its response", async () => {
   const source = await readFile(new URL("providers/chatgpt.js", extensionUrl), "utf8");
   assert.match(source, /matchingUserTurnCount/);
+  assert.match(source, /notificationIdentity/);
+  assert.match(source, /project.*agent.*message.*sequence/s);
   assert.match(source, /filter\(isVisibleTurn\)/);
   assert.match(source, /checkVisibility\(\{ checkOpacity: true, checkVisibilityCSS: true \}\)/);
   assert.match(source, /\[hidden\], \[aria-hidden='true'\], \[inert\]/);
-  assert.match(source, /new_exact_user_turn/);
+  assert.match(source, /new_notification_turn/);
+  assert.match(source, /Date\.now\(\) \+ 30000/);
   assert.doesNotMatch(source, /waitForResponse/);
   assert.doesNotMatch(source, /responseText: captured/);
   assert.doesNotMatch(source, /userTurnCount\(\) > before/);
