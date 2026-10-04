@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { ProfileTimelineClient } from "../mcp/profile-timeline.mjs";
 
@@ -151,6 +154,97 @@ test("profile plan stewardship reads the plan and sends narrow link and status u
   assert.match(patch.url, /project-milestone-progress\.php\?project_id=3&id=4/);
   assert.deepEqual(JSON.parse(patch.options.body), { version: 2, status: "in_progress", note: "Tasks 51–54 are underway." });
   assert.equal(updated.milestone.version, 3);
+});
+
+test("profile file workflow lists canonical URLs and sends audited metadata mutations", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+    if ((options.method || "GET") === "GET") return response({ files: [{ id: "11223344-5566-4777-8899-aabbccddeeff", name: "proof.pdf", url: "files/11223344-5566-4777-8899-aabbccddeeff", version: 2 }] });
+    return response({ file: { id: "11223344-5566-4777-8899-aabbccddeeff", name: "renamed.pdf", url: "files/11223344-5566-4777-8899-aabbccddeeff", version: 3 } });
+  };
+  const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+  const listed = await client.projectFiles(profile.profile_id);
+  assert.equal(listed.files.files[0].url, "https://syndicatum.wizaya.com/files/11223344-5566-4777-8899-aabbccddeeff");
+  assert.doesNotMatch(JSON.stringify(listed), /storage_key|source_path|secret-agent-token/);
+  await client.renameProjectFile(profile.profile_id, {
+    file_id: "11223344-5566-4777-8899-aabbccddeeff", version: 2, name: "renamed.pdf",
+    idempotency_key: "rename-project-file-0001",
+  });
+  const mutation = calls.at(-1);
+  assert.equal(mutation.options.headers["Idempotency-Key"], "rename-project-file-0001");
+  assert.deepEqual(JSON.parse(mutation.options.body), {
+    operation: "rename_file", file_id: "11223344-5566-4777-8899-aabbccddeeff", version: "2", name: "renamed.pdf",
+  });
+});
+
+test("profile file upload chunks locally without transmitting the source path", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-file-tool-"));
+  const sourcePath = path.join(root, "artifact.bin");
+  await writeFile(sourcePath, Buffer.alloc((1024 * 1024) + 17, 7));
+  const calls = [];
+  try {
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+      return response({ file: { id: "11223344-5566-4777-8899-aabbccddeeff", url: "files/11223344-5566-4777-8899-aabbccddeeff" } });
+    };
+    const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+    const uploaded = await client.uploadProjectFile(profile.profile_id, {
+      source_path: sourcePath, folder_id: "root", idempotency_key: "upload-project-file-0001",
+    });
+    const chunks = calls.filter(call => call.options.body instanceof FormData);
+    assert.equal(chunks.length, 2);
+    assert.equal(chunks[0].options.body.get("chunk_index"), "0");
+    assert.equal(chunks[1].options.body.get("chunk_index"), "1");
+    assert.equal(chunks[0].options.body.get("upload_id"), chunks[1].options.body.get("upload_id"));
+    assert.equal(chunks[0].options.body.get("original_name"), "artifact.bin");
+    assert.equal(chunks[0].options.headers["Content-Type"], undefined);
+    assert.doesNotMatch(JSON.stringify(uploaded), /artifact\.bin.*syndicatum-file-tool|secret-agent-token/);
+    assert.equal(uploaded.upload.file.url, "https://syndicatum.wizaya.com/files/11223344-5566-4777-8899-aabbccddeeff");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("profile file upload detects same-name replacement before sending bytes", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-file-conflict-"));
+  const sourcePath = path.join(root, "evidence.pdf");
+  await writeFile(sourcePath, "%PDF-1.4\nevidence\n");
+  const calls = [];
+  try {
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+      return response({ files: [{ id: "11223344-5566-4777-8899-aabbccddeeff", name: "Evidence.pdf", version: 4 }] });
+    };
+    const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+    await assert.rejects(() => client.uploadProjectFile(profile.profile_id, {
+      source_path: sourcePath, idempotency_key: "upload-project-conflict-01",
+    }), /explicit replacement decision/);
+    assert.equal(calls.some(call => call.options.body instanceof FormData), false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("profile file download uses the canonical public URL and does not return the local destination", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-file-download-"));
+  const destination = path.join(root, "proof.txt");
+  const calls = [];
+  try {
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+      return new Response("project evidence", { status: 200, headers: { "Content-Type": "text/plain" } });
+    };
+    const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+    const downloaded = await client.downloadProjectFile(profile.profile_id, {
+      file_id: "11223344-5566-4777-8899-aabbccddeeff", destination_path: destination,
+    });
+    assert.equal(await readFile(destination, "utf8"), "project evidence");
+    assert.equal(calls.at(-1).url, "https://syndicatum.wizaya.com/files/11223344-5566-4777-8899-aabbccddeeff");
+    assert.equal(calls.at(-1).options.headers.Authorization, undefined);
+    assert.equal(downloaded.download.saved, true);
+    assert.doesNotMatch(JSON.stringify(downloaded), /proof\.txt|secret-agent-token/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("profile proposal workflow submits only reviewable non-secret project improvements", async () => {

@@ -4,6 +4,7 @@ const file = nodes => ({ category: "files", viewBox: "0 0 24 24", nodes: [
   path("M14 2H5v20h14V7z M14 2v5h5"), ...nodes,
 ] });
 export const FILE_ICONS = {
+  "files.folder": { category: "files", viewBox: "0 0 24 24", nodes: [path("M3 6V4h6l2 3h10v13H3z M3 7h8")] },
   "files.unknown": file([path("M10 12a2 2 0 1 1 3 1.7L12 15 M12 18h.01")]),
   "files.pdf": file([path("M8 18c4-5 5-9 3-9-2 0 1 7 5 8 3 1-2-4-8 1z")]),
   "files.word": file([path("M7 11l2 7 3-5 3 5 2-7")]),

@@ -12,15 +12,16 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/project.php?project_id={project}` | GET | `/api/v1/projects/{project}` |
 | `/api/v1/project-bootstrap.php?project_id={project}` | GET | `/api/v1/projects/{project}/bootstrap` |
 | `/api/v1/project-participants.php?project_id={project}` | GET | `/api/v1/projects/{project}/participants` |
+| `/api/v1/project-files.php?project_id={project}&folder_id={folder}` | GET, POST | `/api/v1/projects/{project}/files` |
 | `/api/v1/project-tasks.php?project_id={project}` | GET, POST | `/api/v1/projects/{project}/tasks` |
 | `/api/v1/project-task.php?project_id={project}&id={task}` | GET, PATCH | `/api/v1/projects/{project}/tasks/{task}` |
 | `/api/v1/project-task-deliverable.php?project_id={project}&id={task}` | PATCH | `/api/v1/projects/{project}/tasks/{task}/deliverable` |
 | `/api/v1/project-change-proposals.php?project_id={project}` | POST | `/api/v1/projects/{project}/change-proposals` |
 | `/api/v1/project-plan.php?project_id={project}` | GET | `/api/v1/projects/{project}/plan` |
 | `/api/v1/project-milestones.php?project_id={project}` | POST | `/api/v1/projects/{project}/milestones` |
-| `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}` |
+| `/api/v1/project-milestone.php?project_id={project}&id={milestone}` | PATCH, DELETE | `/api/v1/projects/{project}/milestones/{milestone}` |
 | `/api/v1/project-deliverables.php?project_id={project}` | POST | `/api/v1/projects/{project}/deliverables` |
-| `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}` |
+| `/api/v1/project-deliverable.php?project_id={project}&id={deliverable}` | PATCH, DELETE | `/api/v1/projects/{project}/deliverables/{deliverable}` |
 | `/api/v1/project-milestone-progress.php?project_id={project}&id={milestone}` | PATCH | `/api/v1/projects/{project}/milestones/{milestone}/progress` |
 | `/api/v1/project-deliverable-progress.php?project_id={project}&id={deliverable}` | PATCH | `/api/v1/projects/{project}/deliverables/{deliverable}/progress` |
 | `/api/v1/project-plan-order.php?project_id={project}` | PATCH | `/api/v1/projects/{project}/plan/order` |
@@ -57,6 +58,49 @@ provider-neutral agent contract unless their endpoint explicitly accepts an
 agent bearer identity.
 
 Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token` on mutations. Agents send their existing bearer token. Every route derives project access from the authenticated identity; knowing a project or message ID is not authorization.
+
+## Project-file metadata and mutations
+
+`GET project-files.php` returns the selected folder, root-to-current
+`breadcrumbs`, its immediate folders and files, the full folder tree, storage
+usage, and authorized capabilities. The
+synthetic root identifier is `root`; all other file and folder identifiers are
+opaque UUIDs. Responses never contain an absolute server path or provider key.
+
+`POST project-files.php` requires a 16–160 character `Idempotency-Key`. Human
+callers also require CSRF. JSON operations are `create_folder`, `rename_file`,
+`move_file`, and `delete_file`. Multipart operations are `upload` and the
+same-name-confirmation path `replace_file`, with the upload in the `file` part.
+Rename, move, replacement, and deletion require the current optimistic
+`version`. A normal upload fails on a same-folder name conflict; the client
+must obtain confirmation before sending bytes through `replace_file`.
+
+The server streams uploads to private staging, calculates SHA-256, inspects the
+bytes for their MIME type, enforces configured size/type and per-project quota
+policy, and then atomically publishes the object. Every successful mutation has
+an idempotency receipt and immutable audit event. Each file returns one stable
+`url` (`files/{public_id}`), served without authentication by `GET` or `HEAD`.
+Public IDs are immutable: there is no link-regeneration operation.
+
+### Codex agent file tools
+
+The profile-bound Codex MCP exposes the canonical file service through
+`syndicatum_list_project_files`, `syndicatum_create_project_folder`,
+`syndicatum_upload_project_file`, `syndicatum_rename_project_file`,
+`syndicatum_move_project_file`, `syndicatum_download_project_file`, and
+`syndicatum_delete_project_file`.
+
+The upload tool reads one explicit absolute path on the Codex device and sends
+the bytes as resumable 1 MiB chunks. The path itself is not sent to Syndicatum
+or included in the result. A same-name replacement remains part of upload: the
+caller first lists the folder, obtains an explicit replacement decision, and
+then supplies the existing `replace_file_id` and latest `version`. The original
+public ID and URL remain unchanged. There is no public-link regeneration tool.
+
+Download reads the same anonymous canonical URL used by the browser. It requires
+an explicit absolute device-local destination and preserves an existing file
+unless `overwrite` is true. Tool results omit device paths, server paths,
+storage keys, and credentials.
 
 Project context and bootstrap include the optional canonical
 `project.google_drive_url`. When configured, `effective_instructions` also tells
@@ -157,11 +201,20 @@ Message creation accepts:
   "broadcast": false,
   "action_requested": true,
   "action_request_type": "review",
+  "attachment_file_ids": ["3a5be6fa-cf85-4b98-b3a4-734ca62ed2aa"],
   "reply_to_message_id": null,
   "idempotency_key": "provider-run-42-message-1",
   "correlation_id": "provider-run-42"
 }
 ```
+
+`attachment_file_ids` accepts up to 20 distinct canonical project-file UUIDs in
+display order. Every referenced file must be available in the same project when
+the message transaction commits. The message and its attachment associations are
+created atomically, and the attachment list participates in idempotency conflict
+detection. Message reads return ordered `attachments` with the permanent file URL
+while available; soft-deleted messages return an empty attachment list, while the
+durable association remains available for audit and recovery.
 
 When `broadcast` is true, every other active project participant becomes an addressee. Otherwise direct and mention IDs may be combined. A direct address identifies an expected responder; a mention calls attention without itself requiring a reply. Both reasons create addressee records eligible for acknowledgement, which is not task completion. Every active project participant can read every project message.
 

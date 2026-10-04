@@ -6,6 +6,8 @@ require_once dirname(__DIR__) . '/src/AuthService.php';
 require_once dirname(__DIR__) . '/src/AdminService.php';
 require_once dirname(__DIR__) . '/src/SettingsService.php';
 require_once dirname(__DIR__) . '/src/ProjectFileStorage.php';
+require_once dirname(__DIR__) . '/src/LocalFileStorage.php';
+require_once dirname(__DIR__) . '/src/ProjectFileService.php';
 require_once dirname(__DIR__) . '/src/ExpansionMigrator.php';
 require_once dirname(__DIR__) . '/src/RateLimiter.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
@@ -122,6 +124,26 @@ try {
         });
         $suite->throws('storage.local_base_path must be an absolute server filesystem path', function () use ($settings, $administrator) {
             $settings->update(['storage.local_base_path' => 'relative/project-files'], $administrator['id']);
+        });
+        $settings->update([
+            'storage.max_upload_bytes' => 26214400,
+            'storage.max_files_per_action' => 10,
+            'storage.allowed_content_types' => ['image/jpeg', 'application/pdf'],
+            'storage.inline_preview_types' => ['image/jpeg'],
+            'storage.default_project_quota_bytes' => 68719476736,
+            'storage.deleted_content_retention_days' => 0,
+            'storage.public_cache_max_age_seconds' => 300,
+        ], $administrator['id']);
+        $suite->same(26214400, $settings->get('storage.max_upload_bytes'));
+        $suite->same(['image/jpeg', 'application/pdf'], $settings->get('storage.allowed_content_types'));
+        $suite->throws('storage.default_project_quota_bytes must be greater than storage.max_upload_bytes', function () use ($settings, $administrator) {
+            $settings->update(['storage.default_project_quota_bytes' => 1048576], $administrator['id']);
+        });
+        $suite->throws('storage.inline_preview_types must be a subset of storage.allowed_content_types', function () use ($settings, $administrator) {
+            $settings->update(['storage.allowed_content_types' => ['application/pdf']], $administrator['id']);
+        });
+        $suite->throws('storage.allowed_content_types contains an unsupported content type', function () use ($settings, $administrator) {
+            $settings->update(['storage.allowed_content_types' => ['application/x-msdownload']], $administrator['id']);
         });
     });
 
@@ -290,6 +312,154 @@ try {
         'password' => 'another correct horse battery staple',
     ], $administrator['id']);
     $management = new ProjectManagementService($pdo);
+
+    $suite->test('project file mutations are idempotent, versioned, audited, and path-private', function () use ($suite, $pdo, $administrator, $management) {
+        $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-project-files-' . bin2hex(random_bytes(6));
+        $remove = function ($path) use (&$remove) {
+            if (!file_exists($path) && !is_link($path)) { return; }
+            if (is_dir($path) && !is_link($path)) {
+                foreach (scandir($path) as $entry) { if ($entry !== '.' && $entry !== '..') { $remove($path . DIRECTORY_SEPARATOR . $entry); } }
+                rmdir($path); return;
+            }
+            unlink($path);
+        };
+        try {
+            $settings = new SettingsService($pdo);
+            $settings->update(['storage.local_base_path' => $root], $administrator['id']);
+            $project = $management->createProject($administrator['id'], ['name' => 'File Service Project']);
+            $participant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
+            $participant->execute([$project['id'], $administrator['id']]);
+            $access = ['project_id' => $project['id'], 'project_name' => $project['name'], 'project_status' => 'active',
+                'participant_id' => (int) $participant->fetchColumn(), 'participant_status' => 'active'];
+            $service = new ProjectFileService($pdo, new LocalFileStorage(dirname(__DIR__), $root), $settings);
+            $folder = $service->createFolder($access, ['name' => 'Board'], 'test-folder-create-0001');
+            $archiveFolder = $service->createFolder($access, ['name' => 'Archive'], 'test-folder-create-0002');
+            $replayedFolder = $service->createFolder($access, ['name' => 'Board'], 'test-folder-create-0001');
+            $suite->same(true, $replayedFolder['replayed']);
+            $boardBrowse = $service->browse($access, $folder['folder']['id']);
+            $suite->same('root', $boardBrowse['breadcrumbs'][0]['id']);
+            $suite->same($folder['folder']['id'], $boardBrowse['breadcrumbs'][1]['id']);
+
+            $stream = fopen('php://temp', 'w+b'); fwrite($stream, "%PDF-1.4\nfirst\n"); rewind($stream);
+            $uploaded = $service->uploadStream($access, $stream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
+            fclose($stream);
+            $suite->same('application/pdf', $uploaded['file']['mime_type']);
+            $suite->same('files/' . $uploaded['file']['id'], $uploaded['file']['url']);
+            $suite->truthy(!isset($uploaded['file']['storage_key']) && !isset($uploaded['file']['path']), 'Storage internals leaked through metadata.');
+            $storedKey = $pdo->prepare('SELECT storage_key FROM project_files WHERE project_id = ? AND public_id = ?');
+            $storedKey->execute([$project['id'], $uploaded['file']['id']]);
+            $suite->truthy(strpos((string) $storedKey->fetchColumn(), 'objects/' . strtolower($project['public_id']) . '/') === 0,
+                'Physical object was not grouped by project public ID.');
+            $replayStream = fopen('php://temp', 'w+b'); fwrite($replayStream, "%PDF-1.4\nfirst\n"); rewind($replayStream);
+            $replayedUpload = $service->uploadStream($access, $replayStream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
+            fclose($replayStream);
+            $suite->same(true, $replayedUpload['replayed']);
+            $duplicateStream = fopen('php://temp', 'w+b'); fwrite($duplicateStream, "%PDF-1.4\nduplicate\n"); rewind($duplicateStream);
+            $suite->throws('FILE_NAME_CONFLICT', function () use ($service, $access, $folder, $duplicateStream) {
+                $service->uploadStream($access, $duplicateStream, 'INFOGRAPHIC.PDF', $folder['folder']['id'], 'test-file-upload-duplicate');
+            });
+            fclose($duplicateStream);
+            $suite->throws('slashes or control characters', function () use ($service, $access) {
+                $service->createFolder($access, ['name' => '../escape'], 'test-folder-traversal-01');
+            });
+            $rejected = fopen('php://temp', 'w+b'); fwrite($rejected, "not an allowed project file\n"); rewind($rejected);
+            $suite->throws('FILE_TYPE_NOT_ALLOWED', function () use ($service, $access, $folder, $rejected) {
+                $service->uploadStream($access, $rejected, 'payload.txt', $folder['folder']['id'], 'test-file-mime-reject-01');
+            });
+            fclose($rejected);
+            $suite->same([], array_values(array_filter(scandir($root . DIRECTORY_SEPARATOR . '.tmp'), function ($entry) { return $entry !== '.' && $entry !== '..'; })),
+                'Rejected upload left a partial staging object.');
+
+            $otherProject = $management->createProject($administrator['id'], ['name' => 'Other File Project']);
+            $otherParticipant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
+            $otherParticipant->execute([$otherProject['id'], $administrator['id']]);
+            $otherAccess = ['project_id' => $otherProject['id'], 'project_name' => $otherProject['name'], 'project_status' => 'active',
+                'participant_id' => (int) $otherParticipant->fetchColumn(), 'participant_status' => 'active'];
+            $suite->throws('FILE_NOT_FOUND', function () use ($service, $otherAccess, $uploaded) {
+                $service->renameFile($otherAccess, ['file_id' => $uploaded['file']['id'], 'version' => 1, 'name' => 'stolen.pdf'], 'test-cross-project-file-01');
+            });
+
+            $renamed = $service->renameFile($access, ['file_id' => $uploaded['file']['id'], 'version' => 1, 'name' => 'board-infographic.pdf'], 'test-file-rename-000001');
+            $suite->same(2, $renamed['file']['version']);
+
+            $replacement = fopen('php://temp', 'w+b'); fwrite($replacement, "%PDF-1.4\nreplacement\n"); rewind($replacement);
+            $replaced = $service->replaceFileStream($access, $replacement, 'replacement.pdf',
+                ['file_id' => $renamed['file']['id'], 'version' => 2], 'test-file-replace-00001');
+            fclose($replacement);
+            $suite->same($uploaded['file']['id'], $replaced['file']['id']);
+            $suite->same(3, $replaced['file']['version']);
+            $moved = $service->moveFile($access, ['file_id' => $replaced['file']['id'], 'version' => 3,
+                'destination_folder_id' => $archiveFolder['folder']['id']], 'test-file-move-0000001');
+            $suite->same($uploaded['file']['id'], $moved['file']['id']);
+            $suite->same(4, $moved['file']['version']);
+            $suite->same([], $service->browse($access, $folder['folder']['id'])['files']);
+            $suite->same(1, count($service->browse($access, $archiveFolder['folder']['id'])['files']));
+
+            $messages = new ProjectRepository($pdo);
+            $attached = $messages->createMessage($access, [
+                'body' => 'Please review the attached project file.',
+                'broadcast' => true,
+                'attachment_file_ids' => [$moved['file']['id']],
+                'idempotency_key' => 'test-message-attachment-0001',
+            ]);
+            $suite->same(true, $attached['created']);
+            $suite->same($moved['file']['id'], $attached['message']['attachments'][0]['id']);
+            $suite->same('files/' . $moved['file']['id'], $attached['message']['attachments'][0]['url']);
+            $suite->same(0, $attached['message']['attachments'][0]['position']);
+            $replayedMessage = $messages->createMessage($access, [
+                'body' => 'Please review the attached project file.',
+                'broadcast' => true,
+                'attachment_file_ids' => [$moved['file']['id']],
+                'idempotency_key' => 'test-message-attachment-0001',
+            ]);
+            $suite->same(false, $replayedMessage['created']);
+            $suite->throws('IDEMPOTENCY_KEY_CONFLICT', function () use ($messages, $access) {
+                $messages->createMessage($access, [
+                    'body' => 'Please review the attached project file.',
+                    'broadcast' => true,
+                    'attachment_file_ids' => [],
+                    'idempotency_key' => 'test-message-attachment-0001',
+                ]);
+            });
+            $suite->throws('unavailable or does not belong', function () use ($messages, $otherAccess, $moved) {
+                $messages->createMessage($otherAccess, [
+                    'body' => 'Cross-project attachment attempt.',
+                    'broadcast' => true,
+                    'attachment_file_ids' => [$moved['file']['id']],
+                ]);
+            });
+            $service->deleteFile($access, ['file_id' => $moved['file']['id'], 'version' => 4], 'test-file-delete-000001');
+            $deletedAttachmentMessage = $messages->message($access, $attached['message']['id']);
+            $suite->same(false, $deletedAttachmentMessage['attachments'][0]['available']);
+            $suite->same(null, $deletedAttachmentMessage['attachments'][0]['url']);
+            $browsed = $service->browse($access, $archiveFolder['folder']['id']);
+            $suite->same([], $browsed['files']);
+            $events = $pdo->prepare('SELECT COUNT(*) FROM project_file_events WHERE project_id = ?');
+            $events->execute([$project['id']]);
+            $suite->same(7, (int) $events->fetchColumn());
+            $operations = $pdo->prepare('SELECT COUNT(*) FROM project_file_operations WHERE project_id = ?');
+            $operations->execute([$project['id']]);
+            $suite->same(7, (int) $operations->fetchColumn());
+
+            $settings->update(['storage.max_upload_bytes' => 1048576, 'storage.default_project_quota_bytes' => 2097152], $administrator['id']);
+            $quotaProject = $management->createProject($administrator['id'], ['name' => 'Quota File Project']);
+            $quotaParticipant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
+            $quotaParticipant->execute([$quotaProject['id'], $administrator['id']]);
+            $quotaAccess = ['project_id' => $quotaProject['id'], 'project_name' => $quotaProject['name'], 'project_status' => 'active',
+                'participant_id' => (int) $quotaParticipant->fetchColumn(), 'participant_status' => 'active'];
+            $quotaPayload = "%PDF-1.4\n" . str_repeat('A', 900000);
+            foreach ([1, 2] as $index) {
+                $quotaStream = fopen('php://temp', 'w+b'); fwrite($quotaStream, $quotaPayload); rewind($quotaStream);
+                $service->uploadStream($quotaAccess, $quotaStream, 'quota-' . $index . '.pdf', 'root', 'test-quota-upload-0000' . $index);
+                fclose($quotaStream);
+            }
+            $quotaStream = fopen('php://temp', 'w+b'); fwrite($quotaStream, $quotaPayload); rewind($quotaStream);
+            $suite->throws('FILE_PROJECT_QUOTA_EXCEEDED', function () use ($service, $quotaAccess, $quotaStream) {
+                $service->uploadStream($quotaAccess, $quotaStream, 'quota-3.pdf', 'root', 'test-quota-upload-00003');
+            });
+            fclose($quotaStream);
+        } finally { $remove($root); }
+    });
 
     $suite->test('project invitations use recipient or system timezone and create a unified human participant', function () use ($suite, $pdo, $auth, $administrator, $member, $management, $mailCaptureRoot) {
         $auth->updateProfile($member, ['display_name' => $member['display_name'], 'timezone' => 'Asia/Manila']);

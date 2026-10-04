@@ -42,6 +42,9 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <div class="project-overview-heading">
                                     <h1 id="project-title">Select a project</h1>
                                     <div class="project-overview-actions">
+                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="project-files-trigger" aria-label="Project files" title="Project files" hidden>
+                                            <span class="timeline-action-icon" id="project-files-icon" aria-hidden="true"></span>
+                                        </button>
                                         <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="project-actions-trigger" aria-label="Project actions" title="Project actions" hidden>
                                             <span class="timeline-action-icon" id="project-actions-icon" aria-hidden="true"></span>
                                         </button>
@@ -58,6 +61,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                     <div id="address-mode"></div><div id="message-intent"></div><div id="addressee-select" class="addressee-select"></div>
                                     <p class="broadcast-warning" id="broadcast-warning" hidden>Everyone active in this project will be notified.</p>
                                 </div>
+                                <div id="composer-attachments" class="composer-attachments" aria-label="Message attachments"></div>
                                 <div id="composer-host"></div>
                             </section>
                             <section class="filter-bar" id="timeline-filter-bar" aria-label="Timeline filters">

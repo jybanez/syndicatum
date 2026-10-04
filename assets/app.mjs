@@ -1,4 +1,5 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.222";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.229";
+import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.229";
 import {
   createResponsibilityInbox,
   responsibilityActions,
@@ -11,7 +12,7 @@ import {
   settleResponsibilityAction,
   validationAlertItems,
 } from "./responsibility-action-flow.mjs?v=20261003051000";
-import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003103000";
+import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003150000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
@@ -23,6 +24,7 @@ const CLAIM_CODE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7
 const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const COLLAPSE_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-7 3-3 3 3m-6 4 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const EXPAND_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-3 3 3 3-3m-6-4 3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+const PROJECT_FILES_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v9.75a1.75 1.75 0 0 1-1.75 1.75H5.25a1.75 1.75 0 0 1-1.75-1.75V6.5Zm0 3h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const APP_BASE_PATH = new URL(document.baseURI).pathname.replace(/\/$/, "");
 const WORKSPACE_MOBILE_QUERY = "(max-width: 980px)";
 const TEMPLATE_MOBILE_QUERY = "(max-width: 680px)";
@@ -54,6 +56,7 @@ const API = {
   projectDeliverable: "api/v1/project-deliverable.php",
   projectPlanOrder: "api/v1/project-plan-order.php",
   projectChangeProposals: "api/v1/project-change-proposals.php",
+  projectFiles: "api/v1/project-files.php",
   projectStatusSummary: "api/v1/project-status-summary.php",
   projectStatusTaskProgress: "api/v1/project-status-task-progress.php",
   projectStatusPlan: "api/v1/project-status-plan.php",
@@ -144,7 +147,7 @@ const state = {
   aiIconPackAvailable: false,
   timelineDefaultCollapsed: false,
   filters: { primary: "all", kind: "all", q: "", sender: [], from: "", to: "" },
-  draft: { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
+  draft: { mode: "direct", intent: "update", addressees: [], attachments: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" },
   oldestCursor: "",
   newestCursor: "",
   hasOlder: false,
@@ -176,10 +179,10 @@ const el = Object.fromEntries([
   "workspace-splitter-host", "workspace-inner-splitter-host", "workspace-work-splitter-host", "project-navigation-column", "project-messages-column", "project-tasks-column", "project-participants-column",
   "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
   "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-search-mount", "task-filter-trigger", "task-filter-icon", "task-filter-count", "task-filter-popover-content", "task-status-filter", "task-sort-trigger", "task-sort-icon", "task-refresh-trigger", "task-refresh-icon", "new-task-trigger", "new-task-icon",
-  "participant-search", "new-message-trigger", "new-message-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
+  "participant-search", "new-message-trigger", "new-message-icon", "project-files-trigger", "project-files-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
-  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-host",
+  "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-attachments", "composer-host",
   "project-view-switch", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
   "admin-eyebrow", "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
@@ -317,6 +320,19 @@ function normalizeMessage(source = {}) {
   const created = normalizeUtcTimestamp(source.created_at || source.timestamp || source.message_timestamp) || new Date().toISOString();
   const currentParticipantId = id(state.project?.current_participant?.id || state.session?.participant?.id);
   const ownAddress = addressees.find((entry) => entry.participant_id === currentParticipantId);
+  const attachments = (Array.isArray(source.attachments) ? source.attachments : []).map((file, position) => ({
+    id: id(file.id),
+    name: String(file.name || file.original_name || "Project file"),
+    original_name: String(file.original_name || file.name || "Project file"),
+    url: file.url ? String(file.url) : "",
+    mime_type: String(file.mime_type || "application/octet-stream"),
+    size_bytes: Number(file.size_bytes || 0),
+    sha256: String(file.sha256 || ""),
+    state: String(file.state || "unavailable"),
+    available: Boolean(file.available && file.url),
+    version: Number(file.version || 0),
+    position: Number(file.position ?? position),
+  }));
   return {
     ...source,
     id: id(source.id ?? source.entry_uuid ?? source.db_id),
@@ -330,6 +346,7 @@ function normalizeMessage(source = {}) {
     updated_at: normalizeUtcTimestamp(source.updated_at) || created,
     sender: participantFrom(senderSource),
     addressees,
+    attachments,
     reply_to: source.reply_to || source.reply || null,
     reply_to_message_id: id(source.reply_to_message_id || source.reply_to?.id || ""),
     revision_count: Number(source.revision_count || 0),
@@ -1081,12 +1098,626 @@ function renderIdentity() {
   mountNavbar();
 }
 
+function projectFilesButton(label, disabled, title, { icon = "", iconOnly = false } = {}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `ui-button ui-button-sm ui-button-borderless${iconOnly ? " project-files-icon-action" : ""}`;
+  button.setAttribute("aria-label", label);
+  if (icon) button.innerHTML = helperIconHtml(icon, 18);
+  if (!iconOnly) {
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.appendChild(text);
+  }
+  button.disabled = Boolean(disabled);
+  if (title) button.title = title;
+  return button;
+}
+
+function projectFilesContent(payload, handlers = {}) {
+  const actionMenus = [];
+  const content = document.createElement("div");
+  content.className = "project-files-layout";
+  const notice = document.createElement("p");
+  notice.className = "project-files-notice";
+  notice.setAttribute("role", "status");
+  notice.textContent = payload.notice || "Project files are ready.";
+  if (!payload.notice) notice.hidden = true;
+
+  const folders = document.createElement("section");
+  folders.className = "project-files-pane project-files-folders";
+  folders.setAttribute("aria-label", "Project folders");
+  const folderHeader = document.createElement("header");
+  folderHeader.className = "project-files-pane-header";
+  const folderTitle = document.createElement("h3");
+  folderTitle.textContent = "Folders";
+  const createFolder = projectFilesButton("Create folder", !payload.capabilities?.create_folder,
+    payload.capabilities?.create_folder ? "Create a folder" : (payload.notice || "Folder creation is not available yet."),
+    { icon: "actions.add", iconOnly: true });
+  if (payload.capabilities?.create_folder) createFolder.addEventListener("click", () => handlers.onCreateFolder?.(payload.current_folder));
+  folderHeader.append(folderTitle, createFolder);
+  const treeHost = document.createElement("div");
+  treeHost.className = "project-files-tree";
+  folders.append(folderHeader, treeHost);
+
+  const files = document.createElement("section");
+  files.className = "project-files-pane project-files-list";
+  files.setAttribute("aria-label", "Files in the current folder");
+  const fileHeader = document.createElement("header");
+  fileHeader.className = "project-files-pane-header";
+  const fileTitle = document.createElement("h3");
+  fileTitle.textContent = payload.current_folder?.name || "Files";
+  const upload = projectFilesButton("Upload files", !payload.capabilities?.upload,
+    payload.capabilities?.upload ? "Upload files" : (payload.notice || "File uploads are not available yet."),
+    { icon: "data.upload" });
+  if (payload.capabilities?.upload) upload.addEventListener("click", () => handlers.onUpload?.(payload.current_folder));
+  fileHeader.append(fileTitle, upload);
+  const gridHost = document.createElement("div");
+  gridHost.className = "project-files-grid";
+  files.append(fileHeader, gridHost);
+
+  content.append(notice, folders, files);
+  const tree = state.factories.createTree(treeHost, payload.root ? [payload.root] : [], {
+    className: "project-files-folder-tree",
+    chrome: false,
+    expandAll: true,
+    enableVirtualization: true,
+    virtualHeight: 520,
+    onSelect(node) {
+      fileTitle.textContent = node.label || "Files";
+      if (node.id && node.id !== payload.current_folder?.id) handlers.onFolderSelect?.(node.id);
+    },
+  });
+  tree.setSelected?.(payload.current_folder?.id || "root");
+  const grid = state.factories.createGrid(gridHost, Array.isArray(payload.files) ? payload.files : [], {
+    className: "project-files-current-folder-grid",
+    chrome: false,
+    enableSearch: false,
+    enableSort: true,
+    enablePagination: false,
+    enableColumnResize: true,
+    minColumnWidth: 90,
+    emptyText: payload.notice || "This folder is empty.",
+    columns: [
+      {
+        key: "name", label: "Name", width: "180px",
+        renderCell({ row }) {
+          const previewable = projectFilePreviewType(row) !== "";
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "project-file-name-cell project-file-name-action";
+          cell.title = `${previewable ? "Preview" : "Open"} ${row.name}`;
+          cell.addEventListener("click", () => handlers.onFileOpen?.(row));
+          const icon = state.factories.createIcon(getFileIconName(row.name, row.mime_type), { size: 18, decorative: true });
+          icon.classList.add("project-file-type-icon");
+          const label = document.createElement("span");
+          label.className = "project-file-name-label";
+          label.textContent = row.name || "Unnamed file";
+          cell.append(icon, label);
+          return cell;
+        },
+      },
+      { key: "size_bytes", label: "Size", width: "90px", format: (value) => recoverySize(Number(value || 0)) },
+      { key: "updated_at", label: "Modified", width: "160px", format: (value) => value ? formatDate(value) : "" },
+      {
+        key: "actions", label: "", width: "48px", sortable: false, resizable: false,
+        renderCell({ row }) {
+          const items = [
+            ...(payload.capabilities?.copy_link ? [{ id: "copy-link", label: "Copy link", icon: helperIconHtml("actions.copy") }] : []),
+            ...(payload.capabilities?.move ? [{ id: "move", label: "Move to", icon: helperIconHtml("navigation.arrow-right") }] : []),
+            ...(payload.capabilities?.download ? [{ id: "download", label: "Download", icon: helperIconHtml("actions.download") }] : []),
+            ...(payload.capabilities?.rename ? [{ id: "rename", label: "Rename", icon: helperIconHtml("actions.edit") }] : []),
+            ...(payload.capabilities?.delete ? [{ id: "delete", label: "Delete", icon: helperIconHtml("actions.delete"), danger: true }] : []),
+          ];
+          if (!items.length) return "";
+          const trigger = document.createElement("button");
+          trigger.type = "button";
+          trigger.className = "ui-button ui-button-sm ui-button-borderless project-file-row-actions";
+          trigger.setAttribute("aria-label", `Actions for ${row.name}`);
+          trigger.title = `Actions for ${row.name}`;
+          trigger.innerHTML = helperIconHtml("actions.more-horizontal", 18);
+          actionMenus.push(createScrollDismissedDropdown(trigger, items, {
+            align: "right",
+            ariaLabel: `Actions for ${row.name}`,
+            onSelect(item) { handlers.onFileAction?.(item.id, row); },
+          }));
+          return trigger;
+        },
+      },
+    ],
+    onColumnResize({ columnWidths }) { state.projectFileGridColumnWidths = columnWidths; },
+    ...(state.projectFileGridColumnWidths ? { columnWidths: state.projectFileGridColumnWidths } : {}),
+  });
+  return {
+    content, tree, grid,
+    destroy() {
+      actionMenus.forEach((menu) => menu?.destroy?.());
+      tree?.destroy?.();
+      grid?.destroy?.();
+    },
+  };
+}
+
+function projectFilePreviewType(file) {
+  const mime = String(file?.mime_type || "").toLowerCase();
+  const name = String(file?.name || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "application/json" || mime === "text/json" || mime.endsWith("+json") || name.endsWith(".json")) return "json";
+  if (["text/markdown", "text/x-markdown"].includes(mime) || name.endsWith(".md") || name.endsWith(".markdown")) return "markdown";
+  if (["text/csv", "application/csv", "text/comma-separated-values"].includes(mime) || name.endsWith(".csv")) return "csv";
+  return "";
+}
+
+function closeProjectFilePreview() {
+  const active = state.components.projectFilePreview;
+  if (!active) return;
+  state.components.projectFilePreview = null;
+  active.viewer?.destroy?.();
+  active.host?.remove?.();
+}
+
+function openProjectFilePreview(file) {
+  const type = projectFilePreviewType(file);
+  const url = new URL(file.url, document.baseURI).href;
+  if (!type) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  closeProjectFilePreview();
+  if (["json", "markdown", "csv"].includes(type)) {
+    const factory = {
+      json: state.factories.createJsonViewer,
+      markdown: state.factories.createMarkdownViewer,
+      csv: state.factories.createCsvViewer,
+    }[type];
+    const viewer = factory({
+      url,
+      title: file.name || `${type === "markdown" ? "Markdown" : type.toUpperCase()} file`,
+      open: true,
+      fullscreen: true,
+      onClose() { window.setTimeout(closeProjectFilePreview, 0); },
+    });
+    state.components.projectFilePreview = { viewer, host: null };
+    return;
+  }
+  if (type === "pdf") {
+    const viewer = state.factories.createPdfViewer({
+      url,
+      title: file.name || "PDF document",
+      open: true,
+      fullscreen: true,
+      onClose() { window.setTimeout(closeProjectFilePreview, 0); },
+    });
+    state.components.projectFilePreview = { viewer, host: null };
+    return;
+  }
+  const host = document.createElement("div");
+  host.className = "project-file-media-viewer-host";
+  document.body.appendChild(host);
+  const viewer = state.factories.createMediaViewer(host, {
+    items: [{ type, srcUrl: url, title: file.name || "Project media", alt: file.name || "Project media" }],
+    open: true,
+    fit: "contain",
+    showHeader: true,
+    showToolbar: type === "image",
+    showVideoControls: true,
+    onClose() { window.setTimeout(closeProjectFilePreview, 0); },
+  });
+  state.components.projectFilePreview = { viewer, host };
+}
+
+function projectFileMutationHeaders(idempotencyKey, extra = {}) {
+  const token = state.session?.csrf_token || state.session?.csrfToken || "";
+  return { "Idempotency-Key": idempotencyKey, ...(token ? { "X-CSRF-Token": token } : {}), ...extra };
+}
+
+function openCreateProjectFolder(projectId, folder, onCreated) {
+  const modal = state.factories.createFormModal({
+    title: "Create folder",
+    submitLabel: "Create folder",
+    manageBusyOnSubmit: false,
+    initialValues: { name: "" },
+    rows: [[modalTextField("name", "Folder name", { required: true, maxlength: 255, autocomplete: "off" })]],
+    validate(values) {
+      const name = String(values.name || "").trim();
+      if (!name) return { name: "Folder name — required" };
+      if (name.length > 255) return { name: "Folder name — use no more than 255 characters." };
+      if (/[\\/\u0000-\u001f\u007f]/.test(name) || name === "." || name === "..") {
+        return { name: "Folder name — remove slashes, control characters, or reserved dot names." };
+      }
+      return {};
+    },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, { name: "Folder name" }); },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Creating folder…" });
+      try {
+        await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: projectFileMutationHeaders(makeIdempotencyKey(), { "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: "create_folder", parent_folder_id: folder?.id || "root", name: String(values.name).trim() }),
+          requireJson: true,
+        });
+        state.components.toast.success("Folder created.");
+        onCreated?.();
+        return true;
+      } catch (error) { context.setBusy(false); context.setFormError(error.message); return false; }
+    },
+  });
+  modal.open();
+}
+
+function openProjectFileUploader(projectId, folder, existingFiles, maximumBytes, maximumFiles, onUploaded) {
+  const content = document.createElement("div");
+  const mount = document.createElement("div");
+  content.append(mount);
+  let modal;
+  let refreshPending = false;
+  let confirmationQueue = Promise.resolve();
+  const idempotencyKeys = new Map();
+  const uploadIds = new Map();
+  const refreshFiles = () => {
+    if (!refreshPending) return;
+    refreshPending = false;
+    onUploaded?.();
+  };
+  const uploader = state.factories.createFileUploader(mount, {
+    ariaLabel: "Upload project file",
+    dropzoneAriaLabel: "Choose a project file",
+    multiple: true,
+    maxFiles: Math.max(1, Number(maximumFiles || 10)),
+    maxFileSize: Number(maximumBytes || 25 * 1024 * 1024),
+    startText: "Upload files",
+    dropText: "Drop files here or choose Browse.",
+    async onUpload(item, controls) {
+      const uploadIdentity = `${item.name}:${item.file?.size || item.size || 0}:${item.file?.lastModified || 0}`;
+      if (!idempotencyKeys.has(uploadIdentity)) idempotencyKeys.set(uploadIdentity, makeIdempotencyKey());
+      if (!uploadIds.has(uploadIdentity)) uploadIds.set(uploadIdentity, crypto.randomUUID());
+      await uploadProjectFile(projectId, folder, existingFiles, item.file, {
+        signal: controls.signal,
+        idempotencyKey: idempotencyKeys.get(uploadIdentity),
+        uploadId: uploadIds.get(uploadIdentity),
+        onProgress: controls.report,
+        confirmReplacement(existing, targetFolder) {
+          const confirmation = confirmationQueue.then(() => confirmProjectFileReplacement(existing, targetFolder));
+          confirmationQueue = confirmation.catch(() => false);
+          return confirmation;
+        },
+      });
+      refreshPending = true;
+    },
+    onComplete(value) {
+      const items = Array.isArray(value.items) ? value.items : [];
+      const successful = items.filter((item) => item.status === "success");
+      if (!successful.length) return;
+      refreshFiles();
+      if (items.some((item) => item.status !== "success")) {
+        state.components.toast.success(`${successful.length} ${successful.length === 1 ? "file" : "files"} uploaded. Review the remaining items.`);
+        return;
+      }
+      state.components.toast.success(`${successful.length} ${successful.length === 1 ? "file" : "files"} uploaded.`);
+      void modal.close({ reason: "uploaded" });
+    },
+  });
+  modal = state.factories.createActionModal({
+    title: `Upload to ${folder?.name || "Project files"}`, size: "lg", content,
+    actions: [{ id: "close", label: "Close" }],
+    onClose() {
+      refreshFiles();
+      uploader.destroy?.();
+    },
+  });
+  modal.open();
+}
+
+function projectFileNameKey(value) {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+async function confirmProjectFileReplacement(existing, folder) {
+  return state.factories.uiConfirm(
+    `${existing.name} already exists in ${folder?.name || "this folder"}. Replace its contents with the selected file?`,
+    { title: "Replace existing file?", variant: "warning", confirmText: "Replace", confirmVariant: "danger" },
+  );
+}
+
+async function uploadProjectFile(projectId, folder, existingFiles, file, {
+  signal, idempotencyKey = makeIdempotencyKey(), uploadId = crypto.randomUUID(), onProgress = () => {},
+  confirmReplacement = confirmProjectFileReplacement,
+} = {}) {
+  const existing = (Array.isArray(existingFiles) ? existingFiles : []).find((candidate) =>
+    projectFileNameKey(candidate.name) === projectFileNameKey(file.name));
+  if (existing && !(await confirmReplacement(existing, folder))) {
+    throw new Error("Upload cancelled. The existing file was not changed.");
+  }
+  const chunkBytes = 1024 * 1024;
+  const chunkCount = Math.max(1, Math.ceil(file.size / chunkBytes));
+  let result = null;
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+    const start = chunkIndex * chunkBytes;
+    const end = Math.min(file.size, start + chunkBytes);
+    const form = new FormData();
+    form.append("operation", "upload_chunk");
+    form.append("target_operation", existing ? "replace_file" : "upload");
+    form.append("upload_id", uploadId);
+    form.append("chunk_index", String(chunkIndex));
+    form.append("chunk_count", String(chunkCount));
+    form.append("total_size", String(file.size));
+    form.append("original_name", file.name);
+    if (existing) {
+      form.append("file_id", existing.id);
+      form.append("version", String(existing.version));
+    } else {
+      form.append("folder_id", folder?.id || "root");
+    }
+    form.append("file", file.slice(start, end), file.name);
+    const response = await fetch(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+      method: "POST", credentials: "same-origin", cache: "no-store", signal,
+      headers: projectFileMutationHeaders(idempotencyKey), body: form,
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (_error) { payload = null; }
+    if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+    result = unwrap(payload) || result;
+    onProgress(Math.min(100, file.size ? (end / file.size) * 100 : 100));
+  }
+  const uploaded = result?.file;
+  if (!uploaded?.id) throw new Error("The server did not return the uploaded file record.");
+  return uploaded;
+}
+
+async function uploadProjectFilesForPicker(projectId, folder, existingFiles, files, limits, signal) {
+  const selected = Array.from(files || []);
+  const maximumFiles = Math.max(1, Number(limits?.maximumFiles || 10));
+  const maximumBytes = Number(limits?.maximumBytes || 25 * 1024 * 1024);
+  if (selected.length > maximumFiles) throw new Error(`Choose no more than ${maximumFiles} files at a time.`);
+  const oversized = selected.find((file) => file.size > maximumBytes);
+  if (oversized) throw new Error(`${oversized.name} exceeds the configured upload limit.`);
+  const known = [...(Array.isArray(existingFiles) ? existingFiles : [])];
+  const uploaded = [];
+  for (const file of selected) {
+    if (signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+    const record = await uploadProjectFile(projectId, folder, known, file, { signal });
+    uploaded.push(record);
+    const index = known.findIndex((candidate) => projectFileNameKey(candidate.name) === projectFileNameKey(record.name));
+    if (index === -1) known.push(record); else known[index] = record;
+  }
+  return uploaded;
+}
+
+function validProjectFileName(value) {
+  const name = String(value || "").trim();
+  if (!name) return "File name — required";
+  if (name.length > 255) return "File name — use no more than 255 characters.";
+  if (/[\\/\u0000-\u001f\u007f]/.test(name) || name === "." || name === "..") {
+    return "File name — remove slashes, control characters, or reserved dot names.";
+  }
+  return "";
+}
+
+function openRenameProjectFile(projectId, file, onChanged) {
+  const idempotencyKey = makeIdempotencyKey();
+  const modal = state.factories.createFormModal({
+    title: "Rename file",
+    submitLabel: "Rename",
+    manageBusyOnSubmit: false,
+    initialValues: { name: file.name || "" },
+    rows: [[modalTextField("name", "File name", { required: true, maxlength: 255, autocomplete: "off" })]],
+    validate(values) {
+      const error = validProjectFileName(values.name);
+      return error ? { name: error } : {};
+    },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, { name: "File name" }); },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Renaming file…" });
+      try {
+        await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: projectFileMutationHeaders(idempotencyKey, { "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: "rename_file", file_id: file.id, version: file.version, name: String(values.name).trim() }),
+          requireJson: true,
+        });
+        state.components.toast.success("File renamed.");
+        onChanged?.();
+        return true;
+      } catch (error) {
+        context.setBusy(false);
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  modal.open();
+}
+
+function confirmProjectFileMutation(projectId, file, action, onChanged) {
+  const idempotencyKey = makeIdempotencyKey();
+  const modal = state.factories.createFormModal({
+    title: `Delete ${file.name}?`,
+    size: "sm",
+    submitLabel: "Delete file",
+    submitVariant: "danger",
+    context: {
+      badge: "Permanent deletion",
+      summary: "The file content and its permanent public link will no longer be available.",
+    },
+    rows: [[{ type: "text", content: "This action is logged and cannot be undone." }]],
+    async onSubmit(_values, context) {
+      try {
+        await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: projectFileMutationHeaders(idempotencyKey, { "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: action, file_id: file.id, version: file.version }),
+          requireJson: true,
+        });
+        state.components.toast.success("File deleted.");
+        onChanged?.();
+        return true;
+      } catch (error) {
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  modal.open();
+}
+
+function projectFileFolderOptions(root, currentFolderId) {
+  const options = [{ value: "", label: "Select a destination" }];
+  const visit = (node, depth = 0) => {
+    if (!node) return;
+    if (node.id !== currentFolderId) options.push({ value: node.id, label: `${"— ".repeat(depth)}${node.label}` });
+    (Array.isArray(node.children) ? node.children : []).forEach((child) => visit(child, depth + 1));
+  };
+  visit(root);
+  return options;
+}
+
+function openMoveProjectFile(projectId, file, currentFolder, root, onChanged) {
+  const options = projectFileFolderOptions(root, currentFolder?.id);
+  const modal = state.factories.createFormModal({
+    title: `Move ${file.name}`,
+    submitLabel: "Move file",
+    manageBusyOnSubmit: false,
+    initialValues: { destination_folder_id: "" },
+    rows: [[{ type: "select", name: "destination_folder_id", label: "Destination folder", required: true, options }]],
+    validate(values) {
+      return values.destination_folder_id ? {} : { destination_folder_id: "Destination folder — required" };
+    },
+    async onInvalid(result, context) {
+      await showFormValidationSummary(result, context, { destination_folder_id: "Destination folder" });
+    },
+    async onSubmit(values, context) {
+      context.setBusy(true, { message: "Moving file…" });
+      try {
+        await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId })}`, {
+          method: "POST",
+          headers: projectFileMutationHeaders(makeIdempotencyKey(), { "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: "move_file", file_id: file.id, version: file.version,
+            destination_folder_id: values.destination_folder_id }),
+          requireJson: true,
+        });
+        state.components.toast.success("File moved.");
+        onChanged?.();
+        return true;
+      } catch (error) {
+        context.setBusy(false);
+        context.setFormError(error.message);
+        return false;
+      }
+    },
+  });
+  modal.open();
+}
+
+async function copyProjectFileLink(file) {
+  try {
+    await navigator.clipboard.writeText(new URL(file.url, document.baseURI).href);
+    state.components.toast.success("Permanent file link copied.");
+  } catch (_error) {
+    state.components.toast.error("The file link could not be copied.");
+  }
+}
+
+function downloadProjectFile(file) {
+  const link = document.createElement("a");
+  link.href = new URL(file.url, document.baseURI).href;
+  link.download = file.name || "download";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function openProjectFilesModal() {
+  const projectId = selectedProjectId();
+  if (!projectId || state.components.projectFilesModal?.getState?.().open) return;
+  const generation = state.generation;
+  const controller = new AbortController();
+  const loading = document.createElement("div");
+  loading.className = "project-files-loading";
+  const skeleton = state.factories.createSkeleton(loading, { lines: 5, rows: 5 }, { variant: "lines", columns: 2, animated: true });
+  let mounted = null;
+  const modal = state.factories.createActionModal({
+    title: "Project files",
+    size: "lg",
+    className: "project-files-modal",
+    content: loading,
+    actions: [{ id: "close", label: "Close" }],
+    onClose() {
+      controller.abort();
+      closeProjectFilePreview();
+      skeleton?.destroy?.();
+      mounted?.destroy?.();
+      if (state.components.projectFilesModal === modal) state.components.projectFilesModal = null;
+      modal.destroy();
+    },
+  });
+  state.components.projectFilesModal = modal;
+  modal.open();
+  modal.setBusy(true, {
+    message: "Loading project files…",
+    cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancel-loading" }) },
+  });
+
+  const loadFolder = (folderId = "root") => request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId, folder_id: folderId })}`, {
+    signal: controller.signal, requireJson: true,
+  }).then((response) => {
+    if (!modal.getState().open) return;
+    if (generation !== state.generation || projectId !== selectedProjectId()) {
+      void modal.close({ reason: "project-changed" });
+      return;
+    }
+    const payload = unwrap(response) || {};
+    skeleton?.destroy?.();
+    mounted?.destroy?.();
+    const refreshCurrentFolder = () => {
+      modal.setBusy(true, { message: "Refreshing files…" });
+      void loadFolder(payload.current_folder?.id || "root");
+    };
+    mounted = projectFilesContent(payload, {
+      onFolderSelect: (nextFolderId) => { modal.setBusy(true, { message: "Loading folder…" }); void loadFolder(nextFolderId); },
+      onCreateFolder: (folder) => openCreateProjectFolder(projectId, folder, () => { modal.setBusy(true, { message: "Refreshing folders…" }); void loadFolder(folder?.id || "root"); }),
+      onUpload: (folder) => openProjectFileUploader(projectId, folder, payload.files, payload.storage?.max_upload_bytes,
+        payload.storage?.max_files_per_action,
+        () => { modal.setBusy(true, { message: "Refreshing files…" }); void loadFolder(folder?.id || "root"); }),
+      onFileAction(action, file) {
+        if (action === "copy-link") void copyProjectFileLink(file);
+        if (action === "move") openMoveProjectFile(projectId, file, payload.current_folder, payload.root, refreshCurrentFolder);
+        if (action === "download") downloadProjectFile(file);
+        if (action === "rename") openRenameProjectFile(projectId, file, refreshCurrentFolder);
+        if (action === "delete") confirmProjectFileMutation(projectId, file, "delete_file", refreshCurrentFolder);
+      },
+      onFileOpen: openProjectFilePreview,
+    });
+    modal.setContent(mounted.content);
+    modal.setBusy(false);
+  }).catch((error) => {
+    if (controller.signal.aborted || !modal.getState().open) return;
+    modal.setBusy(false);
+    loading.replaceChildren();
+    const alert = document.createElement("div");
+    alert.className = "project-files-load-error";
+    alert.setAttribute("role", "alert");
+    alert.textContent = `Unable to load project files. ${error.message || "Try again."}`;
+    loading.appendChild(alert);
+    modal.setContent(loading);
+    modal.setActions([
+      { id: "retry", label: "Retry", closeOnClick: false, onClick() { void modal.close({ reason: "retry" }).then(openProjectFilesModal); return false; } },
+      { id: "close", label: "Close" },
+    ]);
+  });
+  void loadFolder();
+}
+
 function renderProjectHeader() {
   const project = state.project || {};
   const hasProject = Boolean(selectedProjectId());
   el.project_view_switch.hidden = !hasProject || state.mode !== "expanded";
   el.project_title.textContent = project.name || (state.mode === "legacy" ? "PBB Coordination" : "Select a project");
   el.new_message_trigger.hidden = !hasProject || state.mode !== "expanded" || !can("messages.write") || state.projectView !== "timeline";
+  el.project_files_trigger.hidden = !hasProject || state.mode !== "expanded";
   state.components.projectActions?.destroy?.();
   state.components.projectActions = null;
   const actions = [];
@@ -1776,7 +2407,82 @@ function setAllMessagesCollapsed(collapsed) {
 
 function messageCardPreview(message) {
   if (message.deleted_at) return "This message was removed.";
-  return String(message.body || "").replace(/\s+/g, " ").trim() || "Empty message";
+  const copy = String(message.body || "").replace(/\s+/g, " ").trim();
+  if (copy) return copy;
+  const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+  return count ? `${count} attached ${count === 1 ? "file" : "files"}` : "Empty message";
+}
+
+function messageAttachmentMediaType(file) {
+  const mimeType = String(file?.mime_type || "").trim().toLowerCase();
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  return "";
+}
+
+function renderMessageAttachments(message) {
+  const files = Array.isArray(message.attachments) ? message.attachments : [];
+  if (!files.length || message.deleted_at) return null;
+  const list = document.createElement("div");
+  list.className = "message-attachments";
+  list.setAttribute("aria-label", `${files.length} attached ${files.length === 1 ? "file" : "files"}`);
+  const mediaFiles = [];
+  const otherFiles = [];
+  files.forEach((file) => {
+    const mediaType = messageAttachmentMediaType(file);
+    if (mediaType && file.available && file.url) mediaFiles.push({ file, mediaType });
+    else otherFiles.push(file);
+  });
+  let mediaStrip = null;
+  if (mediaFiles.length) {
+    const mediaHost = document.createElement("div");
+    mediaHost.className = "message-attachment-media";
+    list.appendChild(mediaHost);
+    mediaStrip = state.factories.createMediaStrip(mediaHost, mediaFiles.map(({ file, mediaType }) => {
+      const url = new URL(file.url, document.baseURI).href;
+      return {
+        id: file.id,
+        type: mediaType,
+        src: url,
+        thumb: mediaType === "image" ? url : "",
+        title: file.name,
+        alt: file.name,
+      };
+    }), {
+      layout: "wrap",
+      autoplay: false,
+      muted: true,
+      loop: false,
+      viewerAriaLabel: "Message attachments",
+      viewerFit: "contain",
+    });
+  }
+  if (otherFiles.length) {
+    const fileList = document.createElement("div");
+    fileList.className = "message-attachment-files";
+    otherFiles.forEach((file) => {
+      const item = document.createElement(file.available ? "button" : "div");
+      if (file.available) item.type = "button";
+      item.className = `message-attachment${file.available ? "" : " is-unavailable"}`;
+      const icon = state.factories.createIcon(getFileIconName(file.name, file.mime_type), {
+        size: 15,
+        fallback: "data.file",
+        decorative: true,
+      });
+      const copy = document.createElement("span");
+      copy.className = "message-attachment-copy";
+      const name = document.createElement("strong");
+      name.textContent = file.name;
+      const meta = document.createElement("span");
+      meta.textContent = file.available ? recoverySize(file.size_bytes) : "File unavailable";
+      copy.append(name, meta);
+      item.append(icon, copy);
+      if (file.available) item.addEventListener("click", () => openProjectFilePreview(file));
+      fileList.appendChild(item);
+    });
+    list.appendChild(fileList);
+  }
+  return { node: list, mediaStrip };
 }
 
 function messageSeverityLabel(severity) {
@@ -1801,6 +2507,24 @@ function renderMessageHeaderSeverity(host, message, severityLabel) {
   title.appendChild(severity);
 }
 
+function renderMessageAttachmentIndicator(host, message) {
+  const row = host.closest(".ui-timeline-item");
+  row?.querySelector(".message-attachment-indicator")?.remove();
+  const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+  const timestamp = row?.querySelector(".ui-timeline-time");
+  if (!count || !timestamp?.parentElement) return;
+  const label = `${count} attached ${count === 1 ? "file" : "files"}`;
+  const indicator = document.createElement("span");
+  indicator.className = "message-attachment-indicator";
+  indicator.title = label;
+  indicator.appendChild(state.factories.createIcon("actions.attach", {
+    size: 13,
+    decorative: false,
+    ariaLabel: label,
+  }));
+  timestamp.parentElement.insertBefore(indicator, timestamp);
+}
+
 function canAcknowledgeMessage(message) {
   return state.mode === "expanded"
     && message.current_participant_state?.is_addressee
@@ -1813,6 +2537,7 @@ function mountMessageCard(host, item) {
   let renderedMessage = null;
   let renderedContentKey = null;
   let markdownView = null;
+  let attachmentMediaStrip = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
@@ -1820,6 +2545,8 @@ function mountMessageCard(host, item) {
     renderedContentKey = nextItem.contentKey;
     markdownView?.destroy();
     markdownView = null;
+    attachmentMediaStrip?.destroy();
+    attachmentMediaStrip = null;
     destroyTimelineResponsibilityActions(host);
     host.replaceChildren();
     const details = document.createElement("div");
@@ -1835,6 +2562,7 @@ function mountMessageCard(host, item) {
     }
     const severityLabel = messageSeverityLabel(current.severity);
     renderMessageHeaderSeverity(host, current, severityLabel);
+    renderMessageAttachmentIndicator(host, current);
     if (severityLabel && current.message_kind !== "system") {
       const severity = document.createElement("span");
       severity.className = `message-severity is-${current.severity}`;
@@ -1850,6 +2578,11 @@ function mountMessageCard(host, item) {
       linkTarget: "_blank", emptyText: "Empty message",
     });
     details.appendChild(body);
+    const attachments = renderMessageAttachments(current);
+    if (attachments) {
+      attachmentMediaStrip = attachments.mediaStrip;
+      details.appendChild(attachments.node);
+    }
     const footer = document.createElement("footer");
     footer.className = "message-card-footer";
     const actions = document.createElement("div");
@@ -1897,6 +2630,8 @@ function mountMessageCard(host, item) {
     destroyTimelineResponsibilityActions(host);
     markdownView?.destroy();
     markdownView = null;
+    attachmentMediaStrip?.destroy();
+    attachmentMediaStrip = null;
   } };
 }
 
@@ -2452,7 +3187,7 @@ function timelineItems(messages) {
     iconHtml: timelineMarkerHtml(message.sender, message.message_kind),
     contextMenu: messageContextMenu(message),
     raw: message,
-    contentKey: `${message.updated_at}|severity:${message.severity}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
+    contentKey: `${message.updated_at}|severity:${message.severity}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|attachments:${(message.attachments || []).map((file) => `${file.id}:${file.version}:${file.state}`).join(",")}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
   }));
 }
 
@@ -3991,6 +4726,87 @@ function openProjectPlanModal() {
     control.innerHTML = helperIconHtml(icon, 17);
     return control;
   };
+  const deletePlanItem = async (kind, item) => {
+    if (persistencePending || disposed) return;
+    if (hasActiveDraft()) {
+      await state.factories.uiAlert("Save or cancel the active field edit before deleting a plan item.", {
+        title: "Finish editing first", variant: "warning",
+      });
+      return;
+    }
+    const isMilestone = kind === "milestone";
+    const childCount = isMilestone
+      ? (currentPlan.deliverables || []).filter((candidate) => Number(candidate.milestone_id) === Number(item.id)).length
+      : Number(item.task_count || 0);
+    if (childCount > 0) {
+      await state.factories.uiAlert(
+        isMilestone
+          ? "Move or delete every deliverable in this milestone before deleting the milestone."
+          : "Unlink every task from this deliverable before deleting the deliverable.",
+        { title: `${isMilestone ? "Milestone" : "Deliverable"} cannot be deleted`, variant: "warning" },
+      );
+      return;
+    }
+    const itemLabel = isMilestone ? "milestone" : "deliverable";
+    const dialogBody = projectInfoElement("div", "ui-dialog-text");
+    dialogBody.append(projectInfoElement("p", "ui-dialog-message", `Delete ${itemLabel} “${item.title}”? This cannot be undone.`));
+    const dialogError = projectInfoElement("p", "project-plan-feedback is-error");
+    dialogError.setAttribute("role", "alert");
+    dialogError.hidden = true;
+    dialogBody.append(dialogError);
+    const showDialogError = (message = "") => {
+      dialogError.textContent = message;
+      dialogError.hidden = !message;
+    };
+    let confirmationModal = null;
+    const closeOnlyActions = () => [{ id: "close", label: "Close" }];
+    confirmationModal = state.factories.createActionModal({
+      title: `Delete ${itemLabel}?`, size: "sm", className: "ui-dialog ui-dialog--warning", content: dialogBody,
+      actions: [
+        { id: "cancel", label: "Cancel" },
+        { id: "delete", label: `Delete ${itemLabel}`, variant: "danger", busyMessage: `Deleting ${itemLabel}…`,
+          async onClick() {
+            if (disposed || persistencePending) return false;
+            const latest = isMilestone ? milestoneById(item.id) : deliverableById(item.id);
+            if (!latest) {
+              const message = `This ${itemLabel} is no longer available. Reconcile the project plan and try again.`;
+              showDialogError(message); setFeedback(message, "error");
+              return false;
+            }
+            showDialogError();
+            persistencePending = true; board?.setInteractionLocked(true); setFeedback(`Deleting ${itemLabel}…`);
+            const endpoint = isMilestone ? API.projectMilestone : API.projectDeliverable;
+            try {
+              const plan = unwrap(await request(`${endpoint}?${new URLSearchParams({ project_id: projectId, id: latest.id })}`, {
+                method: "DELETE", headers: csrfHeaders(), body: JSON.stringify({ version: latest.version }),
+              })) || {};
+              if (disposed || selectedProjectId() !== projectId) return true;
+              currentPlan = plan; state.projectPlan = plan; state.projectPlanLoaded = true;
+              board?.update(groupsFromPlan(plan)); persistencePending = false; board?.setInteractionLocked(false);
+              setFeedback(`${isMilestone ? "Milestone" : "Deliverable"} deleted.`, "success");
+              return true;
+            } catch (error) {
+              if (disposed) return true;
+              if (error.status && error.status < 500) {
+                persistencePending = false; board?.setInteractionLocked(false);
+                const message = `The ${itemLabel} was not deleted. ${error.message}`;
+                showDialogError(message); setFeedback(message, "error");
+                return false;
+              }
+              const message = "The deletion outcome is unknown. Close this dialog and reconcile with the server before changing the plan.";
+              showDialogError(message);
+              confirmationModal.setActions(closeOnlyActions());
+              const reconcileButton = projectInfoElement("button", "ui-button ui-button-sm", "Reconcile deletion"); reconcileButton.type = "button";
+              reconcileButton.addEventListener("click", () => { void reconcile(); });
+              setFeedback("The deletion outcome is unknown. Reconcile with the server before changing the plan.", "error", reconcileButton);
+              return false;
+            }
+          } },
+      ],
+      onClose() { confirmationModal.destroy(); },
+    });
+    confirmationModal.open();
+  };
   const renderGroupHeader = (host, group) => {
     const cleanups = [];
     const layout = projectInfoElement("div", `project-plan-group-header${group.milestone ? ` is-${group.milestone.status}` : ""}`);
@@ -4039,9 +4855,11 @@ function openProjectPlanModal() {
     if (currentPlan.can_manage) {
       const add = projectPlanIconAction("Add deliverable", "actions.add");
       const details = projectPlanIconAction("Edit milestone details", "actions.edit");
+      const remove = projectPlanIconAction("Delete milestone", "actions.delete"); remove.classList.add("is-danger");
       add.addEventListener("click", () => openDeliverableForm(null, milestoneId, load));
       details.addEventListener("click", () => openMilestoneForm(milestoneById(milestoneId), load));
-      actions.append(add, details);
+      remove.addEventListener("click", () => { void deletePlanItem("milestone", milestoneById(milestoneId)); });
+      actions.append(add, details, remove);
     }
     layout.append(meta, actions);
     return () => cleanups.forEach((component) => component.destroy());
@@ -4101,7 +4919,10 @@ function openProjectPlanModal() {
     }
     if (currentPlan.can_manage) {
       const details = projectPlanIconAction("Edit deliverable details", "actions.edit");
-      details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load)); actions.append(details);
+      const remove = projectPlanIconAction("Delete deliverable", "actions.delete"); remove.classList.add("is-danger");
+      details.addEventListener("click", () => openDeliverableForm(deliverableById(item.id), deliverableById(item.id)?.milestone_id, load));
+      remove.addEventListener("click", () => { void deletePlanItem("deliverable", deliverableById(item.id)); });
+      actions.append(details, remove);
     }
     row.append(meta, actions);
     return () => cleanups.forEach((component) => component.destroy());
@@ -7271,7 +8092,11 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   state.hasOlder = false;
   state.pendingOlderLoad = false;
   dismissMessageComposerModal();
-  state.draft = { mode: "direct", intent: "update", addressees: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
+  state.draft = { mode: "direct", intent: "update", addressees: [], attachments: [], replyTo: null, preReplyAddressing: null, idempotencyKey: "" };
+  state.components.messageAttachmentPicker?.destroy?.();
+  state.components.messageAttachmentPicker = null;
+  state.components.messageAttachmentQueue?.destroy?.();
+  state.components.messageAttachmentQueue = null;
   state.components.timeline?.destroy();
   state.components.timeline = null;
   el.timeline_host.replaceChildren();
@@ -7412,16 +8237,121 @@ function renderComposerControls() {
     },
   });
   state.components.composer?.destroy();
+  state.components.messageAttachmentPicker?.destroy?.();
+  state.components.messageAttachmentQueue?.destroy?.();
+  const projectId = selectedProjectId();
+  state.components.messageAttachmentPicker = createMessageAttachmentPicker(projectId);
   state.components.composer = state.factories.createChatComposer(el.composer_host, { value: "" }, {
     placeholder: "Write to the project timeline…",
     helperText: "Visible to all participants · Shift+Enter for a new line",
-    showAttachmentButton: false,
+    showAttachmentButton: true,
+    attachmentPlacement: "helper",
+    attachmentLabel: "Attach files",
+    multiple: true,
+    attachmentAdapter: {
+      mode: "custom",
+      open: ({ signal }) => state.components.messageAttachmentPicker.pick({ signal }),
+    },
+    onAttachmentsSelected(records) { void addDraftAttachments(records); },
+    onAttachmentError(error) {
+      if (error?.name !== "AbortError") state.components.toast.warn(error?.message || "Unable to choose project files.", { title: "Attachments unavailable" });
+    },
     maxLength: Number(state.project?.message_max_length || 24000),
     onSend: sendMessage,
   });
+  state.components.messageAttachmentQueue = state.factories.createChatUploadQueue(el.composer_attachments, { items: [] }, {
+    onRemove(item) {
+      state.draft.attachments = state.draft.attachments.filter((attachment) => attachment.id !== item.id);
+      renderDraftAttachments();
+    },
+  });
+  renderDraftAttachments();
   enableCompactComposerAutosize();
   syncAddressingControls();
   renderReplyContext();
+}
+
+function messageAttachmentRecord(file) {
+  return {
+    ...file,
+    id: id(file?.id),
+    name: String(file?.name || file?.original_name || "Project file"),
+    mime_type: String(file?.mime_type || file?.mimeType || "application/octet-stream"),
+    mimeType: String(file?.mime_type || file?.mimeType || "application/octet-stream"),
+    size_bytes: Number(file?.size_bytes || 0),
+    url: file?.url ? String(file.url) : "",
+    selectable: file?.selectable !== false && String(file?.state || "available") === "available",
+  };
+}
+
+async function loadMessageAttachmentFolder(projectId, folderId, signal) {
+  const requestedId = folderId == null ? "root" : String(folderId);
+  const response = await request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId, folder_id: requestedId })}`, {
+    signal, requireJson: true,
+  });
+  const payload = unwrap(response) || {};
+  const current = payload.current_folder || { id: requestedId, name: "Project files" };
+  return {
+    folder: { id: String(current.id || "root"), name: String(current.name || "Project files") },
+    breadcrumbs: (Array.isArray(payload.breadcrumbs) ? payload.breadcrumbs : [current]).map((folder) => ({
+      id: String(folder.id || "root"), name: String(folder.name || "Project files"),
+    })),
+    folders: (Array.isArray(payload.folders) ? payload.folders : []).map((folder) => ({
+      ...folder, id: String(folder.id), name: String(folder.name || "Folder"),
+    })),
+    files: (Array.isArray(payload.files) ? payload.files : []).map(messageAttachmentRecord),
+    permissions: {
+      showUpload: Boolean(payload.capabilities?.upload),
+      canUpload: Boolean(payload.capabilities?.upload && payload.storage?.ready),
+    },
+    storage: payload.storage || {},
+  };
+}
+
+function createMessageAttachmentPicker(projectId) {
+  return state.factories.createRepositoryPicker({
+    title: "Attach project files",
+    context: projectId,
+    folderId: "root",
+    multiple: true,
+    loadFolder: ({ folderId, signal }) => loadMessageAttachmentFolder(projectId, folderId, signal),
+    async onUpload(files, { folderId, signal }) {
+      const listing = await loadMessageAttachmentFolder(projectId, folderId, signal);
+      const uploaded = await uploadProjectFilesForPicker(projectId, listing.folder, listing.files, files, {
+        maximumBytes: listing.storage?.max_upload_bytes,
+        maximumFiles: listing.storage?.max_files_per_action,
+      }, signal);
+      state.components.toast.success(`${uploaded.length} ${uploaded.length === 1 ? "file" : "files"} uploaded.`);
+      return uploaded.map(messageAttachmentRecord);
+    },
+  });
+}
+
+async function addDraftAttachments(records) {
+  const merged = new Map(state.draft.attachments.map((attachment) => [attachment.id, attachment]));
+  for (const record of Array.isArray(records) ? records : []) {
+    const attachment = messageAttachmentRecord(record);
+    if (attachment.id) merged.set(attachment.id, attachment);
+  }
+  if (merged.size > 20) {
+    await state.factories.uiAlert("A message can include no more than 20 project files. Remove some attachments or select fewer files.", {
+      title: "Too many attachments", variant: "warning",
+    });
+    return;
+  }
+  state.draft.attachments = [...merged.values()];
+  state.draft.idempotencyKey = "";
+  renderDraftAttachments();
+}
+
+function renderDraftAttachments() {
+  const items = state.draft.attachments.map((attachment) => ({
+    ...attachment,
+    kind: projectFilePreviewType(attachment) || "file",
+    previewUrl: attachment.url ? new URL(attachment.url, document.baseURI).href : "",
+    sizeLabel: recoverySize(Number(attachment.size_bytes || 0)),
+  }));
+  state.components.messageAttachmentQueue?.setItems(items);
 }
 
 function openMessageComposerModal() {
@@ -7587,6 +8517,7 @@ async function sendMessage({ text }) {
       action_requested: state.draft.mode === "direct" && state.draft.intent !== "update",
       action_request_type: state.draft.mode === "direct" && state.draft.intent !== "update"
         ? state.draft.intent : null,
+      attachment_file_ids: state.draft.attachments.map((attachment) => attachment.id),
       idempotency_key: state.draft.idempotencyKey,
     };
     const payload = await request(`${API.messages}?${new URLSearchParams({ project_id: selectedProjectId() })}`, {
@@ -7599,6 +8530,8 @@ async function sendMessage({ text }) {
     }
     state.components.responsibilityInbox?.refreshFromRealtime(message.id);
     state.components.composer.clear();
+    state.draft.attachments = [];
+    renderDraftAttachments();
     enableCompactComposerAutosize();
     state.draft.idempotencyKey = "";
     restoreNormalAddressing();
@@ -7930,6 +8863,23 @@ async function openSettings() {
   const secretValue = (key) => String(secretValues[key] ?? "");
   const configured = (key) => Boolean(settings[key]?.configured);
   const locked = (key) => Boolean(settings[key]?.locked);
+  const storageContentTypeOptions = [
+    ["image/jpeg", "JPEG images"], ["image/png", "PNG images"], ["image/gif", "GIF images"],
+    ["image/webp", "WebP images"], ["image/avif", "AVIF images"], ["image/svg+xml", "SVG images"],
+    ["audio/mpeg", "MP3 audio"], ["audio/mp4", "M4A / MP4 audio"], ["audio/ogg", "Ogg audio"],
+    ["audio/wav", "WAV audio"], ["audio/webm", "WebM audio"], ["video/mp4", "MP4 video"],
+    ["video/webm", "WebM video"], ["video/ogg", "Ogg video"], ["video/quicktime", "QuickTime video"],
+    ["application/pdf", "PDF documents"], ["text/plain", "Plain text"], ["text/csv", "CSV files"],
+    ["text/markdown", "Markdown files"], ["application/json", "JSON files"],
+    ["application/msword", "Word documents (.doc)"],
+    ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Word documents (.docx)"],
+    ["application/vnd.ms-excel", "Excel workbooks (.xls)"],
+    ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Excel workbooks (.xlsx)"],
+    ["application/vnd.ms-powerpoint", "PowerPoint presentations (.ppt)"],
+    ["application/vnd.openxmlformats-officedocument.presentationml.presentation", "PowerPoint presentations (.pptx)"],
+    ["application/zip", "ZIP archives"], ["application/x-7z-compressed", "7-Zip archives"],
+  ].map(([value, label]) => ({ value, label }));
+  const storagePreviewTypeOptions = storageContentTypeOptions.filter((option) => /^(image|audio|video)\//.test(option.value) && option.value !== "image/svg+xml");
   const sections = () => [
     {
       id: "general",
@@ -8000,9 +8950,25 @@ async function openSettings() {
       id: "storage",
       label: "Storage",
       rows: [
-        [{ type: "text", content: "Local project file storage" }],
+        [{ type: "text", content: "Location" }],
         [{ type: "input", name: "file_storage_location", label: "Storage location", placeholder: "/srv/syndicatum/files", required: true, disabled: locked("storage.local_base_path") }],
         [{ type: "text", content: "Absolute directory on the Syndicatum server, outside the public web root. Syndicatum will store project file content here; this is not a browser folder." }],
+        [{ type: "divider" }],
+        [{ type: "text", content: "Uploads" }],
+        [{ type: "input", input: "number", name: "storage_max_upload_mib", label: "Maximum file size (MiB)", min: 1, max: 1024, step: 1, required: true, disabled: locked("storage.max_upload_bytes") },
+          { type: "input", input: "number", name: "storage_max_files_per_action", label: "Maximum files per upload", min: 1, max: 50, step: 1, required: true, disabled: locked("storage.max_files_per_action") }],
+        [{ type: "ui.select", name: "storage_allowed_content_types", label: "Allowed file types", multiple: true, closeOnSelect: false, searchable: true, required: true, disabled: locked("storage.allowed_content_types"), options: storageContentTypeOptions,
+          help: "Files outside this server-supported list are rejected. Executable file types are not available." }],
+        [{ type: "ui.select", name: "storage_inline_preview_types", label: "Inline preview types", multiple: true, closeOnSelect: false, searchable: true, required: true, disabled: locked("storage.inline_preview_types"), options: storagePreviewTypeOptions,
+          help: "Only selected image, audio, and video types render inside Syndicatum. Other allowed files open in a new tab or download." }],
+        [{ type: "divider" }],
+        [{ type: "text", content: "Capacity" }],
+        [{ type: "input", input: "number", name: "storage_project_quota_gib", label: "Default quota per project (GiB)", min: 1, max: 10240, step: 1, required: true, disabled: locked("storage.default_project_quota_bytes") },
+          { type: "input", input: "number", name: "storage_deleted_retention_days", label: "Deleted-content retention (days)", min: 0, max: 365, step: 1, required: true, disabled: locked("storage.deleted_content_retention_days"), help: "Use 0 to purge deleted content immediately." }],
+        [{ type: "divider" }],
+        [{ type: "text", content: "Delivery" }],
+        [{ type: "input", input: "number", name: "storage_public_cache_seconds", label: "Public cache duration (seconds)", min: 0, max: 86400, step: 1, required: true, disabled: locked("storage.public_cache_max_age_seconds"),
+          help: "Recommended: 300 seconds. Every file uses one stable canonical URL for both Syndicatum and external sharing." }],
       ],
     },
     {
@@ -8030,12 +8996,19 @@ async function openSettings() {
     mail_enabled: "mail", mail_smtp_host: "mail", mail_smtp_port: "mail",
     mail_encryption: "mail", mail_username: "mail", mail_password: "mail",
     mail_sender_name: "mail", mail_sender_address: "mail", mail_reply_to_address: "mail",
-    mail_timeout_seconds: "mail", file_storage_location: "storage", backup_base_location: "recovery",
+    mail_timeout_seconds: "mail", file_storage_location: "storage", storage_max_upload_mib: "storage",
+    storage_max_files_per_action: "storage", storage_allowed_content_types: "storage", storage_inline_preview_types: "storage",
+    storage_project_quota_gib: "storage", storage_deleted_retention_days: "storage", storage_public_cache_seconds: "storage",
+    backup_base_location: "recovery",
   };
   const fieldLabels = {
     site_name: "Installation name", public_origin: "Public Syndicatum URL", default_timezone: "Default timezone",
     message_max_length: "Maximum message length", mail_sender_address: "Sender email address",
-    file_storage_location: "Storage location", backup_base_location: "Base location for generated backups",
+    file_storage_location: "Storage location", storage_max_upload_mib: "Maximum file size",
+    storage_max_files_per_action: "Maximum files per upload", storage_allowed_content_types: "Allowed file types",
+    storage_inline_preview_types: "Inline preview types", storage_project_quota_gib: "Default quota per project",
+    storage_deleted_retention_days: "Deleted-content retention", storage_public_cache_seconds: "Public cache duration",
+    backup_base_location: "Base location for generated backups",
   };
   const initialValues = () => ({
     site_name: value("general.installation_name", "Syndicatum"),
@@ -8043,6 +9016,13 @@ async function openSettings() {
     default_timezone: value("general.default_timezone", "UTC"),
     message_max_length: value("messaging.max_message_bytes", 24000),
     file_storage_location: String(value("storage.local_base_path") || "").trim(),
+    storage_max_upload_mib: Number(value("storage.max_upload_bytes", 26214400)) / 1048576,
+    storage_max_files_per_action: Number(value("storage.max_files_per_action", 10)),
+    storage_allowed_content_types: value("storage.allowed_content_types", storageContentTypeOptions.map((option) => option.value)),
+    storage_inline_preview_types: value("storage.inline_preview_types", storagePreviewTypeOptions.map((option) => option.value)),
+    storage_project_quota_gib: Number(value("storage.default_project_quota_bytes", 68719476736)) / 1073741824,
+    storage_deleted_retention_days: Number(value("storage.deleted_content_retention_days", 0)),
+    storage_public_cache_seconds: Number(value("storage.public_cache_max_age_seconds", 300)),
     backup_base_location: String(value("recovery.backup_base_path") || "").trim(),
     realtime_enabled: Boolean(value("realtime.enabled", false)),
     realtime_base_url: value("realtime.base_url"),
@@ -8158,6 +9138,35 @@ async function openSettings() {
       if (!absoluteServerPath(storagePath)) {
         errors.file_storage_location = "Storage location: enter an absolute server path, such as C:\\private\\syndicatum-files or /srv/syndicatum/files.";
       }
+      const maxUploadMiB = Number(values.storage_max_upload_mib);
+      if (!Number.isInteger(maxUploadMiB) || maxUploadMiB < 1 || maxUploadMiB > 1024) {
+        errors.storage_max_upload_mib = "Maximum file size: enter a whole number from 1 to 1,024 MiB.";
+      }
+      const maxFiles = Number(values.storage_max_files_per_action);
+      if (!Number.isInteger(maxFiles) || maxFiles < 1 || maxFiles > 50) {
+        errors.storage_max_files_per_action = "Maximum files per upload: enter a whole number from 1 to 50.";
+      }
+      const allowedTypes = Array.isArray(values.storage_allowed_content_types) ? values.storage_allowed_content_types : [];
+      if (!allowedTypes.length) errors.storage_allowed_content_types = "Allowed file types — select at least one file type.";
+      const previewTypes = Array.isArray(values.storage_inline_preview_types) ? values.storage_inline_preview_types : [];
+      if (!previewTypes.length) errors.storage_inline_preview_types = "Inline preview types — select at least one media type.";
+      else if (previewTypes.some((type) => !allowedTypes.includes(type))) {
+        errors.storage_inline_preview_types = "Inline preview types — select only file types also enabled under Allowed file types.";
+      }
+      const projectQuotaGiB = Number(values.storage_project_quota_gib);
+      if (!Number.isInteger(projectQuotaGiB) || projectQuotaGiB < 1 || projectQuotaGiB > 10240) {
+        errors.storage_project_quota_gib = "Default quota per project: enter a whole number from 1 to 10,240 GiB.";
+      } else if (Number.isFinite(maxUploadMiB) && (projectQuotaGiB * 1024) <= maxUploadMiB) {
+        errors.storage_project_quota_gib = "Default quota per project — choose a quota larger than the maximum file size.";
+      }
+      const retentionDays = Number(values.storage_deleted_retention_days);
+      if (!Number.isInteger(retentionDays) || retentionDays < 0 || retentionDays > 365) {
+        errors.storage_deleted_retention_days = "Deleted-content retention: enter a whole number from 0 to 365 days.";
+      }
+      const cacheSeconds = Number(values.storage_public_cache_seconds);
+      if (!Number.isInteger(cacheSeconds) || cacheSeconds < 0 || cacheSeconds > 86400) {
+        errors.storage_public_cache_seconds = "Public cache duration: enter a whole number from 0 to 86,400 seconds.";
+      }
       const backupPath = String(values.backup_base_location || "").trim();
       if (!absoluteServerPath(backupPath)) {
         errors.backup_base_location = "Base location for generated backups: enter an absolute server path, such as C:\\private\\syndicatum-backups or /srv/syndicatum/backups.";
@@ -8207,6 +9216,13 @@ async function openSettings() {
         "mail.sender_address": values.mail_sender_address,
         "mail.reply_to_address": values.mail_reply_to_address,
         "storage.local_base_path": storagePath,
+        "storage.max_upload_bytes": Number(values.storage_max_upload_mib) * 1048576,
+        "storage.max_files_per_action": Number(values.storage_max_files_per_action),
+        "storage.allowed_content_types": Array.isArray(values.storage_allowed_content_types) ? values.storage_allowed_content_types : [],
+        "storage.inline_preview_types": Array.isArray(values.storage_inline_preview_types) ? values.storage_inline_preview_types : [],
+        "storage.default_project_quota_bytes": Number(values.storage_project_quota_gib) * 1073741824,
+        "storage.deleted_content_retention_days": Number(values.storage_deleted_retention_days),
+        "storage.public_cache_max_age_seconds": Number(values.storage_public_cache_seconds),
         "recovery.backup_base_path": backupPath,
         "realtime.enabled": Boolean(values.realtime_enabled),
         "realtime.base_url": values.realtime_base_url,
@@ -8675,12 +9691,13 @@ function startPolling() {
 
 async function bootstrap() {
   const options = { css: false };
-  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown"];
+  const names = ["ui.navbar", "ui.search", "ui.timeline", "ui.toast", "ui.busy.overlay", "ui.icons", "ui.select", "ui.toggle.group", "ui.chat.composer", "ui.chat.upload.queue", "ui.repository.picker", "ui.action.modal", "ui.form.modal", "ui.form.modal.login", "ui.dialog.alert", "ui.dialog.confirm", "ui.progress", "ui.skeleton", "ui.stat.cards", "ui.chart.xy", "ui.grid", "ui.tree", "ui.dropdown", "ui.popover", "ui.splitter", "ui.navigation.stack", "ui.reorder.groups", "ui.inline.text", "ui.inline.select", "ui.inline.date", "ui.markdown", "ui.media.strip", "ui.media.viewer", "ui.pdf.viewer", "ui.json.viewer", "ui.markdown.viewer", "ui.csv.viewer"];
   await uiLoader.loadMany(names, options);
   const iconModule = await uiLoader.get("ui.icons", options);
   try {
     if (typeof iconModule.registerIconPack === "function") {
       iconModule.registerIconPack(AI_ICONS);
+      iconModule.registerIconPack(FILE_ICONS);
       state.aiIconPackAvailable = true;
     } else {
       console.warn("[Syndicatum] Helper icon pack API is unavailable; using core agent markers.");
@@ -8698,6 +9715,8 @@ async function bootstrap() {
     createSelect: await uiLoader.get("ui.select", options),
     createToggleGroup: await uiLoader.get("ui.toggle.group", options),
     createChatComposer: await uiLoader.get("ui.chat.composer", options),
+    createChatUploadQueue: await uiLoader.get("ui.chat.upload.queue", options),
+    createRepositoryPicker: await uiLoader.get("ui.repository.picker", options),
     createActionModal: await uiLoader.get("ui.action.modal", options),
     createFormModal: await uiLoader.get("ui.form.modal", options),
     createLoginFormModal: await uiLoader.get("ui.form.modal.login", options),
@@ -8709,10 +9728,17 @@ async function bootstrap() {
     createXyChart: await uiLoader.get("ui.chart.xy", options),
     createEmptyState: await uiLoader.get("ui.empty.state", options),
     createGrid: await uiLoader.get("ui.grid", options),
+    createTree: await uiLoader.get("ui.tree", options),
     createDropdown: await uiLoader.get("ui.dropdown", options),
     createPopover: await uiLoader.get("ui.popover", options),
     createTabs: await uiLoader.get("ui.tabs", options),
     createFileUploader: await uiLoader.get("ui.file.uploader", options),
+    createMediaStrip: await uiLoader.get("ui.media.strip", options),
+    createMediaViewer: await uiLoader.get("ui.media.viewer", options),
+    createPdfViewer: await uiLoader.get("ui.pdf.viewer", options),
+    createJsonViewer: await uiLoader.get("ui.json.viewer", options),
+    createMarkdownViewer: await uiLoader.get("ui.markdown.viewer", options),
+    createCsvViewer: await uiLoader.get("ui.csv.viewer", options),
     createDataInspector: await uiLoader.get("ui.data.inspector", options),
     createSplitter: await uiLoader.get("ui.splitter", options),
     createNavigationStack: await uiLoader.get("ui.navigation.stack", options),
@@ -8725,6 +9751,7 @@ async function bootstrap() {
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   mountProjectViewTabs();
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
+  el.project_files_icon.innerHTML = PROJECT_FILES_ICON;
   el.new_message_icon.innerHTML = helperIconHtml("actions.add", 18);
   el.project_list_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
   el.team_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
@@ -8736,6 +9763,7 @@ async function bootstrap() {
   el.new_task_icon.innerHTML = helperIconHtml("actions.add", 18);
   updateTimelineCollapseButton();
   el.new_message_trigger.addEventListener("click", openMessageComposerModal);
+  el.project_files_trigger.addEventListener("click", openProjectFilesModal);
   mountWorkspaceSplitters();
   const search = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search this project", clearText: "Clear", inputClass: "ui-input",

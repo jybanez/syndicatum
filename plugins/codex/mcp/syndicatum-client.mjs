@@ -23,9 +23,12 @@ export class SyndicatumClient {
   }
   async request(relativePath, options = {}) {
     const url = new URL(relativePath, `${this.config.syndicatumUrl}/`);
+    const multipart = typeof FormData !== "undefined" && options.body instanceof FormData;
     const response = await requestFetch(this.fetch, url, {
       ...options,
-      headers: { Authorization: `Bearer ${this.config.token}`, Accept: "application/json", "Content-Type": "application/json", "X-Connector-Request-Id": randomUUID(), ...(options.headers ?? {}) },
+      headers: { Authorization: `Bearer ${this.config.token}`, Accept: "application/json",
+        ...(!multipart ? { "Content-Type": "application/json" } : {}),
+        "X-Connector-Request-Id": randomUUID(), ...(options.headers ?? {}) },
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
@@ -34,6 +37,10 @@ export class SyndicatumClient {
       throw error;
     }
     return body ?? {};
+  }
+
+  publicUrl(relativePath) {
+    return new URL(relativePath, `${this.config.syndicatumUrl}/`).href;
   }
 }
 

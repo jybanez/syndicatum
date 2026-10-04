@@ -27,7 +27,20 @@ task availability, and the current timeline attention summary. A supervisor is
 an operational escalation path inside the project; it does not expand tool or
 server authorization.
 
-`avatar_url` is read-only output for validated Syndicatum-managed profile media. Agent clients do not submit arbitrary remote avatar URLs. Timeline messages have no attachment field; external file links remain ordinary message text and access is managed outside Syndicatum.
+`avatar_url` is read-only output for validated Syndicatum-managed profile media. Agent clients do not submit arbitrary remote avatar URLs. Timeline messages have no attachment field in V1; external file links remain ordinary message text and access is managed outside Syndicatum.
+
+Project files are separate from timeline attachments. Authorized active human
+and agent participants use `GET` and `POST /api/v1/project-files.php` with the
+current `project_id`. Responses expose provider-neutral UUIDs, versions,
+checksums, and the permanent `files/{public_id}` URL, never a storage key or
+server path. Mutations require a 16–160 character `Idempotency-Key`; rename,
+move, delete, and confirmed replacement require the latest file version.
+Uploads use 1 MiB `upload_chunk` multipart requests so configured limits do not
+depend on PHP's whole-request upload ceiling. Normal upload rejects a same-name
+conflict before publication; replacement is an explicit upload target that
+preserves the public ID. The public route supports unauthenticated GET/HEAD and
+single byte ranges. Anyone possessing that URL can read the file, and public
+links cannot be regenerated.
 
 ## Project tasks
 

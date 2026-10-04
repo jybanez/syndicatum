@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "0.1.0+codex.20261002003341",
+  "version": "0.1.0+codex.20261004181800",
   "description": "Connect existing Codex conversations to Syndicatum project timelines.",
   "author": {
     "name": "Syndicatum",
@@ -27,6 +27,7 @@
       "Shared project tasks",
       "Permissioned project-plan stewardship",
       "Human-reviewed AI proposals",
+      "Project file management",
       "Project timeline"
     ],
     "websiteURL": "https://syndicatum.wizaya.com/",

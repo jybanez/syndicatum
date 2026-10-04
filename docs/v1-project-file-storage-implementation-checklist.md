@@ -1,12 +1,12 @@
 # V1 Project File Storage Implementation Checklist
 
-Status: Draft for project-owner review
+Status: Approved and in progress
 Prepared: October 3, 2026
 Source: [V1 Project File Storage Proposal](v1-project-file-storage-proposal.md)
 
-> No storage feature implementation is authorized by this checklist yet. The
-> project owner must approve the checklist and the decisions in Gate A before
-> work proceeds beyond the already completed configuration foundation.
+> The project owner approved this checklist and its project-plan conversion on
+> October 3, 2026. Implementation proceeds gate by gate; incomplete operations
+> remain visibly unavailable rather than simulating success.
 
 ## 1. Outcome and scope
 
@@ -17,8 +17,9 @@ V1 provides ordinary, durable project file sharing:
 - canonical metadata and project associations are stored in MySQL;
 - Syndicatum issues permanent, unguessable public URLs that do not require
   authentication;
-- supported images, audio, and video render or play inline, while other files
-  open in a new tab/window or download;
+- supported images and video render in Helper's Media Viewer, PDFs render in
+  Helper's PDF Viewer, JSON/Markdown/CSV use their complete canonical Helper
+  viewers, and other files open in a new tab/window or download;
 - the public URL remains stable across logout, restart, deployment, backup and
   restore, and later storage-provider migration; and
 - a complete Syndicatum backup includes both database records and file bytes.
@@ -103,23 +104,23 @@ secure file management to Google Drive or another dedicated service.
 | `storage.max_upload_bytes` | Maximum file size | 25 MiB | Integer range with a server hard ceiling; enforced while streaming before storage is committed | [x] Owner-approved |
 | `storage.max_files_per_action` | Maximum files per action | 10 | Integer range 1–50; enforced by browser, human API, and agent API | [x] Owner-approved |
 | `storage.allowed_content_types` | Allowed file types | All server-supported downloadable types | Canonical multi-select/presets only; administrators may narrow the server allowlist but cannot add unsupported executable types | [x] Owner-approved |
-| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a subset only; documents, PDF, archives, text, HTML, and SVG cannot be added to the inline-render allowlist | [x] Owner-approved |
+| `storage.inline_preview_types` | Inline media types | Safe supported image, audio, and video types | Administrators may select a media subset only; PDF uses its separately fixed viewer policy, while other documents, archives, text, HTML, and SVG cannot be added | [x] Owner-approved |
 | `storage.default_project_quota_bytes` | Default project storage quota | 64 GB per project | Must exceed the per-file maximum; each project's canonical live-file usage is enforced independently before committing an upload | [x] Owner-approved |
 | `storage.deleted_content_retention_days` | Deleted-content retention | 0 days | Public access ends immediately regardless of byte-retention period; metadata tombstones and audit evidence remain | [x] Owner-approved |
-| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement, deletion, and link regeneration must use the approved cache invalidation behavior | [x] Owner-approved |
+| `storage.public_cache_max_age_seconds` | Public file cache duration | 300 seconds | Bounded nonnegative duration; replacement and deletion must use the approved cache behavior | [x] Owner-approved |
 
-- [ ] Add these fields to the existing canonical Storage tab, grouped into
+- [x] Add these fields to the existing canonical Storage tab, grouped into
   **Location**, **Uploads**, **Capacity**, and **Delivery** sections.
-- [ ] Load the modal before settings data, retain canonical busy/loading
+- [x] Load the modal before settings data, retain canonical busy/loading
   behavior, and disable only controls whose data or authorization is not ready.
-- [ ] Validate all applicable fields before busy state or requests. Cross-field
+- [x] Validate all applicable fields before busy state or requests. Cross-field
   errors—such as a quota below the maximum file size—must appear beside the
   fields and in the structured multi-error summary.
-- [ ] Store byte values canonically while presenting ordinary MiB/GiB units to
+- [x] Store byte values canonically while presenting ordinary MiB/GiB units to
   administrators.
-- [ ] Lock environment-overridden settings visibly and omit them from browser
+- [x] Lock environment-overridden settings visibly and omit them from browser
   mutations.
-- [ ] Audit changes without recording file content, private paths beyond the
+- [x] Audit changes without recording file content, private paths beyond the
   setting value already authorized for administration, or other secrets.
 - [ ] Apply one backend policy service to human, agent, and future provider
   upload paths so settings cannot be bypassed.
@@ -146,14 +147,15 @@ as toggles:
   allowed-type selection or forced to download under a safe content type.
 - [ ] Every accepted type is server-inspected. Browser filenames, extensions,
   and MIME claims are never trusted as the safety decision.
-- [ ] Ordinary uploads receive a new public ID. A URL is preserved only through
-  an explicit **Replace published file** action.
+- [x] Ordinary uploads receive a new immutable public ID. When a filename
+  already exists in the selected folder, Helper confirms replacement before
+  any bytes are sent; the confirmed replacement preserves that public ID.
 - [ ] Deletion invalidates public access immediately, returns a clear unavailable
   response, and retains the approved metadata tombstone/audit evidence.
-- [ ] Link regeneration is an explicit confirmed action that creates a new
-  public ID and invalidates the former link.
-- [ ] Every active human and agent project participant can upload, rename,
-  replace, regenerate the public link for, and delete every file in that
+- [x] Public IDs cannot be regenerated. A file's generated canonical URL is
+  permanent for the lifetime of the file record.
+- [ ] Every active human and agent project participant can upload, move, rename,
+  download, copy the public link for, and delete every file in that
   project. Every operation records the actor and immutable audit evidence.
   External integration participants receive no file-management authority
   unless a later explicit capability is approved.
@@ -168,7 +170,8 @@ as toggles:
 
 - [ ] Record the approved settings, defaults, ranges, and fixed rules in the
   storage proposal.
-- [x] Include public-link regeneration in V1, using the one canonical URL model.
+- [x] Exclude public-link regeneration permanently; use one immutable canonical
+  URL for internal and external use.
 
 **Exit evidence:** owner-approved global setting catalog and fixed rules are
 recorded in the proposal, followed by an authoritative Syndicatum project-plan
@@ -178,55 +181,55 @@ proposal for implementation. Gate A was approved October 3, 2026.
 
 ### 6.1 Schema and migration
 
-- [ ] Add a forward-only migration for canonical `project_files` metadata.
-- [ ] Store project ownership, unguessable public ID, storage driver, provider-
+- [x] Add a forward-only migration for canonical `project_files` metadata.
+- [x] Store project ownership, unguessable public ID, storage driver, provider-
   neutral storage key, original/display name, server-verified MIME type, byte
   size, SHA-256 digest, uploader participant, timestamps, and deletion state.
-- [ ] Add unique constraints for public IDs and provider/storage keys.
-- [ ] Add indexes for project listing, creation order, deletion state, and
+- [x] Add unique constraints for public IDs and provider/storage keys.
+- [x] Add indexes for project listing, creation order, deletion state, and
   integrity/reconciliation operations.
 - [ ] Model attachments with explicit project-qualified foreign-key integrity;
   do not copy storage paths or provider URLs into messages, tasks, activities,
   deliverables, or project records.
-- [ ] Preserve immutable authorship and audit evidence for attachment,
-  replacement, deletion, and link-regeneration events.
-- [ ] Add the new durable tables and columns to backup metadata, baseline drift
+- [x] Preserve immutable authorship and audit evidence for upload,
+  same-name replacement, move, and deletion events.
+- [x] Add the new durable tables and columns to backup metadata, baseline drift
   checks, clean-install schema, migration reconciliation, and package tests.
 - [ ] Verify clean MySQL 8.4 installation and supported MySQL 5.7-to-8.4
   migration paths.
 
 ### 6.2 Provider-neutral storage service
 
-- [ ] Define a `FileStorage` contract for streaming writes, reads, existence,
+- [x] Define a `FileStorage` contract for streaming writes, reads, existence,
   size, checksum, deletion, and provider-to-provider copy/migration.
-- [ ] Implement the local driver using only generated provider-neutral keys;
+- [x] Implement the local driver using only generated provider-neutral keys;
   never use the original filename as a physical path.
-- [ ] Keep temporary and final objects inside the validated storage root and
+- [x] Keep temporary and final objects inside the validated storage root and
   prevent traversal, separator injection, symlink escape, and path aliasing.
-- [ ] Stream uploads while enforcing the byte limit and calculating SHA-256;
+- [x] Stream uploads while enforcing the byte limit and calculating SHA-256;
   do not load complete files into PHP memory.
-- [ ] Inspect content using server-side bytes rather than trusting browser
+- [x] Inspect content using server-side bytes rather than trusting browser
   filename extensions or `Content-Type` headers.
-- [ ] Write to a private temporary object and atomically publish the final local
+- [x] Write to a private temporary object and atomically publish the final local
   object only after validation succeeds.
-- [ ] Define compensation for filesystem-success/database-failure and database-
+- [x] Define compensation for filesystem-success/database-failure and database-
   success/filesystem-failure cases without automatically replaying an
   uncertain mutation.
-- [ ] Return storage keys and canonical metadata internally; never return an
+- [x] Return storage keys and canonical metadata internally; never return an
   absolute server path to a browser or agent.
 - [ ] Add test doubles that exercise the same interface used by the local and
   future S3 drivers.
 
 ### 6.3 Authorization and service layer
 
-- [ ] Centralize project-file authorization and cross-project concealment in a
+- [x] Centralize project-file authorization and cross-project concealment in a
   dedicated service rather than duplicating it across routes.
-- [ ] Validate that every uploader and attachment target is an active participant
+- [x] Validate that every uploader and file target is an active participant
   or project record in the same project.
-- [ ] Make create, attach, replace, delete, and regenerate operations audited and
+- [x] Make create, upload, confirmed same-name replacement, move, and delete operations audited and
   idempotent where retries are supported.
-- [ ] Use optimistic versions for mutable metadata and replacement state.
-- [ ] Define safe reconciliation states for pending, available, unavailable,
+- [x] Use optimistic versions for mutable metadata and replacement state.
+- [x] Define safe reconciliation states for pending, available, unavailable,
   deleted, and integrity-failed objects.
 
 **Exit evidence:** migration, schema, storage-service, authorization, isolation,
@@ -236,41 +239,41 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
 
 ### 7.1 Permissioned project API
 
-- [ ] Add project-qualified upload and list routes using stable project public
+- [x] Add project-qualified upload and list routes using stable project public
   identifiers where the current API contract requires them.
-- [ ] Add metadata rename, explicit replacement, deletion, and public-link
-  regeneration routes in V1.
-- [ ] Require the existing human session/CSRF boundary or project-agent bearer
+- [x] Add metadata rename, move, confirmed same-name replacement, and deletion
+  routes in V1. Do not expose a public-link regeneration route.
+- [x] Require the existing human session/CSRF boundary or project-agent bearer
   boundary as appropriate; never accept caller-supplied uploader identity.
-- [ ] Parse multipart uploads with explicit limits before mutation and reject
+- [x] Parse multipart uploads with explicit limits before mutation and reject
   missing, empty, oversized, truncated, or malformed files visibly.
-- [ ] Support a stable idempotency key for upload mutations and reconcile an
+- [x] Support a stable idempotency key for upload mutations and reconcile an
   uncertain result before any replay.
-- [ ] Return canonical metadata and a Syndicatum-owned public URL, never the
+- [x] Return canonical metadata and a Syndicatum-owned public URL, never the
   local path or a provider URL.
 - [ ] Add pagination and bounded filters for project file lists.
-- [ ] Add consistent error codes without leaking another project's file
+- [x] Add consistent error codes without leaking another project's file
   existence.
 - [ ] Add request and response schemas to OpenAPI and the Project API guide.
 
 ### 7.2 Public read route
 
-- [ ] Add `GET` and `HEAD` handling for
-  `/files/{public_id}/{cosmetic_filename}` without authentication.
+- [x] Add unauthenticated `GET` and `HEAD` handling for the immutable,
+  rename-safe `/files/{public_id}` route.
 - [ ] Use that exact canonical route for rendered image sources and supported
   document previews as well as externally shared links. Right-clicking a
   rendered image and copying its address must produce the intended permanent
   public URL.
-- [ ] Resolve only the opaque public ID; the filename segment must not select a
-  physical file or change authorization.
-- [ ] Return a clear unavailable response for deleted or invalidated links
+- [x] Resolve only the opaque public ID; display names never select a physical
+  file or change authorization.
+- [x] Return a clear unavailable response for deleted or invalid links
   without exposing storage internals.
-- [ ] Stream local bytes and support safe range requests where required for PDF
+- [x] Stream local bytes and support safe single-range requests for PDF and video
   usability.
-- [ ] Set verified `Content-Type`, safe `Content-Disposition`,
+- [x] Set verified `Content-Type`, safe `Content-Disposition`,
   `X-Content-Type-Options: nosniff`, search-engine exclusion, ETag/checksum, and
   the approved cache policy.
-- [ ] Force potentially active or unknown formats to download; do not render
+- [x] Force potentially active or unknown formats to download; do not render
   HTML or SVG under the Syndicatum origin.
 - [ ] Normalize response filenames safely against control characters, header
   injection, invalid Unicode, and platform-specific separators.
@@ -297,59 +300,94 @@ OpenAPI contract suites pass.
 
 ### 8.1 Reusable Helper attachment component
 
-- [ ] Inspect Helper's complete upload/attachment components and supported
+- [x] Inspect Helper's complete upload/attachment components and supported
   loading, progress, validation, cancellation, preview, and error APIs before
   adding application-specific UI.
-- [ ] Coordinate a shared Helper enhancement only for a verified component gap.
-- [ ] Open attachment modals immediately in their canonical loading state and
+- [x] Coordinate a shared Helper enhancement only for a verified component gap.
+- [x] Open attachment modals immediately in their canonical loading state and
   load target metadata afterward.
-- [ ] Validate applicable fields and files before entering busy state or making
+- [x] Validate applicable fields and files before entering busy state or making
   a mutation.
 - [ ] Keep invalid modals open, preserve chosen files/entered labels, focus the
   first invalid field, and present multiple errors using the required
   structured summary.
-- [ ] Permit cancellation during read-only loading, abort where supported, and
+- [x] Permit cancellation during read-only loading, abort where supported, and
   ignore late responses after dismissal or target changes.
-- [ ] Show per-file progress, success, failure, retry guidance, and an explicit
+- [x] Show per-file progress, success, failure, retry guidance, and an explicit
   uncertain-outcome state without automatic mutation replay.
 - [ ] Display **Anyone with this link can access the file** wherever a public
   link can be copied or opened.
 
 ### 8.2 Project Files management modal
 
-- [ ] Add a project-level **Files** action that opens the canonical modal
+- [x] Add a project-level **Files** action that opens the canonical modal
   immediately in its loading state, then loads the first file page.
 - [ ] List filename, type, size, uploader, creation/update time, and availability
   with bounded pagination, search, sort, loading skeletons, empty state, and
   recoverable error state.
-- [ ] Let every active human and agent participant upload, open, copy, download,
-  rename, replace, regenerate, and delete files in that project.
-- [ ] Require explicit confirmation for replacement, public-link regeneration,
-  and deletion, describing the effect on previously shared URLs.
+- [x] Let every active human and agent participant upload, copy, move, download,
+  rename, and delete files in that project.
+- [x] Require Helper confirmation before a same-name replacement sends bytes,
+  and confirmation before deletion. Replacement preserves the immutable URL.
 - [ ] Record the actor, file, action, prior/current identifiers or metadata as
   appropriate, and timestamp for every mutation without logging file bodies or
   local paths.
-- [ ] Render only supported images, audio, and video inside the modal. Other
-  files expose **Open in new tab** or **Download** according to safe delivery
-  headers.
+- [x] Open supported images and video in Helper's Media Viewer, PDFs in Helper's
+  PDF Viewer, and JSON/Markdown/CSV in their complete bounded Helper viewers
+  from the filename. Audio-player integration remains a separate media slice;
+  files without an assigned viewer open in a new browser tab.
 - [ ] Set rendered media sources and copy/open actions to the same canonical
   public URL; do not introduce an internal-only preview or thumbnail URL.
 - [ ] Reconcile remote file changes through the established realtime/refresh
   model without silently discarding an in-progress local action.
 
+Foundation update (October 3, 2026): the project action opens a large canonical
+loading modal and mounts Helper's complete tree, grid, form-modal, and uploader
+components. **Create folder** and **Upload files** use the participant-authorized,
+CSRF-protected, idempotent mutation service. File rows now provide **Copy link**,
+**Move to**, **Download**, **Rename**, and **Delete**, and the immutable public
+delivery route is active.
+
 ### 8.3 Timeline message attachments
 
-- [ ] Attach files during message composition without sending a message before
+- [x] Attach files during message composition without sending a message before
   all selected attachment records are confirmed.
-- [ ] Define and test cleanup behavior when uploads succeed but message creation
+- [x] Define and test cleanup behavior when uploads succeed but message creation
   is cancelled or fails.
-- [ ] Render compact attachment metadata; inline only supported image, audio,
+- [x] Render compact attachment metadata; inline only supported image, audio,
   and video media; and provide **Open in new tab** or **Download** for all other
   files.
-- [ ] Set rendered media sources and copy/open actions to the same canonical
+- [x] Set rendered media sources and copy/open actions to the same canonical
   public URL; do not introduce an internal-only preview or thumbnail URL.
-- [ ] Preserve reply, revision, deletion, pagination, virtualization, and
+- [x] Preserve reply, revision, deletion, pagination, virtualization, and
   realtime reconciliation behavior.
+
+Delivery update (October 4, 2026): Helper `0.21.229` supplies the complete
+repository picker and composer's custom attachment adapter. Syndicatum opens the
+picker immediately in its loading state, supports cross-folder multi-selection,
+uploads into the current folder through the existing chunked transport, and
+uses visible breadcrumbs plus a folder-first icon row list. File selection is
+shown through a whole-row highlight rather than checkboxes or a duplicate
+selected-file list. Reload and Upload are borderless icon actions in the modal
+header. Escape clears selections retained across folders on its first press and
+closes the picker when no selection remains; Cancel and Close dismiss directly.
+On narrow mobile layouts, short folders use the available modal body without an
+artificial inner scrollbar; genuinely long folders scroll in the modal body
+while the header and footer remain fixed.
+Confirmed uploads use Helper's canonical success toast without inserting an
+inline success row; actionable upload failures remain visible inside the picker.
+The message composer places a compact borderless paperclip and visible
+**Attach files** label below the textarea in the same responsive row as its
+delivery and keyboard instructions.
+The picker renders selected files with Helper's upload
+queue. Message creation reauthorizes
+up to 20 same-project file IDs and commits the message and ordered associations
+atomically. Cancelling or failing a message does not delete already-confirmed
+canonical uploads; the files remain available in Project Files.
+Timeline messages render available image and video attachments first through
+Helper's wrapping media strip and shared gallery viewer. Other file types and
+unavailable media follow as compact file cards. The media-strip lifecycle is
+bound to the virtualized message card so rerendering cannot leave hidden viewers.
 
 ### 8.4 Deferred attachment surfaces
 
@@ -371,11 +409,11 @@ OpenAPI contract suites pass.
 - [ ] Add permissioned Project API/MCP tools for upload, file lookup, and
   attachment association using streams or supported content transfer—not local
   filesystem paths from an agent machine.
-- [ ] Bound encoded or multipart agent uploads so transport expansion cannot
+- [x] Bound encoded or multipart agent uploads so transport expansion cannot
   bypass the server byte limit.
-- [ ] Update installed Syndicatum skills with the public-link security model,
+- [x] Update installed Syndicatum skills with the public-link security model,
   supported targets, idempotency guidance, and no-path/no-credential rules.
-- [ ] Ensure agents can return the permanent Syndicatum URL and canonical file
+- [x] Ensure agents can return the permanent Syndicatum URL and canonical file
   metadata after confirmed upload; it must be the same URL the human UI renders.
 - [ ] Verify at least one human upload and one agent upload end to end.
 
@@ -436,7 +474,7 @@ after cutover.
 
 - [ ] Update application surfaces, architecture inventory, Project API,
   OpenAPI, backup/restore, deployment, security, and operations documentation.
-- [ ] Update the in-app User Guide for upload, sharing, deletion/replacement,
+- [ ] Update the in-app User Guide for upload, sharing, deletion/same-name replacement,
   public-link risk, administrator storage setup, and recovery.
 - [ ] Add every new runtime source, route, migration, asset, skill, and document
   to canonical release packaging.
@@ -466,11 +504,12 @@ after cutover.
   address** yields that same URL, which opens outside Syndicatum without
   authentication.
 - [ ] The URL survives logout, restart, deployment, and complete backup/restore.
-- [ ] Supported images, audio, and video render or play inline. Other files open
-  in a new tab/window or download; active/unknown formats cannot execute under
-  the application origin.
-- [ ] Every active human and agent project participant can upload, rename,
-  replace, regenerate, and delete project files, with attributable audit
+- [ ] Supported images and video render in Helper's Media Viewer, PDFs in
+  Helper's PDF Viewer, and JSON/Markdown/CSV in their dedicated safe viewers.
+  Other files open in a new tab/window or download; active/unknown formats
+  cannot execute under the application origin.
+- [ ] Every active human and agent project participant can upload, move, rename,
+  download, copy links, and delete project files, with attributable audit
   evidence for every action.
 - [ ] Files cannot be enumerated through directory listing or predictable IDs.
 - [ ] Cross-project listing, attachment, replacement, and deletion fail safely.
@@ -491,8 +530,7 @@ after cutover.
 - [ ] Add scheduled checksum/integrity verification and safe repair guidance.
 - [ ] Add optimized Nginx `X-Accel-Redirect` delivery on supported Linux
   deployments without changing URLs.
-- [ ] Complete replacement, deletion, and link-regeneration safeguards deferred
-  from V1, if any.
+- [ ] Complete replacement and deletion safeguards deferred from V1, if any.
 - [ ] Extend attachments to tasks, task activity, deliverables, and project
   details.
 - [ ] Exercise large, concurrent, and interrupted file sets through upload,
@@ -524,8 +562,8 @@ Gate A was approved by the project owner on October 3, 2026:
 - 25 MiB maximum file size and 10 files per action;
 - a 64 GB default storage quota for each project;
 - one canonical permanent URL for internal and external use;
-- public-link regeneration included in V1;
-- inline rendering limited to safe image, audio, and video media;
+- immutable public IDs with no regeneration action;
+- inline rendering limited to safe media plus the dedicated PDF Viewer policy;
 - equal audited file-management authority for every active human and agent
   project participant;
 - project Files management modal first, followed by timeline attachments; and

@@ -15,8 +15,8 @@ S3-compatible storage without changing database references or public URLs.
 
 Files are intended for dependable, low-friction sharing. Every stored file
 receives a permanent, unguessable public Syndicatum URL that works without
-authentication until an authorized user deletes the file or regenerates its
-public identifier.
+authentication until an authorized user deletes the file. Its public identifier
+is immutable and its canonical URL is never regenerated.
 
 The configuration foundation is now present: administrators can set
 `storage.local_base_path` from the **Storage** tab in System Settings. Saving
@@ -47,8 +47,9 @@ Google Drive, and link it from Syndicatum.
 ## 3. User experience
 
 The first delivery surface is a project-level **Files** management modal. Every
-active human and agent project participant can upload, list, open, copy, rename,
-replace, regenerate the public link for, and delete project files. Every
+active human and agent project participant can upload, list, open, copy, move,
+rename, download, and delete project files. Uploading the same name in the same
+folder offers a confirmed in-place replacement before any bytes are sent. Every
 mutation is attributed and recorded in the project audit history.
 
 After project file management is complete, the next delivery surface adds file
@@ -57,9 +58,10 @@ detail attachments are later expansions of the same canonical file records and
 are not required for the initial V1 release.
 
 After upload, Syndicatum shows the filename, type, size, uploader, and creation
-time, together with **Open**, **Copy link**, **Download**, **Rename**,
-**Replace**, **Regenerate public link**, and **Delete** actions. Supported image,
-audio, and video media receive inline rendering or playback. Other files open
+time, together with **Open**, **Copy link**, **Move to**, **Download**, **Rename**,
+and **Delete** actions. Supported image and video media open in Helper's Media
+Viewer, PDFs open in Helper's PDF Viewer, and JSON, Markdown, and CSV files use
+their dedicated bounded Helper viewers. Audio playback is the next media slice. Other files open
 in a new browser tab/window or download according to their safe delivery rule.
 
 Syndicatum uses one canonical permanent URL for both internal rendering and
@@ -77,11 +79,12 @@ Every file surface displays the notice:
 An example permanent URL is:
 
 ```text
-https://syndicatum.example/files/k8Px4m/board-infographic.png
+https://syndicatum.example/files/8e852a61-3d2e-4c96-8ea5-26a4710b572d
 ```
 
-The filename segment is cosmetic. Syndicatum resolves the opaque public ID to
-the canonical file record and storage object. The URL must continue to work
+Syndicatum resolves the opaque public ID to the canonical file record and
+storage object. Renaming, moving, or replacing content does not change that ID.
+The URL must continue to work
 after logout, application restart, deployment, backup restoration, and storage
 provider migration.
 
@@ -94,14 +97,19 @@ than machine-specific absolute paths or provider URLs.
 ### 4.1 Local driver
 
 The default driver stores content outside the public web root under a configured
-storage root. A generated storage key may resolve to a path such as:
+storage root. Objects are grouped by opaque project public ID and then split
+across a two-character hexadecimal performance shard. A generated storage key
+may resolve to a path such as:
 
 ```text
-/srv/syndicatum/files/7f/2a/7f2ad4...bin
+/srv/syndicatum/files/objects/3903bbfe-7ef3-4c70-af45-6bb6aa141757/7f/7f2ad4...
 ```
 
 The application controls key generation and placement. Original filenames must
-not determine physical storage paths.
+not determine physical storage paths. The 256-way shard keeps large projects
+from accumulating every object in one directory, while the project grouping
+makes reconciliation, cleanup, and backup verification project-aware. Public
+URLs remain independent of this physical layout.
 
 Development and Windows installations may initially stream files through the
 application. Linux production installations should support Nginx
@@ -164,30 +172,33 @@ POST   /api/v1/projects/{project}/files
 GET    /api/v1/projects/{project}/files
 PATCH  /api/v1/files/{file}
 DELETE /api/v1/files/{file}
-GET    /files/{public_id}/{filename}
+GET    /files/{public_id}
 ```
 
 Upload, mutation, and project-list operations require an active human or agent
-participant in the owning project. All such participants can upload, rename,
-replace, regenerate, and delete. Every operation is audited. External
+participant in the owning project. All such participants can upload, move,
+rename, download, copy links, and delete. Every operation is audited. External
 integration participants receive no file-management authority unless a later
 explicit capability is approved. The permanent public read route does not
 require authentication. Agent participants receive equivalent file-management
 capabilities through the Project API and installed skills.
 
-Deletion and public-ID regeneration are explicit, audited operations. Replacing
-file content should preserve the public URL only when the user deliberately
-chooses to replace the published file.
+Deletion is explicit and audited. Public IDs cannot be regenerated. Replacing
+file content preserves the public URL and occurs only after the user confirms a
+same-name collision before upload bytes are sent.
 
 ## 7. Rendering and delivery rules
 
-The initial release renders only verified media formats inline:
+The initial release renders these verified formats in application viewers:
 
 - PNG, JPEG, GIF, and WebP images;
-- approved audio formats through the browser's native audio player; and
 - approved video formats through the browser's native video player.
+- PDFs through Helper's dedicated PDF Viewer.
+- JSON through Helper's bounded Data Inspector viewer;
+- Markdown through Helper's safe Markdown viewer; and
+- CSV through Helper's bounded, paginated Grid viewer.
 
-PDFs, documents, archives, plain text, and other non-media files are represented
+Documents, archives, plain text, and other non-media files are represented
 by metadata and an **Open** or **Download** action. **Open** uses the one
 canonical public URL in a new browser tab/window when safe. Potentially active
 formats, including HTML and SVG, are forced to download and must not execute
@@ -260,12 +271,12 @@ Configuration should support:
 - filename normalization;
 - orphan-file reconciliation;
 - checksum verification; and
-- explicit confirmation before deleting or regenerating a shared link.
+- explicit confirmation before deleting a file or replacing same-name content.
 
 The approved V1 defaults also use zero days of deleted-byte retention and a
 300-second public cache duration. Public access ends immediately at the origin
-when a file is deleted or its link is regenerated; cache behavior must follow
-the documented invalidation contract. Project-specific quota overrides and
+when a file is deleted; cache behavior must follow the documented invalidation
+contract. Project-specific quota overrides and
 storage reporting remain Phase 2.
 
 Malware scanning may be introduced later through the storage interface without
@@ -279,8 +290,8 @@ blocking the local-storage foundation.
 - Add the canonical database records.
 - Implement uploads and permanent public delivery.
 - Add the project **Files** management modal for every active human and agent
-  participant, with fully audited rename, replace, regenerate, and delete
-  operations.
+  participant, with fully audited rename, move, confirmed same-name replacement,
+  and delete operations.
 - Add safe image, audio, and video rendering/playback.
 - Support timeline message attachments after project file management is
   complete.
@@ -292,8 +303,7 @@ blocking the local-storage foundation.
 - Add per-project quota overrides and administrative storage reporting.
 - Add orphan reconciliation and integrity verification.
 - Add optimized Nginx delivery for Linux deployments.
-- Harden replacement, deletion, and public-link regeneration for large and
-  interrupted operations.
+- Harden replacement and deletion for large and interrupted operations.
 - Extend attachments to tasks, task activity, deliverables, and project details.
 - Exercise backup and restore with large and interrupted file sets.
 
@@ -310,8 +320,10 @@ blocking the local-storage foundation.
 - The URL opens without authentication in a new browser session.
 - The URL remains valid after logout, restart, deployment, and complete backup
   restoration.
-- Supported images, audio, and video render or play inline. Other files open in
-  a new tab/window or download without being embedded in Syndicatum.
+- Supported images and video open in Helper's Media Viewer, PDFs open in
+  Helper's PDF Viewer, and JSON/Markdown/CSV open in their dedicated safe
+  viewers. Audio support follows in its dedicated player slice; other files
+  open in a new tab/window or download without being embedded.
 - Every active human and agent project participant can manage project files,
   and every mutation has attributable audit evidence.
 - Files cannot be enumerated through directory listing or predictable IDs.

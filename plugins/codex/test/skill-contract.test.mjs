@@ -44,6 +44,12 @@ test("timeline skill keeps direct plan stewardship narrow and permissioned", asy
 
 test("timeline skill uses configured project shared storage without assuming access", async () => {
   const source = await readFile(skillUrl, "utf8");
+  assert.match(source, /syndicatum_list_project_files/);
+  assert.match(source, /syndicatum_upload_project_file/);
+  assert.match(source, /replace_file_id/);
+  assert.match(source, /one permanent public URL/);
+  assert.match(source, /never sends or returns the local path/);
+  assert.match(source, /Do not\s+post local filesystem paths/);
   assert.match(source, /project\.google_drive_url/);
   assert.match(source, /authorized Google Drive access/);
   assert.match(source, /Do not change folder sharing/);

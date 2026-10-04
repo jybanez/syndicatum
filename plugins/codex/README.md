@@ -68,6 +68,15 @@ notifications can be handled when an unattended Codex turn uses
 `approval_policy = "never"`. Claim, login, migration, background installation,
 restart, and credential-configuration tools still require an explicit approval.
 
+Profile-bound project-file tools use the same audited Project API V1 service as
+the browser Files modal. Agents can list files, create folders, upload in
+resumable 1 MiB chunks, rename, move, download, and delete. Upload and download
+paths remain device-local: they are never transmitted as metadata or returned
+in tool results. File results contain the single permanent public URL used by
+the browser; rename, move, and explicitly confirmed same-name replacement do
+not change it. Delete is marked destructive, and existing local download targets
+are preserved unless overwrite is explicitly requested.
+
 For an upgrade from the retired package, rebuild the Git marketplace's sparse
 checkout and install the renamed package:
 

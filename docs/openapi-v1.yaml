@@ -165,6 +165,83 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Invalid' }
+  /api/v1/project-files.php:
+    get:
+      summary: List folders and files in one authorized project folder
+      description: Returns provider-neutral metadata and each file's permanent canonical public URL. Filesystem paths and storage keys are never returned.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: folder_id, in: query, description: Folder UUID; omit or use root for the project root., schema: { type: string } }
+      responses:
+        '200': { description: Current folder, root-to-current breadcrumbs, folder tree, immediate files, capabilities, and project quota summary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    post:
+      summary: Mutate project folders or files through the canonical audited storage service
+      description: JSON operations create folders, rename, move, or delete files. Multipart upload_chunk requests provide resumable 1 MiB upload or explicitly confirmed same-name replacement. Human sessions require CSRF; agents use their project-scoped bearer identity. Every mutation requires a stable Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 16, maxLength: 160 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operation]
+              properties:
+                operation: { type: string, enum: [create_folder, rename_file, move_file, delete_file] }
+                name: { type: string, maxLength: 255 }
+                parent_folder_id: { type: string }
+                file_id: { type: string, format: uuid }
+                destination_folder_id: { type: string }
+                version: { type: integer, minimum: 1 }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [operation, upload_id, chunk_index, chunk_count, total_size, target_operation, original_name, file]
+              properties:
+                operation: { type: string, enum: [upload_chunk] }
+                upload_id: { type: string, format: uuid }
+                chunk_index: { type: integer, minimum: 0 }
+                chunk_count: { type: integer, minimum: 1 }
+                total_size: { type: integer, minimum: 1 }
+                target_operation: { type: string, enum: [upload, replace_file] }
+                original_name: { type: string, maxLength: 255 }
+                folder_id: { type: string }
+                file_id: { type: string, format: uuid, description: Required only for explicitly confirmed replacement. }
+                version: { type: integer, minimum: 1, description: Required only for explicitly confirmed replacement. }
+                file: { type: string, format: binary, description: One upload chunk; clients should use 1 MiB chunks. }
+      responses:
+        '200': { description: Replayed or completed mutation result }
+        '201': { description: Created folder or newly uploaded file }
+        '202': { description: Upload chunk accepted; additional chunks remain }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Name, idempotency, upload-session, or optimistic-version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /files/{file_id}:
+    get:
+      security: []
+      summary: Read a file from its permanent unguessable public URL
+      parameters:
+        - { name: file_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Range, in: header, schema: { type: string }, description: Optional single byte range. }
+      responses:
+        '200': { description: Complete file content with verified Content-Type and safe Content-Disposition }
+        '206': { description: Requested byte range }
+        '404': { description: File is unavailable }
+        '416': { description: Requested range is not satisfiable }
+    head:
+      security: []
+      summary: Read public file metadata headers without a response body
+      parameters:
+        - { name: file_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Public file response headers }
+        '404': { description: File is unavailable }
   /api/v1/project-tasks.php:
     get:
       summary: List shared project tasks
@@ -270,6 +347,26 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Milestone version conflict }
         '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      summary: Delete an empty milestone with an exact version
+      description: Requires an owner or administrator. A milestone containing any deliverable must be emptied first. Successful deletion is audited and broadcast.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties: { version: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated project plan after deletion }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Version conflict or milestone still contains deliverables }
+        '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-deliverables.php:
     post:
       summary: Create a standalone or milestone-bound deliverable
@@ -290,6 +387,26 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Deliverable version conflict }
+        '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      summary: Delete an unlinked deliverable with an exact version
+      description: Requires an owner or administrator. A deliverable linked from any task must be unlinked first. Successful deletion is audited and broadcast.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties: { version: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Updated project plan after deletion }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Version conflict or deliverable still has linked tasks }
         '422': { $ref: '#/components/responses/Invalid' }
   /api/v1/project-milestone-progress.php:
     patch:
@@ -928,7 +1045,7 @@ components:
         editor: { $ref: '#/components/schemas/MessageSender' }
     Message:
       type: object
-      required: [id, uuid, project_id, project_sequence, message_kind, severity, system_event, sender, reply_to_message_id, body, addressees, correlation_id, reply_depth, action_requested, action_request_type, created_at, updated_at, deleted_at, edited, revision_count]
+      required: [id, uuid, project_id, project_sequence, message_kind, severity, system_event, sender, reply_to_message_id, body, addressees, attachments, correlation_id, reply_depth, action_requested, action_request_type, created_at, updated_at, deleted_at, edited, revision_count]
       properties:
         id: { type: integer, minimum: 1 }
         uuid: { type: string, format: uuid }
@@ -941,6 +1058,7 @@ components:
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
         body: { type: string, nullable: true, description: Null for a soft-deleted message. }
         addressees: { type: array, items: { $ref: '#/components/schemas/MessageAddressee' } }
+        attachments: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/MessageAttachment' }, description: Ordered canonical project-file references. Empty for soft-deleted messages. }
         correlation_id: { type: string, nullable: true }
         reply_depth: { type: integer, minimum: 0 }
         action_requested: { type: boolean, description: True only when this direct message explicitly creates Responsibility Inbox work. }
@@ -951,6 +1069,23 @@ components:
         edited: { type: boolean }
         revision_count: { type: integer, minimum: 0 }
         revisions: { type: array, description: Present only when include=revisions is requested., items: { $ref: '#/components/schemas/MessageRevision' } }
+    MessageAttachment:
+      type: object
+      required: [id, name, original_name, url, mime_type, size_bytes, sha256, state, available, version, position, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid, description: Permanent canonical project-file identifier. }
+        name: { type: string }
+        original_name: { type: string }
+        url: { type: string, nullable: true, description: Permanent canonical file URL; null when the file is unavailable or deleted. }
+        mime_type: { type: string }
+        size_bytes: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        state: { type: string, enum: [pending, available, unavailable, deleted, integrity_failed] }
+        available: { type: boolean }
+        version: { type: integer, minimum: 1 }
+        position: { type: integer, minimum: 0, maximum: 19 }
+        created_at: { $ref: '#/components/schemas/UtcTimestamp' }
+        updated_at: { $ref: '#/components/schemas/UtcTimestamp' }
     MessagePage:
       type: object
       required: [limit, has_more, newer_cursor, older_cursor, order, mode, continuation_cursor]
@@ -1191,6 +1326,7 @@ components:
         action_request_type: { type: string, enum: [work, approval, review], description: Required conceptually when action_requested is true; omitted requests default to work for backward compatibility and it is invalid otherwise. }
         severity: { type: string, enum: [neutral, info, success, warning, error, critical], default: neutral, description: Canonical importance independent from addressing and action-request state. }
         reply_to_message_id: { type: integer, minimum: 1, nullable: true }
+        attachment_file_ids: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, format: uuid }, description: Ordered canonical file IDs from this project. Every file must still be available when the message transaction commits. }
         idempotency_key: { type: string, maxLength: 160 }
         correlation_id: { type: string, nullable: true, maxLength: 160 }
         responsibility_event: { $ref: '#/components/schemas/ResponsibilityEventWrite' }

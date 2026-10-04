@@ -376,6 +376,15 @@ try {
             && strpos($settings, '"storage.local_base_path": storagePath') !== false
             && strpos($settings, 'Storage location: enter an absolute server path') !== false,
             'The Storage tab must expose, validate, and persist the local project-file root.');
+        foreach (['storage_max_upload_mib', 'storage_max_files_per_action', 'storage_allowed_content_types',
+            'storage_inline_preview_types', 'storage_project_quota_gib', 'storage_deleted_retention_days',
+            'storage_public_cache_seconds'] as $field) {
+            $suite->true(strpos($settings, 'name: "' . $field . '"') !== false,
+                'Missing controlled Storage field: ' . $field);
+        }
+        $suite->true(strpos($settings, 'Default quota per project — choose a quota larger than the maximum file size.') !== false
+            && strpos($settings, 'Inline preview types — select only file types also enabled under Allowed file types.') !== false,
+            'Storage settings need client-side cross-field validation before submission.');
         $suite->true(strpos($settingsEndpoint, "new ProjectFileStorage") !== false
             && strpos($settingsEndpoint, "Storage location is invalid or unavailable") !== false,
             'The settings endpoint must validate and prepare the configured project-file root.');
@@ -417,7 +426,7 @@ try {
             'The deferred email notification proposal is incomplete.');
         $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
         $suite->true(strpos($guide, 'id: "configure-local-storage"') !== false
-            && strpos($guide, 'This setting prepares the storage foundation only.') !== false,
+            && strpos($guide, 'The folder icon beside the project menu opens the Project Files workspace.') !== false,
             'The user guide must explain local storage configuration and its current scope.');
     });
 
@@ -707,7 +716,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.222";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.222";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.229";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -874,7 +883,7 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.222 retains planning contracts and owns Timeline pagination loading', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.229 retains planning contracts and provides canonical responsive attachment controls', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $appCss = file_get_contents($root . '/assets/app.css');
         $setup = file_get_contents($root . '/assets/setup.mjs');
@@ -882,13 +891,13 @@ try {
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.222') !== false,
-                'Every Helper entry point must use the canonical 0.21.222 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.229') !== false,
+                'Every Helper entry point must use the canonical 0.21.229 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.222') !== false,
-                $surface . ' must use the matching canonical 0.21.222 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.229') !== false,
+                $surface . ' must use the matching canonical 0.21.229 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -936,15 +945,79 @@ try {
             && strpos($bundleJs, 'Loading timeline items…') !== false
             && strpos($app, 'loadingText: mode === "older" ? "Loading earlier messages…" : "Loading messages…"') !== false,
             'Timeline pagination must use Helper-owned loading presentation and an application-specific accessible label.');
-        $suite->same('081d31904ac60ab189a5de41f3555c548ee6b5f53981bd7ed2ae0b2fe285b7d5',
+        $suite->true(strpos($bundleJs, 'ui.json.viewer') !== false
+            && strpos($bundleJs, 'ui.markdown.viewer') !== false
+            && strpos($bundleJs, 'ui.csv.viewer') !== false,
+            'The Helper bundle must expose the complete JSON, Markdown, and CSV viewer factories.');
+        $suite->true(strpos($bundleJs, 'ui.repository.picker') !== false
+            && strpos($bundleJs, 'onAttachmentsSelected') !== false
+            && strpos($app, 'createRepositoryPicker: await uiLoader.get("ui.repository.picker", options)') !== false
+            && strpos($app, 'attachment_file_ids: state.draft.attachments.map') !== false,
+            'Message composition must use the canonical repository picker and submit canonical project-file IDs.');
+        $suite->true(strpos($bundleJs, 'attachmentPlacement') !== false
+            && strpos($bundleJs, 'ui-chat-composer-metadata') !== false
+            && strpos($bundleJs, 'actions.attach') !== false
+            && strpos($bundleCss, '.ui-chat-composer-attach.is-helper-action') !== false
+            && strpos($app, 'attachmentPlacement: "helper"') !== false
+            && strpos($app, 'attachmentLabel: "Attach files"') !== false
+            && strpos($appCss, '#composer-host .ui-chat-composer-attach.is-helper-action') !== false,
+            'The message composer must place a compact paperclip and visible Attach files label in the helper row below the input.');
+        $suite->true(strpos($app, 'status: "uploaded"') === false,
+            'Selected project-file attachments must not render a redundant Uploaded status badge.');
+        $suite->true(strpos($app, 'onOpen(item) { if (item?.url) openProjectFilePreview(item); }') === false,
+            'Composer attachment thumbnails must rely on the queue media strip viewer instead of opening a duplicate application viewer.');
+        $suite->true(strpos($app, 'getFileIconName(file.name, file.mime_type)') !== false
+            && strpos($app, 'projectFileIconName(file)') === false,
+            'Timeline attachment cards must resolve Helper file icons through the imported file-icon API.');
+        $suite->true(strpos($app, 'createMediaStrip: await uiLoader.get("ui.media.strip", options)') !== false
+            && strpos($app, 'function messageAttachmentMediaType(file)') !== false
+            && strpos($app, 'mediaHost.className = "message-attachment-media"') !== false
+            && strpos($app, 'fileList.className = "message-attachment-files"') !== false
+            && strpos($app, 'layout: "wrap"') !== false
+            && strpos($app, 'attachmentMediaStrip?.destroy()') !== false,
+            'Timeline messages must render image and video attachments first through Helper media strip and clean up its viewer lifecycle.');
+        $suite->true(strpos($app, 'function renderMessageAttachmentIndicator(host, message)') !== false
+            && strpos($app, 'state.factories.createIcon("actions.attach"') !== false
+            && strpos($app, 'timestamp.parentElement.insertBefore(indicator, timestamp)') !== false
+            && strpos($appCss, '.message-attachment-indicator { display: inline-flex;') !== false,
+            'Messages with attachments must show an accessible Helper paperclip immediately before the timeline timestamp.');
+        $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
+            && strpos($appCss, '.message-attachment-files { display: flex;') !== false
+            && strpos($appCss, 'flex: 0 1 210px;') !== false
+            && strpos($appCss, 'min-height: 36px;') !== false
+            && strpos($app, 'size: 15,') !== false,
+            'Non-media timeline attachments must follow the media strip as compact wrapping cards with a small file icon and accessible target height.');
+        $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
+            && strpos($bundleJs, 'aria-pressed') !== false
+            && strpos($bundleJs, 'files.folder') !== false
+            && strpos($bundleJs, 'ui-repository-picker-header-actions') !== false
+            && strpos($bundleJs, 'headerActions:') !== false
+            && strpos($bundleJs, 'Reload folder') !== false
+            && strpos($bundleJs, 'Upload files') !== false
+            && strpos($bundleJs, '?.reason==="escape"') !== false
+            && strpos($bundleJs, '==="ready"') !== false
+            && strpos($bundleCss, '.ui-repository-picker-row.is-selected') !== false
+            && strpos($bundleCss, '.ui-repository-picker .ui-breadcrumbs-link') !== false
+            && strpos($bundleCss, '.ui-repository-picker-header-actions') !== false
+            && strpos($bundleCss, '@media(max-width:640px){.ui-repository-picker-list{max-height:none;overflow:visible}}') !== false
+            && strpos($bundleCss, '.ui-repository-picker-selection') === false,
+            'The repository picker must use Helper breadcrumbs, accessible icon rows, header actions, two-stage Escape selection clearing, and one mobile scroll owner without a summary footer.');
+        $suite->true(strpos($bundleJs, 'ui-repository-picker-toasts') !== false
+            && strpos($bundleJs, 'Upload completed. Select the files to attach.') !== false
+            && strpos($bundleJs, 'ui.toast') !== false,
+            'Confirmed repository uploads must use the canonical Helper success toast while upload failures retain inline feedback.');
+        $suite->same('1b14c6fa522be2dcb81e9c5f0ef6f0595682688ef4623f87ead75e985f03dc76',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match canonical commit 0640350 exactly.');
-        $suite->same('6e3aed81c249f6dea649b87756ad41fe75c0bc0bd7313eebdcd51a834ba0137b',
+            'The vendored Helper JavaScript must match canonical release 0.21.229 exactly.');
+        $suite->same('e6f804d437d424129f61f388a09e756e1738db93145f49fad565436040475c8c',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match canonical commit 0640350 exactly.');
-        $suite->same('ad67920d25d246d5e3c9c5a3b40203747052f2bac5fbf47252a80782c819edbd',
+            'The vendored Helper stylesheet must match canonical release 0.21.229 exactly.');
+        $suite->same('6993cae3245b687a41549d026ceed599b10dd12dcf90c8d09c468ac113c3fb89',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match canonical commit 0640350 exactly.');
+            'The vendored Helper loader must match canonical release 0.21.229 exactly.');
+        $suite->same('a7a8668869be48a47202f24b1fd5f20b14a41cc818fa65b89a1c9c41a0a90cf7',
+            hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.icons.files.js'),
+            'The vendored Helper file icon pack must match canonical release 0.21.229 exactly.');
     });
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
@@ -1028,7 +1101,84 @@ try {
     $suite->test('Project overview uses one upper-right action menu without status chrome', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $filesApi = file_get_contents($root . '/api/v1/project-files.php');
+        $publicFiles = file_get_contents($root . '/files.php');
+        $htaccess = file_get_contents($root . '/.htaccess');
         $suite->true(strpos($index, 'id="project-actions-trigger"') !== false, 'The project overview action-menu trigger is missing.');
+        $filesAction = strpos($index, 'id="project-files-trigger"');
+        $projectMenu = strpos($index, 'id="project-actions-trigger"');
+        $suite->true($filesAction !== false && $filesAction < $projectMenu,
+            'The Project Files action must appear immediately before the project menu.');
+        $suite->true(strpos($source, 'title: "Project files"') !== false
+            && strpos($source, 'size: "lg"') !== false
+            && strpos($source, 'modal.open();') !== false
+            && strpos($source, 'message: "Loading project files…"') !== false
+            && strpos($source, 'state.factories.createTree(treeHost') !== false
+            && strpos($source, 'state.factories.createGrid(gridHost') !== false,
+            'Project Files must open a loading canonical modal and use Helper tree/grid components.');
+        $suite->true(strpos($filesApi, "projectAccess(\$projectId, 'profile:read')") !== false
+            && strpos($filesApi, 'requireCsrfForHuman') !== false
+            && strpos($filesApi, 'new ProjectFileService') !== false
+            && strpos($source, 'openCreateProjectFolder') !== false
+            && strpos($source, 'openProjectFileUploader') !== false
+            && strpos($source, 'multiple: true') !== false
+            && strpos($source, 'payload.storage?.max_files_per_action') !== false
+            && strpos($source, 'const successful = items.filter((item) => item.status === "success");') !== false
+            && strpos($source, 'refreshFiles();') !== false
+            && strpos($source, 'enableColumnResize: true') !== false
+            && strpos($source, 'iconModule.registerIconPack(FILE_ICONS)') !== false
+            && strpos($source, 'getFileIconName(row.name, row.mime_type)') !== false
+            && strpos($source, 'project-file-name-cell') !== false
+            && strpos($source, 'projectFilePreviewType(row)') !== false
+            && strpos($source, 'createMediaViewer(host') !== false
+            && strpos($source, 'createPdfViewer({') !== false
+            && strpos($source, 'createJsonViewer: await uiLoader.get("ui.json.viewer", options)') !== false
+            && strpos($source, 'createMarkdownViewer: await uiLoader.get("ui.markdown.viewer", options)') !== false
+            && strpos($source, 'createCsvViewer: await uiLoader.get("ui.csv.viewer", options)') !== false
+            && strpos($source, '["json", "markdown", "csv"].includes(type)') !== false
+            && strpos($source, 'open: true') !== false
+            && strpos($source, 'window.open(url, "_blank", "noopener,noreferrer")') !== false
+            && strpos($source, '{ key: "mime_type", label: "Type" }') === false
+            && strpos($source, '{ icon: "actions.add", iconOnly: true }') !== false
+            && strpos($source, '{ icon: "data.upload" }') !== false
+            && strpos($source, 'ui-button-borderless') !== false
+            && strpos($source, 'className = "ui-button ui-button-sm ui-button-borderless project-file-row-actions"') !== false
+            && strpos($source, 'label: "Copy link"') !== false
+            && strpos($source, 'label: "Move to"') !== false
+            && strpos($source, 'label: "Download"') !== false
+            && strpos($source, 'label: "Rename"') !== false
+            && strpos($source, 'label: "Delete"') !== false
+            && strpos($source, 'openRenameProjectFile') !== false
+            && strpos($source, 'openMoveProjectFile') !== false
+            && strpos($source, 'state.factories.uiConfirm(') !== false
+            && strpos($source, 'form.append("operation", "upload_chunk")') !== false
+            && strpos($source, 'const chunkBytes = 1024 * 1024;') !== false
+            && strpos($filesApi, 'new ProjectFileChunkUploadStore') !== false
+            && strpos($source, 'confirmProjectFileMutation') !== false,
+            'The Project Files contract must authorize reads and protect canonical create/upload mutations.');
+        $suite->true(strpos($htaccess, 'Options -MultiViews') !== false
+            && strpos($htaccess, 'files.php?id=$1') !== false
+            && strpos($publicFiles, "['GET', 'HEAD']") !== false
+            && strpos($publicFiles, "header('X-Robots-Tag: noindex, nofollow, noarchive')") !== false
+            && strpos($publicFiles, "get('storage.inline_preview_types')") !== false
+            && strpos($publicFiles, "header('Accept-Ranges: bytes')") !== false
+            && strpos($publicFiles, "http_response_code(206)") !== false
+            && strpos($filesApi, 'regenerate_link') === false
+            && strpos($source, 'Regenerate public link') === false,
+            'Project files must use one immutable anonymous public URL with safe delivery headers and no regeneration operation.');
+        $suite->true(strpos($styles, '.project-files-layout') !== false
+            && strpos($styles, 'height: min(66vh, 660px)') !== false
+            && strpos($styles, '.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none;') !== false,
+            'The Project Files modal needs a fixed-height two-column workspace.');
+        $suite->true(strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv { display: flex; flex-direction: column; height: 100%; min-height: 0; }') !== false
+            && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid { flex: 1 1 auto; width: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }') !== false
+            && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid-table-wrap { min-height: 0; height: 100%; max-height: none; }') !== false,
+            'The fullscreen CSV viewer must give its Helper grid the available modal height without nested overflow gaps.');
+        $suite->true(strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-json { display: flex; flex-direction: column; height: 100%; min-height: 0; }') !== false
+            && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-json .ui-file-viewer-content { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }') !== false
+            && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-json .ui-data-inspector { flex: 1 1 auto; align-content: start; min-height: 0; height: 100%; max-height: none; overflow: auto; }') !== false,
+            'The fullscreen JSON viewer must give its Helper inspector the available modal height and one bounded scroll region.');
         $suite->true(strpos($index, '<p class="ui-eyebrow">Project</p>') === false, 'The redundant Project eyebrow must not render.');
         $suite->true(strpos($index, 'class="ui-badge" id="status-badge"') === false, 'Realtime state must not render as a visible pill.');
         $suite->true(strpos($source, 'state.components.projectActions = state.factories.createDropdown') !== false, 'Project management actions must use the supported Helper dropdown.');
@@ -1095,6 +1245,8 @@ try {
     $suite->test('project planning distinguishes milestones, deliverables, and linked tasks', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $service = file_get_contents($root . '/src/ProjectPlanService.php');
+        $milestoneApi = file_get_contents($root . '/api/v1/project-milestone.php');
+        $deliverableApi = file_get_contents($root . '/api/v1/project-deliverable.php');
         $orderApi = file_get_contents($root . '/api/v1/project-plan-order.php');
         $suite->true(strpos($source, 'label: "Project plan"') !== false
             && strpos($source, 'title: "Project plan"') !== false
@@ -1134,9 +1286,21 @@ try {
         $suite->true(strpos($source, 'projectPlanIconAction("Add deliverable", "actions.add")') !== false
             && strpos($source, 'projectPlanIconAction("Edit milestone details", "actions.edit")') !== false
             && strpos($source, 'projectPlanIconAction("Edit deliverable details", "actions.edit")') !== false
+            && strpos($source, 'projectPlanIconAction("Delete milestone", "actions.delete")') !== false
+            && strpos($source, 'projectPlanIconAction("Delete deliverable", "actions.delete")') !== false
+            && strpos($source, 'The deletion outcome is unknown. Reconcile with the server before changing the plan.') !== false
+            && strpos($milestoneApi, "projectApiRequireMethod(['PATCH', 'DELETE'])") !== false
+            && strpos($deliverableApi, "projectApiRequireMethod(['PATCH', 'DELETE'])") !== false
+            && strpos($service, 'MILESTONE_DELETE_HAS_DELIVERABLES') !== false
+            && strpos($service, 'DELIVERABLE_DELETE_HAS_TASKS') !== false
             && strpos($source, 'ui-button-borderless project-plan-icon-action') !== false
             && strpos($styles, '.project-plan-icon-action') !== false,
             'Row-level project-plan actions must use compact accessible borderless icon controls.');
+        $suite->true(strpos($source, 'confirmationModal = state.factories.createActionModal({') !== false
+            && strpos($source, 'busyMessage: `Deleting ${itemLabel}…`') !== false
+            && strpos($source, 'showDialogError(message); setFeedback(message, "error");') !== false
+            && strpos($source, 'confirmationModal.setActions(closeOnlyActions())') !== false,
+            'Milestone and deliverable deletion confirmation must remain visible and busy during the mutation, surface recoverable errors, and prevent replay after an unknown outcome.');
         $suite->true(strpos($source, 'if (targetValue)') !== false
             && strpos($source, 'if (dueValue)') !== false
             && strpos($source, 'placeholder: "No target date"') === false
@@ -1530,7 +1694,7 @@ try {
             && strpos($source, 'await loadTasks(state.generation);') !== false
             && strpos($source, 'el.task_refresh_trigger.disabled = true;') !== false,
             'The task rail needs an accessible, duplicate-safe authoritative refresh action.');
-        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-actions-trigger', 'filter-popover-trigger',
+        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-files-trigger', 'project-actions-trigger', 'filter-popover-trigger',
             'timeline-collapse-toggle', 'refresh-button', 'new-task-trigger', 'task-sort-trigger', 'task-refresh-trigger', 'team-actions-trigger'] as $iconActionId) {
             $suite->true((bool) preg_match('/class="[^"]*ui-button-borderless[^"]*"[^>]*id="' . preg_quote($iconActionId, '/') . '"/', $index),
                 'Icon-only action #' . $iconActionId . ' must use the consistent borderless treatment.');

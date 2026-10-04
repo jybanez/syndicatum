@@ -12,13 +12,14 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `766df8c17a129206652c174f4f185700a65ad746`
+- Pinned commit: `ee37f8570ffe4dcfacf2489ca15f0c09aea463a3` (Helper `0.21.229`)
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
 ## Vendored Paths
 
 - `vendor/pbb-helper/js/ui/ui.loader.js`
+- `vendor/pbb-helper/js/ui/ui.icons.files.js`
 - `vendor/pbb-helper/dist/helpers.ui.bundle.min.js`
 - `vendor/pbb-helper/dist/helpers.ui.bundle.min.css`
 - `vendor/pbb-realtime/js/sdk/`
@@ -41,6 +42,10 @@ This first implementation uses the helper library for:
 - in-place project-plan editing via `ui.inline.text`, `ui.inline.select`, and `ui.inline.date`, including overlay action placement,
 - milestone-grouped native form choices through `ui.form.modal` select option groups, and
 - production-safe Markdown rendering through `ui.markdown` for authored messages and task details.
+- complete modal-based JSON, Markdown, and CSV project-file previews through
+  `ui.json.viewer`, `ui.markdown.viewer`, and `ui.csv.viewer`.
+- canonical project-file selection through `ui.repository.picker`, including the
+  chat composer's custom attachment adapter and selected-attachment queue.
 
 The current upstream helper line also includes newer primitives that should be preferred during the DB-backed refactor:
 

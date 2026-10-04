@@ -136,6 +136,31 @@ try {
         throw new RuntimeException('Expected stale reorder rejection.');
     });
 
+    $test('plan deletion is version checked, dependency safe, audited, and broadcast', function () use ($plan, $tasks, $access, $same, $pdo) {
+        $milestone = $plan->createMilestone($access, ['title' => 'Temporary checkpoint']);
+        $deliverable = $plan->createDeliverable($access, ['title' => 'Temporary output', 'milestone_id' => $milestone['id']]);
+        $task = $tasks->create($access, ['title' => 'Temporary work', 'deliverable_id' => $deliverable['id']]);
+        try { $plan->deleteMilestone($access, $milestone['id'], ['version' => $milestone['version']]); }
+        catch (RuntimeException $error) { $same('MILESTONE_DELETE_HAS_DELIVERABLES', $error->getMessage()); $milestoneBlocked = true; }
+        if (empty($milestoneBlocked)) { throw new RuntimeException('Expected milestone child protection.'); }
+        try { $plan->deleteDeliverable($access, $deliverable['id'], ['version' => $deliverable['version']]); }
+        catch (RuntimeException $error) { $same('DELIVERABLE_DELETE_HAS_TASKS', $error->getMessage()); $deliverableBlocked = true; }
+        if (empty($deliverableBlocked)) { throw new RuntimeException('Expected deliverable task protection.'); }
+        $tasks->update($access, $task['id'], ['version' => $task['version'], 'deliverable_id' => null]);
+        $afterDeliverable = $plan->deleteDeliverable($access, $deliverable['id'], ['version' => $deliverable['version']]);
+        $same(false, in_array($deliverable['id'], array_column($afterDeliverable['deliverables'], 'id'), true));
+        $afterMilestone = $plan->deleteMilestone($access, $milestone['id'], ['version' => $milestone['version']]);
+        $same(false, in_array($milestone['id'], array_column($afterMilestone['milestones'], 'id'), true));
+        $same(2, (int) $pdo->query("SELECT COUNT(*) FROM administrative_audit_events WHERE action = 'project.plan_item_deleted'")->fetchColumn());
+        $same(2, (int) $pdo->query("SELECT COUNT(*) FROM message_events_outbox WHERE event_type = 'syndicatum.project_plan.changed' AND JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.change')) = 'deleted'")->fetchColumn());
+        $stale = $plan->createMilestone($access, ['title' => 'Stale deletion']);
+        $updated = $plan->updateMilestone($access, $stale['id'], ['version' => $stale['version'], 'title' => $stale['title'],
+            'description' => null, 'status' => 'planned', 'target_at' => null, 'position' => $stale['position']]);
+        try { $plan->deleteMilestone($access, $stale['id'], ['version' => $stale['version']]); }
+        catch (RuntimeException $error) { $same('MILESTONE_VERSION_CONFLICT', $error->getMessage()); return; }
+        throw new RuntimeException('Expected stale milestone deletion rejection at version ' . $updated['version'] . '.');
+    });
+
     $test('explicit agent plan stewardship links existing tasks and updates guarded progress with evidence', function () use ($plan, $tasks, $access, $same, $pdo, $owner, $project) {
         $unlinked = $tasks->create($access, ['title' => 'Existing research evidence']);
         $created = (new ProjectManagementService($pdo))->createAgent($project['id'], $owner['id'], [

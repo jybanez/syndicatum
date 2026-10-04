@@ -26,6 +26,13 @@ class SettingsService
             'mail.sender_address' => ['section' => 'mail', 'type' => 'email', 'default' => ''],
             'mail.reply_to_address' => ['section' => 'mail', 'type' => 'email', 'default' => ''],
             'storage.local_base_path' => ['section' => 'storage', 'type' => 'path', 'default' => '', 'max' => 2048],
+            'storage.max_upload_bytes' => ['section' => 'storage', 'type' => 'integer', 'default' => 26214400, 'min' => 1048576, 'max' => 1073741824],
+            'storage.max_files_per_action' => ['section' => 'storage', 'type' => 'integer', 'default' => 10, 'min' => 1, 'max' => 50],
+            'storage.allowed_content_types' => ['section' => 'storage', 'type' => 'string_list', 'default' => self::supportedDownloadContentTypes(), 'allowed' => self::supportedDownloadContentTypes()],
+            'storage.inline_preview_types' => ['section' => 'storage', 'type' => 'string_list', 'default' => self::supportedInlinePreviewTypes(), 'allowed' => self::supportedInlinePreviewTypes()],
+            'storage.default_project_quota_bytes' => ['section' => 'storage', 'type' => 'integer', 'default' => 68719476736, 'min' => 1048576, 'max' => 10995116277760],
+            'storage.deleted_content_retention_days' => ['section' => 'storage', 'type' => 'integer', 'default' => 0, 'min' => 0, 'max' => 365],
+            'storage.public_cache_max_age_seconds' => ['section' => 'storage', 'type' => 'integer', 'default' => 300, 'min' => 0, 'max' => 86400],
             'recovery.backup_base_path' => ['section' => 'recovery', 'type' => 'path', 'default' => '', 'max' => 2048],
             'realtime.enabled' => ['section' => 'integrations', 'type' => 'boolean', 'default' => false],
             'realtime.base_url' => ['section' => 'integrations', 'type' => 'url', 'default' => ''],
@@ -126,6 +133,7 @@ class SettingsService
     {
         $changes = $this->withDerivedRealtimeEndpoints($changes);
         $this->validateRealtimeEndpointCompatibility($changes);
+        $this->validateStoragePolicy($changes);
         $registry = self::registry();
         $this->pdo->beginTransaction();
         try {
@@ -239,6 +247,29 @@ class SettingsService
             }
             return $value;
         }
+        if ($definition['type'] === 'string_list') {
+            if (!is_array($value)) {
+                throw new InvalidArgumentException($key . ' must be a list.');
+            }
+            $allowed = isset($definition['allowed']) && is_array($definition['allowed']) ? $definition['allowed'] : [];
+            $result = [];
+            foreach ($value as $item) {
+                if (!is_string($item) || trim($item) === '') {
+                    throw new InvalidArgumentException($key . ' contains an invalid value.');
+                }
+                $item = strtolower(trim($item));
+                if (!in_array($item, $allowed, true)) {
+                    throw new InvalidArgumentException($key . ' contains an unsupported content type.');
+                }
+                if (!in_array($item, $result, true)) {
+                    $result[] = $item;
+                }
+            }
+            if (empty($result)) {
+                throw new InvalidArgumentException($key . ' must contain at least one content type.');
+            }
+            return $result;
+        }
         $value = trim((string) $value);
         if ($definition['type'] === 'timezone') {
             try {
@@ -312,7 +343,69 @@ class SettingsService
             }
             return ['exists' => true, 'value' => $parsed];
         }
+        if ($definition['type'] === 'string_list') {
+            $decoded = json_decode((string) $value, true);
+            $items = is_array($decoded) ? $decoded : preg_split('/\s*,\s*/', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY);
+            return ['exists' => true, 'value' => $this->validateValue($key, $items, $definition)];
+        }
         return ['exists' => true, 'value' => $this->validateValue($key, $value, $definition)];
+    }
+
+    private function validateStoragePolicy(array $changes)
+    {
+        $storageKeys = [
+            'storage.max_upload_bytes', 'storage.max_files_per_action', 'storage.allowed_content_types',
+            'storage.inline_preview_types', 'storage.default_project_quota_bytes',
+            'storage.deleted_content_retention_days', 'storage.public_cache_max_age_seconds',
+        ];
+        $touchesStoragePolicy = false;
+        foreach ($storageKeys as $key) {
+            if (array_key_exists($key, $changes)) {
+                $touchesStoragePolicy = true;
+                break;
+            }
+        }
+        if (!$touchesStoragePolicy) {
+            return;
+        }
+
+        $registry = self::registry();
+        $resolved = [];
+        foreach ($storageKeys as $key) {
+            $input = array_key_exists($key, $changes) ? $changes[$key] : $this->get($key);
+            $resolved[$key] = $this->validateValue($key, $input, $registry[$key]);
+        }
+        if ($resolved['storage.default_project_quota_bytes'] <= $resolved['storage.max_upload_bytes']) {
+            throw new InvalidArgumentException('storage.default_project_quota_bytes must be greater than storage.max_upload_bytes.');
+        }
+        foreach ($resolved['storage.inline_preview_types'] as $contentType) {
+            if (!in_array($contentType, $resolved['storage.allowed_content_types'], true)) {
+                throw new InvalidArgumentException('storage.inline_preview_types must be a subset of storage.allowed_content_types.');
+            }
+        }
+    }
+
+    public static function supportedDownloadContentTypes()
+    {
+        return [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/svg+xml',
+            'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm',
+            'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+            'application/pdf', 'text/plain', 'text/csv', 'text/markdown', 'application/json',
+            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/zip', 'application/x-7z-compressed',
+        ];
+    }
+
+    public static function supportedInlinePreviewTypes()
+    {
+        return [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+            'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm',
+            'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+        ];
     }
 
     private function encrypt($plaintext)

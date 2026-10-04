@@ -215,7 +215,7 @@ project owners and administrators. Notification delivery resumes the existing
 provider discussion; it does not create a replacement discussion or change its
 permissions.
 
-The Timeline column, not the page, owns timeline scrolling. Loading and rendering must preserve the user's position and must not repeatedly fire bottom-page loading. Message composition opens in its canonical modal; reply mode automatically addresses the original sender and temporarily hides normal addressing controls until cancel or send.
+The Timeline column, not the page, owns timeline scrolling. Loading and rendering must preserve the user's position and must not repeatedly fire bottom-page loading. Message composition opens in its canonical modal; reply mode automatically addresses the original sender and temporarily hides normal addressing controls until cancel or send. The composer attachment action opens Helper's canonical repository picker immediately in a loading state. It navigates Project Files, supports cross-folder multi-selection and upload into the current folder, and renders the chosen canonical records in Helper's attachment queue. Sending reauthorizes up to 20 file IDs in the current project and commits the message and ordered attachment associations atomically. Messages with attachments show an accessible paperclip immediately before the timeline timestamp in both expanded and collapsed layouts. Timeline messages group available images and videos into Helper's wrapping media strip before rendering remaining or unavailable attachments as compact file cards. The strip owns the shared gallery viewer and is destroyed with its virtualized message card.
 
 An unaddressed historical message is presented as a project broadcast. Composer
 validation uses a Helper alert dialog for conditions requiring user action, such
@@ -230,6 +230,7 @@ Administration uses the same fixed shell. Navbar items are omitted unless their 
 - **Agents:** installation-wide emergency suspension and credential revocation.
 - **Audit:** security and administrative events without secret or message leakage.
 - **System Settings:** an administrator-only modal with General, Realtime, Authentication, Mail, Storage, and Recovery tabs. General includes the IANA **Default timezone**, installation and messaging controls, and the canonical **Public Syndicatum URL** used as the MCP/OAuth issuer and resource origin; production values require HTTPS and never derive from request Host headers. Authentication groups PBB Account, Google sign-in, native-login availability, and self-registration. Mail currently exposes the private development-capture boundary while production SMTP controls remain disabled. Storage configures and prepares the private absolute server directory that will hold project file content; it must be writable and outside the public web root. Recovery separately owns the server-side backup base location.
+- **Project Files:** the folder action before the project menu opens a large canonical loading modal with a folder tree and resizable current-folder grid. Active project participants can create folders and upload a batch up to the configured files-per-action limit; the Helper uploader sends each file in ordered, retry-safe 1 MiB requests so the configured file-size policy is independent of PHP's per-request upload ceiling. Private partial sessions are bound to the project participant, expire after 24 hours, and enter the canonical file service only after complete assembly; partial batch successes still refresh normally. Before any bytes are sent for a same-folder name collision, Helper asks whether to replace the existing file. Clicking an image or video filename opens Helper's Media Viewer; clicking a PDF opens Helper's PDF Viewer; filenames without an assigned viewer open their permanent delivery URL in a new browser tab. Each file row exposes Copy link, Move to, Download, Rename, and Delete. Public delivery supports byte ranges for video seeking and PDF rendering. Public IDs and their single canonical `files/{public_id}` URLs are immutable; no link-regeneration action exists. Local objects are physically grouped by opaque project public ID and then split across 256 two-character performance shards. The service enforces configured type, size, and per-project quota policy, records versioned metadata and immutable audit events, and never returns local paths.
 
 Project ownership and ordinary project management remain project-scoped even when accessed by a global administrator.
 
@@ -237,7 +238,7 @@ Project ownership and ordinary project management remain project-scoped even whe
 
 The avatar menu and Workspace profile column open the same profile actions.
 
-Avatar editing uses a local file chooser/upload with preview and replacement. It must not present an arbitrary URL field. Human avatar upload changes the current user's global profile media; agent avatar upload changes only that project-agent identity. The returned `avatar_url` is a read-only Syndicatum media location. Explicit avatar removal remains follow-up work. Avatar upload is not exposed in the message composer and does not create general message attachments. A human profile may also select an IANA timezone or **Use system default**; timestamps remain stored in UTC and effective display/email timezone resolves from personal preference, system default, then UTC.
+Avatar editing uses a local file chooser/upload with preview and replacement. It must not present an arbitrary URL field. Human avatar upload changes the current user's global profile media; agent avatar upload changes only that project-agent identity. The returned `avatar_url` is a read-only Syndicatum media location. Explicit avatar removal remains follow-up work. Avatar media remains separate from canonical Project Files and cannot be selected through the message attachment picker. A human profile may also select an IANA timezone or **Use system default**; timestamps remain stored in UTC and effective display/email timezone resolves from personal preference, system default, then UTC.
 
 A native password change requires:
 
@@ -287,9 +288,9 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/project-task-deliverable.php` | PATCH | Permissioned, version-checked task-to-deliverable link update with evidence |
 | `/api/v1/project-plan.php` | GET | Read milestones, deliverables, and computed task-backed progress |
 | `/api/v1/project-milestones.php` | POST | Owner/admin milestone creation |
-| `/api/v1/project-milestone.php` | PATCH | Owner/admin version-checked milestone update |
+| `/api/v1/project-milestone.php` | PATCH, DELETE | Owner/admin version-checked milestone update or empty-milestone deletion |
 | `/api/v1/project-deliverables.php` | POST | Owner/admin standalone or milestone-bound deliverable creation |
-| `/api/v1/project-deliverable.php` | PATCH | Owner/admin version-checked deliverable update |
+| `/api/v1/project-deliverable.php` | PATCH, DELETE | Owner/admin version-checked deliverable update or unlinked-deliverable deletion |
 | `/api/v1/project-milestone-progress.php` | PATCH | Permissioned, version-checked milestone-status update with evidence |
 | `/api/v1/project-deliverable-progress.php` | PATCH | Permissioned, version-checked deliverable-status update with evidence |
 | `/api/v1/project-plan-order.php` | PATCH | Owner/admin atomic milestone reorder or deliverable membership-and-order move |

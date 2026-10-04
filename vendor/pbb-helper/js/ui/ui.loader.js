@@ -3,7 +3,7 @@ const UI_COMPONENTS_CSS = "../../css/ui/ui.components.css";
 const INCIDENT_BASE_CSS = "../../css/incident/incident.css";
 const UI_OVERLAY_ROUTING_REV = "0.21.215";
 const UI_AUDIO_REV = "0.21.62";
-const UI_ICONS_REV = "0.21.209";
+const UI_ICONS_REV = "0.21.225";
 const UI_FILE_INPUT_REV = "0.21.108";
 const UI_CHAT_REV = "0.21.120";
 const UI_PASSWORD_REV = "0.21.66";
@@ -20,7 +20,7 @@ const UI_DEVICE_PRIMER_REV = "0.21.65";
 const UI_GAME_REV = "0.21.112";
 const UI_INSPECTION_REV = "0.21.1";
 const UI_TIMELINE_REV = "0.21.222";
-const UI_BUNDLE_REV = "0.21.222";
+const UI_BUNDLE_REV = "0.21.229";
 const UI_GAME_BUNDLE_REV = "0.21.209";
 const UI_INSPECTION_BUNDLE_REV = "0.21.1";
 const UI_BUNDLE_JS = `../../dist/helpers.ui.bundle.min.js?v=${UI_BUNDLE_REV}`;
@@ -30,6 +30,26 @@ const UI_GAME_BUNDLE_CSS = `../../dist/helpers.game.bundle.min.css?v=${UI_GAME_B
 const UI_INSPECTION_BUNDLE_JS = `../../dist/helpers.inspection.bundle.min.js?v=${UI_INSPECTION_BUNDLE_REV}`;
 
 export const DEFAULT_COMPONENT_REGISTRY = {
+  "ui.repository.picker": {
+    js: "./ui.repository.picker.js?v=0.21.229",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.nav.css?v=0.21.4", "../../css/ui/ui.repository.picker.css?v=0.21.227"],
+    deps: ["ui.toast"], export: "createRepositoryPicker",
+  },
+  "ui.json.viewer": {
+    js: "./ui.file.viewer.js?v=0.21.223",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.data.inspector.css", "../../css/ui/ui.file.viewer.css?v=0.21.223"],
+    deps: [], export: "createJsonViewer",
+  },
+  "ui.markdown.viewer": {
+    js: "./ui.file.viewer.js?v=0.21.223",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.markdown.css?v=0.21.217", "../../css/ui/ui.file.viewer.css?v=0.21.223"],
+    deps: [], export: "createMarkdownViewer",
+  },
+  "ui.csv.viewer": {
+    js: "./ui.file.viewer.js?v=0.21.223",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.grid.css?v=0.21.189", "../../css/ui/ui.file.viewer.css?v=0.21.223"],
+    deps: [], export: "createCsvViewer",
+  },
   "ui.markdown": {
     js: "./ui.markdown.js?v=0.21.217",
     css: [UI_TOKENS_CSS, "../../css/ui/ui.markdown.css?v=0.21.217"],
@@ -594,8 +614,8 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createChatThread",
   },
   "ui.chat.composer": {
-    js: "./ui.chat.composer.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.composer.css"],
+    js: "./ui.chat.composer.js?v=0.21.228",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.composer.css?v=0.21.228"],
     deps: [],
     export: "createChatComposer",
   },
