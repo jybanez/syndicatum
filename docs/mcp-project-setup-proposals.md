@@ -7,7 +7,7 @@ Syndicatum agents can help improve project details, project plans, and agent set
 - `propose_agent_setup` suggests a new project-scoped agent profile.
 - `propose_agent_profile_update` suggests changes to an existing agent profile or supervisor assignment.
 
-Every tool creates a durable, auditable proposal with `pending` status. A human project owner or administrator opens the timeline column's **AI Proposals** tab (or uses **Project actions → AI proposals** as a shortcut), chooses **Review**, and explicitly selects **Approve and apply** or **Reject**. Approval and the underlying project change are committed in one database transaction.
+Every tool creates a durable, auditable proposal with `pending` status. A human project owner or administrator opens the timeline column's **AI Proposals** tab, chooses **Review**, and explicitly selects **Approve and apply** or **Reject**. Approval and the underlying project change are committed in one database transaction.
 
 New proposals and review decisions update an already-open **AI Proposals** tab through Realtime without a browser refresh. The proposal-list event is only a content-free invalidation containing proposal identity, version, status, and change type; authorized owners and administrators then reload the protected proposal resource. A successful approval or rejection also creates an immutable system timeline message addressed to the proposing participant. That message carries only decision metadata and the optional review note—not the protected proposal payload or rationale—so the proposer receives the outcome through the ordinary connector notification path. Reconnect and polling reconciliation cover events missed while the browser was offline.
 
