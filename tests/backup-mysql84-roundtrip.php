@@ -7,6 +7,7 @@ require_once dirname(__DIR__) . '/src/McpServiceTokenService.php';
 require_once dirname(__DIR__) . '/src/CurrentBackupProducer.php';
 require_once dirname(__DIR__) . '/src/CurrentBackupStorage.php';
 require_once dirname(__DIR__) . '/src/CurrentRestoreWorker.php';
+require_once dirname(__DIR__) . '/src/SettingsService.php';
 
 function mysql84BackupFail($message)
 {
@@ -61,6 +62,49 @@ function mysql84BackupRemoveTree($path)
     rmdir($path);
 }
 
+function mysql84BackupPort()
+{
+    $socket = stream_socket_server('tcp://127.0.0.1:0', $number, $message);
+    if (!$socket) { throw new RuntimeException('Could not reserve public-link acceptance port: ' . $message); }
+    $name = stream_socket_get_name($socket, false);
+    fclose($socket);
+    return (int) substr(strrchr($name, ':'), 1);
+}
+
+function mysql84BackupPublicServer($applicationRoot, $router, $port, $database)
+{
+    $environment = getenv();
+    if (!is_array($environment)) { $environment = []; }
+    $environment['PBB_AGENTCHAT_DB_HOST'] = getenv('PBB_AGENTCHAT_DB_HOST') ?: '127.0.0.1';
+    $environment['PBB_AGENTCHAT_DB_PORT'] = getenv('PBB_AGENTCHAT_DB_PORT') ?: '3306';
+    $environment['PBB_AGENTCHAT_DB_USER'] = getenv('PBB_AGENTCHAT_DB_USER') ?: 'root';
+    $environment['PBB_AGENTCHAT_DB_PASS'] = getenv('PBB_AGENTCHAT_DB_PASS') === false ? '' : getenv('PBB_AGENTCHAT_DB_PASS');
+    $environment['PBB_AGENTCHAT_DB_NAME'] = $database;
+    $log = tempnam(sys_get_temp_dir(), 'syndicatum-public-link-');
+    $process = proc_open([PHP_BINARY, '-S', '127.0.0.1:' . $port, '-t', $applicationRoot, $router], [
+        0 => ['pipe', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a'],
+    ], $pipes, $applicationRoot, $environment);
+    if (!is_resource($process)) { throw new RuntimeException('Could not start public-link acceptance server.'); }
+    fclose($pipes[0]);
+    for ($attempt = 0; $attempt < 50; $attempt++) {
+        usleep(100000);
+        $socket = @fsockopen('127.0.0.1', $port, $errorNumber, $errorMessage, 0.2);
+        if (is_resource($socket)) { fclose($socket); return [$process, $log]; }
+    }
+    proc_terminate($process);
+    throw new RuntimeException('Public-link acceptance server failed: ' . (is_file($log) ? file_get_contents($log) : ''));
+}
+
+function mysql84BackupPublicGet($url)
+{
+    $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 10]]);
+    $bytes = file_get_contents($url, false, $context);
+    $headers = isset($http_response_header) && is_array($http_response_header) ? $http_response_header : [];
+    $status = isset($headers[0]) && preg_match('/\s(\d{3})\s/', $headers[0], $matches) ? (int) $matches[1] : 0;
+    if (!is_string($bytes)) { throw new RuntimeException('Public-link acceptance request failed.'); }
+    return ['status' => $status, 'headers' => $headers, 'bytes' => $bytes];
+}
+
 final class Mysql84RestoreRealtime
 {
     public $updates = [];
@@ -83,6 +127,8 @@ $targetName = 'syndicatum_backup_target_' . $suffix;
 $temporaryRoot = sys_get_temp_dir() . '/syndicatum-backup-mysql84-' . $suffix;
 $server = null;
 $assetStage = null;
+$publicServer = null;
+$publicServerLog = null;
 
 try {
     $server = mysql84BackupPdo();
@@ -211,6 +257,20 @@ try {
     $projectInsert = $source->prepare("INSERT INTO project_files (id, public_id, project_id, folder_id, storage_driver, storage_key, original_name, display_name, normalized_name, mime_type, size_bytes, sha256, uploaded_by_participant_id, state, version, created_at, updated_at, deleted_at) VALUES (701, ?, 300, 700, 'local', ?, 'recovery-proof.txt', 'recovery-proof.txt', 'recovery-proof.txt', 'text/plain', ?, ?, 500, 'available', 1, ?, ?, NULL)");
     $projectInsert->execute([$projectPublicId, $projectStorageKey, strlen($projectBytes), $projectSha256, $now, $now]);
     $source->exec("INSERT INTO message_file_attachments (id, project_id, message_id, project_file_id, attached_by_participant_id, position, created_at) VALUES (702, 300, 600, 701, 500, 0, '$now')");
+    (new SettingsService($source))->update(['storage.local_base_path' => $temporaryRoot . '/project-source'], 100);
+
+    $publicRouter = $temporaryRoot . '/public-link-router.php';
+    file_put_contents($publicRouter, "<?php\n\$path = parse_url(\$_SERVER['REQUEST_URI'], PHP_URL_PATH);\n"
+        . "if (preg_match('#^/files/([a-f0-9-]{36})$#i', (string) \$path, \$matches)) { \$_GET['id'] = \$matches[1]; require "
+        . var_export($root . '/files.php', true) . "; return true; }\nreturn false;\n");
+    $publicPort = mysql84BackupPort();
+    list($publicServer, $publicServerLog) = mysql84BackupPublicServer($root, $publicRouter, $publicPort, $sourceName);
+    $canonicalPath = '/files/' . $projectPublicId;
+    $sourcePublic = mysql84BackupPublicGet('http://127.0.0.1:' . $publicPort . $canonicalPath);
+    mysql84BackupAssert($sourcePublic['status'] === 200 && hash_equals($projectSha256, hash('sha256', $sourcePublic['bytes'])),
+        'The pre-backup canonical public URL did not serve the Project File bytes.');
+    proc_terminate($publicServer); proc_close($publicServer); $publicServer = null;
+    if (is_file($publicServerLog)) { unlink($publicServerLog); } $publicServerLog = null;
 
     $secretsPath = $temporaryRoot . '/portable-secrets.php';
     $backupConfigPath = $temporaryRoot . '/portable-backup-config.php';
@@ -281,6 +341,14 @@ try {
         'Current restore did not preserve Project File database identity and integrity metadata.');
     mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM message_file_attachments WHERE message_id = 600 AND project_file_id = 701')->fetchColumn() === 1,
         'Current restore did not preserve the message attachment association.');
+    (new SettingsService($target))->update(['storage.local_base_path' => $temporaryRoot . '/project-target'], 100);
+    list($publicServer, $publicServerLog) = mysql84BackupPublicServer($root, $publicRouter, $publicPort, $targetName);
+    $restoredPublic = mysql84BackupPublicGet('http://127.0.0.1:' . $publicPort . $canonicalPath);
+    mysql84BackupAssert($restoredPublic['status'] === 200
+        && hash_equals(hash('sha256', $sourcePublic['bytes']), hash('sha256', $restoredPublic['bytes']))
+        && hash_equals($projectSha256, hash('sha256', $restoredPublic['bytes'])),
+        'The exact canonical public URL did not serve byte-identical content after restore.');
+    proc_terminate($publicServer); proc_close($publicServer); $publicServer = null;
 
     echo json_encode([
         'mysql_version' => $target->query('SELECT VERSION()')->fetchColumn(),
@@ -309,10 +377,14 @@ try {
         'current_project_file_count' => $completedRestore['restored_project_file_count'],
         'current_project_file_sha256' => $projectSha256,
         'current_message_attachment_preserved' => true,
+        'canonical_public_path' => $canonicalPath,
+        'canonical_public_link_byte_identical' => true,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $exception) {
     mysql84BackupFail('MySQL 8.4 encrypted-backup round-trip failed: ' . $exception->getMessage());
 } finally {
+    if (is_resource($publicServer)) { @proc_terminate($publicServer); @proc_close($publicServer); }
+    if (is_string($publicServerLog) && is_file($publicServerLog)) { @unlink($publicServerLog); }
     if (is_string($assetStage) && is_dir($assetStage) && is_dir($temporaryRoot . '/staging')) {
         try { BackupEnvelope::removePrivateStage($assetStage, $temporaryRoot . '/staging'); } catch (Throwable $ignored) {}
     }

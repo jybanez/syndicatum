@@ -2,6 +2,7 @@
 
 require_once dirname(__DIR__) . '/src/PortableBackupManifest.php';
 require_once dirname(__DIR__) . '/src/PortableBackupArchive.php';
+require_once dirname(__DIR__) . '/src/CurrentBackupEnvelope.php';
 require_once dirname(__DIR__) . '/src/ProjectFileBackupSource.php';
 require_once dirname(__DIR__) . '/src/ProjectFileRestoreTarget.php';
 
@@ -83,7 +84,10 @@ try {
     projectBackupAssert(PortableBackupManifest::parse(PortableBackupManifest::encode($previous)) === $previous,
         'V2 portable backups must remain readable.');
 
-    if (in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        throw new RuntimeException('SQLite is required for configured local-storage backup acceptance.');
+    }
+    {
         $application = $root . DIRECTORY_SEPARATOR . 'application';
         $storage = $root . DIRECTORY_SEPARATOR . 'storage';
         mkdir($application, 0700); mkdir($storage, 0700);
@@ -101,10 +105,29 @@ try {
         $inventory = $source->inventory($pdo, true);
         projectBackupAssert(count($inventory) === 1 && $inventory[0]['key'] === $projectKey,
             'Snapshot inventory did not capture the referenced local object.');
+        $configuredManifest = $manifest;
+        $configuredManifest['project_files'] = $inventory;
+        $configuredArchive = $root . DIRECTORY_SEPARATOR . 'configured-local-storage.zip';
+        PortableBackupArchive::create($payload, $configuredManifest, $configuredArchive, $source->archiveSources());
+        $configuredEnvelope = $root . DIRECTORY_SEPARATOR . 'configured-local-storage.syndicatum-backup';
+        $configuredStage = $root . DIRECTORY_SEPARATOR . 'configured-stage';
+        mkdir($configuredStage, 0700); @chmod($configuredStage, 0700);
+        $configuredKey = random_bytes(32);
+        $configuredJson = PortableBackupManifest::encode($configuredManifest);
+        CurrentBackupEnvelope::encrypt($configuredArchive, $configuredJson, $configuredEnvelope, $configuredKey);
+        $authenticated = CurrentBackupEnvelope::decryptToPrivateStage($configuredEnvelope, $configuredStage, $configuredKey);
+        try {
+            $authenticatedManifest = PortableBackupManifest::parse($authenticated['manifest_json']);
+            PortableBackupArchive::verify($authenticated['archive_path'], $authenticatedManifest);
+            projectBackupAssert($authenticatedManifest['project_files'] === $inventory,
+                'Authenticated Windows-compatible backup did not preserve configured local-storage inventory.');
+        } finally {
+            CurrentBackupEnvelope::removePrivateStage($authenticated['stage_path'], $configuredStage);
+        }
         file_put_contents($sourcePath, 'changed bytes');
         $changedRejected = false;
         try { $source->verifyUnchanged(); } catch (RuntimeException $expected) { $changedRejected = true; }
         projectBackupAssert($changedRejected, 'A project file changed after snapshot was not rejected.');
     }
-    echo "Portable project-file backup contract passed.\n";
+    echo "Portable project-file backup and configured-storage envelope contract passed.\n";
 } finally { projectBackupRemove($root); }
