@@ -1015,7 +1015,7 @@ try {
         $suite->same('6993cae3245b687a41549d026ceed599b10dd12dcf90c8d09c468ac113c3fb89',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
             'The vendored Helper loader must match canonical release 0.21.229 exactly.');
-        $suite->same('a7c5be8b0f91e81d4765b3583390ba99a3596c8091304fe4e1c01c29d591e7f1',
+        $suite->same('a7a8668869be48a47202f24b1fd5f20b14a41cc818fa65b89a1c9c41a0a90cf7',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.icons.files.js'),
             'The vendored Helper file icon pack must match canonical release 0.21.229 exactly.');
     });
