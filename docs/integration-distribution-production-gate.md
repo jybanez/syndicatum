@@ -29,6 +29,21 @@ local connector and background process. Public OpenAI submission requires a
 stable public HTTPS MCP endpoint. Do not silently replace one model with the
 other or call a local marketplace listing a public-directory release.
 
+## Machine-readable promotion evidence
+
+The distribution policy records every channel gate as a stable ID, requirement,
+status, and evidence list. A gate may be `open`, `blocked`, or `passed`; a
+`passed` gate must retain at least one non-secret evidence reference for the
+exact artifact. A channel may be classified as `production` only when it is
+production eligible, has a published identifier, and every required gate is
+passed with retained evidence. Repository tests enforce this fail-closed
+promotion rule.
+
+Current open or blocked gates intentionally carry no placeholder evidence. Add
+only durable paths, run URLs, provider identifiers, or sanitized records that
+were actually verified. Never convert a source test, draft dashboard, local
+install, or inferred compatibility result into publication evidence.
+
 ## Verified repository and service evidence
 
 The following evidence was current on 2026-10-04:
