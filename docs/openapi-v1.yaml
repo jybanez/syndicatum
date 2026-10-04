@@ -172,8 +172,13 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - { name: folder_id, in: query, description: Folder UUID; omit or use root for the project root., schema: { type: string } }
+        - { name: page, in: query, description: One-based file page., schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 } }
+        - { name: per_page, in: query, description: Bounded files per page., schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, description: Case-insensitive filename, MIME type, or uploader search., schema: { type: string, maxLength: 100 } }
+        - { name: sort, in: query, schema: { type: string, enum: [name, type, size, uploader, created, updated, state], default: name } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: asc } }
       responses:
-        '200': { description: Current folder, root-to-current breadcrumbs, folder tree, immediate files, capabilities, and project quota summary }
+        '200': { description: Current folder, root-to-current breadcrumbs, folder tree, bounded file page with uploader and availability metadata, pagination state, capabilities, and project quota summary }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Invalid' }

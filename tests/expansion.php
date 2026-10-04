@@ -461,6 +461,62 @@ try {
         } finally { $remove($root); }
     });
 
+    $suite->test('project file browsing is bounded, searchable, sortable, and exposes uploader and availability metadata', function () use ($suite, $pdo, $administrator, $management) {
+        $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-project-file-list-' . bin2hex(random_bytes(6));
+        $remove = function ($path) use (&$remove) {
+            if (!file_exists($path) && !is_link($path)) { return; }
+            if (is_dir($path) && !is_link($path)) {
+                foreach (scandir($path) as $entry) { if ($entry !== '.' && $entry !== '..') { $remove($path . DIRECTORY_SEPARATOR . $entry); } }
+                rmdir($path); return;
+            }
+            unlink($path);
+        };
+        try {
+            $settings = new SettingsService($pdo);
+            $settings->update(['storage.local_base_path' => $root], $administrator['id']);
+            $project = $management->createProject($administrator['id'], ['name' => 'Bounded File Listing']);
+            $participant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
+            $participant->execute([$project['id'], $administrator['id']]);
+            $participantId = (int) $participant->fetchColumn();
+            $access = ['project_id' => $project['id'], 'project_name' => $project['name'], 'project_status' => 'active',
+                'participant_id' => $participantId, 'participant_status' => 'active'];
+            $service = new ProjectFileService($pdo, new LocalFileStorage(dirname(__DIR__), $root), $settings);
+            $folder = $service->createFolder($access, ['name' => 'Reports'], 'bounded-file-list-folder');
+            $folderId = $pdo->prepare('SELECT id FROM project_file_folders WHERE project_id = ? AND public_id = ?');
+            $folderId->execute([$project['id'], $folder['folder']['id']]);
+            $folderDatabaseId = (int) $folderId->fetchColumn();
+            $insert = $pdo->prepare("INSERT INTO project_files
+                (public_id, project_id, folder_id, storage_driver, storage_key, original_name, display_name, normalized_name,
+                 mime_type, size_bytes, sha256, uploaded_by_participant_id, state, version, created_at, updated_at)
+                VALUES (?, ?, ?, 'local', ?, ?, ?, ?, 'application/pdf', ?, ?, ?, ?, 1, ?, ?)");
+            for ($index = 1; $index <= 23; $index++) {
+                $name = sprintf('report-%02d.pdf', $index);
+                $state = $index === 23 ? 'unavailable' : 'available';
+                $insert->execute([Db::uuidV4(), $project['id'], $folderDatabaseId, 'objects/test/' . $index, $name, $name,
+                    strtolower($name), $index * 100, hash('sha256', $name), $participantId, $state, Db::now(), Db::now()]);
+            }
+            $first = $service->browse($access, $folder['folder']['id'], ['page' => 1, 'per_page' => 10, 'sort' => 'size', 'direction' => 'desc']);
+            $suite->same(10, count($first['files']));
+            $suite->same(23, $first['pagination']['total']);
+            $suite->same(3, $first['pagination']['total_pages']);
+            $suite->same(true, $first['pagination']['has_more']);
+            $suite->same('report-23.pdf', $first['files'][0]['name']);
+            $suite->same('unavailable', $first['files'][0]['state']);
+            $suite->same(false, $first['files'][0]['available']);
+            $suite->same($administrator['display_name'], $first['files'][0]['uploader_name']);
+            $suite->same($participantId, $first['files'][0]['uploader']['participant_id']);
+            $filtered = $service->browse($access, $folder['folder']['id'], ['search' => 'report-07', 'sort' => 'name']);
+            $suite->same(1, $filtered['pagination']['total']);
+            $suite->same('report-07.pdf', $filtered['files'][0]['name']);
+            $suite->throws('Per page must be between 1 and 100', function () use ($service, $access, $folder) {
+                $service->browse($access, $folder['folder']['id'], ['per_page' => 101]);
+            });
+            $suite->throws('Page must be between 1 and 1000000', function () use ($service, $access, $folder) {
+                $service->browse($access, $folder['folder']['id'], ['page' => 'not-a-page']);
+            });
+        } finally { $remove($root); }
+    });
+
     $suite->test('project invitations use recipient or system timezone and create a unified human participant', function () use ($suite, $pdo, $auth, $administrator, $member, $management, $mailCaptureRoot) {
         $auth->updateProfile($member, ['display_name' => $member['display_name'], 'timezone' => 'Asia/Manila']);
         $project = $management->createProject($administrator['id'], ['name' => 'Shared Product']);

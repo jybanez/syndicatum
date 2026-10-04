@@ -863,8 +863,14 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
   .project-files-current-folder-grid .ui-grid-table thead { display: none; }
   .project-files-current-folder-grid .ui-grid-table col:nth-child(2),
   .project-files-current-folder-grid .ui-grid-table col:nth-child(3),
+  .project-files-current-folder-grid .ui-grid-table col:nth-child(4),
+  .project-files-current-folder-grid .ui-grid-table col:nth-child(5),
+  .project-files-current-folder-grid .ui-grid-table col:nth-child(6),
   .project-files-current-folder-grid .ui-grid-cell:nth-child(2),
-  .project-files-current-folder-grid .ui-grid-cell:nth-child(3) { display: none; }
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(3),
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(4),
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(5),
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(6) { display: none; }
   .project-files-current-folder-grid .ui-grid-table col:first-child { width: auto !important; }
   .project-files-current-folder-grid .ui-grid-table col:last-child { width: 44px !important; }
   .project-files-current-folder-grid .ui-grid-cell:first-child { width: auto !important; padding: 7px 6px 7px 10px; }

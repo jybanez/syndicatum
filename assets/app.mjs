@@ -1168,12 +1168,23 @@ function projectFilesContent(payload, handlers = {}) {
     },
   });
   tree.setSelected?.(payload.current_folder?.id || "root");
+  const page = payload.pagination || {};
+  const gridSort = ({ size: "size_bytes", uploader: "uploader_name", created: "created_at", updated: "updated_at" })[page.sort] || page.sort || "name";
   const grid = state.factories.createGrid(gridHost, Array.isArray(payload.files) ? payload.files : [], {
     className: "project-files-current-folder-grid",
     chrome: false,
-    enableSearch: false,
+    mode: "remote",
+    enableSearch: true,
     enableSort: true,
-    enablePagination: false,
+    enablePagination: true,
+    searchPlaceholder: "Search files",
+    search: page.search || "",
+    sortBy: gridSort,
+    sortDir: page.direction || "asc",
+    page: Number(page.page || 1),
+    pageSize: Number(page.per_page || 20),
+    pageSizeOptions: [10, 20, 50, 100],
+    totalRows: Number(page.total || 0),
     enableColumnResize: true,
     minColumnWidth: 90,
     emptyText: payload.notice || "This folder is empty.",
@@ -1185,7 +1196,7 @@ function projectFilesContent(payload, handlers = {}) {
           const cell = document.createElement("button");
           cell.type = "button";
           cell.className = "project-file-name-cell project-file-name-action";
-          cell.title = `${previewable ? "Preview" : "Open"} ${row.name}`;
+          cell.title = `${previewable ? "Preview" : "Open"} ${row.name}${row.mime_type ? ` · ${row.mime_type}` : ""}`;
           cell.addEventListener("click", () => handlers.onFileOpen?.(row));
           const icon = state.factories.createIcon(getFileIconName(row.name, row.mime_type), { size: 18, decorative: true });
           icon.classList.add("project-file-type-icon");
@@ -1206,7 +1217,10 @@ function projectFilesContent(payload, handlers = {}) {
         },
       },
       { key: "size_bytes", label: "Size", width: "90px", format: (value) => recoverySize(Number(value || 0)) },
+      { key: "uploader_name", label: "Uploader", width: "150px" },
+      { key: "created_at", label: "Created", width: "160px", format: (value) => value ? formatDate(value) : "" },
       { key: "updated_at", label: "Modified", width: "160px", format: (value) => value ? formatDate(value) : "" },
+      { key: "state", label: "Status", width: "105px", format: (value) => String(value || "unknown").replaceAll("_", " ") },
       {
         key: "actions", label: "", width: "48px", sortable: false, resizable: false,
         renderCell({ row }) {
@@ -1234,6 +1248,7 @@ function projectFilesContent(payload, handlers = {}) {
       },
     ],
     onColumnResize({ columnWidths }) { state.projectFileGridColumnWidths = columnWidths; },
+    onQueryChange(query) { handlers.onQueryChange?.(query); },
     ...(state.projectFileGridColumnWidths ? { columnWidths: state.projectFileGridColumnWidths } : {}),
   });
   return {
@@ -1647,6 +1662,8 @@ function openProjectFilesModal() {
   loading.className = "project-files-loading";
   const skeleton = state.factories.createSkeleton(loading, { lines: 5, rows: 5 }, { variant: "lines", columns: 2, animated: true });
   let mounted = null;
+  let queryTimer = null;
+  let loadVersion = 0;
   const modal = state.factories.createActionModal({
     title: "Project files",
     size: "lg",
@@ -1655,6 +1672,7 @@ function openProjectFilesModal() {
     actions: [{ id: "close", label: "Close" }],
     onClose() {
       controller.abort();
+      if (queryTimer !== null) window.clearTimeout(queryTimer);
       closeProjectFilePreview();
       skeleton?.destroy?.();
       mounted?.destroy?.();
@@ -1669,9 +1687,25 @@ function openProjectFilesModal() {
     cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancel-loading" }) },
   });
 
-  const loadFolder = (folderId = "root") => request(`${API.projectFiles}?${new URLSearchParams({ project_id: projectId, folder_id: folderId })}`, {
+  const loadFolder = (folderId = "root", query = {}) => {
+    const version = ++loadVersion;
+    const requestedSort = String(query.sort || query.sortBy || "name");
+    const sort = ({ size_bytes: "size", uploader_name: "uploader", created_at: "created", updated_at: "updated" })[requestedSort]
+      || (["name", "type", "size", "uploader", "created", "updated", "state"].includes(requestedSort) ? requestedSort : "name");
+    const requestedDirection = String(query.direction || query.sortDir || "asc").toLowerCase();
+    const parameters = new URLSearchParams({
+      project_id: projectId,
+      folder_id: folderId,
+      page: String(query.page || 1),
+      per_page: String(query.per_page || query.pageSize || 20),
+      search: String(query.search || ""),
+      sort,
+      direction: ["asc", "desc"].includes(requestedDirection) ? requestedDirection : "asc",
+    });
+    return request(`${API.projectFiles}?${parameters}`, {
     signal: controller.signal, requireJson: true,
   }).then((response) => {
+    if (version !== loadVersion) return;
     if (!modal.getState().open) return;
     if (generation !== state.generation || projectId !== selectedProjectId()) {
       void modal.close({ reason: "project-changed" });
@@ -1682,7 +1716,18 @@ function openProjectFilesModal() {
     mounted?.destroy?.();
     const refreshCurrentFolder = () => {
       modal.setBusy(true, { message: "Refreshing files…" });
-      void loadFolder(payload.current_folder?.id || "root");
+      void loadFolder(payload.current_folder?.id || "root", payload.pagination || {});
+    };
+    const scheduleQuery = (query) => {
+      if (queryTimer !== null) window.clearTimeout(queryTimer);
+      queryTimer = window.setTimeout(() => {
+        queryTimer = null;
+        modal.setBusy(true, {
+          message: "Loading files…",
+          cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancel-loading" }) },
+        });
+        void loadFolder(payload.current_folder?.id || "root", query);
+      }, query.search !== payload.pagination?.search ? 250 : 0);
     };
     mounted = projectFilesContent(payload, {
       onFolderSelect: (nextFolderId) => { modal.setBusy(true, { message: "Loading folder…" }); void loadFolder(nextFolderId); },
@@ -1698,10 +1743,12 @@ function openProjectFilesModal() {
         if (action === "delete") confirmProjectFileMutation(projectId, file, "delete_file", refreshCurrentFolder);
       },
       onFileOpen: openProjectFilePreview,
+      onQueryChange: scheduleQuery,
     });
     modal.setContent(mounted.content);
     modal.setBusy(false);
   }).catch((error) => {
+    if (version !== loadVersion) return;
     if (controller.signal.aborted || !modal.getState().open) return;
     modal.setBusy(false);
     loading.replaceChildren();
@@ -1716,6 +1763,7 @@ function openProjectFilesModal() {
       { id: "close", label: "Close" },
     ]);
   });
+  };
   void loadFolder();
 }
 

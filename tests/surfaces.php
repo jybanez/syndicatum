@@ -1141,6 +1141,13 @@ try {
             && strpos($source, 'const successful = items.filter((item) => item.status === "success");') !== false
             && strpos($source, 'refreshFiles();') !== false
             && strpos($source, 'enableColumnResize: true') !== false
+            && strpos($source, 'mode: "remote"') !== false
+            && strpos($source, 'enableSearch: true') !== false
+            && strpos($source, 'enablePagination: true') !== false
+            && strpos($source, 'totalRows: Number(page.total || 0)') !== false
+            && strpos($source, 'onQueryChange(query)') !== false
+            && strpos($filesApi, "'per_page' => isset(\$_GET['per_page'])") !== false
+            && strpos($filesApi, "'search' => isset(\$_GET['search'])") !== false
             && strpos($source, 'iconModule.registerIconPack(FILE_ICONS)') !== false
             && strpos($source, 'getFileIconName(row.name, row.mime_type)') !== false
             && strpos($source, 'project-file-name-cell') !== false
@@ -1188,7 +1195,7 @@ try {
         $suite->true(strpos($source, 'mobileMeta.className = "project-file-mobile-meta"') !== false
             && strpos($styles, '.project-files-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }') !== false
             && strpos($styles, '.project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 0 !important; }') !== false
-            && strpos($styles, '.project-files-current-folder-grid .ui-grid-cell:nth-child(3) { display: none; }') !== false
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-cell:nth-child(6) { display: none; }') !== false
             && strpos($styles, '.project-file-mobile-meta { display: block; }') !== false,
             'Project Files must become a bounded stacked workspace with a compact two-column file list on narrow screens.');
         $suite->true(strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv { display: flex; flex-direction: column; height: 100%; min-height: 0; }') !== false

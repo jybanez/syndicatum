@@ -100,9 +100,16 @@ const tools = [
   },
   {
     name: "syndicatum_list_project_files",
-    description: "List folders and files in the selected project folder. Returned URLs are the permanent canonical public URLs; server filesystem paths are never returned.",
+    description: "List a bounded, searchable, sortable page of folders and files in the selected project folder. Returned URLs are the permanent canonical public URLs; server filesystem paths are never returned.",
     annotations: remoteReadAnnotations,
-    inputSchema: { type: "object", required: ["profile_id"], properties: { profile_id: profileIdProperty(), folder_id: { type: "string", description: "Folder UUID, or root when omitted" } }, additionalProperties: false },
+    inputSchema: { type: "object", required: ["profile_id"], properties: {
+      profile_id: profileIdProperty(), folder_id: { type: "string", description: "Folder UUID, or root when omitted" },
+      page: { type: ["integer", "string"], description: "One-based page, default 1" },
+      per_page: { type: ["integer", "string"], description: "Files per page from 1 to 100, default 20" },
+      search: { type: "string", maxLength: 100, description: "Filename, MIME type, or uploader search" },
+      sort: { type: "string", enum: ["name", "type", "size", "uploader", "created", "updated", "state"] },
+      direction: { type: "string", enum: ["asc", "desc"] },
+    }, additionalProperties: false },
   },
   {
     name: "syndicatum_create_project_folder",

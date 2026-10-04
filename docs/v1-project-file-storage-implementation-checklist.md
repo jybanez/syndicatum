@@ -257,7 +257,7 @@ streaming, traversal, failure-compensation, and package-contract tests pass.
   uncertain result before any replay.
 - [x] Return canonical metadata and a Syndicatum-owned public URL, never the
   local path or a provider URL.
-- [ ] Add pagination and bounded filters for project file lists.
+- [x] Add pagination and bounded filters for project file lists.
 - [x] Add consistent error codes without leaking another project's file
   existence.
 - [x] Add request and response schemas to OpenAPI and the Project API guide.
@@ -328,7 +328,7 @@ OpenAPI contract suites pass.
 
 - [x] Add a project-level **Files** action that opens the canonical modal
   immediately in its loading state, then loads the first file page.
-- [ ] List filename, type, size, uploader, creation/update time, and availability
+- [x] List filename, type, size, uploader, creation/update time, and availability
   with bounded pagination, search, sort, loading skeletons, empty state, and
   recoverable error state.
 - [x] Let every active human and agent participant upload, copy, move, download,
@@ -353,6 +353,15 @@ components. **Create folder** and **Upload files** use the participant-authorize
 CSRF-protected, idempotent mutation service. File rows now provide **Copy link**,
 **Move to**, **Download**, **Rename**, and **Delete**, and the immutable public
 delivery route is active.
+
+Acceptance update (October 4, 2026): the canonical list endpoint now validates
+and enforces a maximum 100-row page, filename/MIME/uploader search, approved
+sort keys and direction, and returns deterministic page totals. Rows expose the
+uploader participant, creation/update timestamps, MIME metadata, and explicit
+availability state without leaking paths or provider keys. Project Files uses
+Helper Grid remote mode for server-backed search, sort, page-size, and previous/
+next controls; the API-backed filename icon/tooltip retains type identification
+without restoring the intentionally removed Type column.
 
 ### 8.3 Timeline message attachments
 

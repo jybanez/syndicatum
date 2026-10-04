@@ -62,8 +62,13 @@ Humans authenticate with their Syndicatum session cookie and send `X-CSRF-Token`
 ## Project-file metadata and mutations
 
 `GET project-files.php` returns the selected folder, root-to-current
-`breadcrumbs`, its immediate folders and files, the full folder tree, storage
-usage, and authorized capabilities. The
+`breadcrumbs`, its immediate folders, a bounded page of files, the full folder
+tree, storage usage, and authorized capabilities. File pages accept `page`
+(1–1,000,000), `per_page` (1–100), a 100-character `search`, an approved
+`sort`, and `direction=asc|desc`. Search covers filenames, MIME type, and the
+uploader display name. Each row includes canonical metadata, availability
+state, creation/update times, and the project participant that uploaded it;
+the response includes total/page metadata for deterministic continuation. The
 synthetic root identifier is `root`; all other file and folder identifiers are
 opaque UUIDs. Responses never contain an absolute server path or provider key.
 
@@ -101,6 +106,8 @@ or included in the result. A same-name replacement remains part of upload: the
 caller first lists the folder, obtains an explicit replacement decision, and
 then supplies the existing `replace_file_id` and latest `version`. The original
 public ID and URL remain unchanged. There is no public-link regeneration tool.
+The list tool exposes the same bounded page, search, sort, and continuation
+parameters as the Project API so agents do not need to load an unbounded folder.
 
 Download reads the same anonymous canonical URL used by the browser. It requires
 an explicit absolute device-local destination and preserves an existing file
