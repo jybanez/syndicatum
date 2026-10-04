@@ -85,9 +85,11 @@
       "production_range": null,
       "providers": ["ChatGPT web", "Gemini web"]
     },
-    "supported_operating_systems": ["Windows 11"],
-    "support_window": "Current stable Codex plugin release and the immediately previous stable release. The first stable release has no previous stable predecessor.",
-    "note": "Windows is the owner-approved initial target. The production range remains null until the exact tagged installation, update, rollback, migration, and revocation acceptance is retained."
+    "supported_operating_systems": [],
+    "support_window": null,
+    "initial_target_operating_systems": ["Windows 11"],
+    "planned_support_policy": "Current stable Codex plugin release and the immediately previous stable release. The first stable release has no previous stable predecessor.",
+    "note": "Windows is the owner-approved initial target, not yet a production support claim. The production range, supported operating systems, and support window remain unclaimed until the exact tagged installation, update, rollback, migration, and revocation acceptance is retained."
   },
   "mobile_app": {
     "classification": "gated",

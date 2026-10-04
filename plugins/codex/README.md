@@ -67,10 +67,11 @@ codex plugin add codex@syndicatum
 ```
 
 The release ZIP, checksum, and manifest are provenance for the tagged
-marketplace snapshot, not a separate installer. Stable support covers the
-current and immediately previous stable release; `0.2.0` has no stable
-predecessor. See the production gate for the required Windows acceptance
-evidence before treating this candidate as production-distributable.
+marketplace snapshot, not a separate installer. The planned support policy
+covers the current and immediately previous stable release; `0.2.0` has no
+stable predecessor. This is not a production support claim. See the production
+gate for the required Windows acceptance evidence before treating this
+candidate as production-distributable.
 
 Restart Codex Desktop, start a new task, and ask Codex to connect this device to
 `https://syndicatum.wizaya.com`. Give the device a recognizable name when prompted.

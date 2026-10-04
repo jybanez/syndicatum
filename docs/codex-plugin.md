@@ -116,8 +116,9 @@ For rollback, fully exit Codex Desktop, remove and re-add the marketplace at the
 previous supported `codex-v<version>` ref, install `codex@syndicatum`, then
 restart Desktop and verify connector and profile status before resuming work.
 Do not delete the per-user Syndicatum plugin data directory during an update or
-rollback. The support window is the current stable release plus the immediately
-previous stable release; `0.2.0` has no stable predecessor.
+rollback. The planned support window is the current stable release plus the
+immediately previous stable release; `0.2.0` has no stable predecessor. That
+window is not a production support claim until installed acceptance passes.
 
 Production classification remains fail-closed until the exact tagged release
 passes clean install, update, rollback, restart, device migration, revocation,

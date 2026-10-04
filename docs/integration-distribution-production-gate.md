@@ -3,10 +3,11 @@
 Status: active production-readiness contract. Last assessed 2026-10-04.
 
 Owner direction recorded 2026-10-04: productionize the Codex channel first,
-with Windows 11 as the initial supported operating system. The support policy is
-the current stable release plus the immediately previous stable release; the
-first stable release has no stable predecessor. OpenAI and Companion store
-publication remain later phases.
+with Windows 11 as the initial target operating system. The planned support
+policy is the current stable release plus the immediately previous stable
+release; the first stable release has no stable predecessor. Neither is a
+production support claim until installed acceptance passes. OpenAI and
+Companion store publication remain later phases.
 
 This document separates source capability, pilot distribution, and production
 distribution for Syndicatum's AI integrations. A source test, unpacked browser
