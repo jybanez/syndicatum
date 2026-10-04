@@ -45,7 +45,16 @@ project membership, policy, versions, idempotency, audit evidence, and immutable
 public IDs. Timeline messages reference canonical files atomically and expose
 the same permanent URL used by internal media rendering and external sharing.
 Local storage is ordinary public-link file sharing, not confidential document
-management. Complete backup/restore of file bytes remains the Gate E boundary.
+management. Portable backup format 3 inventories every available local project
+file by provider-neutral key, public ID, MIME type, byte count, and SHA-256 while
+the database export snapshot is still open. Libzip reads verified objects
+directly from the private storage root, avoiding a second complete plaintext
+copy in staging, and the producer re-verifies every source after archive close.
+Format 3 restore authenticates that inventory before mutation, streams members
+into a private stage, installs exact local provider keys without replacement,
+verifies database metadata and target bytes before commit, and removes objects
+created by a failed transaction. Cross-platform production/restore acceptance
+and operational recovery exercises remain the final Gate E boundary.
 
 The vendored Helper bundle and loader changes are independent prerequisites and must remain bundled/offline-safe.
 

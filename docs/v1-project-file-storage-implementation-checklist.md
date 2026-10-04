@@ -321,7 +321,7 @@ OpenAPI contract suites pass.
   ignore late responses after dismissal or target changes.
 - [x] Show per-file progress, success, failure, retry guidance, and an explicit
   uncertain-outcome state without automatic mutation replay.
-- [ ] Display **Anyone with this link can access the file** wherever a public
+- [x] Display **Anyone with this link can access the file** wherever a public
   link can be copied or opened.
 
 ### 8.2 Project Files management modal
@@ -431,30 +431,30 @@ cancellation, partial failure, and uncertain-outcome recovery.
 
 ### 9.1 Backup production
 
-- [ ] Extend the canonical backup producer to include all referenced local file
+- [x] Extend the canonical backup producer to include all referenced local file
   objects in addition to MySQL and existing persistent assets.
-- [ ] Add a file-storage manifest containing provider-neutral key, size, MIME
+- [x] Add a file-storage manifest containing provider-neutral key, size, MIME
   type, and SHA-256 for every archived object.
-- [ ] Include only non-secret storage interpretation metadata; never archive
+- [x] Include only non-secret storage interpretation metadata; never archive
   provider credentials, tokens, or host-specific secrets.
-- [ ] Stream file content into the archive without requiring a second complete
+- [x] Stream file content into the archive without requiring a second complete
   storage copy in temporary staging.
-- [ ] Define and implement a maintenance lock or consistent-snapshot sequence so
+- [x] Define and implement a maintenance lock or consistent-snapshot sequence so
   database records and file bytes cannot drift during capture.
-- [ ] Fail backup clearly on missing, changing, unreadable, unexpected, or
+- [x] Fail backup clearly on missing, changing, unreadable, unexpected, or
   checksum-mismatched referenced content.
-- [ ] Preserve backward restore support for valid pre-file-storage backups.
+- [x] Preserve backward restore support for valid pre-file-storage backups.
 
 ### 9.2 Staged restore
 
-- [ ] Extend protected restore inspection to validate storage manifest paths,
+- [x] Extend protected restore inspection to validate storage manifest paths,
   roles, counts, sizes, and checksums before extraction or database cutover.
-- [ ] Stage restored file bytes privately and prevent archive traversal,
+- [x] Stage restored file bytes privately and prevent archive traversal,
   symlink, executable-placement, duplicate-path, and decompression attacks.
-- [ ] Restore bytes into the selected target provider and verify them before
+- [x] Restore bytes into the selected target provider and verify them before
   presenting recovery as complete.
-- [ ] Preserve every canonical public ID, association, and permanent URL.
-- [ ] Keep a partial or failed file restore staged; do not label the combined
+- [x] Preserve every canonical public ID, association, and permanent URL.
+- [x] Keep a partial or failed file restore staged; do not label the combined
   database/file recovery successful.
 - [ ] Include file-storage verification and cutover evidence in the recovery
   report and audit history.

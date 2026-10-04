@@ -4,6 +4,7 @@ require_once __DIR__ . '/CurrentBackupJobStore.php';
 require_once __DIR__ . '/CurrentBackupProducer.php';
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/RealtimeIntegration.php';
+require_once __DIR__ . '/SettingsService.php';
 
 /** One exclusive server-side worker; the browser never owns the producer. */
 final class CurrentBackupWorker
@@ -71,8 +72,11 @@ final class CurrentBackupWorker
             if (!is_dir($this->avatarRoot)) {
                 throw new RuntimeException('Private avatar directory is unavailable.');
             }
-            $producer = new CurrentBackupProducer(Db::pdo(), $this->storage->stage(),
-                $this->avatarRoot, $this->applicationRoot);
+            $pdo = Db::pdo();
+            $projectFileRoot = Db::tableExists($pdo, 'system_settings')
+                ? trim((string) (new SettingsService($pdo))->get('storage.local_base_path')) : '';
+            $producer = new CurrentBackupProducer($pdo, $this->storage->stage(),
+                $this->avatarRoot, $this->applicationRoot, $projectFileRoot);
             $lastPublishedStage = null;
             $lastPublishedPercent = -1;
             $made = $producer->produce($artifact, $key, $id, function ($stage, $percent) use ($id, &$lastPublishedStage, &$lastPublishedPercent) {

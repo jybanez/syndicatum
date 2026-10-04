@@ -5,6 +5,7 @@ require_once __DIR__ . '/CurrentBackupEnvelope.php';
 require_once __DIR__ . '/PortableBackupArchive.php';
 require_once __DIR__ . '/PortableBackupConfiguration.php';
 require_once __DIR__ . '/PortableBackupRuntime.php';
+require_once __DIR__ . '/ProjectFileBackupSource.php';
 
 /** Produces a portable, encrypted package of the running Syndicatum baseline. */
 final class CurrentBackupProducer
@@ -13,13 +14,15 @@ final class CurrentBackupProducer
     private $stageRoot;
     private $assetRoot;
     private $publicRoot;
+    private $projectFiles;
 
-    public function __construct(PDO $pdo, $stageRoot, $assetRoot, $publicRoot)
+    public function __construct(PDO $pdo, $stageRoot, $assetRoot, $publicRoot, $projectFileRoot = '')
     {
         $this->pdo = $pdo;
         $this->stageRoot = self::directory($stageRoot, 'staging');
         $this->assetRoot = self::directory($assetRoot, 'avatar');
         $this->publicRoot = self::directory($publicRoot, 'application');
+        $this->projectFiles = new ProjectFileBackupSource($this->publicRoot, $projectFileRoot);
         if (self::inside($this->stageRoot, $this->publicRoot)) { throw new InvalidArgumentException('Backup staging must be outside the application root.'); }
     }
 
@@ -61,8 +64,10 @@ final class CurrentBackupProducer
 
             $emit('Exporting database', 0);
             $sql = CurrentBaselineSql::exportPortable($this->pdo, $payload . DIRECTORY_SEPARATOR . 'database',
-                function ($done, $total) use ($emit) { $emit('Exporting database', (int) floor(100 * $done / max(1, $total))); }, $includeData);
+                function ($done, $total) use ($emit) { $emit('Exporting database', (int) floor(100 * $done / max(1, $total))); }, $includeData,
+                function (PDO $pdo) use ($includeData) { return $this->projectFiles->inventory($pdo, $includeData); });
             $emit('Exporting database', 100);
+            $projectFiles = is_array($sql['snapshot_evidence']) ? $sql['snapshot_evidence'] : [];
 
             $emit('Collecting persistent files', 0);
             $files = $this->copyAvatars($payload, $sql['referenced_avatars'], $emit);
@@ -82,12 +87,13 @@ final class CurrentBackupProducer
                 'sql' => ['schema' => $sql['schema'], 'data' => $sql['data'], 'triggers' => $sql['triggers'],
                     'table_count' => $sql['table_count'], 'trigger_count' => $sql['trigger_count'],
                     'row_counts' => $sql['row_counts'], 'row_hashes' => $sql['row_hashes']],
-                'runtime' => $runtime, 'persistent_files' => $files, 'configuration' => $configuration,
+                'runtime' => $runtime, 'persistent_files' => $files, 'project_files' => $projectFiles, 'configuration' => $configuration,
             ];
             $manifestJson = PortableBackupManifest::encode($manifest);
             $archivePath = $stage . DIRECTORY_SEPARATOR . 'archive.zip';
             $emit('Building encrypted package', 0);
-            $archiveSha = PortableBackupArchive::create($payload, $manifest, $archivePath);
+            $archiveSha = PortableBackupArchive::create($payload, $manifest, $archivePath, $this->projectFiles->archiveSources());
+            $this->projectFiles->verifyUnchanged();
             $envelope = CurrentBackupEnvelope::encrypt($archivePath, $manifestJson, $outputPath, $encryptionKey);
             $committedOutput = true;
             $emit('Building encrypted package', 100);
@@ -110,7 +116,7 @@ final class CurrentBackupProducer
                 'manifest_sha256' => hash('sha256', $manifestJson),
                 'sql_sha256' => hash('sha256', json_encode([$sql['schema'], $sql['data'], $sql['triggers']], JSON_UNESCAPED_SLASHES)),
                 'row_counts' => $sql['row_counts'],
-                'runtime_count' => count($runtime), 'persistent_file_count' => count($files),
+                'runtime_count' => count($runtime), 'persistent_file_count' => count($files), 'project_file_count' => count($projectFiles),
                 'configuration_count' => count($configuration), 'format' => PortableBackupManifest::CONTRACT_NAME,
                 'inspection_path' => $inspectionPath, 'plaintext_cleanup_verified' => false];
         } catch (Throwable $exception) {

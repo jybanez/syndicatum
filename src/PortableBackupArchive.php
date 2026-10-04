@@ -5,16 +5,21 @@ require_once __DIR__ . '/PortableBackupManifest.php';
 /** Compressed ZIP payload inside the authenticated encrypted envelope. */
 final class PortableBackupArchive
 {
-    public static function create($payloadRoot, array $manifest, $archivePath)
+    public static function create($payloadRoot, array $manifest, $archivePath, array $externalSources = [])
     {
         if (!class_exists('ZipArchive')) { throw new RuntimeException('ZIP support is required.'); }
         if (file_exists($archivePath)) { throw new InvalidArgumentException('Backup archive destination already exists.'); }
         $entries = PortableBackupManifest::entries($manifest);
+        foreach ($externalSources as $path => $_source) {
+            if (!isset($entries[$path]) || strpos($path, 'persistent/project-files/') !== 0) {
+                throw new InvalidArgumentException('Backup external source is undeclared.');
+            }
+        }
         $zip = new ZipArchive();
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::EXCL) !== true) { throw new RuntimeException('Backup ZIP could not be created.'); }
         try {
             foreach ($entries as $path => $entry) {
-                $source = self::source($payloadRoot, $path);
+                $source = isset($externalSources[$path]) ? self::externalSource($externalSources[$path], $entry, $path) : self::source($payloadRoot, $path);
                 if (!is_file($source) || is_link($source) || filesize($source) !== $entry['bytes']
                     || !hash_equals($entry['sha256'], hash_file('sha256', $source))
                     || !$zip->addFile($source, $path)
@@ -75,5 +80,16 @@ final class PortableBackupArchive
             throw new InvalidArgumentException('Backup member path is invalid.');
         }
         return rtrim($root, '/\\') . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
+    }
+
+    private static function externalSource($source, array $entry, $path)
+    {
+        if (!preg_match('#\Apersistent/project-files/[0-9a-f-]{36}\z#', $path)
+            || !is_array($source) || array_keys($source) !== ['path','bytes','sha256']
+            || !is_string($source['path']) || !is_file($source['path']) || is_link($source['path'])
+            || $source['bytes'] !== $entry['bytes'] || !hash_equals($source['sha256'], $entry['sha256'])) {
+            throw new InvalidArgumentException('Backup external source is invalid.');
+        }
+        return $source['path'];
     }
 }

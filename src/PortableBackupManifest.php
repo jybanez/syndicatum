@@ -7,7 +7,8 @@ require_once __DIR__ . '/CurrentBaselineSql.php';
 final class PortableBackupManifest
 {
     const CONTRACT_NAME = 'syndicatum-portable-backup';
-    const FORMAT_VERSION = '2.0';
+    const FORMAT_VERSION = '3.0';
+    const PREVIOUS_FORMAT_VERSION = '2.0';
     const LEGACY_FORMAT_VERSION = '1.0';
     const SQL_PATH = 'database/baseline.sql';
     const SCHEMA_PATH = 'database/schema.sql';
@@ -35,13 +36,17 @@ final class PortableBackupManifest
 
     public static function validate(array $document)
     {
-        self::keys($document, ['contract_name','format_version','created_at','operation_id','package_type','include_data',
+        $version = isset($document['format_version']) ? $document['format_version'] : null;
+        $keys = ['contract_name','format_version','created_at','operation_id','package_type','include_data',
             'source_database','source_mysql_version','source_application_version','source_commit','source_installation_id',
-            'sql','runtime','persistent_files','configuration']);
+            'sql','runtime','persistent_files'];
+        if ($version === self::FORMAT_VERSION) { $keys[] = 'project_files'; }
+        $keys[] = 'configuration';
+        self::keys($document, $keys);
         $full = $document['package_type'] === 'full_clone' && $document['include_data'] === true;
         $clean = $document['package_type'] === 'clean_installation' && $document['include_data'] === false;
         if ($document['contract_name'] !== self::CONTRACT_NAME
-            || !in_array($document['format_version'], [self::FORMAT_VERSION, self::LEGACY_FORMAT_VERSION], true)
+            || !in_array($document['format_version'], [self::FORMAT_VERSION, self::PREVIOUS_FORMAT_VERSION, self::LEGACY_FORMAT_VERSION], true)
             || (!$full && !$clean)) {
             throw new InvalidArgumentException('Portable-backup artifact contract is invalid.');
         }
@@ -83,11 +88,12 @@ final class PortableBackupManifest
                 throw new InvalidArgumentException('Portable-backup table entry is invalid.');
             }
         }
-        if ($document['format_version'] === self::FORMAT_VERSION) {
+        if ($document['format_version'] !== self::LEGACY_FORMAT_VERSION) {
             self::dataMembers($document['sql']['data'], $document['sql']['row_counts']);
         }
         self::members($document['runtime'], '#\Aruntime/(?!.*(?:^|/)\.\.?(?:/|$))[A-Za-z0-9_.@/+\-]+\z#', 'runtime');
         self::members($document['persistent_files'], '#\Apersistent/avatars/[a-f0-9]{40}\.(?:jpg|png|webp)\z#', 'persistent file');
+        if ($document['format_version'] === self::FORMAT_VERSION) { self::projectFiles($document['project_files']); }
         self::members($document['configuration'], '#\Aconfiguration/[a-z0-9_.-]+\.json\z#', 'configuration');
         if ($document['runtime'] === [] || $document['configuration'] === []) {
             throw new InvalidArgumentException('Portable-backup runtime or configuration inventory is empty.');
@@ -107,7 +113,10 @@ final class PortableBackupManifest
             ];
             foreach ($document['sql']['data'] as $entry) { $entries[$entry['path']] = $entry; }
         }
-        foreach (['runtime','persistent_files','configuration'] as $group) {
+        $groups = ['runtime','persistent_files'];
+        if ($document['format_version'] === self::FORMAT_VERSION) { $groups[] = 'project_files'; }
+        $groups[] = 'configuration';
+        foreach ($groups as $group) {
             foreach ($document[$group] as $entry) { $entries[$entry['path']] = $entry; }
         }
         ksort($entries, SORT_STRING);
@@ -148,6 +157,26 @@ final class PortableBackupManifest
             self::member($entry, $pattern);
             if (strcmp($entry['path'], $previous) <= 0) { throw new InvalidArgumentException('Portable-backup member path is duplicated or unsorted.'); }
             $previous = $entry['path'];
+        }
+    }
+
+    private static function projectFiles($value)
+    {
+        if (!is_array($value) || array_values($value) !== $value) { throw new InvalidArgumentException('Portable-backup project file inventory is invalid.'); }
+        $previous = ''; $keys = [];
+        foreach ($value as $entry) {
+            self::keys($entry, ['path','provider','key','public_id','mime_type','sha256','bytes']);
+            self::member(['path' => $entry['path'], 'sha256' => $entry['sha256'], 'bytes' => $entry['bytes']],
+                '#\Apersistent/project-files/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z#');
+            if ($entry['provider'] !== 'local'
+                || !is_string($entry['key']) || !preg_match('#\Aobjects/(?:[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}/)?([a-f0-9]{2})/([a-f0-9]{64})\z#', $entry['key'], $matches)
+                || substr($matches[2], 0, 2) !== $matches[1]
+                || !is_string($entry['public_id']) || $entry['path'] !== 'persistent/project-files/' . $entry['public_id']
+                || !is_string($entry['mime_type']) || !preg_match('~\A[a-z0-9][a-z0-9!#$&^_.+\-]{0,126}/[a-z0-9][a-z0-9!#$&^_.+\-]{0,126}\z~', $entry['mime_type'])
+                || strcmp($entry['path'], $previous) <= 0 || isset($keys[$entry['key']])) {
+                throw new InvalidArgumentException('Portable-backup project file entry is invalid.');
+            }
+            $previous = $entry['path']; $keys[$entry['key']] = true;
         }
     }
 

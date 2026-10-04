@@ -2134,6 +2134,20 @@
       "mode": 420
     },
     {
+      "source": "src/ProjectFileBackupSource.php",
+      "action": "ship",
+      "path": "app/src/ProjectFileBackupSource.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "src/ProjectFileRestoreTarget.php",
+      "action": "ship",
+      "path": "app/src/ProjectFileRestoreTarget.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/FileStorage.php",
       "action": "ship",
       "path": "app/src/FileStorage.php",

@@ -111,12 +111,13 @@ final class CurrentBaselineSql
     }
 
     /** Export an ordered, bounded SQL inventory for checkpointed restoration. */
-    public static function exportPortable(PDO $pdo, $directory, $onTableExported = null, $includeData = true)
+    public static function exportPortable(PDO $pdo, $directory, $onTableExported = null, $includeData = true, $beforeCommit = null)
     {
         if ($onTableExported !== null && !is_callable($onTableExported)) {
             throw new InvalidArgumentException('SQL export progress callback must be callable.');
         }
         if (!is_bool($includeData)) { throw new InvalidArgumentException('SQL export data policy is invalid.'); }
+        if ($beforeCommit !== null && !is_callable($beforeCommit)) { throw new InvalidArgumentException('SQL snapshot callback must be callable.'); }
         if (!is_string($directory) || !is_dir($directory) || is_link($directory)) {
             throw new InvalidArgumentException('Portable SQL destination must be a private directory.');
         }
@@ -209,6 +210,7 @@ final class CurrentBaselineSql
             }
             if (!fflush($triggers)) { throw new RuntimeException('Portable trigger file could not be flushed.'); }
             fclose($triggers); $triggers = null;
+            $snapshotEvidence = $beforeCommit === null ? null : call_user_func($beforeCommit, $pdo);
             $pdo->commit(); $snapshotActive = false;
             $avatarNames = array_keys($referencedAvatars); sort($avatarNames, SORT_STRING);
             return [
@@ -218,6 +220,7 @@ final class CurrentBaselineSql
                 'table_count' => count($tables), 'trigger_count' => count($triggerNames),
                 'row_counts' => $counts, 'row_hashes' => $rowHashes,
                 'referenced_avatars' => $avatarNames,
+                'snapshot_evidence' => $snapshotEvidence,
             ];
         } catch (Throwable $error) {
             if ($snapshotActive) { $pdo->rollBack(); }
