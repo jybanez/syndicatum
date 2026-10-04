@@ -201,6 +201,15 @@ and authorization endpoints derive their canonical issuer/resource URLs from
 explicit production configuration; forwarded host headers are not trusted as
 the authority for token audiences or OAuth redirects.
 
+Public distribution now uses the OpenAI Plugins Directory shared by ChatGPT
+and Codex; enabling a custom app in Developer mode or publishing within one
+workspace does not create a public listing. The exact submission artifact must
+complete developer verification, package validation, domain verification,
+current MCP/tool scans, five positive and three negative review cases, reviewer
+access, demo recording, policy attestations, and approval. The current status
+and retained-evidence requirements are defined by the
+[integration distribution production gate](integration-distribution-production-gate.md).
+
 When creating the ChatGPT app entry, upload the canonical transparent PNG at
 `assets/brand/png/color/syndicatum-128.png`. It is the approved standard-color
 master for app-sized use and is below ChatGPT's 10 KB creation-form limit.

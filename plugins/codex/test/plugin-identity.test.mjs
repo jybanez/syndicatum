@@ -15,8 +15,10 @@ test("Codex plugin identity is distinct from the hosted Syndicatum app", async (
   assert.equal(manifest.name, "codex");
   assert.equal(manifest.interface.displayName, "Syndicatum for Codex");
   assert.equal(manifest.interface.websiteURL, "https://syndicatum.wizaya.com/");
+  assert.equal(manifest.interface.supportURL, "https://syndicatum.wizaya.com/support");
   assert.equal(manifest.interface.privacyPolicyURL, "https://syndicatum.wizaya.com/privacy");
   assert.equal(manifest.interface.termsOfServiceURL, "https://syndicatum.wizaya.com/terms");
+  assert.ok(manifest.interface.shortDescription.length <= 30);
   await access(new URL(`../${manifest.interface.composerIcon.replace(/^\.\//, "")}`, import.meta.url));
   await access(new URL(`../${manifest.interface.logo.replace(/^\.\//, "")}`, import.meta.url));
   assert.ok(mcp.mcpServers.syndicatum_codex);

@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "policy_version": "1.0.0",
+  "assessed_on": "2026-10-04",
+  "production_rule": "A channel is production only when production_eligible is true and every required gate has retained acceptance evidence for the exact published artifact.",
+  "release_train": {
+    "application": "v1.0.0-rc.3",
+    "codex_plugin": "0.1.0+codex.20261004181801",
+    "companion": "0.10.6"
+  },
+  "channels": [
+    {
+      "id": "openai-public-plugin",
+      "surfaces": ["ChatGPT", "Codex"],
+      "classification": "development",
+      "production_eligible": false,
+      "distribution_authority": "OpenAI public Plugins Directory",
+      "published_identifier": null,
+      "required_gates": [
+        "verified publisher identity and policy attestations",
+        "production HTTPS MCP endpoint and completed domain verification",
+        "successful current MCP tool and skill scans",
+        "complete public listing metadata and legal/support URLs",
+        "five passing positive cases and three passing negative cases",
+        "reviewer test account, demo recording, and release notes",
+        "directory approval and owner-controlled publication"
+      ]
+    },
+    {
+      "id": "codex-repository-marketplace",
+      "surfaces": ["Codex Desktop", "Codex CLI"],
+      "classification": "pilot",
+      "production_eligible": false,
+      "distribution_authority": "jybanez/syndicatum Git marketplace",
+      "published_identifier": null,
+      "required_gates": [
+        "immutable reviewed Git ref designated as the stable channel",
+        "published package provenance and checksum",
+        "clean install and upgrade acceptance on each supported OS",
+        "downgrade, rollback, revocation, and second-device acceptance",
+        "documented support window and compatibility range"
+      ]
+    },
+    {
+      "id": "companion-chrome-web-store",
+      "surfaces": ["Chrome", "ChatGPT web", "Gemini web"],
+      "classification": "pilot",
+      "production_eligible": false,
+      "distribution_authority": "Chrome Web Store",
+      "published_identifier": null,
+      "required_gates": [
+        "Chrome Web Store developer account and reviewed listing",
+        "single-purpose, permission, privacy, and limited-use declarations",
+        "store-managed installation and automatic update acceptance",
+        "published-version upgrade and rollback acceptance",
+        "clean device migration and revocation acceptance"
+      ]
+    },
+    {
+      "id": "companion-edge-add-ons",
+      "surfaces": ["Microsoft Edge", "ChatGPT web", "Gemini web"],
+      "classification": "pilot",
+      "production_eligible": false,
+      "distribution_authority": "Microsoft Edge Add-ons",
+      "published_identifier": null,
+      "required_gates": [
+        "Partner Center developer account and certified listing",
+        "complete purpose, permission, data-use, and privacy declarations",
+        "store-managed installation and automatic update acceptance",
+        "published-version upgrade and rollback acceptance",
+        "clean device migration and revocation acceptance"
+      ]
+    }
+  ],
+  "compatibility": {
+    "application_release": "v1.0.0-rc.3",
+    "codex_plugin": {
+      "tested_source_version": "0.1.0+codex.20261004181801",
+      "production_range": null
+    },
+    "companion": {
+      "tested_source_version": "0.10.6",
+      "production_range": null,
+      "providers": ["ChatGPT web", "Gemini web"]
+    },
+    "supported_operating_systems": [],
+    "support_window": null,
+    "note": "Source and pilot evidence do not establish a production compatibility or support claim."
+  },
+  "mobile_app": {
+    "classification": "gated",
+    "owner_approval_required": true,
+    "approved": false,
+    "implementation_planned": false
+  }
+}

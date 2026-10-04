@@ -73,7 +73,7 @@ codex plugin add codex@syndicatum
 Restart Codex and start a new task after installing or updating the plugin so
 its MCP server and bundled `syndicatum-timeline` skill are loaded.
 
-## Install on another Windows PC or Mac
+## Pilot install on another Windows PC or Mac
 
 The official GitHub repository is itself a Codex plugin marketplace. A Windows
 or macOS user with Codex Desktop can install the connector without cloning this
@@ -83,6 +83,11 @@ repository or running a separate installer:
 codex plugin marketplace add jybanez/syndicatum --ref main
 codex plugin add codex@syndicatum
 ```
+
+This command tracks mutable `main` and is a pilot channel, not the stable
+production channel. Production installation requires the immutable reviewed
+ref and acceptance evidence named in the
+[integration distribution gate](integration-distribution-production-gate.md).
 
 After installation, restart Codex Desktop and begin a new task. Ask Codex to
 connect the device to the operator-provided Syndicatum server URL and provide a recognizable
