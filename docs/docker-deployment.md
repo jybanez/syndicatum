@@ -338,6 +338,11 @@ low disk space, old backups, and TLS expiry.
 
 ## Database backup
 
+For installations using Project Files, a database dump does not preserve the
+external storage objects. Complete canonical project-file backup/restore remains
+unfinished; see [Project files recovery boundaries](project-files.md#backup-and-recovery-boundary)
+before relying on these commands for a recovery plan.
+
 Backups contain message content, credential hashes, configuration, and possibly
 encrypted integration secrets. Store them encrypted, outside the repository
 and container volumes, with access limited to operators.

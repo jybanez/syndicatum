@@ -73,9 +73,12 @@ appropriate, and an AI drafting or review assistant.
 
 1. Record the brief, scope boundaries, and who can approve changes.
 2. Define deliverables and assign preparation and review tasks.
-3. Share artifact links that participants are authorized to access and record
-   feedback on the timeline.
-4. Record the human acceptance decision and handover outcome.
+3. Attach a shareable draft from Project Files, or link a restricted artifact
+   in an external service where reviewers have access. Hosted file links are
+   public to anyone who has them; see [Project files](project-files.md).
+4. For a Work request, the contributor uses Start work, then Submit for review
+   with evidence. The requester uses Accept work or Request changes and records
+   the handover outcome; submission alone is not acceptance.
 
 ### Why not ordinary AI chat?
 

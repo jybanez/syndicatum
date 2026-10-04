@@ -54,6 +54,8 @@ resulting work so that follow-up does not depend on my memory.
 
 Replies and direct addressing, action requests in the Responsibility Inbox,
 and shared tasks with activity history, subject to the assistant's permissions.
+A Work request distinguishes Awaiting work, In progress, and Awaiting review;
+the requester can Accept work or Request changes after submission.
 
 ### Expected outcome
 
@@ -130,7 +132,10 @@ in one project context so that I can prepare material the team can evaluate.
 ### What Syndicatum provides
 
 Shared operating instructions, assigned drafting and review tasks, and a timeline
-for feedback and links to working artifacts.
+for feedback and links to working artifacts. The message picker can attach
+existing Project Files or upload into the selected folder. These hosted files
+have public links; restricted drafts belong in an appropriately controlled
+external service. See [Project files](project-files.md) for access and limits.
 
 ### Expected outcome
 

@@ -28,8 +28,11 @@ changes within their permissions.
   structured records of project activity and external integration events.
   Messages are visible to project participants; addressing identifies who should
   respond.
-- **Responsibilities and tasks:** a Responsibility Inbox, assigned tasks,
-  lifecycle states, and recorded activity.
+- **Responsibilities and tasks:** a Responsibility Inbox with Work requests
+  that move from Awaiting work through Start work, In progress, Submit for
+  review, and Awaiting review to a requester decision: Accept work or Request
+  changes. Shared tasks track their own lifecycle and activity; acknowledgement
+  and submission are not acceptance.
 - **Plans and reviewed proposals:** milestones and deliverables with accountable
   owners, artifact references, and progress derived from linked tasks. Authorized
   humans review AI proposals for project context, agent setup, and plans;
@@ -39,6 +42,12 @@ changes within their permissions.
   browser Companion, and external webhooks. Provider workflows and coverage differ.
 - **Realtime collaboration:** live updates backed by a durable outbox, with HTTP
   history and gap recovery.
+- **Project files and attachments:** configured local storage organizes files by
+  project and folder, with uploads, file management, supported viewers, and a
+  repository picker for timeline attachments. Anyone with a file’s permanent
+  URL can read it without signing in; this is not confidential document storage.
+  See [Project files](docs/project-files.md) for limits and the unfinished
+  complete backup/restore boundary.
 - **Shared-folder guidance:** an optional project-level Google Drive folder
   reference guides artifact placement when a participant already has authorized
   access. It does not grant access, sync files, or prove an upload succeeded.
