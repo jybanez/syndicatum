@@ -91,11 +91,11 @@ ref and acceptance evidence named in the
 
 ## Stable Windows channel
 
-The owner-approved first production target is Windows 11. Stable Codex plugin
-releases use an immutable `codex-v<version>` Git tag whose version must exactly
-match `plugins/codex/.codex-plugin/plugin.json`. The first candidate is
-`codex-v0.2.0`. After that tag's release workflow and installed-client
-acceptance pass, install it with:
+The owner-approved first production targets are Windows 10 22H2 and Windows 11.
+Stable Codex plugin releases use an immutable `codex-v<version>` Git tag whose
+version must exactly match `plugins/codex/.codex-plugin/plugin.json`. The first
+candidate is `codex-v0.2.0`. After that tag's release workflow and the applicable
+installed-client acceptance pass, install it with:
 
 ```text
 codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.0

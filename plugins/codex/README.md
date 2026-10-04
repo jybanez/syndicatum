@@ -57,9 +57,9 @@ ref and acceptance evidence named in the
 
 ## Stable Windows channel
 
-The first owner-approved stable target is Windows 11. After the `codex-v0.2.0`
-release workflow and installed-client acceptance pass, use the immutable Git
-marketplace ref:
+The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
+After the `codex-v0.2.0` release workflow and the applicable installed-client
+acceptance pass, use the immutable Git marketplace ref:
 
 ```text
 codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.0
