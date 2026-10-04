@@ -1141,6 +1141,8 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
 .recovery-backup-controls { display: grid; justify-items: end; gap: 8px; min-width: 0; }
 .recovery-backup-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .recovery-backup-controls .recovery-backup-realtime-error { justify-self: stretch; }
+.recovery-backup-storage-health { justify-self: stretch; margin: 0; color: var(--ui-text-muted); font-size: .875rem; }
+.recovery-backup-storage-health.is-unhealthy { color: var(--ui-danger, #ef8f8f); }
 .recovery-backup-grid { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .recovery-backup-grid .ui-grid { flex: 1 1 auto; min-height: 0; height: 100%; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
 .recovery-backup-grid .ui-grid-toolbar-slot { color: var(--app-muted); font-size: 13px; }

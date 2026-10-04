@@ -2143,6 +2143,13 @@
       "mode": 420
     },
     {
+      "source": "src/ProjectFileBackupEligibility.php",
+      "action": "ship",
+      "path": "app/src/ProjectFileBackupEligibility.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/ProjectFileRestoreTarget.php",
       "action": "ship",
       "path": "app/src/ProjectFileRestoreTarget.php",

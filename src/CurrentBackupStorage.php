@@ -49,6 +49,9 @@ final class CurrentBackupStorage
         if (DIRECTORY_SEPARATOR === '/' && (fileperms($base) & 0077) !== 0) {
             throw new RuntimeException('Backup directory must be private (0700).');
         }
+        if (!is_writable($base) || (DIRECTORY_SEPARATOR === '/' && (fileperms($base) & 0200) === 0)) {
+            throw new RuntimeException('Backup directory must be writable by Syndicatum.');
+        }
         $this->base = $base;
         foreach (['staging', 'artifacts', 'inspection', 'jobs', 'download-authorizations',
             'restore-staging', 'restore-jobs'] as $name) {

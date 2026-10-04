@@ -487,9 +487,13 @@ and methods in the durable `restore.completed` administrative audit event.
 - [ ] Test missing object, corrupt bytes, checksum mismatch, insufficient space,
   unwritable target, interrupted stream, changed storage root, and repeated
   inspection/cutover attempts.
-- [ ] Document operator recovery for storage-root loss and for moving a restored
+- [x] Focused backup-preflight coverage rejects missing objects, corrupt or
+  checksum-mismatched bytes, unwritable targets, changed roots, and proves
+  repeated health inspection is deterministic. Insufficient-space,
+  interrupted-stream, and repeated inspection/cutover recovery acceptance remain.
+- [x] Document operator recovery for storage-root loss and for moving a restored
   installation to a different absolute local path.
-- [ ] Update the backup eligibility and delivery-health signals so an
+- [x] Update the backup eligibility and delivery-health signals so an
   unprotected or unhealthy file store cannot be mistaken for a complete backup.
 
 **Exit evidence:** a verified backup restores MySQL and file content together,

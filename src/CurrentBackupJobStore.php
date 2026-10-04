@@ -39,6 +39,22 @@ final class CurrentBackupJobStore
         });
     }
 
+    /** Reconciles an already accepted logical request without creating a new job. */
+    public function findByRequest($userId, $idempotencyKey, $includeData = true)
+    {
+        if (!is_int($userId) || $userId < 1 || !is_string($idempotencyKey)
+            || strlen($idempotencyKey) < 16 || strlen($idempotencyKey) > 255 || !is_bool($includeData)) {
+            throw new InvalidArgumentException('Backup request identity or idempotency key is invalid.');
+        }
+        $hash = hash('sha256', $userId . "\0" . ($includeData ? 'full' : 'clean') . "\0" . $idempotencyKey);
+        return $this->locked(function () use ($hash) {
+            foreach ($this->rawRows() as $row) {
+                if (hash_equals((string) $row['idempotency_hash'], $hash)) { return self::publicRow($row); }
+            }
+            return null;
+        });
+    }
+
     public function get($operationId)
     {
         $path = $this->storage->job($operationId);

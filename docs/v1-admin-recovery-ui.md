@@ -79,6 +79,17 @@ and verifies the restored database inventory and target bytes before commit.
 On failure, the database transaction is rolled back and any objects newly
 installed by that attempt are removed; no automatic replay occurs.
 
+Before the UI offers a full clone, the administrator backup endpoint reports a
+content-free `project_file_backup` health object. It verifies the current
+Project File inventory and backup-target capacity, and the Delivery health page
+shows the same signal. Full clone is disabled when the signal is unhealthy;
+Clean installation remains selectable. The POST endpoint performs the same
+preflight again before creating an operation or idempotency record and returns
+`project_file_backup_ineligible` with an explicit “no backup was started”
+message on failure. This check is advisory only for the minimum referenced-file
+bytes; operators must continue monitoring capacity for the database, runtime,
+encryption overhead, and retained artifacts.
+
 ## Configuration
 
 The container already supplies `SYNDICATUM_BACKUP_DIR`,

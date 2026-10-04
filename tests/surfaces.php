@@ -1025,6 +1025,7 @@ try {
 
     $suite->test('Backup and restore actions use canonical Helper components and preserve recovery boundaries', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
+        $currentBackupUi = file_get_contents($root . '/assets/current-backup-ui.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
         $recoveryApi = file_get_contents($root . '/api/v1/admin/_recovery.php');
         $backupApi = file_get_contents($root . '/api/v1/admin/backups.php');
@@ -1058,6 +1059,16 @@ try {
         $suite->true(strpos($source, 'Authorize another download') !== false && strpos($source, 'operation_id: operationId') !== false, 'Expired or interrupted backup downloads need a digest-rechecked reauthorization path.');
         $suite->true(strpos($source, 'operation_id: operation.operation_id') !== false && strpos($source, 'status: "uncertain"') !== false, 'Started operations need bounded receipt polling and an explicit uncertain state.');
         $suite->true(strpos($backupApi, 'does not accept client-controlled paths') !== false && strpos($restoreApi, 'does not accept client paths, database credentials, or cutover options') !== false, 'Recovery routes must reject browser-controlled filesystem, DSN, and cutover inputs.');
+        $preflightPosition = strpos($backupApi, 'ProjectFileBackupEligibility::assertFullCloneEligible');
+        $jobCreatePosition = strpos($backupApi, '$jobs->create(');
+        $suite->true($preflightPosition !== false && $jobCreatePosition !== false && $preflightPosition < $jobCreatePosition,
+            'Full-clone Project File health must be verified before a backup job or idempotency record is created.');
+        $suite->true(strpos($backupApi, "'project_file_backup' => \$eligibility") !== false
+            && strpos($backupApi, "'project_file_backup_ineligible'") !== false,
+            'Backup reads and rejected full-clone starts must expose the Project File eligibility contract.');
+        $suite->true(strpos($currentBackupUi, 'full_clone_backup_eligible') !== false
+            && strpos($currentBackupUi, 'Full clone requires healthy Project File storage') !== false,
+            'The canonical backup modal must visibly disable and validate an unhealthy full clone before submission.');
         $suite->true(strpos($service, 'RESTORE_TARGET_IS_SERVING_DATABASE') !== false && strpos($service, '@@server_uuid') !== false, 'Staged restore must independently reject the serving database.');
         $suite->true(strpos($service, "'automatic_cutover' => false") !== false && strpos($service, "'live_overwrite' => false") !== false, 'Server receipts must preserve no-overwrite and no-cutover facts.');
     });

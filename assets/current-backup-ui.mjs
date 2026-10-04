@@ -31,6 +31,8 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
   let clearModal = null;
   let clearing = false;
   let realtimeNotice = null;
+  let eligibilityNotice = null;
+  let backupEligibility = null;
 
   host.replaceChildren();
 
@@ -78,6 +80,7 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
     try {
       const payload = await request(api.backups, { signal: controller.signal });
       if (!alive || controller.signal.aborted) return;
+      backupEligibility = payload?.data?.project_file_backup || null;
       const snapshot = Array.isArray(payload?.data?.backups) ? payload.data.backups.map(viewJob) : [];
       const current = new Map(jobs.map((job) => [job.operation_id, job]));
       jobs = snapshot.map((job) => Number(current.get(job.operation_id)?.revision || 0) > Number(job.revision || 0)
@@ -95,6 +98,8 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
         const current = jobById(running.id);
         if (current) running.update(current);
       }
+      renderEligibility();
+      syncRealtimeState();
     } catch (error) {
       if (alive && !controller.signal.aborted) {
         const notice = host.querySelector(".recovery-backup-load-error");
@@ -320,15 +325,17 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
       return;
     }
     let startedJob = null;
+    const fullCloneEligible = backupEligibility?.full_clone_backup_eligible === true;
     startModal = factories.createFormModal({
       title: "Backup Now", size: "sm", className: "ui-dialog ui-dialog--warning recovery-backup-warning-dialog",
       submitLabel: "Start backup", cancelLabel: "Cancel",
       manageBusyOnSubmit: false,
-      initialValues: { package_type: "full_clone" },
+      initialValues: { package_type: fullCloneEligible ? "full_clone" : "clean_installation" },
       rows: [
         [{ type: "alert", tone: "warning", content: "Create an encrypted, portable package of the current Syndicatum installation. The backup continues if you close this browser." }],
+        ...(!fullCloneEligible ? [[{ type: "alert", tone: "error", content: backupEligibility?.message || "Project File storage did not pass backup preflight. Full clone is unavailable until storage health is restored." }]] : []),
         [{ type: "select", name: "package_type", label: "Package type", required: true, options: [
-          { value: "full_clone", label: "Full clone — include user-generated data" },
+          { value: "full_clone", label: "Full clone — include user-generated data", disabled: !fullCloneEligible },
           { value: "clean_installation", label: "Clean installation — exclude user-generated data" },
         ], help: "Full clone includes user-generated records and referenced assets. Clean installation includes the production runtime, current database baseline, system settings, presets, and protected configuration without user-generated data or assets." }],
       ],
@@ -336,6 +343,11 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
         if (!['full_clone', 'clean_installation'].includes(values.package_type)) {
           context.setErrors({ package_type: "Choose Full clone or Clean installation." });
           context.setFormError("Please address the following issues before continuing:\n• Package type — required");
+          return false;
+        }
+        if (values.package_type === "full_clone" && !fullCloneEligible) {
+          context.setErrors({ package_type: "Choose Clean installation, or restore Project File storage health before selecting Full clone." });
+          context.setFormError("Please address the following issues before continuing:\n• Package type — Full clone requires healthy Project File storage");
           return false;
         }
         const idempotencyKey = crypto.randomUUID();
@@ -470,6 +482,9 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
     realtimeNotice.className = "recovery-backup-realtime-error";
     realtimeNotice.setAttribute("role", "alert");
     realtimeNotice.hidden = true;
+    eligibilityNotice = document.createElement("p");
+    eligibilityNotice.className = "recovery-backup-storage-health";
+    eligibilityNotice.setAttribute("role", "status");
     const gridHost = document.createElement("div");
     gridHost.className = "recovery-backup-grid";
     gridHost.appendChild(error);
@@ -478,7 +493,7 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
     const actions = document.createElement("div");
     actions.className = "recovery-backup-actions";
     actions.append(startButton, clearButton);
-    controls.append(actions, realtimeNotice);
+    controls.append(actions, realtimeNotice, eligibilityNotice);
     panel.append(controls, gridHost);
     const width = Math.max(800, (host.clientWidth || panel.clientWidth || 1016) - 16);
     columnWidths ||= { initiated_at: Math.round(width * .21), artifact_created_at: Math.round(width * .21),
@@ -512,10 +527,23 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
     });
   }
 
+  function renderEligibility() {
+    if (!eligibilityNotice) return;
+    const health = backupEligibility;
+    eligibilityNotice.classList.toggle("is-unhealthy", health?.full_clone_backup_eligible === false);
+    if (!health) {
+      eligibilityNotice.textContent = "Checking Project File backup eligibility…";
+      return;
+    }
+    eligibilityNotice.textContent = health.full_clone_backup_eligible
+      ? `Project Files ready for full-clone backup · ${Number(health.verified_file_count || 0)} verified`
+      : `Full clone unavailable · ${health.message || "Project File storage failed backup preflight."}`;
+  }
+
   function syncRealtimeState(message = null) {
     const connection = realtime?.state?.() || {};
     const joined = connection.joined === true;
-    if (startButton) startButton.disabled = !joined;
+    if (startButton) startButton.disabled = !joined || backupEligibility === null;
     if (realtimeNotice) {
       realtimeNotice.hidden = joined;
       realtimeNotice.textContent = joined ? "" : (message || connection.error || "Connecting to PBB Realtime Backup updates…");
@@ -531,6 +559,7 @@ export function mountCurrentBackup({ host, factories, api, request, csrfHeaders,
   const onRealtimeError = (event) => { if (alive) syncRealtimeState(event?.detail?.message); };
 
   makeGrid(host);
+  renderEligibility();
   window.addEventListener("syndicatum:backup-updated", onBackupUpdated);
   window.addEventListener("syndicatum:realtime-ready", onRealtimeReady);
   window.addEventListener("syndicatum:realtime-error", onRealtimeError);
