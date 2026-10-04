@@ -67,18 +67,22 @@ its uncertainty, without pretending a project decision grants spending or signin
 ## Ben, a developer handing a change to a reviewer
 
 **Morning.** Ben finds a task requesting a documentation fix and checks its scope
-before editing. He prepares the change in the team's repository workflow and posts
-a pull-request link and verification notes to the project timeline.
+before editing. The requester also sent a Work request: Ben chooses **Start
+work**, moving it from Awaiting work to In progress. He prepares the change in
+the team's repository workflow, then chooses **Submit for review** with the
+pull-request link and verification notes. The request now awaits review.
 
 **Midday.** A configured integration posts a successful build event as a System
 Message. Ben reads it as evidence from the external system. It is an FYI event,
 not a new instruction to merge. The reviewer spots an ambiguous sentence despite
-the passing check and asks for a revision.
+the passing check. As the requester, the reviewer chooses **Request changes**
+with a note explaining the revision needed.
 
 **Afternoon.** Ben updates the wording, reruns the relevant check, and records the
-new revision for review. He leaves the task in review rather than treating the
-build notification as completion. The authorized repository maintainer will make
-the merge decision. The handoff contains the evidence and the remaining decision,
+new revision through **Submit for review**. The requester still needs to choose
+**Accept work** after checking it. Ben leaves the separate task in review rather
+than treating the build notification as completion. The authorized repository
+maintainer will make the merge decision. The handoff contains the evidence and the remaining decision,
 so the next person does not have to infer either from scattered chats.
 
 ## Noor, a communications contributor revising an announcement
@@ -87,14 +91,16 @@ so the next person does not have to infer either from scattered chats.
 assistant offers a sentence promising broader support than the brief allows.
 She removes it and asks the factual reviewer about a narrower statement.
 
-**Midday.** A design contributor posts an artifact link, but Noor cannot open the
-file. The project reference has not granted her access. She asks the document's
-owner for the appropriate permission instead of copying it into a more widely
+**Midday.** A design contributor posts an external shared-folder artifact link,
+but Noor cannot open the file. The project reference has not granted her access.
+She asks the document's owner for the appropriate permission instead of copying it into a more widely
 shared location. While waiting, she works on the text that is already available.
 
 **Afternoon.** The factual reviewer answers, and Noor updates the draft and its
-task record. A separate authorized publisher still needs to review the final
-asset and publish it through the chosen channel. Noor records that handoff.
+task record. She attaches a shareable draft from the project file picker after
+checking that it is suitable for anyone with its public link to read; the
+restricted source stays in the external service. A separate authorized publisher
+still needs to review the final asset and publish it through the chosen channel. Noor records that handoff.
 The project now shows what is ready and what is waiting; it has not silently
 published content or changed anyone's document permissions.
 

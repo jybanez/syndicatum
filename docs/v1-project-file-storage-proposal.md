@@ -1,6 +1,9 @@
 # V1 Project File Storage Proposal
 
-Status: Proposed; configuration foundation implemented
+Status: Design record; local file service, Project Files UI, message attachments,
+and Codex file tools implemented on main at `35a1cb5`. Complete backup/restore
+and other unchecked acceptance gates remain unfinished; see the implementation
+checklist and [current usage and operator guidance](project-files.md).
 Created: October 2, 2026  
 Audience: Product, engineering, operations, security, and support
 
@@ -21,9 +24,9 @@ is immutable and its canonical URL is never regenerated.
 The configuration foundation is now present: administrators can set
 `storage.local_base_path` from the **Storage** tab in System Settings. Saving
 validates and prepares a private, writable absolute directory outside the
-public application root. This does not yet enable uploads, file records,
-previews, downloads, or permanent public links; those remain implementation
-work described below.
+public application root. The local service now supports uploads, file records,
+supported viewers, downloads, and permanent public links. The sections below
+preserve the design and future scope; they are not a release acceptance claim.
 
 ## 2. Product principles
 
@@ -52,8 +55,8 @@ rename, download, and delete project files. Uploading the same name in the same
 folder offers a confirmed in-place replacement before any bytes are sent. Every
 mutation is attributed and recorded in the project audit history.
 
-After project file management is complete, the next delivery surface adds file
-attachments to timeline messages. Task, activity, deliverable, and project-
+Project file management and timeline message attachments are implemented.
+Task, activity, deliverable, and project-
 detail attachments are later expansions of the same canonical file records and
 are not required for the initial V1 release.
 

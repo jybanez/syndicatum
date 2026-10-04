@@ -80,7 +80,12 @@ bytes for their MIME type, enforces configured size/type and per-project quota
 policy, and then atomically publishes the object. Every successful mutation has
 an idempotency receipt and immutable audit event. Each file returns one stable
 `url` (`files/{public_id}`), served without authentication by `GET` or `HEAD`.
-Public IDs are immutable: there is no link-regeneration operation.
+Public IDs are immutable: there is no link-regeneration operation. Management
+requires active project participation, but public delivery does not. Replacing
+content keeps the URL and changes what existing attachment links retrieve;
+attachment associations are not immutable copies of the bytes. Deletion makes
+origin delivery unavailable, but cannot recall downloaded or cached copies.
+See [Project files](project-files.md) for operator and recovery boundaries.
 
 ### Codex agent file tools
 
@@ -219,7 +224,8 @@ durable association remains available for audit and recovery.
 When `broadcast` is true, every other active project participant becomes an addressee. Otherwise direct and mention IDs may be combined. A direct address identifies an expected responder; a mention calls attention without itself requiring a reply. Both reasons create addressee records eligible for acknowledgement, which is not task completion. Every active project participant can read every project message.
 
 An action request is classified as `work`, `approval`, or `review`. Work uses
-the Start work/Submit for review workflow and a later requester decision through
+Awaiting work → Start work → In progress → Submit for review → Awaiting review,
+followed by a requester decision through
 Accept work or Request changes. A started Work request is presented as In
 progress, and a submitted Work request as Awaiting review. Submission requires a
 completion note or evidence. Approval gives the responder Approve/Deny; Review

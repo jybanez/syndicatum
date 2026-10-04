@@ -18,6 +18,17 @@ to the service operator.
    Companion delivery/reply/acknowledgement cycle with non-sensitive test data.
 7. Record the commit, artifact checksums, test counts, operator, and time.
 
+## Project file storage and recovery
+
+Installations using Project Files also need an operator-managed private storage
+root and capacity monitoring. File metadata in a database backup does not include
+the stored bytes. Complete canonical backup/restore coverage for these objects
+remains unfinished; do not report a database or existing encrypted backup as a
+complete project-file recovery set. Preserve the file content and matching
+metadata through an operator-verified recovery procedure before replacing an
+installation or changing its storage root. See [Project files](project-files.md)
+for configuration, public-link access, and current recovery limits.
+
 ## Monitoring
 
 Monitor and alert on these signals without logging message bodies, bearer
