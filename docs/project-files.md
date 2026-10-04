@@ -107,5 +107,9 @@ the setting at an empty replacement directory merely to clear the warning.
 Preserve the old tree until a new encrypted backup is verified and its permanent
 `/files/{public_id}` URLs return byte-identical content.
 
-Interrupted-stream and repeated inspection/cutover acceptance remain tracked in
+Recovery acceptance also injects insufficient backup capacity, truncated stream
+inventory, unwritable restore targets, and repeated identical/conflicting
+exact-key restore attempts. Interrupted staging removes its partial private
+bytes; a repeat accepts already-identical content without replacement and
+rejects conflicting content without modifying it. The evidence is tracked in
 the [implementation checklist](v1-project-file-storage-implementation-checklist.md#93-operational-recovery-cases).

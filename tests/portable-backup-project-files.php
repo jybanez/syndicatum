@@ -74,6 +74,38 @@ try {
     $restoredPath = $restoreStorage . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $projectKey);
     projectBackupAssert(is_file($restoredPath) && hash_file('sha256', $restoredPath) === hash_file('sha256', $external),
         'Verified project file restore did not preserve the provider-neutral key and bytes.');
+    $interruptedStage = $root . DIRECTORY_SEPARATOR . 'interrupted-stage'; mkdir($interruptedStage, 0700);
+    $interruptedEntry = $manifest['project_files'][0]; $interruptedEntry['bytes']++;
+    $zip = new ZipArchive(); $zip->open($archive, ZipArchive::RDONLY);
+    $interruptedRejected = false;
+    try { $restoreTarget->stage($zip, [$interruptedEntry], $interruptedStage); }
+    catch (RuntimeException $expected) { $interruptedRejected = true; }
+    finally { $zip->close(); }
+    projectBackupAssert($interruptedRejected && !file_exists($interruptedStage . DIRECTORY_SEPARATOR . 'project-files'),
+        'An interrupted or truncated Project File stream did not fail closed and remove partial staging bytes.');
+
+    $repeatStage = $root . DIRECTORY_SEPARATOR . 'repeat-stage'; mkdir($repeatStage, 0700);
+    $zip = new ZipArchive(); $zip->open($archive, ZipArchive::RDONLY);
+    $repeatStaged = $restoreTarget->stage($zip, $manifest['project_files'], $repeatStage); $zip->close();
+    $beforeRepeat = hash_file('sha256', $restoredPath);
+    $restoreTarget->install($repeatStaged); $restoreTarget->verify($repeatStaged); $restoreTarget->commit();
+    projectBackupAssert(hash_file('sha256', $restoredPath) === $beforeRepeat,
+        'A repeated identical Project File restore replaced or changed existing verified content.');
+    file_put_contents($restoredPath, 'conflicting target bytes');
+    $conflictRejected = false;
+    try { $restoreTarget->install($repeatStaged); } catch (RuntimeException $expected) { $conflictRejected = true; }
+    projectBackupAssert($conflictRejected && file_get_contents($restoredPath) === 'conflicting target bytes',
+        'A repeated conflicting Project File restore replaced target content instead of failing closed.');
+    if (DIRECTORY_SEPARATOR === '/') {
+        $unwritableRestoreStorage = $root . DIRECTORY_SEPARATOR . 'unwritable-restore-storage';
+        mkdir($unwritableRestoreStorage, 0500); chmod($unwritableRestoreStorage, 0500);
+        $unwritableRestoreRejected = false;
+        try { new ProjectFileRestoreTarget($restoreApplication, $unwritableRestoreStorage); }
+        catch (RuntimeException $expected) { $unwritableRestoreRejected = true; }
+        projectBackupAssert($unwritableRestoreRejected,
+            'An unwritable Project File restore target was not rejected before staging or cutover.');
+        chmod($unwritableRestoreStorage, 0700);
+    }
     $rollbackStorage = $root . DIRECTORY_SEPARATOR . 'rollback-storage'; mkdir($rollbackStorage, 0700);
     $rollbackTarget = new ProjectFileRestoreTarget($restoreApplication, $rollbackStorage);
     $rollbackTarget->install($staged);
@@ -115,6 +147,11 @@ try {
             'Healthy Project File storage was not reported as full-clone eligible.');
         $repeated = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination);
         projectBackupAssert($repeated === $healthy, 'Repeated Project File backup preflight was not deterministic.');
+        $insufficient = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination,
+            function () use ($healthy) { return max(0, $healthy['available_bytes'] - 1); });
+        projectBackupAssert($insufficient['full_clone_backup_eligible'] === false
+            && $insufficient['unavailable_reason'] === 'insufficient_backup_space',
+            'Insufficient backup capacity was not marked full-clone ineligible.');
         $jobStore = new CurrentBackupJobStore(new CurrentBackupStorage($application, $backupDestination));
         $requestKey = 'project-file-health-idempotency-key';
         projectBackupAssert($jobStore->findByRequest(7, $requestKey, true) === null,

@@ -90,6 +90,14 @@ message on failure. This check is advisory only for the minimum referenced-file
 bytes; operators must continue monitoring capacity for the database, runtime,
 encryption overhead, and retained artifacts.
 
+Project File restore staging removes its private partial directory when a ZIP
+stream is truncated or differs from the authenticated inventory. Local restore
+targets must be privately owner-writable. Repeating an exact-key install accepts
+already-identical verified bytes without replacing them; conflicting existing
+bytes fail closed and remain untouched. Restore inspection receipts remain
+single-claim, and idempotent operation receipts prevent a repeated request from
+performing a second cutover.
+
 ## Configuration
 
 The container already supplies `SYNDICATUM_BACKUP_DIR`,

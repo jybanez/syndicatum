@@ -44,7 +44,7 @@ final class ProjectFileStorage
         if (DIRECTORY_SEPARATOR === '/' && (fileperms($base) & 0077) !== 0) {
             throw new RuntimeException('Storage location must be private (0700).');
         }
-        if (!is_writable($base)) {
+        if (!is_writable($base) || (DIRECTORY_SEPARATOR === '/' && (fileperms($base) & 0200) === 0)) {
             throw new RuntimeException('Storage location must be writable by Syndicatum.');
         }
 

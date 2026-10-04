@@ -484,13 +484,16 @@ and methods in the durable `restore.completed` administrative audit event.
 
 ### 9.3 Operational recovery cases
 
-- [ ] Test missing object, corrupt bytes, checksum mismatch, insufficient space,
+- [x] Test missing object, corrupt bytes, checksum mismatch, insufficient space,
   unwritable target, interrupted stream, changed storage root, and repeated
   inspection/cutover attempts.
 - [x] Focused backup-preflight coverage rejects missing objects, corrupt or
   checksum-mismatched bytes, unwritable targets, changed roots, and proves
-  repeated health inspection is deterministic. Insufficient-space,
-  interrupted-stream, and repeated inspection/cutover recovery acceptance remain.
+  repeated health inspection is deterministic. Capacity injection proves the
+  insufficient-space gate. Restore coverage removes partial bytes after a
+  truncated stream, rejects unwritable targets, accepts repeated identical
+  exact-key content without replacement, and rejects conflicts without mutation;
+  retained inspections remain single-claim and operation receipts idempotent.
 - [x] Document operator recovery for storage-root loss and for moving a restored
   installation to a different absolute local path.
 - [x] Update the backup eligibility and delivery-health signals so an
