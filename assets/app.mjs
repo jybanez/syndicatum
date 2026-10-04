@@ -2540,6 +2540,12 @@ function mountMessageCard(host, item) {
   let attachmentMediaStrip = null;
   function paint(nextItem = item) {
     const current = nextItem.raw;
+    const severityLabel = messageSeverityLabel(current.severity);
+    // Helper rebuilds the timeline row chrome while reusing mounted custom
+    // content. Refresh header decorations before the content cache guard so
+    // they survive timeline updates, collapse changes, and mode switches.
+    renderMessageHeaderSeverity(host, current, severityLabel);
+    renderMessageAttachmentIndicator(host, current);
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
     renderedMessage = current;
     renderedContentKey = nextItem.contentKey;
@@ -2560,9 +2566,6 @@ function mountMessageCard(host, item) {
       preview.addEventListener("click", () => jumpToMessage(reply.id));
       details.appendChild(preview);
     }
-    const severityLabel = messageSeverityLabel(current.severity);
-    renderMessageHeaderSeverity(host, current, severityLabel);
-    renderMessageAttachmentIndicator(host, current);
     if (severityLabel && current.message_kind !== "system") {
       const severity = document.createElement("span");
       severity.className = `message-severity is-${current.severity}`;
