@@ -16,6 +16,42 @@ Phase 2 validates commercial value and must not silently expand the product.
 An item is complete only when its implementation, documentation, automated
 checks, and operational proof are all present where applicable.
 
+## Current-status reconciliation — 2026-10-04
+
+This layer records the present commercial and release interpretation without
+rewriting the dated September implementation evidence below.
+
+- **Category:** Syndicatum is the project operating layer for accountable
+  human-and-AI teams.
+- **Validation segment:** mixed human-and-AI project operations, not only
+  engineering and product teams. Do not imply validation by, or name, specific
+  government agencies without separate authority and evidence.
+- **Shipped foundations:** Work request lifecycle, Responsibility Inbox,
+  project planning with milestones and deliverables, human-reviewed AI
+  proposals, System Messages and integrations, Project Files and attachments,
+  and Realtime.
+- **Lifecycle rule:** acknowledgement, outcome submission, and requester
+  acceptance are separate states and evidence. Never treat one as another.
+- **Project Files:** simple project sharing, not a confidential DMS. Permanent
+  canonical links are public to anyone with the URL.
+- **Backup:** the old missing-Project-File-backup gap is superseded. Format-3
+  full-clone backup inventories, streams, hashes, restores, and verifies file
+  bytes; remaining items are operational edge-case acceptance.
+- **Distribution:** production remains blocked by the
+  [integration distribution production gate](integration-distribution-production-gate.md):
+  OpenAI directory approval, an immutable Codex stable ref and support window,
+  Chrome/Edge publication or managed updates, and exact installed compatibility
+  evidence. Mobile remains gated.
+- **Commercial model:** retain AGPL/open-core. Near-term paid value is hosting,
+  onboarding, implementation, integration setup, reliability, and support;
+  later value may include governance, audit, and enterprise controls.
+- **Claim boundary:** no production-ready claim is permitted until external
+  distribution and installed acceptance gates close.
+
+Current implementation completion and historical run IDs below remain useful
+evidence. Where older prose describes a capability as missing, this dated layer
+and the linked current domain-specific documents control.
+
 ## Phase 0 — Reliable Deployable Core
 
 ### P0.1 Baseline and acceptance contract
@@ -880,8 +916,9 @@ delays, bounded recovery, and no silent loss or duplication.
 
 ### P2.1 Pilot preparation
 
-- [ ] Define one target profile: AI-forward engineering or product teams already
-      coordinating humans across multiple AI systems.
+- [ ] Define one target profile within mixed human-and-AI project operations,
+      without limiting validation to engineering/product teams or naming
+      specific government agencies without separate authority and evidence.
 - [ ] Begin recruitment during Phase 0.
 - [ ] Recruit 5–10 design partners for active pilots.
 - [ ] Document informed data collection, retention, privacy, and support terms.
