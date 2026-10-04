@@ -93,12 +93,13 @@ ref and acceptance evidence named in the
 
 The owner-approved first production targets are Windows 10 22H2 and Windows 11.
 Stable Codex plugin releases use an immutable `codex-v<version>` Git tag whose
-version must exactly match `plugins/codex/.codex-plugin/plugin.json`. The first
-candidate is `codex-v0.2.0`. After that tag's release workflow and the applicable
-installed-client acceptance pass, install it with:
+version must exactly match `plugins/codex/.codex-plugin/plugin.json`. The current
+candidate is `codex-v0.2.1`; it corrects the MCP handshake version reported by
+the published `codex-v0.2.0` release. After the current tag's release workflow
+and the applicable installed-client acceptance pass, install it with:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.0
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.1
 codex plugin add codex@syndicatum
 ```
 
@@ -117,8 +118,10 @@ previous supported `codex-v<version>` ref, install `codex@syndicatum`, then
 restart Desktop and verify connector and profile status before resuming work.
 Do not delete the per-user Syndicatum plugin data directory during an update or
 rollback. The planned support window is the current stable release plus the
-immediately previous stable release; `0.2.0` has no stable predecessor. That
-window is not a production support claim until installed acceptance passes.
+immediately previous stable release. The published `0.2.0` release remains a
+prior release, but is not a production-support claim. That window is not a
+production support claim until installed acceptance passes, and an unpromoted
+published predecessor does not receive support merely because it exists.
 
 Production classification remains fail-closed until the exact tagged release
 passes clean install, update, rollback, restart, device migration, revocation,

@@ -14,6 +14,7 @@ test("MCP discovery does not block on background listener startup", async () => 
 });
 
 test("MCP server initializes and exposes connector tools while unconfigured", async () => {
+  const manifest = JSON.parse(await readFile(fileURLToPath(new URL("../.codex-plugin/plugin.json", import.meta.url)), "utf8"));
   const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-plugin-test-"));
   const child = spawn(process.execPath, [fileURLToPath(new URL("../mcp/server.mjs", import.meta.url))], {
     env: { ...process.env, SYNDICATUM_PLUGIN_DATA: data, SYNDICATUM_AGENT_TOKEN: "" },
@@ -36,6 +37,7 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     new Promise((_, reject) => setTimeout(() => reject(new Error("MCP server did not reply in time")), 2000)),
   ]);
   assert.equal(replies.find(item => item.id === 1)?.result?.serverInfo?.name, "syndicatum-connector");
+  assert.equal(replies.find(item => item.id === 1)?.result?.serverInfo?.version, manifest.version);
   const discoveredTools = replies.find(item => item.id === 2)?.result?.tools || [];
   assert.deepEqual(discoveredTools.map(tool => tool.name), [
     "claim_agent_profile",

@@ -23,12 +23,27 @@ test("distribution classifications match the exact source package versions", asy
   assert.equal(policy.release_train.codex_plugin, plugin.version);
   assert.equal(policy.release_train.companion, companion.version);
   assert.equal(policy.compatibility.codex_plugin.tested_source_version, plugin.version);
-  assert.equal(policy.compatibility.codex_plugin.initial_stable_ref, `codex-v${plugin.version}`);
+  assert.equal(policy.compatibility.codex_plugin.initial_stable_ref, "codex-v0.2.0");
+  assert.equal(policy.compatibility.codex_plugin.current_candidate_ref, `codex-v${plugin.version}`);
+  assert.deepEqual(policy.compatibility.codex_plugin.release_history, [
+    {
+      version: "0.2.0",
+      ref: "codex-v0.2.0",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "MCP initialize reports serverInfo.version 0.1.0 instead of the packaged manifest version 0.2.0.",
+        "Windows rollback and restoration acceptance is open after plugin-cache backup failed with access denied.",
+      ],
+    },
+  ]);
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);
   assert.deepEqual(policy.compatibility.initial_target_operating_systems, ["Windows 10 22H2", "Windows 11"]);
   assert.match(policy.compatibility.planned_support_policy, /current stable/i);
-  assert.match(policy.compatibility.planned_support_policy, /previous stable/i);
+  assert.match(policy.compatibility.planned_support_policy, /previous promoted stable/i);
+  assert.match(policy.compatibility.planned_support_policy, /does not create a support entitlement/i);
   assert.equal(policy.compatibility.companion.tested_source_version, companion.version);
 
   const ids = new Set(policy.channels.map(channel => channel.id));

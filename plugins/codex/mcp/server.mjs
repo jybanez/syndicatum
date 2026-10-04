@@ -1,4 +1,5 @@
 import readline from "node:readline";
+import { readFile } from "node:fs/promises";
 import { PluginRuntime } from "./runtime.mjs";
 import { claimAgentProfile } from "./profile-claim.mjs";
 import { listAgentProfiles, publicAgentProfile } from "./agent-profile-store.mjs";
@@ -9,6 +10,10 @@ import { migrateLegacyWindowsPluginData } from "./paths.mjs";
 // inside the package. Move existing data once to a user-profile path that the
 // external Scheduled Task and Run-key launcher can also access.
 await migrateLegacyWindowsPluginData();
+
+const pluginManifest = JSON.parse(await readFile(new URL("../.codex-plugin/plugin.json", import.meta.url), "utf8"));
+const pluginVersion = String(pluginManifest.version || "").trim();
+if (!pluginVersion) throw new Error("Codex plugin manifest version is missing");
 
 const runtime = new PluginRuntime();
 // MCP discovery must not wait for the background notification service. On a
@@ -324,7 +329,7 @@ lines.on("line", async line => {
   try {
     let result;
     if (request.method === "initialize") {
-      result = { protocolVersion: request.params?.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "syndicatum-connector", version: "0.1.0" } };
+      result = { protocolVersion: request.params?.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "syndicatum-connector", version: pluginVersion } };
     } else if (request.method === "ping") {
       result = {};
     } else if (request.method === "tools/list") {
