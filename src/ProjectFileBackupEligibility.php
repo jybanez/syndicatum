@@ -5,8 +5,11 @@ require_once __DIR__ . '/ProjectFileBackupSource.php';
 /** Read-only integrity and capacity preflight for Project Files in full-clone backups. */
 final class ProjectFileBackupEligibility
 {
-    public static function snapshot(PDO $pdo, $applicationRoot, $configuredProjectRoot, $backupRoot)
+    public static function snapshot(PDO $pdo, $applicationRoot, $configuredProjectRoot, $backupRoot, $freeSpaceProbe = null)
     {
+        if ($freeSpaceProbe !== null && !is_callable($freeSpaceProbe)) {
+            throw new InvalidArgumentException('Backup free-space probe must be callable.');
+        }
         $summary = self::availableSummary($pdo);
         $result = [
             'state' => 'ready',
@@ -47,7 +50,8 @@ final class ProjectFileBackupEligibility
             return self::unavailable($result, 'backup_storage_unwritable',
                 'Backup storage is not writable; no full-clone backup can be started.');
         }
-        $free = @disk_free_space($resolvedBackup);
+        $free = $freeSpaceProbe === null ? @disk_free_space($resolvedBackup)
+            : call_user_func($freeSpaceProbe, $resolvedBackup);
         if ($free === false || !is_finite((float) $free)) {
             return self::unavailable($result, 'backup_capacity_unknown',
                 'Backup storage capacity could not be verified; no full-clone backup can be started.');
@@ -60,9 +64,9 @@ final class ProjectFileBackupEligibility
         return $result;
     }
 
-    public static function assertFullCloneEligible(PDO $pdo, $applicationRoot, $configuredProjectRoot, $backupRoot)
+    public static function assertFullCloneEligible(PDO $pdo, $applicationRoot, $configuredProjectRoot, $backupRoot, $freeSpaceProbe = null)
     {
-        $result = self::snapshot($pdo, $applicationRoot, $configuredProjectRoot, $backupRoot);
+        $result = self::snapshot($pdo, $applicationRoot, $configuredProjectRoot, $backupRoot, $freeSpaceProbe);
         if (!$result['full_clone_backup_eligible']) {
             throw new RuntimeException('PROJECT_FILE_BACKUP_INELIGIBLE:' . $result['unavailable_reason']);
         }

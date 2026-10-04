@@ -20,31 +20,39 @@ final class ProjectFileRestoreTarget
         if (!mkdir($directory, 0700) || is_link($directory)) { throw new RuntimeException('Project file restore stage could not be created.'); }
         @chmod($directory, 0700);
         $staged = [];
-        foreach ($entries as $entry) {
-            $stream = $zip->getStream($entry['path']);
-            if (!is_resource($stream)) { throw new RuntimeException('A verified project file could not be opened for restore.'); }
-            $path = $directory . DIRECTORY_SEPARATOR . $entry['public_id'];
-            $output = @fopen($path, 'xb');
-            if (!is_resource($output)) { fclose($stream); throw new RuntimeException('A project file restore stage could not be created.'); }
-            @chmod($path, 0600); $hash = hash_init('sha256'); $bytes = 0;
-            try {
-                while (!feof($stream)) {
-                    $chunk = fread($stream, 1048576);
-                    if ($chunk === false || ($chunk === '' && !feof($stream))) { throw new RuntimeException('A project file restore stream was interrupted.'); }
-                    if ($chunk === '') { continue; }
-                    $bytes += strlen($chunk);
-                    if ($bytes > $entry['bytes'] || fwrite($output, $chunk) !== strlen($chunk)) {
-                        throw new RuntimeException('A project file restore stream exceeded its verified inventory.');
+        try {
+            foreach ($entries as $entry) {
+                $stream = $zip->getStream($entry['path']);
+                if (!is_resource($stream)) { throw new RuntimeException('A verified project file could not be opened for restore.'); }
+                $path = $directory . DIRECTORY_SEPARATOR . $entry['public_id'];
+                $output = @fopen($path, 'xb');
+                if (!is_resource($output)) { fclose($stream); throw new RuntimeException('A project file restore stage could not be created.'); }
+                @chmod($path, 0600); $hash = hash_init('sha256'); $bytes = 0;
+                try {
+                    while (!feof($stream)) {
+                        $chunk = fread($stream, 1048576);
+                        if ($chunk === false || ($chunk === '' && !feof($stream))) { throw new RuntimeException('A project file restore stream was interrupted.'); }
+                        if ($chunk === '') { continue; }
+                        $bytes += strlen($chunk);
+                        if ($bytes > $entry['bytes'] || fwrite($output, $chunk) !== strlen($chunk)) {
+                            throw new RuntimeException('A project file restore stream exceeded its verified inventory.');
+                        }
+                        hash_update($hash, $chunk);
                     }
-                    hash_update($hash, $chunk);
-                }
-                if (!fflush($output) || $bytes !== $entry['bytes'] || !hash_equals($entry['sha256'], hash_final($hash))) {
-                    throw new RuntimeException('A staged project file differs from its verified inventory.');
-                }
-            } finally { fclose($stream); fclose($output); }
-            $staged[] = ['entry' => $entry, 'path' => $path];
+                    if (!fflush($output) || $bytes !== $entry['bytes'] || !hash_equals($entry['sha256'], hash_final($hash))) {
+                        throw new RuntimeException('A staged project file differs from its verified inventory.');
+                    }
+                } finally { fclose($stream); fclose($output); }
+                $staged[] = ['entry' => $entry, 'path' => $path];
+            }
+            return $staged;
+        } catch (Throwable $error) {
+            foreach (scandir($directory) ?: [] as $name) {
+                if ($name !== '.' && $name !== '..') { @unlink($directory . DIRECTORY_SEPARATOR . $name); }
+            }
+            @rmdir($directory);
+            throw $error;
         }
-        return $staged;
     }
 
     public function install(array $staged)
