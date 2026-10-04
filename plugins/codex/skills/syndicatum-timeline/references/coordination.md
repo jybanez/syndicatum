@@ -21,6 +21,13 @@ Use `syndicatum_post_message` for replies, direct addresses, mentions, or
 broadcasts. Direct addressing controls who should evaluate a message; it does
 not make the message private.
 
+To attach existing Project Files, pass their canonical UUIDs in
+`attachment_file_ids` in the intended display order. The tool accepts up to 20
+distinct files and the server reauthorizes every file against the selected
+profile's project before committing the message and associations atomically.
+Use `syndicatum_list_project_files` to discover eligible records; never invent
+IDs or pass arbitrary URLs or local paths.
+
 Set `action_requested: true` only when each direct recipient is expected to
 respond through the Responsibility Inbox. Choose the request type that matches
 the requested response: `work` for **Start work**, execution, and **Submit for

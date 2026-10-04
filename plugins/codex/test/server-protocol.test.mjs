@@ -89,6 +89,10 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
   });
   assert.deepEqual(discoveredTools.find(tool => tool.name === "syndicatum_post_message")
     ?.inputSchema?.properties?.action_request_type?.enum, ["work", "approval", "review"]);
+  assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_post_message")
+    ?.inputSchema?.properties?.attachment_file_ids?.maxItems, 20);
+  assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_post_message")
+    ?.inputSchema?.properties?.attachment_file_ids?.uniqueItems, true);
   assert.match(discoveredTools.find(tool => tool.name === "syndicatum_propose_project_details")?.description || "", /human owner or administrator review/i);
   assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_propose_project_plan")?.inputSchema?.properties?.milestones?.maxItems, 10);
   assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_propose_agent_setup")?.inputSchema?.properties?.api_key, undefined);

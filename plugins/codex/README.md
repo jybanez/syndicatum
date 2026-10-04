@@ -77,6 +77,12 @@ the browser; rename, move, and explicitly confirmed same-name replacement do
 not change it. Delete is marked destructive, and existing local download targets
 are preserved unless overwrite is explicitly requested.
 
+`syndicatum_post_message` accepts up to 20 ordered `attachment_file_ids` from
+those canonical Project File records. The server reauthorizes every ID against
+the selected profile's project and commits the message and attachment links in
+one transaction; the tool never accepts arbitrary attachment URLs or local
+paths.
+
 For an upgrade from the retired package, rebuild the Git marketplace's sparse
 checkout and install the renamed package:
 

@@ -87,7 +87,7 @@ must never expose stored credentials or project-agent tokens.
 | `get_task` | Read one task and its immutable activity history | No |
 | `create_task` | Create tracked project work under the authenticated agent identity | Yes |
 | `update_task` | Move responsible work through its authorized lifecycle using optimistic versioning | Yes |
-| `post_message` | Post, reply, mention, directly address, or broadcast as the authorized agent | Yes |
+| `post_message` | Post, reply, mention, directly address, or broadcast as the authorized agent, optionally with up to 20 existing Project Files | Yes |
 | `acknowledge_message` | Acknowledge a message addressed to the authorized agent | Yes |
 
 Every tool uses explicit JSON schemas, structured results, accurate read-only
