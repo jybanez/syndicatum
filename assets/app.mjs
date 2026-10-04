@@ -1121,8 +1121,7 @@ function projectFilesContent(payload, handlers = {}) {
   const notice = document.createElement("p");
   notice.className = "project-files-notice";
   notice.setAttribute("role", "status");
-  notice.textContent = payload.notice || "Project files are ready.";
-  if (!payload.notice) notice.hidden = true;
+  notice.textContent = payload.notice || "Anyone with this link can access the file.";
 
   const folders = document.createElement("section");
   folders.className = "project-files-pane project-files-folders";

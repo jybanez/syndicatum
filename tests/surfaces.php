@@ -1124,9 +1124,10 @@ try {
             && strpos($source, 'size: "lg"') !== false
             && strpos($source, 'modal.open();') !== false
             && strpos($source, 'message: "Loading project files…"') !== false
+            && strpos($source, 'Anyone with this link can access the file.') !== false
             && strpos($source, 'state.factories.createTree(treeHost') !== false
             && strpos($source, 'state.factories.createGrid(gridHost') !== false,
-            'Project Files must open a loading canonical modal and use Helper tree/grid components.');
+            'Project Files must open a loading canonical modal, state the public-link boundary, and use Helper tree/grid components.');
         $suite->true(strpos($filesApi, "projectAccess(\$projectId, 'profile:read')") !== false
             && strpos($filesApi, 'requireCsrfForHuman') !== false
             && strpos($filesApi, 'new ProjectFileService') !== false
