@@ -23,6 +23,10 @@ test("distribution classifications match the exact source package versions", asy
   assert.equal(policy.release_train.codex_plugin, plugin.version);
   assert.equal(policy.release_train.companion, companion.version);
   assert.equal(policy.compatibility.codex_plugin.tested_source_version, plugin.version);
+  assert.equal(policy.compatibility.codex_plugin.initial_stable_ref, `codex-v${plugin.version}`);
+  assert.deepEqual(policy.compatibility.supported_operating_systems, ["Windows 11"]);
+  assert.match(policy.compatibility.support_window, /current stable/i);
+  assert.match(policy.compatibility.support_window, /previous stable/i);
   assert.equal(policy.compatibility.companion.tested_source_version, companion.version);
 
   const ids = new Set(policy.channels.map(channel => channel.id));

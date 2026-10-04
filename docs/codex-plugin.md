@@ -89,6 +89,41 @@ production channel. Production installation requires the immutable reviewed
 ref and acceptance evidence named in the
 [integration distribution gate](integration-distribution-production-gate.md).
 
+## Stable Windows channel
+
+The owner-approved first production target is Windows 11. Stable Codex plugin
+releases use an immutable `codex-v<version>` Git tag whose version must exactly
+match `plugins/codex/.codex-plugin/plugin.json`. The first candidate is
+`codex-v0.2.0`. After that tag's release workflow and installed-client
+acceptance pass, install it with:
+
+```text
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.0
+codex plugin add codex@syndicatum
+```
+
+The tagged Git marketplace is the installation channel. GitHub release ZIP,
+SHA-256, and manifest assets are deterministic provenance records for the exact
+marketplace snapshot; they are not a separate installer. Never substitute
+mutable `main` for the stable ref.
+
+For an update, fully exit Codex Desktop, upgrade the configured marketplace,
+restart Desktop, and start a new task so the new MCP host and skill are loaded.
+Protected device authorization, claimed agent profiles, discussion bindings,
+and connector data live outside the plugin cache and must remain intact.
+
+For rollback, fully exit Codex Desktop, remove and re-add the marketplace at the
+previous supported `codex-v<version>` ref, install `codex@syndicatum`, then
+restart Desktop and verify connector and profile status before resuming work.
+Do not delete the per-user Syndicatum plugin data directory during an update or
+rollback. The support window is the current stable release plus the immediately
+previous stable release; `0.2.0` has no stable predecessor.
+
+Production classification remains fail-closed until the exact tagged release
+passes clean install, update, rollback, restart, device migration, revocation,
+and project-isolation acceptance on Windows and the retained evidence is added
+to the distribution policy.
+
 After installation, restart Codex Desktop and begin a new task. Ask Codex to
 connect the device to the operator-provided Syndicatum server URL and provide a recognizable
 device name such as `Office PC` or `Laptop`. Codex opens the one-time browser

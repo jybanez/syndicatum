@@ -6,7 +6,7 @@
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
-    "codex_plugin": "0.1.0+codex.20261004181801",
+    "codex_plugin": "0.2.0",
     "companion": "0.10.6"
   },
   "channels": [
@@ -76,17 +76,18 @@
   "compatibility": {
     "application_release": "v1.0.0-rc.3",
     "codex_plugin": {
-      "tested_source_version": "0.1.0+codex.20261004181801",
-      "production_range": null
+      "tested_source_version": "0.2.0",
+      "production_range": null,
+      "initial_stable_ref": "codex-v0.2.0"
     },
     "companion": {
       "tested_source_version": "0.10.6",
       "production_range": null,
       "providers": ["ChatGPT web", "Gemini web"]
     },
-    "supported_operating_systems": [],
-    "support_window": null,
-    "note": "Source and pilot evidence do not establish a production compatibility or support claim."
+    "supported_operating_systems": ["Windows 11"],
+    "support_window": "Current stable Codex plugin release and the immediately previous stable release. The first stable release has no previous stable predecessor.",
+    "note": "Windows is the owner-approved initial target. The production range remains null until the exact tagged installation, update, rollback, migration, and revocation acceptance is retained."
   },
   "mobile_app": {
     "classification": "gated",
