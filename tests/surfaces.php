@@ -979,8 +979,11 @@ try {
         $suite->true(strpos($app, 'function renderMessageAttachmentIndicator(host, message)') !== false
             && strpos($app, 'state.factories.createIcon("actions.attach"') !== false
             && strpos($app, 'timestamp.parentElement.insertBefore(indicator, timestamp)') !== false
+            && strpos($app, 'renderMessageAttachmentIndicator(host, current);') !== false
+            && strpos($app, 'renderMessageAttachmentIndicator(host, current);')
+                < strpos($app, 'if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;')
             && strpos($appCss, '.message-attachment-indicator { display: inline-flex;') !== false,
-            'Messages with attachments must show an accessible Helper paperclip immediately before the timeline timestamp.');
+            'Messages with attachments must restore an accessible Helper paperclip immediately before the timeline timestamp before reused content skips repainting.');
         $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
             && strpos($appCss, '.message-attachment-files { display: flex;') !== false
             && strpos($appCss, 'flex: 0 1 210px;') !== false
