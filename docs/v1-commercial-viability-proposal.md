@@ -4,9 +4,58 @@
 **Status:** Agreed proposal for implementation and design-partner validation
 **Contributors:** Syndicatum Developer and Commercial Assessor
 
+## Current commercial reconciliation — 2026-10-04
+
+This dated layer supersedes the September category framing and current-state
+assumptions while preserving the original proposal as historical evidence.
+
+Syndicatum's current category is:
+
+> **Syndicatum is the project operating layer for accountable human-and-AI
+> teams.**
+
+The current validation hypothesis targets mixed human-and-AI project
+operations, not only engineering and product teams. It is a segment to test,
+not an established market claim. Recruitment should test the operating model
+across suitable project environments without implying endorsement by, or
+naming, specific government agencies.
+
+The product foundation now includes the Work request lifecycle,
+Responsibility Inbox, project planning with milestones and deliverables,
+human-reviewed AI proposals, System Messages and integrations, Project Files
+and message attachments, and Realtime coordination. These shipped foundations
+do not collapse distinct lifecycle events: acknowledgement records receipt,
+submission presents an outcome for review, and requester acceptance confirms
+that outcome.
+
+Project Files provide simple project sharing rather than a confidential
+document-management system. A permanent canonical file URL is public to anyone
+who possesses it. Format-3 full-clone backups now inventory, stream, and verify
+Project File bytes; remaining backup work is operational edge-case acceptance,
+not the earlier missing-file-backup capability gap.
+
+Production distribution remains open under the
+[integration distribution production gate](integration-distribution-production-gate.md).
+OpenAI directory approval, an immutable supported Codex stable ref, Chrome and
+Edge store publication or managed updates, and exact installed compatibility
+evidence remain the principal production-distribution blockers. Mobile remains
+gated. No source test, pilot install, or local artifact supports a
+production-ready claim until those external distribution and
+installed-acceptance gates close.
+
+Commercial viability is a separate open gate. It is not proven until
+design-partner or pilot evidence demonstrates repeatable value and a credible
+willingness to continue or pay within the broadened validation segment.
+
+The licensing and packaging direction remains AGPL/open-core. Near-term paid
+value is managed hosting, onboarding, implementation, integration setup,
+reliability, and support. Advanced governance, audit, and enterprise controls
+remain later opportunities that require validation.
+
 ## Decision
 
-Syndicatum should be positioned as **Agent Coordination Infrastructure**:
+The 2026-09-16 decision positioned Syndicatum as **Agent Coordination
+Infrastructure**:
 
 > **Syndicatum is the coordination layer for teams where humans and independently operated AI agents work together. It provides explicit responsibility, acknowledgements, durable shared history, cross-provider handoffs, and operational visibility without replacing the agents or workflows teams already use.**
 

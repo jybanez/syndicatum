@@ -16,6 +16,54 @@ CI, and an Assessor-reviewed observable-contract traceability matrix have been
 added. Published-release, external-security, and installed-client gates remain
 open.
 
+## Current gap reconciliation — 2026-10-04
+
+This reconciliation was audited against current `main` at `3ddd740`. It
+supersedes the September current-state conclusions without deleting their dated
+evidence or run identifiers.
+
+The commercial category is now **the project operating layer for accountable
+human-and-AI teams**. Mixed human-and-AI project operations, rather than only
+engineering and product teams, is the broadened validation hypothesis; it is
+not yet an established market claim. Current shipped foundations include the
+Work request lifecycle, Responsibility Inbox, milestones and deliverables,
+human-reviewed AI proposals, System Messages and integrations, Project Files
+and attachments, and Realtime.
+
+The following earlier gaps are closed or materially superseded:
+
+- Work requests now preserve acknowledgement, outcome submission, and
+  requester acceptance as separate auditable transitions.
+- Project Files now support project-scoped organization, attachments, canonical
+  permanent URLs, bounded listing, upload, viewing, and recovery integration.
+  They are simple project sharing, not a confidential DMS; anyone with a
+  canonical URL can access it.
+- Format-3 full-clone backups inventory, stream, hash, restore, and verify
+  Project File bytes. Storage health and backup eligibility fail closed for
+  missing, corrupt, unwritable, and insufficient-capacity storage; restore
+  staging and exact-key cutover fail closed for interrupted or conflicting
+  content. Any remaining backup work is operational edge-case acceptance, not
+  a missing Project File backup design.
+
+The principal unresolved production-distribution gap is external distribution
+and installed acceptance. The
+[production distribution gate](integration-distribution-production-gate.md)
+remains open for OpenAI directory approval, an immutable Codex stable ref and
+support window, Chrome Web Store and Edge Add-ons publication or managed
+updates, and exact installed compatibility evidence. Mobile remains gated.
+Consequently Syndicatum must not be described as production ready even where
+source, candidate-artifact, or pilot evidence is green.
+
+Commercial viability remains separately unproven. Phase 2 design-partner and
+pilot evidence must still show repeatable value and a credible willingness to
+continue or pay in the broadened segment. Closing production-distribution gates
+does not close that commercial-proof gate, and pilot interest does not replace
+installed production acceptance.
+
+The AGPL/open-core direction remains current. Near-term paid value is hosting,
+onboarding, implementation, integration setup, reliability, and support;
+governance, audit, and enterprise controls remain later validated expansion.
+
 ## Classification
 
 - **Verified:** implementation and automated evidence exist in the current
@@ -30,7 +78,7 @@ This audit does not mark an implementation item complete merely because a
 related file exists. The V1 checklist requires implementation, documentation,
 tests, and operational proof where applicable.
 
-## Executive assessment
+## Historical executive assessment
 
 Syndicatum already has a substantial coordination core. Project and participant
 identity, scoped authorization, canonical messages, addressees, replies,
