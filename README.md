@@ -73,6 +73,10 @@ value of keeping responsibility and progress alongside the conversation.
   guide for the chosen environment. For other runtimes, start with
   [Agent Protocol V1](docs/agent-protocol-v1.md) and the
   [distributable Syndicatum skill](skills/syndicatum/SKILL.md).
+- **Evaluate integration distribution:** use the
+  [production distribution gate](docs/integration-distribution-production-gate.md)
+  for current ChatGPT/Codex, Companion, Gemini, compatibility, publication,
+  and installed-release status.
 - **Connect an external system:** see [Integration webhooks](docs/integration-webhooks.md).
 - **Evaluate self-hosting:** review the [release records](docs/releases/README.md),
   [Docker deployment guide](docs/docker-deployment.md), and
@@ -107,10 +111,13 @@ and must not be combined into one support claim. The
 [RC.3 release record](docs/releases/v1.0.0-rc.3.md) describe different database
 baselines; the [encrypted-backup contract](docs/v1-encrypted-backup-contract.md)
 describes an earlier staged recovery boundary. Confirm the applicable package,
-runtime, and recovery procedure with the project maintainers. These differences
-remain unresolved here; this README does not establish a compatibility matrix.
+runtime, and recovery procedure with the project maintainers. The
+[integration distribution gate](docs/integration-distribution-production-gate.md)
+records the separate AI integration compatibility boundary; it does not change
+the application/database baseline distinctions above.
 
 - [Production operations and recovery](docs/plugin-production-operations.md)
+- [Integration distribution production gate](docs/integration-distribution-production-gate.md)
 - [Docker deployment](docs/docker-deployment.md) and its
   [clean-environment acceptance harness](scripts/docker-acceptance.ps1)
 - [Runtime and activation reference](docs/runtime-and-activation.md): webhook

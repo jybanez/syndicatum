@@ -43,12 +43,17 @@ credentials, activation settings, webhooks, and runtime paths.
 
 A device-local ownership lock ensures that only the plugin-managed background process opens the Realtime listener. Codex MCP hosts remain on standby, preventing duplicate task wakeups.
 
-## Install from GitHub in Codex Desktop
+## Pilot install from GitHub in Codex Desktop
 
 ```text
 codex plugin marketplace add jybanez/syndicatum --ref main
 codex plugin add codex@syndicatum
 ```
+
+This command tracks mutable `main` and is a pilot channel, not the stable
+production channel. Production installation requires the immutable reviewed
+ref and acceptance evidence named in the
+[integration distribution gate](../../docs/integration-distribution-production-gate.md).
 
 Restart Codex Desktop, start a new task, and ask Codex to connect this device to
 `https://syndicatum.wizaya.com`. Give the device a recognizable name when prompted.

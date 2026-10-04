@@ -371,6 +371,7 @@ jobs:
       - name: Check portable Codex and Companion adapter contracts
         run: |
           set -euo pipefail
+          node --test tests/integration-distribution.test.mjs | tee ci-evidence/integration-distribution.txt
           node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs | tee ci-evidence/codex-portable.txt
           node --test companion/test/*.test.mjs | tee ci-evidence/companion-portable.txt
       - name: Retain source-contract test evidence

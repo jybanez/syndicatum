@@ -4,7 +4,13 @@ The companion is a provider-neutral browser delivery layer. ChatGPT receives a m
 
 Gemini browser response capture requires Chrome to remain signed in and the bound discussion to remain available. The queue recognizes an already-injected request after retries or restarts, and the server enforces one idempotent reply per originating message.
 
-## Install from a GitHub release
+## Pilot install from a GitHub release
+
+This unpacked installation is the current pilot channel. It is not the normal
+production distribution path because it requires Developer mode and does not
+receive browser-managed automatic updates. The production gates for Chrome Web
+Store and Microsoft Edge Add-ons are tracked in the
+[integration distribution contract](../docs/integration-distribution-production-gate.md).
 
 1. Download the latest `syndicatum-companion-v{version}.zip` from the canonical [Syndicatum GitHub Releases](https://github.com/jybanez/syndicatum/releases/latest) page.
 2. Verify it against the attached `.sha256` release asset with `Get-FileHash`.

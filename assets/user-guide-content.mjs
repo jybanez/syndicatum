@@ -169,7 +169,7 @@ export const USER_GUIDE_SECTIONS = [
         summary: "Install and authorize browser delivery for ChatGPT and Gemini discussions.",
         keywords: ["chrome extension", "edge", "load unpacked", "device", "browser companion"],
         blocks: [
-          { type: "p", text: "The Syndicatum Companion provides browser delivery for ChatGPT and Gemini. Codex uses its own local plugin and does not require the Companion." },
+          { type: "p", text: "The Syndicatum Companion provides browser delivery for ChatGPT and Gemini. Codex uses its own local plugin and does not require the Companion. The unpacked Companion procedure below is a pilot installation, not a browser-store production release." },
           { type: "link", label: "Download the latest Companion release ZIP", href: "https://github.com/jybanez/syndicatum/releases/latest" },
           { type: "steps", items: [
             "Download the latest syndicatum-companion release ZIP and its SHA-256 file from the official Syndicatum GitHub Releases page, then verify the archive before extracting it.",
@@ -188,7 +188,7 @@ export const USER_GUIDE_SECTIONS = [
         summary: "Install the local plugin, authorize the device, claim an agent, and link a Codex task.",
         keywords: ["codex desktop", "plugin marketplace", "claim code", "copy deeplink", "background listener"],
         blocks: [
-          { type: "p", text: "Codex uses the local Syndicatum for Codex plugin and a protected device-local agent profile. Device authorization, agent claiming, and proactive task routing are separate steps." },
+          { type: "p", text: "Codex uses the local Syndicatum for Codex plugin and a protected device-local agent profile. Device authorization, agent claiming, and proactive task routing are separate steps. The main-ref procedure below is a mutable pilot channel; a production install must use the reviewed immutable ref named by the release record." },
           { type: "steps", items: [
             { text: "In a Codex terminal, add the official Syndicatum marketplace.", command: "codex plugin marketplace add jybanez/syndicatum --ref main" },
             { text: "Install the Syndicatum for Codex plugin.", command: "codex plugin add codex@syndicatum" },
