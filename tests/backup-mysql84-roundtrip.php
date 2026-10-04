@@ -4,6 +4,9 @@ require_once dirname(__DIR__) . '/src/BaselineInstaller.php';
 require_once dirname(__DIR__) . '/src/BackupProducer.php';
 require_once dirname(__DIR__) . '/src/StagedBackupRestore.php';
 require_once dirname(__DIR__) . '/src/McpServiceTokenService.php';
+require_once dirname(__DIR__) . '/src/CurrentBackupProducer.php';
+require_once dirname(__DIR__) . '/src/CurrentBackupStorage.php';
+require_once dirname(__DIR__) . '/src/CurrentRestoreWorker.php';
 
 function mysql84BackupFail($message)
 {
@@ -56,6 +59,12 @@ function mysql84BackupRemoveTree($path)
         elseif (is_dir($child)) { mysql84BackupRemoveTree($child); }
     }
     rmdir($path);
+}
+
+final class Mysql84RestoreRealtime
+{
+    public $updates = [];
+    public function publishRestoreUpdated(array $restore) { $this->updates[] = $restore; }
 }
 
 if (DIRECTORY_SEPARATOR !== '/') {
@@ -121,7 +130,7 @@ try {
     $source->exec("INSERT INTO responses_api_deliveries (delivery_uuid, project_id, message_id, agent_id, status, attempt_count, next_attempt_at, created_at) VALUES ('88888888-8888-4888-8888-888888888888', 300, 600, 400, 'queued', 0, '$now', '$now')");
     $source->exec("INSERT INTO workspace_agent_trigger_deliveries (delivery_uuid, project_id, message_id, agent_id, status, attempt_count, next_attempt_at, created_at) VALUES ('99999999-9999-4999-8999-999999999999', 300, 600, 400, 'queued', 0, '$now', '$now')");
 
-    foreach (['staging', 'assets', 'public', 'backups'] as $directory) {
+    foreach (['staging', 'assets', 'public', 'backups', 'project-source', 'project-target', 'current-target-assets'] as $directory) {
         $path = $temporaryRoot . '/' . $directory;
         if (!mkdir($path, 0700, true) && !is_dir($path)) { throw new RuntimeException('Could not create private backup acceptance directory.'); }
         chmod($path, 0700);
@@ -184,6 +193,95 @@ try {
     $nextUserId = (int) $target->query("SELECT auto_increment FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users'")->fetchColumn();
     mysql84BackupAssert($nextUserId === 1001, 'Durable AUTO_INCREMENT state above MAX(id) was not preserved.');
 
+    // Exercise the production format-3 producer and in-app restore worker with a real
+    // Project File object. This is deliberately separate from the legacy round trip
+    // above so the compatibility evidence remains independently meaningful.
+    $projectBytes = str_repeat('portable-project-file-', 131072);
+    $projectSha256 = hash('sha256', $projectBytes);
+    $projectPublicId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    $projectStorageKey = 'objects/33333333-3333-4333-8333-333333333333/'
+        . substr($projectSha256, 0, 2) . '/' . $projectSha256;
+    $projectSourcePath = $temporaryRoot . '/project-source/' . str_replace('/', DIRECTORY_SEPARATOR, $projectStorageKey);
+    if (!mkdir(dirname($projectSourcePath), 0700, true) && !is_dir(dirname($projectSourcePath))) {
+        throw new RuntimeException('Could not create Project File source directory.');
+    }
+    file_put_contents($projectSourcePath, $projectBytes);
+    chmod($projectSourcePath, 0600);
+    $source->exec("INSERT INTO project_file_folders (id, public_id, project_id, parent_folder_id, name, normalized_name, root_marker, created_by_participant_id, version, created_at, updated_at, deleted_at) VALUES (700, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 300, NULL, 'Recovered project', 'recovered project', 1, 500, 1, '$now', '$now', NULL)");
+    $projectInsert = $source->prepare("INSERT INTO project_files (id, public_id, project_id, folder_id, storage_driver, storage_key, original_name, display_name, normalized_name, mime_type, size_bytes, sha256, uploaded_by_participant_id, state, version, created_at, updated_at, deleted_at) VALUES (701, ?, 300, 700, 'local', ?, 'recovery-proof.txt', 'recovery-proof.txt', 'recovery-proof.txt', 'text/plain', ?, ?, 500, 'available', 1, ?, ?, NULL)");
+    $projectInsert->execute([$projectPublicId, $projectStorageKey, strlen($projectBytes), $projectSha256, $now, $now]);
+    $source->exec("INSERT INTO message_file_attachments (id, project_id, message_id, project_file_id, attached_by_participant_id, position, created_at) VALUES (702, 300, 600, 701, 500, 0, '$now')");
+
+    $secretsPath = $temporaryRoot . '/portable-secrets.php';
+    $backupConfigPath = $temporaryRoot . '/portable-backup-config.php';
+    file_put_contents($secretsPath, "<?php return ['PBB_AGENTCHAT_SECRET' => '" . str_repeat('s', 32)
+        . "', 'SYNDICATUM_MASTER_KEY' => '" . str_repeat('m', 32) . "'];\n");
+    file_put_contents($backupConfigPath, "<?php return ['SYNDICATUM_BACKUP_STORAGE' => 'acceptance'];\n");
+    chmod($secretsPath, 0600); chmod($backupConfigPath, 0600);
+    putenv('SYNDICATUM_SECRETS_FILE=' . $secretsPath);
+    putenv('SYNDICATUM_BACKUP_CONFIG=' . $backupConfigPath);
+
+    $currentStorage = new CurrentBackupStorage($root, $temporaryRoot . '/current-backup-storage');
+    $currentOperationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    $currentKey = random_bytes(32);
+    $currentArtifact = $currentStorage->artifact($currentOperationId);
+    $currentProduced = (new CurrentBackupProducer(
+        $source,
+        $currentStorage->stage(),
+        $temporaryRoot . '/assets',
+        $root,
+        $temporaryRoot . '/project-source'
+    ))->produce($currentArtifact, $currentKey, $currentOperationId);
+    mysql84BackupAssert($currentProduced['project_file_count'] === 1, 'Current backup did not inventory the Project File object.');
+
+    $authenticated = CurrentBackupEnvelope::decryptToPrivateStage($currentArtifact, $currentStorage->stage(), $currentKey);
+    try {
+        $currentManifest = PortableBackupManifest::parse($authenticated['manifest_json']);
+        PortableBackupArchive::verify($authenticated['archive_path'], $currentManifest);
+        mysql84BackupAssert($currentManifest['format_version'] === '3.0', 'Current backup did not emit portable format 3.');
+        mysql84BackupAssert(count($currentManifest['project_files']) === 1, 'Current manifest Project File inventory differs.');
+        $projectEntry = $currentManifest['project_files'][0];
+        mysql84BackupAssert($projectEntry['public_id'] === $projectPublicId
+            && $projectEntry['key'] === $projectStorageKey
+            && $projectEntry['bytes'] === strlen($projectBytes)
+            && hash_equals($projectSha256, $projectEntry['sha256']),
+            'Current manifest did not preserve Project File identity and integrity metadata.');
+    } finally {
+        CurrentBackupEnvelope::removePrivateStage($authenticated['stage_path'], $currentStorage->stage());
+    }
+
+    $keyFile = $temporaryRoot . '/current-restore.key';
+    file_put_contents($keyFile, base64_encode($currentKey));
+    chmod($keyFile, 0600);
+    $restoreJobs = new CurrentRestoreJobStore($currentStorage);
+    $restoreJob = $restoreJobs->create(100, 'Backup Owner', 'mysql84-current-project-file-roundtrip',
+        'existing', $currentOperationId, $currentArtifact, $keyFile);
+    putenv('PBB_AGENTCHAT_DB_NAME=' . $targetName);
+    $restoreRealtime = new Mysql84RestoreRealtime();
+    $currentWorker = new CurrentRestoreWorker($currentStorage, $restoreJobs,
+        $temporaryRoot . '/current-target-assets', $restoreRealtime, $root, $temporaryRoot . '/project-target');
+    mysql84BackupAssert($currentWorker->runPending() === 1, 'Current restore worker did not claim the queued round trip.');
+    $completedRestore = $restoreJobs->get($restoreJob['operation_id']);
+    mysql84BackupAssert(is_array($completedRestore) && $completedRestore['status'] === 'Complete',
+        'Current project-file restore did not complete: ' . (is_array($completedRestore) ? (string) $completedRestore['failure_summary'] : 'missing job'));
+    mysql84BackupAssert($completedRestore['restored_project_file_count'] === 1,
+        'Current restore evidence did not report the restored Project File count.');
+    $restoredProjectPath = $temporaryRoot . '/project-target/' . str_replace('/', DIRECTORY_SEPARATOR, $projectStorageKey);
+    mysql84BackupAssert(is_file($restoredProjectPath)
+        && filesize($restoredProjectPath) === strlen($projectBytes)
+        && hash_equals($projectSha256, hash_file('sha256', $restoredProjectPath)),
+        'Current restore did not reproduce the exact Project File bytes at the provider-neutral key.');
+    $restoredProject = $target->query("SELECT public_id, storage_driver, storage_key, size_bytes, sha256 FROM project_files WHERE id = 701")->fetch(PDO::FETCH_ASSOC);
+    mysql84BackupAssert(is_array($restoredProject)
+        && $restoredProject['public_id'] === $projectPublicId
+        && $restoredProject['storage_driver'] === 'local'
+        && $restoredProject['storage_key'] === $projectStorageKey
+        && (int) $restoredProject['size_bytes'] === strlen($projectBytes)
+        && hash_equals($projectSha256, $restoredProject['sha256']),
+        'Current restore did not preserve Project File database identity and integrity metadata.');
+    mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM message_file_attachments WHERE message_id = 600 AND project_file_id = 701')->fetchColumn() === 1,
+        'Current restore did not preserve the message attachment association.');
+
     echo json_encode([
         'mysql_version' => $target->query('SELECT VERSION()')->fetchColumn(),
         'baseline_id' => $baselineArray['baseline_id'],
@@ -207,6 +305,10 @@ try {
         'replacement_mcp_token_authenticated' => true,
         'next_users_auto_increment' => $nextUserId,
         'cutover_performed' => false,
+        'current_project_file_format' => $currentManifest['format_version'],
+        'current_project_file_count' => $completedRestore['restored_project_file_count'],
+        'current_project_file_sha256' => $projectSha256,
+        'current_message_attachment_preserved' => true,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $exception) {
     mysql84BackupFail('MySQL 8.4 encrypted-backup round-trip failed: ' . $exception->getMessage());
