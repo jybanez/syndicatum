@@ -6,7 +6,7 @@
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
-    "codex_plugin": "0.2.0",
+    "codex_plugin": "0.2.1",
     "companion": "0.10.6"
   },
   "channels": [
@@ -76,9 +76,9 @@
   "compatibility": {
     "application_release": "v1.0.0-rc.3",
     "codex_plugin": {
-      "tested_source_version": "0.2.0",
+      "tested_source_version": "0.2.1",
       "production_range": null,
-      "initial_stable_ref": "codex-v0.2.0"
+      "initial_stable_ref": "codex-v0.2.1"
     },
     "companion": {
       "tested_source_version": "0.10.6",
