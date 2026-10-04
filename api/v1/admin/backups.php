@@ -7,22 +7,25 @@ require_once dirname(dirname(dirname(__DIR__))) . '/src/CurrentBackupJobStore.ph
 require_once dirname(dirname(dirname(__DIR__))) . '/src/CurrentBackupWorkerLauncher.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/SettingsService.php';
 require_once dirname(dirname(dirname(__DIR__))) . '/src/RealtimeIntegration.php';
+require_once dirname(dirname(dirname(__DIR__))) . '/src/ProjectFileBackupEligibility.php';
 
 try {
     $method = Api::method();
     if (!in_array($method, ['GET', 'POST', 'DELETE'], true)) {
         Api::json(['error' => true, 'code' => 'method_not_allowed', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET, POST, DELETE']);
     }
-    $auth = new AuthService(Db::pdo());
+    $pdo = Db::pdo();
+    $auth = new AuthService($pdo);
     $user = $auth->requireAdministrator();
     if ($method !== 'GET') {
         $auth->validateCsrf($user, Api::csrfToken());
     }
     $root = dirname(dirname(dirname(__DIR__)));
-    $settings = new SettingsService(Db::pdo());
+    $settings = new SettingsService($pdo);
     $storage = new CurrentBackupStorage($root, $settings->get('recovery.backup_base_path'));
     $jobs = new CurrentBackupJobStore($storage);
     $realtime = new RealtimeIntegration($settings);
+    $projectFileRoot = trim((string) $settings->get('storage.local_base_path'));
     if ($method === 'GET') {
         $id = isset($_GET['operation_id']) ? trim((string) $_GET['operation_id']) : '';
         if ($id !== '') {
@@ -30,7 +33,9 @@ try {
             if ($job === null) { Api::json(['error' => true, 'code' => 'not_found', 'message' => 'Backup operation not found.'], 404); }
             Api::json(['data' => ['backup' => $job]]);
         }
-        Api::json(['data' => ['backups' => $jobs->recent(), 'storage_base' => $storage->base()]]);
+        $eligibility = ProjectFileBackupEligibility::snapshot($pdo, $root, $projectFileRoot, $storage->base());
+        Api::json(['data' => ['backups' => $jobs->recent(), 'storage_base' => $storage->base(),
+            'project_file_backup' => $eligibility]], 200, ['Cache-Control' => 'private, no-store']);
     }
     // The mutation does not accept client-controlled paths; storage destinations are server-selected.
     $body = Api::body();
@@ -59,7 +64,19 @@ try {
         throw new InvalidArgumentException('Choose either a full clone or a clean installation package.');
     }
     $key = Api::idempotencyKey();
-    $job = $jobs->create((int) $user['id'], (string) $user['display_name'], $key, $body['include_data']);
+    $job = $jobs->findByRequest((int) $user['id'], $key, $body['include_data']);
+    if ($job === null && $body['include_data']) {
+        try {
+            ProjectFileBackupEligibility::assertFullCloneEligible($pdo, $root, $projectFileRoot, $storage->base());
+        } catch (Throwable $preflightError) {
+            // Reconcile a concurrent or uncertain accepted request before reporting that nothing started.
+            $job = $jobs->findByRequest((int) $user['id'], $key, $body['include_data']);
+            if ($job === null) { throw $preflightError; }
+        }
+    }
+    if ($job === null) {
+        $job = $jobs->create((int) $user['id'], (string) $user['display_name'], $key, $body['include_data']);
+    }
     if ($job['status'] === 'Queued') {
         try {
             $realtime->publishBackupUpdated($job);
@@ -82,10 +99,12 @@ try {
     $code = $error->getMessage();
     $status = $code === 'AUTHENTICATION_REQUIRED' ? 401
         : ($code === 'ADMINISTRATOR_REQUIRED' || $code === 'CSRF_VALIDATION_FAILED' ? 403 : 503);
+    $projectFilesIneligible = strpos($code, 'PROJECT_FILE_BACKUP_INELIGIBLE:') === 0;
     $message = $status === 401 ? 'Authentication is required.'
         : ($status === 403 ? 'Administrator access or a valid request token is required.'
-            : ($code === 'BACKUP_REALTIME_UNAVAILABLE' ? 'Backup Realtime is unavailable; no backup was started.' : 'Backup service is unavailable.'));
-    Api::json(['error' => true, 'code' => strtolower($code), 'message' => $message], $status);
+            : ($projectFilesIneligible ? 'Project File storage failed backup preflight; no backup was started.'
+                : ($code === 'BACKUP_REALTIME_UNAVAILABLE' ? 'Backup Realtime is unavailable; no backup was started.' : 'Backup service is unavailable.')));
+    Api::json(['error' => true, 'code' => $projectFilesIneligible ? 'project_file_backup_ineligible' : strtolower($code), 'message' => $message], $status);
 } catch (Throwable $error) {
     error_log('Syndicatum backup API failed: ' . $error->getMessage());
     Api::json(['error' => true, 'code' => 'server_error', 'message' => 'Backup service is unavailable.'], 500);

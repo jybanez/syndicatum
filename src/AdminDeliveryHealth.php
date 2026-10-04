@@ -3,6 +3,8 @@
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/OperationalHealth.php';
 require_once __DIR__ . '/DeliveryOperatorView.php';
+require_once __DIR__ . '/SettingsService.php';
+require_once __DIR__ . '/ProjectFileBackupEligibility.php';
 
 /** Read-only, content-free delivery health for authenticated administrators. */
 class AdminDeliveryHealth
@@ -14,13 +16,17 @@ class AdminDeliveryHealth
         foreach (self::definitions() as $name => $definition) {
             $paths[$name] = self::path($pdo, $definition);
         }
-        $components = [$worker['state']];
+        $settings = new SettingsService($pdo);
+        $storage = ProjectFileBackupEligibility::snapshot($pdo, dirname(__DIR__),
+            $settings->get('storage.local_base_path'), $settings->get('recovery.backup_base_path'));
+        $components = [$worker['state'], $storage['full_clone_backup_eligible'] ? 'ok' : 'degraded'];
         foreach ($paths as $path) { $components[] = $path['state']; }
         return [
             'checked_at' => gmdate('c'),
             'state' => operationalAggregateState($components),
             'worker' => $worker,
             'paths' => $paths,
+            'project_file_backup' => $storage,
         ];
     }
 

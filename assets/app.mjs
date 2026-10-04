@@ -13,7 +13,7 @@ import {
   validationAlertItems,
 } from "./responsibility-action-flow.mjs?v=20261003051000";
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003150000";
-import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202609240004";
+import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202610040001";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
@@ -7521,6 +7521,15 @@ function renderAdminDeliveryHealth(report) {
     `State: ${value(worker.state)}`, `Heartbeat age: ${seconds(worker.age_seconds)}`,
     `Last successful cycle: ${value(worker.last_success_at)}`,
     ...(worker.unavailable_reason ? [`Telemetry: ${worker.unavailable_reason}`] : []),
+  ]);
+  const storage = report?.project_file_backup || {};
+  addCard("Project File backup", [
+    `State: ${value(storage.state)}`,
+    `Full-clone eligible: ${storage.full_clone_backup_eligible === true ? "Yes" : "No"}`,
+    `Available files: ${value(storage.available_file_count)} · Verified files: ${value(storage.verified_file_count)}`,
+    `Available bytes: ${value(storage.available_bytes)} · Backup free bytes: ${value(storage.backup_free_bytes)}`,
+    ...(storage.message ? [`Details: ${storage.message}`] : []),
+    ...(storage.unavailable_reason ? [`Telemetry: ${storage.unavailable_reason}`] : []),
   ]);
   const names = { realtime: "Realtime", webhook: "Agent webhooks", workspace_agent: "Workspace Agent", responses_api: "Responses API" };
   Object.entries(names).forEach(([key, label]) => {

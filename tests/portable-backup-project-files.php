@@ -5,6 +5,8 @@ require_once dirname(__DIR__) . '/src/PortableBackupArchive.php';
 require_once dirname(__DIR__) . '/src/CurrentBackupEnvelope.php';
 require_once dirname(__DIR__) . '/src/ProjectFileBackupSource.php';
 require_once dirname(__DIR__) . '/src/ProjectFileRestoreTarget.php';
+require_once dirname(__DIR__) . '/src/ProjectFileBackupEligibility.php';
+require_once dirname(__DIR__) . '/src/CurrentBackupJobStore.php';
 
 function projectBackupAssert($condition, $message) { if (!$condition) { throw new RuntimeException($message); } }
 function projectBackupEntry($path, $relative) { return ['path' => $relative, 'sha256' => hash_file('sha256', $path), 'bytes' => filesize($path)]; }
@@ -105,6 +107,22 @@ try {
         $inventory = $source->inventory($pdo, true);
         projectBackupAssert(count($inventory) === 1 && $inventory[0]['key'] === $projectKey,
             'Snapshot inventory did not capture the referenced local object.');
+        $backupDestination = $root . DIRECTORY_SEPARATOR . 'backup-destination';
+        mkdir($backupDestination, 0700); @chmod($backupDestination, 0700);
+        $healthy = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination);
+        projectBackupAssert($healthy['state'] === 'ready' && $healthy['full_clone_backup_eligible'] === true
+            && $healthy['verified_file_count'] === 1 && $healthy['available_bytes'] === filesize($sourcePath),
+            'Healthy Project File storage was not reported as full-clone eligible.');
+        $repeated = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination);
+        projectBackupAssert($repeated === $healthy, 'Repeated Project File backup preflight was not deterministic.');
+        $jobStore = new CurrentBackupJobStore(new CurrentBackupStorage($application, $backupDestination));
+        $requestKey = 'project-file-health-idempotency-key';
+        projectBackupAssert($jobStore->findByRequest(7, $requestKey, true) === null,
+            'A new backup request unexpectedly reconciled to an existing job.');
+        $createdJob = $jobStore->create(7, 'Backup Operator', $requestKey, true);
+        $reconciledJob = $jobStore->findByRequest(7, $requestKey, true);
+        projectBackupAssert($reconciledJob['operation_id'] === $createdJob['operation_id'],
+            'An accepted backup request could not be reconciled before a repeated preflight.');
         $configuredManifest = $manifest;
         $configuredManifest['project_files'] = $inventory;
         $configuredArchive = $root . DIRECTORY_SEPARATOR . 'configured-local-storage.zip';
@@ -124,10 +142,37 @@ try {
         } finally {
             CurrentBackupEnvelope::removePrivateStage($authenticated['stage_path'], $configuredStage);
         }
-        file_put_contents($sourcePath, 'changed bytes');
+        file_put_contents($sourcePath, 'tampered bytes');
         $changedRejected = false;
         try { $source->verifyUnchanged(); } catch (RuntimeException $expected) { $changedRejected = true; }
         projectBackupAssert($changedRejected, 'A project file changed after snapshot was not rejected.');
+        $corrupt = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination);
+        projectBackupAssert($corrupt['full_clone_backup_eligible'] === false
+            && $corrupt['unavailable_reason'] === 'project_file_integrity_failed',
+            'Checksum-mismatched Project File bytes were not marked backup-ineligible.');
+        file_put_contents($sourcePath, 'verified bytes');
+        unlink($sourcePath);
+        $missing = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination);
+        projectBackupAssert($missing['full_clone_backup_eligible'] === false
+            && $missing['unavailable_reason'] === 'project_file_integrity_failed',
+            'A missing Project File object was not marked backup-ineligible.');
+        $changedRoot = ProjectFileBackupEligibility::snapshot($pdo, $application,
+            $root . DIRECTORY_SEPARATOR . 'moved-storage', $backupDestination);
+        projectBackupAssert($changedRoot['full_clone_backup_eligible'] === false,
+            'A changed or missing Project File storage root was not marked backup-ineligible.');
+        if (DIRECTORY_SEPARATOR === '/') {
+            file_put_contents($sourcePath, 'verified bytes');
+            chmod($backupDestination, 0500);
+            $unwritable = ProjectFileBackupEligibility::snapshot($pdo, $application, $storage, $backupDestination);
+            projectBackupAssert($unwritable['full_clone_backup_eligible'] === false
+                && $unwritable['unavailable_reason'] === 'backup_storage_unwritable',
+                'An unwritable backup target was not marked backup-ineligible.');
+            chmod($backupDestination, 0700);
+        }
+        $pdo->exec('DELETE FROM project_files');
+        $empty = ProjectFileBackupEligibility::snapshot($pdo, $application, '', $backupDestination);
+        projectBackupAssert($empty['full_clone_backup_eligible'] === true && $empty['available_file_count'] === 0,
+            'An empty Project File inventory incorrectly required configured object storage for backup.');
     }
     echo "Portable project-file backup and configured-storage envelope contract passed.\n";
 } finally { projectBackupRemove($root); }

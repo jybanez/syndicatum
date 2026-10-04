@@ -89,9 +89,23 @@ round-trip acceptance preserve the public IDs and confirm that the original
 URLs return byte-identical content after restore. Older backups or a SQL dump
 alone still do not protect hosted Project Files.
 
-Operators must still verify backup eligibility and storage health before relying
-on a recovery set. Recovery needs intact public IDs, storage objects, and the
-correct public origin and routing for old URLs to work. Missing/corrupt objects,
-unwritable targets, interrupted streams, changed storage roots, and repeated
-inspection/cutover remain explicit operational acceptance cases in the
-[implementation checklist](v1-project-file-storage-implementation-checklist.md#93-operational-recovery-cases).
+The Backup surface and administrator Delivery health now expose Project File
+full-clone eligibility. The read-only preflight verifies every available record,
+object path, byte count, and SHA-256 digest, plus backup-target writability and
+the minimum free capacity needed for referenced Project Files. An unhealthy
+store disables Full clone in the modal, while Clean installation remains
+available. The server repeats the preflight before it creates a full-clone job,
+so stale browser state cannot bypass the gate.
+
+For storage-root loss, stop Project File mutations, restore the complete object
+tree from a trusted copy, set **System settings → Storage location** to the
+restored absolute private path, and confirm Full-clone eligibility before taking
+a new backup. To move a restored installation, copy the tree without changing
+provider-neutral keys, ownership, private permissions, byte counts, or content;
+then configure the new absolute path and run the same health check. Never point
+the setting at an empty replacement directory merely to clear the warning.
+Preserve the old tree until a new encrypted backup is verified and its permanent
+`/files/{public_id}` URLs return byte-identical content.
+
+Interrupted-stream and repeated inspection/cutover acceptance remain tracked in
+the [implementation checklist](v1-project-file-storage-implementation-checklist.md#93-operational-recovery-cases).
