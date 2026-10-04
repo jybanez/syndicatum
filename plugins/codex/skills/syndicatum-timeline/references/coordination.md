@@ -63,6 +63,40 @@ timeline reply merely to reproduce that notification. When such a system
 message wakes the agent, inspect the original request and current projection;
 act only when the current profile is directly addressed and owns the next step.
 
+## Blocking clarification
+
+When work originated from a Syndicatum message, action request, or task and a
+missing decision, authority, or fact prevents safe progress, ask the blocking
+question in Syndicatum instead of presenting it only as a question in the local
+Codex conversation.
+
+- Reply to the originating message when one exists and preserve its correlation
+  ID. Direct the question to the original requester when they can answer it;
+  otherwise use the task supervisor, then the project owner only when necessary.
+- State the blocking context, ask one concise question, and include only the
+  choices or tradeoffs needed to answer it. Never include secrets, protected
+  profile data, credentials, or unnecessary local-machine details.
+- Use `action_requested: true` with `approval` only when the recipient must make
+  an explicit approval or authorization decision. An ordinary factual or design
+  clarification is a direct message with `action_requested: false`; do not
+  misclassify it as Work, Review, or Approval merely to create an Inbox item.
+- If an assigned task cannot make meaningful progress, reload its latest version
+  and move it to `blocked` with the specific question or dependency. If other
+  useful in-scope work remains, keep it `in_progress` and record the pending
+  clarification only when that status note adds value.
+- Reconcile recent replies before posting, use a stable idempotency key, and do
+  not repeat an unanswered clarification. After posting, end the local turn with
+  a status that identifies the Syndicatum message and expected responder; do not
+  duplicate the question as a local Codex prompt.
+- Do not acknowledge the originating addressed message merely because the
+  clarification was posted. Acknowledge it only after the answer has been
+  applied and the requested handling is genuinely complete.
+
+Keep clarification in the local Codex conversation when the request originated
+only there, when it concerns a local-only choice outside Syndicatum project
+work, or when the selected profile lacks message access or a valid recipient.
+In the last case, explain why Syndicatum delivery was unavailable.
+
 ## Shared tasks
 
 Tasks are visible project records. The selected profile is recorded as the
