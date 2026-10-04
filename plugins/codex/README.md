@@ -72,8 +72,9 @@ The release ZIP, checksum, and manifest are provenance for the tagged
 marketplace snapshot, not a separate installer. The planned support policy
 covers the current and immediately previous stable release. The published
 `0.2.0` release remains a prior release, but is not a production-support claim.
-See the production gate for the required Windows acceptance evidence before
-treating this candidate as production-distributable.
+An unpromoted published predecessor does not receive support merely because it
+exists. See the production gate for the required Windows acceptance evidence
+before treating this candidate as production-distributable.
 
 Restart Codex Desktop, start a new task, and ask Codex to connect this device to
 `https://syndicatum.wizaya.com`. Give the device a recognizable name when prompted.

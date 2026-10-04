@@ -58,7 +58,8 @@ The following evidence was current on 2026-10-04:
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
 - Codex stable candidate: `0.2.1` (`codex-v0.2.1`); `0.2.0` is published but
-  not promoted after installed acceptance found a handshake-version defect;
+  not promoted after installed acceptance found a handshake-version defect and
+  does not qualify as a supported predecessor;
 - Companion source manifest: `0.10.6`;
 - live `scripts/verify-plugin-publication.ps1` passed against
   `https://syndicatum.wizaya.com`, including service health, support/privacy/

@@ -120,7 +120,8 @@ Do not delete the per-user Syndicatum plugin data directory during an update or
 rollback. The planned support window is the current stable release plus the
 immediately previous stable release. The published `0.2.0` release remains a
 prior release, but is not a production-support claim. That window is not a
-production support claim until installed acceptance passes.
+production support claim until installed acceptance passes, and an unpromoted
+published predecessor does not receive support merely because it exists.
 
 Production classification remains fail-closed until the exact tagged release
 passes clean install, update, rollback, restart, device migration, revocation,
