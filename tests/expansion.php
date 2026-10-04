@@ -345,6 +345,8 @@ try {
             fclose($stream);
             $suite->same('application/pdf', $uploaded['file']['mime_type']);
             $suite->same('files/' . $uploaded['file']['id'], $uploaded['file']['url']);
+            $suite->same((int) $access['participant_id'], $uploaded['file']['uploader']['participant_id']);
+            $suite->same($administrator['display_name'], $uploaded['file']['uploader_name']);
             $suite->truthy(!isset($uploaded['file']['storage_key']) && !isset($uploaded['file']['path']), 'Storage internals leaked through metadata.');
             $storedKey = $pdo->prepare('SELECT storage_key FROM project_files WHERE project_id = ? AND public_id = ?');
             $storedKey->execute([$project['id'], $uploaded['file']['id']]);
@@ -354,6 +356,7 @@ try {
             $replayedUpload = $service->uploadStream($access, $replayStream, 'infographic.pdf', $folder['folder']['id'], 'test-file-upload-000001');
             fclose($replayStream);
             $suite->same(true, $replayedUpload['replayed']);
+            $suite->same($administrator['display_name'], $replayedUpload['file']['uploader_name']);
             $duplicateStream = fopen('php://temp', 'w+b'); fwrite($duplicateStream, "%PDF-1.4\nduplicate\n"); rewind($duplicateStream);
             $suite->throws('FILE_NAME_CONFLICT', function () use ($service, $access, $folder, $duplicateStream) {
                 $service->uploadStream($access, $duplicateStream, 'INFOGRAPHIC.PDF', $folder['folder']['id'], 'test-file-upload-duplicate');
