@@ -979,11 +979,14 @@ try {
         $suite->true(strpos($app, 'function renderMessageAttachmentIndicator(host, message)') !== false
             && strpos($app, 'state.factories.createIcon("actions.attach"') !== false
             && strpos($app, 'timestamp.parentElement.insertBefore(indicator, timestamp)') !== false
+            && strpos($app, 'function observeAttachmentIndicator(message)') !== false
+            && strpos($app, 'attachmentIndicatorObserver = new MutationObserver') !== false
+            && strpos($app, 'attachmentIndicatorObserver.observe(row, { childList: true, subtree: true });') !== false
             && strpos($app, 'renderMessageAttachmentIndicator(host, current);') !== false
             && strpos($app, 'renderMessageAttachmentIndicator(host, current);')
                 < strpos($app, 'if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;')
             && strpos($appCss, '.message-attachment-indicator { display: inline-flex;') !== false,
-            'Messages with attachments must restore an accessible Helper paperclip immediately before the timeline timestamp before reused content skips repainting.');
+            'Messages with attachments must keep an accessible Helper paperclip before the timeline timestamp across expanded, collapsed, and interactive row chrome rebuilds.');
         $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
             && strpos($appCss, '.message-attachment-files { display: flex;') !== false
             && strpos($appCss, 'flex: 0 1 210px;') !== false
