@@ -2606,23 +2606,38 @@ function mountMessageCard(host, item) {
   let attachmentIndicatorRow = null;
   let attachmentIndicatorMessage = null;
   let attachmentIndicatorRefreshQueued = false;
-  function observeAttachmentIndicator(message) {
+  let attachmentIndicatorMountObserver = null;
+  function syncAttachmentIndicator(message) {
     attachmentIndicatorMessage = message;
     const row = host.closest(".ui-timeline-item");
-    if (!row || row === attachmentIndicatorRow) return;
-    attachmentIndicatorObserver?.disconnect();
-    attachmentIndicatorRow = row;
-    attachmentIndicatorObserver = new MutationObserver(() => {
-      if (attachmentIndicatorRefreshQueued) return;
-      attachmentIndicatorRefreshQueued = true;
-      queueMicrotask(() => {
-        attachmentIndicatorRefreshQueued = false;
-        if (host.isConnected && attachmentIndicatorMessage) {
-          renderMessageAttachmentIndicator(host, attachmentIndicatorMessage);
-        }
+    if (!row) {
+      if (!attachmentIndicatorMountObserver) {
+        attachmentIndicatorMountObserver = new MutationObserver(() => {
+          if (host.closest(".ui-timeline-item") && attachmentIndicatorMessage) {
+            syncAttachmentIndicator(attachmentIndicatorMessage);
+          }
+        });
+        attachmentIndicatorMountObserver.observe(document.documentElement, { childList: true, subtree: true });
+      }
+      return;
+    }
+    attachmentIndicatorMountObserver?.disconnect();
+    attachmentIndicatorMountObserver = null;
+    if (row !== attachmentIndicatorRow) {
+      attachmentIndicatorObserver?.disconnect();
+      attachmentIndicatorRow?.querySelector(".message-attachment-indicator")?.remove();
+      attachmentIndicatorRow = row;
+      attachmentIndicatorObserver = new MutationObserver(() => {
+        if (attachmentIndicatorRefreshQueued) return;
+        attachmentIndicatorRefreshQueued = true;
+        queueMicrotask(() => {
+          attachmentIndicatorRefreshQueued = false;
+          if (attachmentIndicatorMessage) syncAttachmentIndicator(attachmentIndicatorMessage);
+        });
       });
-    });
-    attachmentIndicatorObserver.observe(row, { childList: true, subtree: true });
+      attachmentIndicatorObserver.observe(row, { childList: true, subtree: true });
+    }
+    renderMessageAttachmentIndicator(host, message);
   }
   function paint(nextItem = item) {
     const current = nextItem.raw;
@@ -2631,8 +2646,7 @@ function mountMessageCard(host, item) {
     // content. Refresh header decorations before the content cache guard so
     // they survive timeline updates, collapse changes, and mode switches.
     renderMessageHeaderSeverity(host, current, severityLabel);
-    renderMessageAttachmentIndicator(host, current);
-    observeAttachmentIndicator(current);
+    syncAttachmentIndicator(current);
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
     renderedMessage = current;
     renderedContentKey = nextItem.contentKey;
@@ -2719,6 +2733,8 @@ function mountMessageCard(host, item) {
   return { update: paint, destroy() {
     attachmentIndicatorObserver?.disconnect();
     attachmentIndicatorObserver = null;
+    attachmentIndicatorMountObserver?.disconnect();
+    attachmentIndicatorMountObserver = null;
     attachmentIndicatorRow?.querySelector(".message-attachment-indicator")?.remove();
     attachmentIndicatorRow = null;
     attachmentIndicatorMessage = null;
