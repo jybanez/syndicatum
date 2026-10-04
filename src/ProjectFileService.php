@@ -173,9 +173,8 @@ final class ProjectFileService
                     $originalName, $originalName, $this->normalizeName($originalName), $mime, (int) $staged['size_bytes'],
                     $staged['sha256'], (int) $access['participant_id'], $now, $now]);
                 $fileId = (int) $this->pdo->lastInsertId();
-                $row = ['public_id' => $publicId, 'display_name' => $originalName, 'original_name' => $originalName,
-                    'mime_type' => $mime, 'size_bytes' => (int) $staged['size_bytes'], 'sha256' => $staged['sha256'],
-                    'state' => 'available', 'version' => 1, 'created_at' => $now, 'updated_at' => $now];
+                $row = $this->fileMetadataRow((int) $access['project_id'], $fileId);
+                if (!$row) { throw new RuntimeException('FILE_NOT_FOUND'); }
                 $result = ['file' => $this->fileView($row), 'replayed' => false];
                 $this->event($access, 'file.uploaded', $fileId, (int) $folder['id'], ['name' => $originalName, 'mime_type' => $mime,
                     'size_bytes' => (int) $staged['size_bytes'], 'sha256' => $staged['sha256']]);
@@ -497,6 +496,23 @@ final class ProjectFileService
             'state' => $row['state'], 'available' => $row['state'] === 'available', 'uploader' => $uploader,
             'uploader_name' => $uploader ? $uploader['display_name'] : 'Unknown participant',
             'version' => (int) $row['version'], 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at']];
+    }
+
+    private function fileMetadataRow($projectId, $fileId)
+    {
+        $uploaderName = "COALESCE(u.display_name, pa.display_name, ic.display_name, 'Unknown participant')";
+        $statement = $this->pdo->prepare(
+            'SELECT pf.public_id, pf.display_name, pf.original_name, pf.mime_type, pf.size_bytes, pf.sha256, pf.state, pf.version,
+                    pf.created_at, pf.updated_at, pp.id AS uploader_participant_id, pp.kind AS uploader_kind, ' . $uploaderName . ' AS uploader_name
+             FROM project_files pf
+             LEFT JOIN project_participants pp ON pp.id = pf.uploaded_by_participant_id AND pp.project_id = pf.project_id
+             LEFT JOIN users u ON u.id = pp.user_id
+             LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+             LEFT JOIN integration_connections ic ON ic.project_id = pp.project_id AND ic.id = pp.integration_id
+             WHERE pf.project_id = ? AND pf.id = ? LIMIT 1'
+        );
+        $statement->execute([(int) $projectId, (int) $fileId]);
+        return $statement->fetch();
     }
 
     private function listingQuery(array $query)
