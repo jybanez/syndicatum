@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "policy_version": "1.0.0",
   "assessed_on": "2026-10-04",
-  "production_rule": "A channel is production only when production_eligible is true and every required gate has retained acceptance evidence for the exact published artifact.",
+  "production_rule": "A channel is production only when production_eligible is true, it has a published identifier, and every required gate is passed with retained acceptance evidence for the exact published artifact.",
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
@@ -18,13 +18,13 @@
       "distribution_authority": "OpenAI public Plugins Directory",
       "published_identifier": null,
       "required_gates": [
-        "verified publisher identity and policy attestations",
-        "production HTTPS MCP endpoint and completed domain verification",
-        "successful current MCP tool and skill scans",
-        "complete public listing metadata and legal/support URLs",
-        "five passing positive cases and three passing negative cases",
-        "reviewer test account, demo recording, and release notes",
-        "directory approval and owner-controlled publication"
+        {"id": "publisher-identity", "requirement": "verified publisher identity and policy attestations", "status": "open", "evidence": []},
+        {"id": "domain-and-endpoint", "requirement": "production HTTPS MCP endpoint and completed domain verification", "status": "open", "evidence": []},
+        {"id": "provider-scans", "requirement": "successful current MCP tool and skill scans", "status": "open", "evidence": []},
+        {"id": "listing-and-legal", "requirement": "complete public listing metadata and legal/support URLs", "status": "open", "evidence": []},
+        {"id": "review-cases", "requirement": "five passing positive cases and three passing negative cases", "status": "open", "evidence": []},
+        {"id": "reviewer-materials", "requirement": "reviewer test account, demo recording, and release notes", "status": "open", "evidence": []},
+        {"id": "directory-publication", "requirement": "directory approval and owner-controlled publication", "status": "open", "evidence": []}
       ]
     },
     {
@@ -35,11 +35,11 @@
       "distribution_authority": "jybanez/syndicatum Git marketplace",
       "published_identifier": null,
       "required_gates": [
-        "immutable reviewed Git ref designated as the stable channel",
-        "published package provenance and checksum",
-        "clean install and upgrade acceptance on each supported OS",
-        "downgrade, rollback, revocation, and second-device acceptance",
-        "documented support window and compatibility range"
+        {"id": "immutable-stable-ref", "requirement": "immutable reviewed Git ref designated as the stable channel", "status": "open", "evidence": []},
+        {"id": "artifact-provenance", "requirement": "published package provenance and checksum", "status": "open", "evidence": []},
+        {"id": "install-and-upgrade", "requirement": "clean install and upgrade acceptance on each supported OS", "status": "open", "evidence": []},
+        {"id": "lifecycle-and-device", "requirement": "downgrade, rollback, revocation, and second-device acceptance", "status": "open", "evidence": []},
+        {"id": "support-and-compatibility", "requirement": "documented support window and compatibility range", "status": "open", "evidence": []}
       ]
     },
     {
@@ -50,11 +50,11 @@
       "distribution_authority": "Chrome Web Store",
       "published_identifier": null,
       "required_gates": [
-        "Chrome Web Store developer account and reviewed listing",
-        "single-purpose, permission, privacy, and limited-use declarations",
-        "store-managed installation and automatic update acceptance",
-        "published-version upgrade and rollback acceptance",
-        "clean device migration and revocation acceptance"
+        {"id": "store-listing", "requirement": "Chrome Web Store developer account and reviewed listing", "status": "open", "evidence": []},
+        {"id": "policy-declarations", "requirement": "single-purpose, permission, privacy, and limited-use declarations", "status": "open", "evidence": []},
+        {"id": "managed-install-and-update", "requirement": "store-managed installation and automatic update acceptance", "status": "open", "evidence": []},
+        {"id": "upgrade-and-rollback", "requirement": "published-version upgrade and rollback acceptance", "status": "open", "evidence": []},
+        {"id": "migration-and-revocation", "requirement": "clean device migration and revocation acceptance", "status": "open", "evidence": []}
       ]
     },
     {
@@ -65,11 +65,11 @@
       "distribution_authority": "Microsoft Edge Add-ons",
       "published_identifier": null,
       "required_gates": [
-        "Partner Center developer account and certified listing",
-        "complete purpose, permission, data-use, and privacy declarations",
-        "store-managed installation and automatic update acceptance",
-        "published-version upgrade and rollback acceptance",
-        "clean device migration and revocation acceptance"
+        {"id": "store-listing", "requirement": "Partner Center developer account and certified listing", "status": "open", "evidence": []},
+        {"id": "policy-declarations", "requirement": "complete purpose, permission, data-use, and privacy declarations", "status": "open", "evidence": []},
+        {"id": "managed-install-and-update", "requirement": "store-managed installation and automatic update acceptance", "status": "open", "evidence": []},
+        {"id": "upgrade-and-rollback", "requirement": "published-version upgrade and rollback acceptance", "status": "open", "evidence": []},
+        {"id": "migration-and-revocation", "requirement": "clean device migration and revocation acceptance", "status": "open", "evidence": []}
       ]
     }
   ],

@@ -18,7 +18,7 @@ test("distribution classifications match the exact source package versions", asy
     readJson(companionUrl),
   ]);
 
-  assert.equal(policy.schema_version, 1);
+  assert.equal(policy.schema_version, 2);
   assert.equal(policy.release_train.openai_public_plugin, publicPlugin.version);
   assert.equal(policy.release_train.codex_plugin, plugin.version);
   assert.equal(policy.release_train.companion, companion.version);
@@ -36,12 +36,36 @@ test("distribution classifications match the exact source package versions", asy
   for (const channel of policy.channels) {
     assert.ok(["development", "pilot", "production"].includes(channel.classification));
     assert.ok(channel.required_gates.length > 0);
+    const gateIds = new Set();
+    for (const gate of channel.required_gates) {
+      assert.match(gate.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      assert.ok(!gateIds.has(gate.id), `Duplicate gate ${channel.id}/${gate.id}`);
+      gateIds.add(gate.id);
+      assert.ok(typeof gate.requirement === "string" && gate.requirement.trim().length > 0);
+      assert.ok(["open", "blocked", "passed"].includes(gate.status));
+      assert.ok(Array.isArray(gate.evidence));
+      for (const evidence of gate.evidence) {
+        assert.ok(typeof evidence === "string" && evidence.trim().length > 0);
+      }
+      if (gate.status === "passed") {
+        assert.ok(gate.evidence.length > 0, `Passed gate lacks evidence: ${channel.id}/${gate.id}`);
+      }
+    }
     if (channel.classification === "production") {
       assert.equal(channel.production_eligible, true);
       assert.ok(channel.published_identifier);
+      assert.ok(channel.required_gates.every(gate => gate.status === "passed"));
     } else {
       assert.equal(channel.production_eligible, false);
     }
+  }
+});
+
+test("non-production channels retain at least one explicit unresolved gate", async () => {
+  const policy = await readJson(policyUrl);
+  for (const channel of policy.channels) {
+    if (channel.production_eligible) continue;
+    assert.ok(channel.required_gates.some(gate => gate.status !== "passed"));
   }
 });
 
