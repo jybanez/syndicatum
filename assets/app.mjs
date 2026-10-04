@@ -1268,7 +1268,7 @@ function projectFilePreviewType(file) {
   if (mime.startsWith("video/")) return "video";
   if (mime === "application/pdf") return "pdf";
   if (mime === "application/json" || mime === "text/json" || mime.endsWith("+json") || name.endsWith(".json")) return "json";
-  if (["text/markdown", "text/x-markdown"].includes(mime) || name.endsWith(".md") || name.endsWith(".markdown")) return "markdown";
+  if (["text/markdown", "text/x-markdown"].includes(mime) || name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".txt")) return "markdown";
   if (["text/csv", "application/csv", "text/comma-separated-values"].includes(mime) || name.endsWith(".csv")) return "csv";
   return "";
 }
