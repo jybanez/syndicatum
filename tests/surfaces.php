@@ -979,14 +979,16 @@ try {
         $suite->true(strpos($app, 'function renderMessageAttachmentIndicator(host, message)') !== false
             && strpos($app, 'state.factories.createIcon("actions.attach"') !== false
             && strpos($app, 'timestamp.parentElement.insertBefore(indicator, timestamp)') !== false
-            && strpos($app, 'function observeAttachmentIndicator(message)') !== false
+            && strpos($app, 'function syncAttachmentIndicator(message)') !== false
+            && strpos($app, 'attachmentIndicatorMountObserver = new MutationObserver') !== false
+            && strpos($app, 'attachmentIndicatorMountObserver.observe(document.documentElement, { childList: true, subtree: true });') !== false
             && strpos($app, 'attachmentIndicatorObserver = new MutationObserver') !== false
             && strpos($app, 'attachmentIndicatorObserver.observe(row, { childList: true, subtree: true });') !== false
-            && strpos($app, 'renderMessageAttachmentIndicator(host, current);') !== false
-            && strpos($app, 'renderMessageAttachmentIndicator(host, current);')
+            && strpos($app, 'syncAttachmentIndicator(current);') !== false
+            && strpos($app, 'syncAttachmentIndicator(current);')
                 < strpos($app, 'if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;')
             && strpos($appCss, '.message-attachment-indicator { display: inline-flex;') !== false,
-            'Messages with attachments must keep an accessible Helper paperclip before the timeline timestamp across expanded, collapsed, and interactive row chrome rebuilds.');
+            'Messages with attachments must keep an accessible Helper paperclip before the timeline timestamp across lazy page mounts, expanded, collapsed, and interactive row chrome rebuilds.');
         $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
             && strpos($appCss, '.message-attachment-files { display: flex;') !== false
             && strpos($appCss, 'flex: 0 1 210px;') !== false
