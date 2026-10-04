@@ -58,20 +58,23 @@ ref and acceptance evidence named in the
 ## Stable Windows channel
 
 The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
-After the `codex-v0.2.0` release workflow and the applicable installed-client
-acceptance pass, use the immutable Git marketplace ref:
+The current candidate is `codex-v0.2.1`; it corrects the MCP handshake version
+reported by the published `codex-v0.2.0` release. After the current release
+workflow and the applicable installed-client acceptance pass, use the immutable
+Git marketplace ref:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.0
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.1
 codex plugin add codex@syndicatum
 ```
 
 The release ZIP, checksum, and manifest are provenance for the tagged
 marketplace snapshot, not a separate installer. The planned support policy
-covers the current and immediately previous stable release; `0.2.0` has no
-stable predecessor. This is not a production support claim. See the production
-gate for the required Windows acceptance evidence before treating this
-candidate as production-distributable.
+covers the current and immediately previous stable release. The published
+`0.2.0` release remains a prior release, but is not a production-support claim.
+An unpromoted published predecessor does not receive support merely because it
+exists. See the production gate for the required Windows acceptance evidence
+before treating this candidate as production-distributable.
 
 Restart Codex Desktop, start a new task, and ask Codex to connect this device to
 `https://syndicatum.wizaya.com`. Give the device a recognizable name when prompted.
