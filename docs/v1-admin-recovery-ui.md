@@ -58,6 +58,27 @@ restore backend remains authoritative; this UI does not add live cutover.
   reprovisioned before another inspection because non-transactional sequence
   state may have changed even when row inserts rolled back.
 
+## Project-file backup production
+
+Current full-clone packages use portable backup format 3. During the same
+repeatable-read snapshot used for the database export, the producer inventories
+every available local `project_files` record and verifies its configured private
+object by size and SHA-256. The manifest records only the provider name,
+provider-neutral storage key, permanent public ID, MIME type, byte count, and
+digest; it never records the absolute storage root or provider credentials.
+
+Project-file objects are supplied directly to the ZIP writer from the private
+storage root, rather than copied into the plaintext staging tree. The producer
+checks each source before archival and again after ZIP close, and fails the
+whole backup on a missing, unsafe, unreadable, changing, unsupported, or
+checksum-mismatched object. Clean-installation packages omit project data and
+objects. Valid format 1 and format 2 packages remain readable. Format 3 restore
+authenticates the complete archive, streams project files into private staging,
+restores their exact provider-neutral keys into the configured local provider,
+and verifies the restored database inventory and target bytes before commit.
+On failure, the database transaction is rolled back and any objects newly
+installed by that attempt are removed; no automatic replay occurs.
+
 ## Configuration
 
 The container already supplies `SYNDICATUM_BACKUP_DIR`,

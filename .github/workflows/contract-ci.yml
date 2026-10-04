@@ -108,6 +108,7 @@ jobs:
           php tests/backup-envelope.php
           php tests/archive-safety.php
           php tests/portable-runtime-dependencies.php
+          php tests/portable-backup-project-files.php
 
   canonical-release-candidate:
     runs-on: ubuntu-24.04
@@ -352,6 +353,7 @@ jobs:
           php tests/package-contract.php | tee ci-evidence/package-contract.txt
           php tests/backup-envelope.php | tee ci-evidence/backup-envelope.txt
           php tests/backup-producer.php | tee ci-evidence/backup-producer.txt
+          php tests/portable-backup-project-files.php | tee ci-evidence/portable-backup-project-files.txt
           php tests/recovery-operation-store.php | tee ci-evidence/recovery-operation-store.txt
           python tests/canonical-inventory-contract.py | tee ci-evidence/canonical-inventory-contract.txt
           php tests/archive-safety.php | tee ci-evidence/archive-safety.txt

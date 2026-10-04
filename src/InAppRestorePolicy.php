@@ -21,12 +21,14 @@ final class InAppRestorePolicy
         'workspace_agent_trigger_deliveries',
     ];
 
-    public static function restoreTables() { $tables = self::$restore; sort($tables, SORT_STRING); return $tables; }
+    private static $projectFiles = ['message_file_attachments', 'project_file_events', 'project_file_folders', 'project_file_operations', 'project_files'];
+
+    public static function restoreTables($includeProjectFiles = false) { $tables = self::$restore; if ($includeProjectFiles) { $tables = array_merge($tables, self::$projectFiles); } sort($tables, SORT_STRING); return $tables; }
     public static function clearOnlyTables() { $tables = self::$clear; sort($tables, SORT_STRING); return $tables; }
 
     public static function assertCompatible(PDO $pdo, array $manifest)
     {
-        if (($manifest['format_version'] ?? null) !== '2.0' || ($manifest['package_type'] ?? null) !== 'full_clone'
+        if (!in_array(($manifest['format_version'] ?? null), ['2.0','3.0'], true) || ($manifest['package_type'] ?? null) !== 'full_clone'
             || ($manifest['include_data'] ?? null) !== true) {
             throw new InvalidArgumentException('In-app restore requires a current full-clone backup.');
         }
@@ -34,7 +36,7 @@ final class InAppRestorePolicy
             ->fetchAll(PDO::FETCH_COLUMN);
         $current = array_fill_keys($current, true);
         $package = array_fill_keys(array_keys($manifest['sql']['row_counts']), true);
-        foreach (self::restoreTables() as $table) {
+        foreach (self::restoreTables(($manifest['format_version'] ?? null) === '3.0') as $table) {
             if (isset($current[$table]) && !isset($package[$table])) {
                 throw new InvalidArgumentException('The backup is missing required user data table: ' . $table . '.');
             }
