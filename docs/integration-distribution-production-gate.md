@@ -34,6 +34,7 @@ other or call a local marketplace listing a public-directory release.
 The following evidence was current on 2026-10-04:
 
 - application release candidate: `v1.0.0-rc.3`;
+- portable OpenAI public-review candidate: `0.1.0`;
 - Codex source package: `0.1.0+codex.20261004181801`;
 - Companion source manifest: `0.10.6`;
 - live `scripts/verify-plugin-publication.ps1` passed against
@@ -49,6 +50,13 @@ The following evidence was current on 2026-10-04:
 These observations are prerequisites only. They do not prove OpenAI directory
 approval, browser-store approval, automatic updates, or an installed release
 on a second device.
+
+The portable OpenAI candidate in [`plugins/openai-public`](../plugins/openai-public/README.md)
+contains the production MCP URL, listing/legal metadata, approved icon, and
+exactly five positive and three negative review cases. Its deterministic builder
+is `tools/release/build_openai_plugin.py`. The demo recording, dedicated reviewer
+account, portal-generated draft identity/domain challenge, scans, and approval
+remain intentionally external to source control.
 
 ## Provider publication requirements
 
