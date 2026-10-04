@@ -1173,6 +1173,7 @@ try {
             && strpos($source, 'createJsonViewer: await uiLoader.get("ui.json.viewer", options)') !== false
             && strpos($source, 'createMarkdownViewer: await uiLoader.get("ui.markdown.viewer", options)') !== false
             && strpos($source, 'createCsvViewer: await uiLoader.get("ui.csv.viewer", options)') !== false
+            && strpos($source, 'name.endsWith(".txt")') !== false
             && strpos($source, '["json", "markdown", "csv"].includes(type)') !== false
             && strpos($source, 'open: true') !== false
             && strpos($source, 'window.open(url, "_blank", "noopener,noreferrer")') !== false
