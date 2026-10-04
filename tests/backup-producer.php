@@ -127,12 +127,12 @@ try {
         && $inspected['manifest_sha256'] === $result['manifest_sha256']
         && $inspected['content_tree_sha256'] === $result['content_tree_sha256'],
         'Inspection did not return the authenticated compatibility and hash identities.');
-    backupProducerAssert($inspected['backup_policy']['durable']['count'] === 42
+    backupProducerAssert($inspected['backup_policy']['durable']['count'] === 47
         && $inspected['backup_policy']['reset']['count'] === 17
         && $inspected['backup_policy']['excluded']['count'] === 3
-        && $inspected['file_role_counts']['logical_data'] === 42
+        && $inspected['file_role_counts']['logical_data'] === 47
         && $inspected['file_role_counts']['persistent_asset'] === 1
-        && $inspected['sequence_table_count'] === 42,
+        && $inspected['sequence_table_count'] === 47,
         'Inspection did not return the trusted policy and inventory counts.');
     backupProducerAssert(serialize([
         $restoreTarget->counts, $restoreTarget->rows, $restoreTarget->transaction, $restoreTarget->sequences,
