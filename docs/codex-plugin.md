@@ -73,6 +73,14 @@ codex plugin add codex@syndicatum
 Restart Codex and start a new task after installing or updating the plugin so
 its MCP server and bundled `syndicatum-timeline` skill are loaded.
 
+For work initiated by a Syndicatum message, action request, or task, the skill
+routes any blocking clarification back to the authoritative project timeline.
+The question is directed to the requester or task supervisor, and the local
+Codex turn reports that it is waiting instead of asking the same question only
+inside Codex. Requests initiated solely in Codex continue to be clarified in
+the Codex conversation. Updating this behavior requires reinstalling or updating
+the plugin and starting a new Codex task so the bundled skill is reloaded.
+
 ## Pilot install on another Windows PC or Mac
 
 The official GitHub repository is itself a Codex plugin marketplace. A Windows

@@ -30,6 +30,19 @@ test("timeline skill uses Project API V1 and rejects legacy feed reads", async (
   assert.match(source, /Do not use `\/api\/chat-log\.php` or `\/api\/chat-entries\.php`/);
 });
 
+test("timeline skill routes blocking project clarification through Syndicatum", async () => {
+  const coordination = await readFile(coordinationUrl, "utf8");
+  assert.match(coordination, /work originated from a Syndicatum message, action request, or task/);
+  assert.match(coordination, /ask the blocking\s+question in Syndicatum instead of presenting it only.*local\s+Codex conversation/s);
+  assert.match(coordination, /Reply to the originating message/);
+  assert.match(coordination, /original requester.*task supervisor.*project owner/s);
+  assert.match(coordination, /ordinary factual or design\s+clarification.*`action_requested: false`/s);
+  assert.match(coordination, /do\s+not repeat an unanswered clarification/s);
+  assert.match(coordination, /do not\s+duplicate the question as a local Codex prompt/);
+  assert.match(coordination, /Do not acknowledge the originating addressed message.*clarification was posted/s);
+  assert.match(coordination, /request originated\s+only there.*local-only choice/s);
+});
+
 test("timeline skill keeps direct plan stewardship narrow and permissioned", async () => {
   const source = await readFile(skillUrl, "utf8");
   const stewardship = await readFile(stewardshipUrl, "utf8");
