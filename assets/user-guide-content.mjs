@@ -43,7 +43,7 @@ export const USER_GUIDE_SECTIONS = [
         keywords: ["milestone", "deliverable", "artifact", "plan", "output", "task"],
         blocks: [
           { type: "steps", items: [
-            "Open a project and choose Project plan from the project menu.",
+            "Open a project and choose the Plan icon beside its title.",
             "Add a milestone for an important checkpoint or target date. Milestones are optional containers, not tasks.",
             "Add deliverables beneath a milestone or leave them standalone. Assign one accountable person or AI agent and optionally add the final artifact link.",
             "Select a milestone or deliverable title, status, date, or accountable owner to edit it in place. Save or cancel the field explicitly.",
@@ -95,7 +95,7 @@ export const USER_GUIDE_SECTIONS = [
         keywords: ["owner", "status", "dashboard", "progress", "blocked", "overdue", "activity"],
         blocks: [
           { type: "steps", items: [
-            "Open a project you own, open the project menu beside its title, and choose Project status.",
+            "Open a project you own and choose the Status icon beside its title.",
             "Review At a glance and Task progress first. Completed work is shown as a ratio and percentage, and the active team distinguishes people, AI agents, and connected systems.",
             "Change Project activity between 7, 14, and 30 days to compare work outcomes such as opened, completed, blocked, reviewed, and reassigned tasks. Message volume remains a secondary count.",
             "Use Needs attention to review blocked, in-review, and overdue tasks. Select an item to open its task details, or load another bounded page when more results are available.",
@@ -112,7 +112,7 @@ export const USER_GUIDE_SECTIONS = [
         blocks: [
           { type: "steps", items: [
             "An authorized project agent submits a focused project-detail, milestone-and-deliverable plan, new-agent, or agent-profile proposal through MCP.",
-            "As a project owner or administrator, open the AI Proposals tab in the timeline column. The project menu shortcut opens the same tab.",
+            "As a project owner or administrator, open the AI Proposals tab in the timeline column.",
             "Choose Review for a pending proposal, inspect the rationale, target agent when applicable, and every proposed field, then add an optional review note.",
             "Choose Approve and apply to commit the reviewed change, or Reject to preserve the current setup.",
             "Syndicatum records the decision as a system timeline message addressed to the proposing agent, so its connector receives the outcome and any review note.",
@@ -514,7 +514,7 @@ export const USER_GUIDE_SECTIONS = [
             "Allowed file types can be narrowed to server-supported downloads. Inline previews are limited to selected image, audio, and video types and must also be allowed upload types.",
             "The Storage location is separate from Recovery backup storage. Future complete backups must preserve both the database and stored project file content.",
           ] },
-          { type: "note", text: "The folder icon beside the project menu opens the Project Files workspace. Use the plus action to organize the selected folder and Upload files to add a batch up to the administrator-configured files-per-action limit. Every file is validated and uploaded independently in retry-safe chunks, so files larger than the web server's per-request limit are supported and successful files appear even when another item in the same batch fails. If the selected folder already has the same filename, confirm replacement before Syndicatum sends the upload. Click an image or video filename to open Helper's Media Viewer, a PDF filename to open Helper's PDF Viewer, or a JSON, Markdown, or CSV filename to open its dedicated safe viewer. Files without an assigned Syndicatum viewer open their permanent URL in a new browser tab. Use a file row's three-dot menu to copy its permanent link, move it, download it, rename it, or delete it. The one public link never changes when a file is moved, renamed, or replaced; anyone with that link can access the file until it is deleted. Uploads are private on the server and count against the project quota." },
+          { type: "note", text: "The Files icon is the fourth project action, after Status, Plan, and Info and before More. It opens the Project Files workspace. Use the plus action to organize the selected folder and Upload files to add a batch up to the administrator-configured files-per-action limit. Every file is validated and uploaded independently in retry-safe chunks, so files larger than the web server's per-request limit are supported and successful files appear even when another item in the same batch fails. If the selected folder already has the same filename, confirm replacement before Syndicatum sends the upload. Click an image or video filename to open Helper's Media Viewer, a PDF filename to open Helper's PDF Viewer, or a JSON, Markdown, or CSV filename to open its dedicated safe viewer. Files without an assigned Syndicatum viewer open their permanent URL in a new browser tab. Use a file row's three-dot menu to copy its permanent link, move it, download it, rename it, or delete it. The one public link never changes when a file is moved, renamed, or replaced; anyone with that link can access the file until it is deleted. Uploads are private on the server and count against the project quota." },
         ],
       },
     ],

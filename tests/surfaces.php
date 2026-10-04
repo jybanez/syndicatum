@@ -426,7 +426,7 @@ try {
             'The deferred email notification proposal is incomplete.');
         $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
         $suite->true(strpos($guide, 'id: "configure-local-storage"') !== false
-            && strpos($guide, 'The folder icon beside the project menu opens the Project Files workspace.') !== false,
+            && strpos($guide, 'The Files icon is the fourth project action, after Status, Plan, and Info and before More.') !== false,
             'The user guide must explain local storage configuration and its current scope.');
     });
 
@@ -1098,7 +1098,7 @@ try {
         $suite->true(strpos($source, 'function restoreNormalAddressing()') !== false, 'Cancelling or sending a reply must restore the previous addressing state.');
     });
 
-    $suite->test('Project overview uses one upper-right action menu without status chrome', function () use ($suite, $root) {
+    $suite->test('Project overview exposes ordered primary actions and a focused overflow menu', function () use ($suite, $root) {
         $index = file_get_contents($root . '/index.php');
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
@@ -1106,17 +1106,28 @@ try {
         $publicFiles = file_get_contents($root . '/files.php');
         $htaccess = file_get_contents($root . '/.htaccess');
         $suite->true(strpos($index, 'id="project-actions-trigger"') !== false, 'The project overview action-menu trigger is missing.');
+        $statusAction = strpos($index, 'id="project-status-trigger"');
+        $planAction = strpos($index, 'id="project-plan-trigger"');
+        $infoAction = strpos($index, 'id="project-info-trigger"');
         $filesAction = strpos($index, 'id="project-files-trigger"');
         $projectMenu = strpos($index, 'id="project-actions-trigger"');
-        $suite->true($filesAction !== false && $filesAction < $projectMenu,
-            'The Project Files action must appear immediately before the project menu.');
+        $suite->true($statusAction !== false && $statusAction < $planAction
+            && $planAction < $infoAction && $infoAction < $filesAction && $filesAction < $projectMenu,
+            'Project header actions must appear as Status, Plan, Info, Files, then More.');
+        $suite->true(strpos($source, 'el.project_status_trigger.addEventListener("click", openProjectStatusModal)') !== false
+            && strpos($source, 'el.project_plan_trigger.addEventListener("click", openProjectPlanModal)') !== false
+            && strpos($source, 'el.project_info_trigger.addEventListener("click", openProjectInfoModal)') !== false
+            && strpos($source, 'label: "AI proposals"') === false
+            && strpos($source, 'item.id === "proposals"') === false,
+            'Primary project views must open directly while AI Proposals remains available only through its tab.');
         $suite->true(strpos($source, 'title: "Project files"') !== false
             && strpos($source, 'size: "lg"') !== false
             && strpos($source, 'modal.open();') !== false
             && strpos($source, 'message: "Loading project files…"') !== false
+            && strpos($source, 'Anyone with this link can access the file.') !== false
             && strpos($source, 'state.factories.createTree(treeHost') !== false
             && strpos($source, 'state.factories.createGrid(gridHost') !== false,
-            'Project Files must open a loading canonical modal and use Helper tree/grid components.');
+            'Project Files must open a loading canonical modal, state the public-link boundary, and use Helper tree/grid components.');
         $suite->true(strpos($filesApi, "projectAccess(\$projectId, 'profile:read')") !== false
             && strpos($filesApi, 'requireCsrfForHuman') !== false
             && strpos($filesApi, 'new ProjectFileService') !== false
@@ -1201,9 +1212,9 @@ try {
     $suite->test('project owners receive a section-loaded Helper status visualization', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');
-        $suite->true(strpos($source, 'label: "Project status"') !== false
-            && strpos($source, 'String(project.role || "") === "owner"') !== false,
-            'Project status must be visible only to the project owner.');
+    $suite->true(strpos($source, 'el.project_status_trigger.hidden = !hasProject || state.mode !== "expanded" || String(project.role || "") !== "owner";') !== false
+        && strpos($source, 'el.project_status_trigger.addEventListener("click", openProjectStatusModal)') !== false,
+        'The direct Project status action must remain visible only to the project owner.');
         $suite->true(strpos($source, 'createStatCards: await uiLoader.get("ui.stat.cards"') !== false
             && strpos($source, 'createProgress: await uiLoader.get("ui.progress"') !== false
             && strpos($source, 'createXyChart: await uiLoader.get("ui.chart.xy"') !== false
@@ -1694,7 +1705,7 @@ try {
             && strpos($source, 'await loadTasks(state.generation);') !== false
             && strpos($source, 'el.task_refresh_trigger.disabled = true;') !== false,
             'The task rail needs an accessible, duplicate-safe authoritative refresh action.');
-        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-files-trigger', 'project-actions-trigger', 'filter-popover-trigger',
+        foreach (['project-list-actions-trigger', 'new-message-trigger', 'project-status-trigger', 'project-plan-trigger', 'project-info-trigger', 'project-files-trigger', 'project-actions-trigger', 'filter-popover-trigger',
             'timeline-collapse-toggle', 'refresh-button', 'new-task-trigger', 'task-sort-trigger', 'task-refresh-trigger', 'team-actions-trigger'] as $iconActionId) {
             $suite->true((bool) preg_match('/class="[^"]*ui-button-borderless[^"]*"[^>]*id="' . preg_quote($iconActionId, '/') . '"/', $index),
                 'Icon-only action #' . $iconActionId . ' must use the consistent borderless treatment.');

@@ -42,6 +42,15 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 <div class="project-overview-heading">
                                     <h1 id="project-title">Select a project</h1>
                                     <div class="project-overview-actions">
+                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action project-primary-action" id="project-status-trigger" aria-label="Project status" title="Project status" hidden>
+                                            <span class="timeline-action-icon" id="project-status-icon" aria-hidden="true"></span>
+                                        </button>
+                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action project-primary-action" id="project-plan-trigger" aria-label="Project plan" title="Project plan" hidden>
+                                            <span class="timeline-action-icon" id="project-plan-icon" aria-hidden="true"></span>
+                                        </button>
+                                        <button type="button" class="ui-button ui-button-borderless timeline-icon-action project-primary-action" id="project-info-trigger" aria-label="Project info" title="Project info" hidden>
+                                            <span class="timeline-action-icon" id="project-info-icon" aria-hidden="true"></span>
+                                        </button>
                                         <button type="button" class="ui-button ui-button-borderless timeline-icon-action" id="project-files-trigger" aria-label="Project files" title="Project files" hidden>
                                             <span class="timeline-action-icon" id="project-files-icon" aria-hidden="true"></span>
                                         </button>

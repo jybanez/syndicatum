@@ -76,24 +76,34 @@ test("profile timeline posts as the selected profile with stable idempotency", a
     return response({ id: 1700, body: "Handled" });
   };
   const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
-  const result = await client.post(profile.profile_id, { body: "Handled", direct_participant_ids: [11], reply_to_message_id: 1699, idempotency_key: "reply-1699-v1" });
+  const attachmentIds = [
+    "3a5be6fa-cf85-4b98-b3a4-734ca62ed2aa",
+    "8bc27d31-6e2c-40a8-95b2-74827cafb54c",
+  ];
+  const result = await client.post(profile.profile_id, { body: "Handled", direct_participant_ids: [11], attachment_file_ids: attachmentIds, reply_to_message_id: 1699, idempotency_key: "reply-1699-v1" });
   const post = calls.at(-1);
   assert.equal(post.options.method, "POST");
   assert.equal(post.options.headers["Idempotency-Key"], "reply-1699-v1");
-  assert.deepEqual(JSON.parse(post.options.body), { body: "Handled", direct_participant_ids: [11], mention_participant_ids: [], broadcast: false, action_requested: false, idempotency_key: "reply-1699-v1", reply_to_message_id: 1699 });
+  assert.deepEqual(JSON.parse(post.options.body), { body: "Handled", direct_participant_ids: [11], mention_participant_ids: [], attachment_file_ids: attachmentIds, broadcast: false, action_requested: false, idempotency_key: "reply-1699-v1", reply_to_message_id: 1699 });
   assert.equal(result.message.id, 1700);
   assert.doesNotMatch(JSON.stringify(result), /secret-agent-token/);
 
   await client.post(profile.profile_id, { body: "Please approve", direct_participant_ids: [11],
     action_requested: true, action_request_type: "approval", idempotency_key: "approval-1" });
   assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
-    body: "Please approve", direct_participant_ids: [11], mention_participant_ids: [],
+    body: "Please approve", direct_participant_ids: [11], mention_participant_ids: [], attachment_file_ids: [],
     broadcast: false, action_requested: true, idempotency_key: "approval-1",
     action_request_type: "approval",
   });
   await assert.rejects(() => client.post(profile.profile_id, {
     body: "Invalid typed FYI", action_request_type: "review",
   }), /requires action_requested/);
+  await assert.rejects(() => client.post(profile.profile_id, {
+    body: "Duplicate attachment", attachment_file_ids: [attachmentIds[0], attachmentIds[0]],
+  }), /only once/);
+  await assert.rejects(() => client.post(profile.profile_id, {
+    body: "Foreign identifier shape", attachment_file_ids: ["not-a-project-file-id"],
+  }), /valid Syndicatum attachment file ID/);
 });
 
 test("profile task workflow reads shared tasks and updates with optimistic version", async () => {

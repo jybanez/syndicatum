@@ -313,6 +313,7 @@ export class ProfileTimelineClient {
       body,
       direct_participant_ids: numericIds(input.direct_participant_ids),
       mention_participant_ids: numericIds(input.mention_participant_ids),
+      attachment_file_ids: projectFileIds(input.attachment_file_ids),
       broadcast: input.broadcast === true,
       action_requested: input.action_requested === true,
       idempotency_key: idempotencyKey,
@@ -393,6 +394,15 @@ function publicFilePayload(client, value) {
 function numericIds(values) {
   if (!Array.isArray(values)) return [];
   return [...new Set(values.map(value => Number(positiveId(value, "participant"))))];
+}
+
+function projectFileIds(values) {
+  if (values === undefined || values === null) return [];
+  if (!Array.isArray(values)) throw new Error("Attachment file IDs must be an array.");
+  if (values.length > 20) throw new Error("A timeline message supports at most 20 attachments.");
+  const ids = values.map(value => projectFileId(value, "attachment file"));
+  if (new Set(ids).size !== ids.length) throw new Error("A file can be attached to a message only once.");
+  return ids;
 }
 
 function nullablePositiveId(value, label) {

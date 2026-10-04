@@ -179,7 +179,7 @@ const el = Object.fromEntries([
   "workspace-splitter-host", "workspace-inner-splitter-host", "workspace-work-splitter-host", "project-navigation-column", "project-messages-column", "project-tasks-column", "project-participants-column",
   "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
   "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-search-mount", "task-filter-trigger", "task-filter-icon", "task-filter-count", "task-filter-popover-content", "task-status-filter", "task-sort-trigger", "task-sort-icon", "task-refresh-trigger", "task-refresh-icon", "new-task-trigger", "new-task-icon",
-  "participant-search", "new-message-trigger", "new-message-icon", "project-files-trigger", "project-files-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
+  "participant-search", "new-message-trigger", "new-message-icon", "project-status-trigger", "project-status-icon", "project-plan-trigger", "project-plan-icon", "project-info-trigger", "project-info-icon", "project-files-trigger", "project-files-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
   "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-attachments", "composer-host",
@@ -1121,8 +1121,7 @@ function projectFilesContent(payload, handlers = {}) {
   const notice = document.createElement("p");
   notice.className = "project-files-notice";
   notice.setAttribute("role", "status");
-  notice.textContent = payload.notice || "Project files are ready.";
-  if (!payload.notice) notice.hidden = true;
+  notice.textContent = payload.notice || "Anyone with this link can access the file.";
 
   const folders = document.createElement("section");
   folders.className = "project-files-pane project-files-folders";
@@ -1717,19 +1716,20 @@ function renderProjectHeader() {
   el.project_view_switch.hidden = !hasProject || state.mode !== "expanded";
   el.project_title.textContent = project.name || (state.mode === "legacy" ? "PBB Coordination" : "Select a project");
   el.new_message_trigger.hidden = !hasProject || state.mode !== "expanded" || !can("messages.write") || state.projectView !== "timeline";
+  el.project_status_trigger.hidden = !hasProject || state.mode !== "expanded" || String(project.role || "") !== "owner";
+  el.project_plan_trigger.hidden = !hasProject || state.mode !== "expanded";
+  el.project_info_trigger.hidden = !hasProject;
   el.project_files_trigger.hidden = !hasProject || state.mode !== "expanded";
   state.components.projectActions?.destroy?.();
   state.components.projectActions = null;
   const actions = [];
-  if (hasProject && state.mode === "expanded" && String(project.role || "") === "owner") {
-    actions.push({ id: "status", label: "Project status", icon: helperIconHtml("data.grid") });
+  if (window.matchMedia("(max-width: 680px)").matches) {
+    if (!el.project_status_trigger.hidden) actions.push({ id: "status", label: "Project status", icon: helperIconHtml("data.grid") });
+    if (!el.project_plan_trigger.hidden) actions.push({ id: "plan", label: "Project plan", icon: helperIconHtml("data.list") });
+    if (!el.project_info_trigger.hidden) actions.push({ id: "info", label: "Project info", icon: helperIconHtml("status.info") });
+    if (!el.project_files_trigger.hidden) actions.push({ id: "files", label: "Project files", icon: PROJECT_FILES_ICON });
   }
-  if (hasProject && state.mode === "expanded") {
-    actions.push({ id: "plan", label: "Project plan", icon: helperIconHtml("actions.check") });
-  }
-  if (hasProject) actions.push({ id: "info", label: "Project Info", icon: helperIconHtml("status.info") });
   if (hasProject && state.mode === "expanded" && (can("project.manage") || can("project.admin"))) {
-    actions.push({ id: "proposals", label: "AI proposals", icon: helperIconHtml("assets.document") });
     actions.push({ id: "edit", label: "Edit project", icon: helperIconHtml("actions.edit") });
   }
   if (hasProject) actions.push({
@@ -1746,7 +1746,7 @@ function renderProjectHeader() {
         if (item.id === "status") openProjectStatusModal();
         if (item.id === "plan") openProjectPlanModal();
         if (item.id === "info") openProjectInfoModal();
-        if (item.id === "proposals") showProjectView("proposals");
+        if (item.id === "files") openProjectFilesModal();
         if (item.id === "edit") openEditProjectModal();
         if (item.id === "toggle-team") setTeamVisible(!state.teamVisible);
       },
@@ -9751,6 +9751,9 @@ async function bootstrap() {
   state.components.toast = state.factories.createToastStack({ position: "bottom-right", defaultDuration: 3200, max: 4 });
   mountProjectViewTabs();
   el.project_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
+  el.project_status_icon.innerHTML = helperIconHtml("data.grid", 18);
+  el.project_plan_icon.innerHTML = helperIconHtml("data.list", 18);
+  el.project_info_icon.innerHTML = helperIconHtml("status.info", 18);
   el.project_files_icon.innerHTML = PROJECT_FILES_ICON;
   el.new_message_icon.innerHTML = helperIconHtml("actions.add", 18);
   el.project_list_actions_icon.innerHTML = helperIconHtml("actions.more-horizontal", 18);
@@ -9763,7 +9766,11 @@ async function bootstrap() {
   el.new_task_icon.innerHTML = helperIconHtml("actions.add", 18);
   updateTimelineCollapseButton();
   el.new_message_trigger.addEventListener("click", openMessageComposerModal);
+  el.project_status_trigger.addEventListener("click", openProjectStatusModal);
+  el.project_plan_trigger.addEventListener("click", openProjectPlanModal);
+  el.project_info_trigger.addEventListener("click", openProjectInfoModal);
   el.project_files_trigger.addEventListener("click", openProjectFilesModal);
+  window.matchMedia("(max-width: 680px)").addEventListener("change", renderProjectHeader);
   mountWorkspaceSplitters();
   const search = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search this project", clearText: "Clear", inputClass: "ui-input",

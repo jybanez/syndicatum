@@ -205,6 +205,7 @@ try {
     } elseif ($name === 'post_message') {
         $input = ['body' => trim((string) ($args['body'] ?? '')), 'broadcast' => !empty($args['broadcast']),
             'direct_participant_ids' => $args['direct_participant_ids'] ?? [], 'mention_participant_ids' => $args['mention_participant_ids'] ?? [],
+            'attachment_file_ids' => $args['attachment_file_ids'] ?? [],
             'reply_to_message_id' => isset($args['reply_to_message_id']) ? (int) $args['reply_to_message_id'] : null,
             'idempotency_key' => trim((string) ($args['idempotency_key'] ?? '')),
             'severity' => trim((string) ($args['severity'] ?? 'neutral'))];
@@ -323,9 +324,12 @@ function mcpTools()
                 'role_instructions' => ['type' => 'string', 'maxLength' => 20000],
                 'supervising_participant_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
                 'rationale' => ['type' => 'string', 'maxLength' => 4000]], ['target_agent_id'], $write),
-        $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent. Addressees indicate expected responders, not visibility.',
+        $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent, optionally attaching up to 20 existing files from the project. Addressees indicate expected responders, not visibility.',
             $binding + ['body' => ['type' => 'string', 'minLength' => 1], 'direct_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'mention_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]], 'broadcast' => ['type' => 'boolean'],
+                'attachment_file_ids' => ['type' => 'array', 'maxItems' => 20, 'uniqueItems' => true,
+                    'description' => 'Canonical project-file UUIDs to attach in display order. Each file must be available in this project.',
+                    'items' => ['type' => 'string']],
                 'reply_to_message_id' => ['type' => 'integer', 'minimum' => 1],
                 'severity' => ['type' => 'string', 'enum' => ['neutral','info','success','warning','error','critical'], 'default' => 'neutral'],
                 'idempotency_key' => ['type' => 'string', 'maxLength' => 160]], ['body', 'idempotency_key'], $write),
@@ -392,6 +396,8 @@ function mcpMessage(array $message) {
         'sender' => ['participant_id' => (int) $message['sender']['participant_id'],
             'kind' => $message['sender']['kind'], 'display_name' => $message['sender']['display_name']],
         'reply_to_message_id' => $message['reply_to_message_id'], 'body' => $message['body'],
+        'attachments' => isset($message['attachments']) && is_array($message['attachments'])
+            ? array_values($message['attachments']) : [],
         'addressees' => $addressees, 'created_at' => $message['created_at'],
         'updated_at' => $message['updated_at'], 'deleted_at' => $message['deleted_at'],
         'action_requested' => (bool) $message['action_requested'],

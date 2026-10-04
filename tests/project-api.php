@@ -397,6 +397,8 @@ try {
         $suite->same(['deliverable_id', 'version', 'status', 'note'], $tools['update_deliverable_progress']['required']);
         $suite->same(['body', 'idempotency_key'], $tools['post_message']['required']);
         $suite->same(['neutral','info','success','warning','error','critical'], $tools['post_message']['properties']['severity']['enum']);
+        $suite->same(20, $tools['post_message']['properties']['attachment_file_ids']['maxItems']);
+        $suite->same(true, $tools['post_message']['properties']['attachment_file_ids']['uniqueItems']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
     });
@@ -948,17 +950,46 @@ try {
         $suite->same(false, $projects['body']['result']['isError']);
         $suite->same([$projectOne], array_column($projects['body']['result']['structuredContent']['result'], 'id'));
 
+        $attachmentIds = [
+            '3a5be6fa-cf85-4b98-b3a4-734ca62ed2aa',
+            '8bc27d31-6e2c-40a8-95b2-74827cafb54c',
+        ];
+        $insertFolder = $pdo->prepare(
+            'INSERT INTO project_file_folders
+             (public_id, project_id, parent_folder_id, name, normalized_name, root_marker,
+              created_by_participant_id, version, created_at, updated_at)
+             VALUES (?, ?, NULL, ?, ?, 1, ?, 1, ?, ?)'
+        );
+        $insertFolder->execute(['72a8b8c7-9e27-4d95-a081-2bb0f7c36918', $projectOne,
+            'MCP attachment test root', 'mcp attachment test root', $agentOne['participant_id'], Db::now(), Db::now()]);
+        $folderId = (int) $pdo->lastInsertId();
+        $insertFile = $pdo->prepare(
+            'INSERT INTO project_files
+             (public_id, project_id, folder_id, storage_driver, storage_key, original_name, display_name,
+              normalized_name, mime_type, size_bytes, sha256, uploaded_by_participant_id, state, version, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
+        );
+        foreach ($attachmentIds as $index => $attachmentId) {
+            $name = 'mcp-attachment-' . ($index + 1) . '.txt';
+            $insertFile->execute([$attachmentId, $projectOne, $folderId, 'local', 'test/' . $attachmentId,
+                $name, $name, strtolower($name), 'text/plain', 12 + $index,
+                hash('sha256', $name), $agentOne['participant_id'], 'available', Db::now(), Db::now()]);
+        }
         $posted = $call($tokenOne, 'post_message', [
             'body' => 'Remote MCP service-token contract probe.',
+            'attachment_file_ids' => $attachmentIds,
             'idempotency_key' => 'remote-mcp-service-token-contract-probe',
         ]);
         $suite->same(200, $posted['status'], $posted['raw']);
         $suite->same(false, $posted['body']['result']['isError']);
         $message = $posted['body']['result']['structuredContent']['result']['message'];
         $suite->same($agentOne['participant_id'], $message['sender']['participant_id']);
+        $suite->same($attachmentIds, array_column($message['attachments'], 'id'));
         $read = $call($tokenOne, 'get_message', ['message_id' => $message['id']]);
         $suite->same(false, $read['body']['result']['isError']);
         $suite->same($message['id'], $read['body']['result']['structuredContent']['result']['id']);
+        $suite->same($attachmentIds,
+            array_column($read['body']['result']['structuredContent']['result']['attachments'], 'id'));
 
         $proposal = $call($tokenOne, 'propose_project_details', [
             'description' => 'Suggested through the remote MCP contract.',

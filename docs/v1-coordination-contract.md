@@ -164,11 +164,12 @@ is checked against the running server by `tests/project-api.php`.
 | Message page | Default 50, explicit 1–200; sender/date/search/address filters | Default 50, explicit 1–200; cursor, query, addressed-to-me, unacknowledged-only filters |
 | Post retry key | Optional `idempotency_key` or header | `idempotency_key` required by `post_message` tool schema |
 | Correlation ID | Optional on a post | Not exposed by `post_message` |
+| Project File attachments | Up to 20 ordered canonical project-file UUIDs | Same `attachment_file_ids` contract; every file is reauthorized in the bound project |
 | Result | Full canonical JSON message | Compact message projection in MCP `structuredContent.result` |
 | Operation failure | HTTP status and JSON `code` | Auth/scope challenge uses HTTP 401; authorized tool failures return an MCP tool result with `isError: true` |
 
 The MCP projection retains stable message ID, project sequence, sender,
-addressees, reply parent, body, timestamps, and acknowledgement state. It does
+addressees, reply parent, body, ordered attachment metadata, timestamps, and acknowledgement state. It does
 not expose every HTTP field or the revision list. Clients needing an omitted
 field must use an authorized surface that explicitly provides it; they must
 not infer it from the projection. Discovery alone does not establish a

@@ -197,6 +197,14 @@ with `approval_policy = "never"` can complete its normal coordination workflow.
 Claim, login, migration, background installation, restart, and credential
 configuration remain approval-gated.
 
+Profile-bound agents can attach up to 20 existing Project Files when posting a
+timeline message by passing their canonical UUIDs in `attachment_file_ids`.
+The connector preserves the supplied display order, rejects malformed or
+duplicate IDs locally, and relies on the server to reauthorize every file in
+the selected profile's project before the message and attachment associations
+are committed atomically. Arbitrary URLs and local paths are not attachment
+inputs.
+
 Notifications arriving while an earlier wake remains unacknowledged are briefly
 coalesced so an active task is not flooded. The coalescing window is bounded:
 after one minute, the newest unresolved message receives a follow-up wake even
