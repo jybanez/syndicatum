@@ -2,6 +2,13 @@
 
 Status: active production-readiness contract. Last assessed 2026-10-04.
 
+Owner direction recorded 2026-10-04: productionize the Codex channel first,
+with Windows 11 as the initial target operating system. The planned support
+policy is the current stable release plus the immediately previous stable
+release; the first stable release has no stable predecessor. Neither is a
+production support claim until installed acceptance passes. OpenAI and
+Companion store publication remain later phases.
+
 This document separates source capability, pilot distribution, and production
 distribution for Syndicatum's AI integrations. A source test, unpacked browser
 extension, local marketplace installation, or successful operator preflight is
@@ -17,7 +24,7 @@ installed-client acceptance gates below remain open.
 | Integration | Current channel | Classification | Production blocker |
 | --- | --- | --- | --- |
 | ChatGPT hosted MCP | Developer/custom MCP connection | Development | No approved public OpenAI plugin listing; current public-review artifact, domain challenge, scans, reviewer materials, and directory identity are not retained. |
-| Codex connector | Git-backed local marketplace, normally tracking `main` | Pilot | `main` is mutable. No designated immutable stable ref, published plugin artifact/provenance, support window, or installed upgrade/rollback matrix exists. |
+| Codex connector | Git-backed local marketplace; `codex-v0.2.0` stable candidate | Pilot | Release workflow and Windows target/support policy are defined, but the immutable tag, published provenance, and exact installed clean-install/update/rollback/device evidence are not yet retained. |
 | Companion for Chrome | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required and unpacked extensions do not auto-update. No Chrome Web Store identifier or reviewed listing exists. |
 | Companion for Edge | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required. No Edge Add-ons identifier, Partner Center certification, or store-managed update acceptance exists. |
 | Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion distribution blockers and still needs exact installed-version provider acceptance. |
@@ -50,7 +57,7 @@ The following evidence was current on 2026-10-04:
 
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
-- Codex source package: `0.1.0+codex.20261004181801`;
+- Codex stable candidate: `0.2.0` (`codex-v0.2.0`);
 - Companion source manifest: `0.10.6`;
 - live `scripts/verify-plugin-publication.ps1` passed against
   `https://syndicatum.wizaya.com`, including service health, support/privacy/
@@ -127,6 +134,13 @@ following are retained for that exact ref:
 Until a stable ref is designated, documentation may show `--ref main` only as
 the pilot install path and must say so next to the command.
 
+The repository now includes `tools/release/build_codex_plugin.py` and a
+tag-triggered Windows release workflow. The builder emits a deterministic ZIP,
+SHA-256 checksum, and per-file manifest bound to the full source commit and the
+exact `codex-v<manifest-version>` ref. These artifacts establish provenance;
+they do not pass the gate until the tag and GitHub release exist and the tagged
+marketplace is exercised on Windows.
+
 ### Chrome Web Store and Microsoft Edge Add-ons
 
 The production Companion must be store-installed or deployed through a managed
@@ -159,7 +173,7 @@ The source versions below are test anchors, not production ranges.
 
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
-| `v1.0.0-rc.3` | Codex `0.1.0+codex.20261004181801` | Codex Desktop/CLI | Source tests and pilot connector behavior | None until exact installed release passes each supported OS/device row. |
+| `v1.0.0-rc.3` | Codex `0.2.0` candidate | Codex Desktop/CLI on Windows 11 | Source tests and deterministic tagged-release contract | None until the exact tagged release passes the Windows install/lifecycle/device rows. |
 | `v1.0.0-rc.3` | Companion `0.10.6` | Chrome + ChatGPT web | Source tests; prior live evidence does not certify the current bind contract | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.6` | Chrome + Gemini web | Source tests and provider adapter contract | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.6` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |

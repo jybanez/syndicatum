@@ -1,0 +1,76 @@
+name: Release Syndicatum for Codex
+
+on:
+  push:
+    tags:
+      - "codex-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  codex-windows-stable-release:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Verify immutable tag and package version
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Raw plugins/codex/.codex-plugin/plugin.json | ConvertFrom-Json
+          $expected = "codex-v$($manifest.version)"
+          if ($env:GITHUB_REF_NAME -ne $expected) {
+            throw "Tag $env:GITHUB_REF_NAME does not match plugin version $($manifest.version); expected $expected."
+          }
+          $tagCommit = git rev-list -n 1 $env:GITHUB_REF_NAME
+          if ($tagCommit -ne $env:GITHUB_SHA) {
+            throw "The release tag does not resolve to GITHUB_SHA."
+          }
+      - name: Verify Codex plugin contracts
+        shell: pwsh
+        run: |
+          node --test plugins/codex/test/*.test.mjs
+          python tests/codex-plugin-package.py
+          node --test tests/integration-distribution.test.mjs
+      - name: Build deterministic release artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force codex-release | Out-Null
+          python tools/release/build_codex_plugin.py `
+            --repository . `
+            --output-dir codex-release `
+            --source-commit $env:GITHUB_SHA `
+            --source-ref $env:GITHUB_REF_NAME `
+            | Tee-Object codex-release/build-result.json
+          $checksum = Get-ChildItem codex-release/*.sha256 | Select-Object -First 1
+          $parts = (Get-Content -Raw $checksum.FullName).Trim() -split '\s+', 2
+          $actual = (Get-FileHash -Algorithm SHA256 (Join-Path codex-release $parts[1])).Hash.ToLowerInvariant()
+          if ($actual -ne $parts[0]) { throw "Codex plugin checksum verification failed." }
+      - name: Publish immutable GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @"
+          Syndicatum for Codex $env:GITHUB_REF_NAME
+
+          Initial stable channel for Windows. Install the repository marketplace using the immutable tag, then install codex@syndicatum. The release assets are deterministic provenance records for the exact marketplace snapshot; installation remains through the tagged Git marketplace.
+          "@
+          gh release create $env:GITHUB_REF_NAME `
+            --repo $env:GITHUB_REPOSITORY `
+            --title "Syndicatum for Codex $env:GITHUB_REF_NAME" `
+            --notes $notes `
+            codex-release/*.zip codex-release/*.sha256 codex-release/*.manifest.json
+      - name: Retain workflow evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: codex-stable-${{ github.sha }}-${{ github.run_attempt }}
+          path: codex-release
+          if-no-files-found: warn
+          retention-days: 30
