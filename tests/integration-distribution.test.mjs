@@ -4,19 +4,22 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 const policyUrl = new URL("release/integration-distribution-policy-v1.json", root);
+const publicPluginUrl = new URL("plugins/openai-public/plugin.json", root);
 const pluginUrl = new URL("plugins/codex/.codex-plugin/plugin.json", root);
 const companionUrl = new URL("companion/extension/manifest.json", root);
 
 const readJson = async url => JSON.parse(await readFile(url, "utf8"));
 
 test("distribution classifications match the exact source package versions", async () => {
-  const [policy, plugin, companion] = await Promise.all([
+  const [policy, publicPlugin, plugin, companion] = await Promise.all([
     readJson(policyUrl),
+    readJson(publicPluginUrl),
     readJson(pluginUrl),
     readJson(companionUrl),
   ]);
 
   assert.equal(policy.schema_version, 1);
+  assert.equal(policy.release_train.openai_public_plugin, publicPlugin.version);
   assert.equal(policy.release_train.codex_plugin, plugin.version);
   assert.equal(policy.release_train.companion, companion.version);
   assert.equal(policy.compatibility.codex_plugin.tested_source_version, plugin.version);

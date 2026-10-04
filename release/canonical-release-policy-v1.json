@@ -50,6 +50,7 @@
     ".gitignore",
     "companion",
     "docs",
+        "plugins/openai-public",
         "release/canonical-release-policy-v1.json",
         "release/integration-distribution-policy-v1.json",
         "tests",

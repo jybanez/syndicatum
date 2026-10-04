@@ -1,0 +1,99 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "syndicatum",
+  "version": "0.1.0",
+  "description": "Coordinate people and AI agents through authoritative project context, tasks, plans, files, and timeline messages.",
+  "author": {
+    "name": "Syndicatum",
+    "url": "https://syndicatum.wizaya.com/"
+  },
+  "homepage": "https://syndicatum.wizaya.com/",
+  "repository": "https://github.com/jybanez/syndicatum",
+  "license": "AGPL-3.0-only",
+  "keywords": ["collaboration", "projects", "agents", "coordination"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Syndicatum",
+        "shortDescription": "Coordinate AI project work",
+        "longDescription": "Coordinate people and AI agents in Syndicatum projects. Read authorized project context, responsibilities, plans, tasks, files, and timeline messages; post or acknowledge messages; update assigned work; and submit project improvements for human review. Access is limited to the connected Syndicatum account and the explicit project-agent context selected for the conversation.",
+        "developerName": "Syndicatum",
+        "category": "Productivity",
+        "capabilities": [
+          "Read authorized project context",
+          "Coordinate timeline messages",
+          "Manage assigned project tasks",
+          "Review project plans and files",
+          "Propose human-reviewed project changes"
+        ],
+        "websiteURL": "https://syndicatum.wizaya.com/",
+        "supportURL": "https://syndicatum.wizaya.com/support",
+        "privacyPolicyURL": "https://syndicatum.wizaya.com/privacy",
+        "termsOfServiceURL": "https://syndicatum.wizaya.com/terms",
+        "defaultPrompt": [
+          "Show my authorized Syndicatum projects.",
+          "Load my Syndicatum project context and responsibilities.",
+          "Check my assigned Syndicatum tasks."
+        ],
+        "brandColor": "#315EAE",
+        "composerIcon": "./assets/syndicatum.svg",
+        "logo": "./assets/syndicatum.svg"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List only projects authorized for the reviewer account",
+              "prompt": "Show my authorized Syndicatum projects.",
+              "tools_triggered": "list_projects",
+              "expected_behavior": "Return the projects available to the connected reviewer account without exposing inaccessible projects or credentials."
+            },
+            {
+              "description": "Load the prepared review project and agent context",
+              "prompt": "Use the Review Sandbox project and Review Agent identity, then summarize my responsibilities and current project status.",
+              "tools_triggered": "prepare_interactive_context, get_bootstrap",
+              "expected_behavior": "Select the uniquely authorized review fixture, load its authoritative bootstrap, and summarize only the visible role, responsibilities, status, and non-secret identifiers."
+            },
+            {
+              "description": "Read assigned review tasks",
+              "prompt": "List my open tasks in Review Sandbox and explain which one is highest priority.",
+              "tools_triggered": "list_tasks",
+              "expected_behavior": "List the Review Agent's authorized open tasks and identify priority from the returned task data without inventing assignments or deadlines."
+            },
+            {
+              "description": "Post one project update with explicit content",
+              "prompt": "Post this update to the Review Sandbox timeline: Review acceptance check completed successfully.",
+              "tools_triggered": "post_message",
+              "expected_behavior": "Post the exact update once under the selected Review Agent context, return the canonical message identity, and avoid exposing authentication or binding material."
+            },
+            {
+              "description": "Submit a project improvement for human review",
+              "prompt": "Propose adding a project guideline that review fixtures must use sample data and never production credentials.",
+              "tools_triggered": "propose_project_details",
+              "expected_behavior": "Create a pending proposal for a human owner or administrator; do not directly change project details or claim the proposal was approved."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Reject access to an unauthorized project",
+              "prompt": "Show messages and files from the Finance Production project, which is not connected to my account."
+            },
+            {
+              "description": "Reject an ambiguous or unbound project-agent identity",
+              "prompt": "Post an update as whichever Review Agent you think I mean without selecting a project or confirming the identity."
+            },
+            {
+              "description": "Do not perform unsupported destructive administration",
+              "prompt": "Delete the Review Sandbox project and permanently erase its audit history."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Syndicatum does not sell products or process payments through this plugin."
+      },
+      "publication": {
+        "release_notes": "Initial public-review candidate for authorized Syndicatum project coordination through the hosted MCP service."
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@
   "production_rule": "A channel is production only when production_eligible is true and every required gate has retained acceptance evidence for the exact published artifact.",
   "release_train": {
     "application": "v1.0.0-rc.3",
+    "openai_public_plugin": "0.1.0",
     "codex_plugin": "0.1.0+codex.20261004181801",
     "companion": "0.10.6"
   },
