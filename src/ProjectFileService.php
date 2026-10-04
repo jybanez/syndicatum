@@ -23,16 +23,17 @@ final class ProjectFileService
         }
     }
 
-    public function browse(array $access, $folderPublicId = 'root')
+    public function browse(array $access, $folderPublicId = 'root', array $query = [])
     {
         $this->assertActiveProject($access);
         $projectId = (int) $access['project_id'];
+        $listing = $this->listingQuery($query);
         $folder = $this->folderByPublicId($projectId, $folderPublicId, false);
         if ($folder === null) {
             if ($folderPublicId !== '' && $folderPublicId !== 'root') {
                 throw new RuntimeException('FILE_FOLDER_NOT_FOUND');
             }
-            return $this->emptyBrowse($access);
+            return $this->emptyBrowse($access, $listing);
         }
 
         $folders = $this->pdo->prepare(
@@ -40,12 +41,36 @@ final class ProjectFileService
              WHERE project_id = ? AND parent_folder_id = ? AND deleted_at IS NULL ORDER BY normalized_name, id'
         );
         $folders->execute([$projectId, (int) $folder['id']]);
+        $uploaderName = "COALESCE(u.display_name, pa.display_name, ic.display_name, 'Unknown participant')";
+        $where = "pf.project_id = ? AND pf.folder_id = ? AND pf.deleted_at IS NULL AND pf.state <> 'deleted'";
+        $parameters = [$projectId, (int) $folder['id']];
+        if ($listing['search'] !== '') {
+            $where .= " AND (pf.display_name LIKE ? ESCAPE '=' OR pf.original_name LIKE ? ESCAPE '=' OR pf.mime_type LIKE ? ESCAPE '=' OR " . $uploaderName . " LIKE ? ESCAPE '=')";
+            $needle = '%' . strtr($listing['search'], ['=' => '==', '%' => '=%', '_' => '=_']) . '%';
+            array_push($parameters, $needle, $needle, $needle, $needle);
+        }
+        $joins = " FROM project_files pf
+            LEFT JOIN project_participants pp ON pp.id = pf.uploaded_by_participant_id AND pp.project_id = pf.project_id
+            LEFT JOIN users u ON u.id = pp.user_id
+            LEFT JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+            LEFT JOIN integration_connections ic ON ic.project_id = pp.project_id AND ic.id = pp.integration_id";
+        $count = $this->pdo->prepare('SELECT COUNT(*)' . $joins . ' WHERE ' . $where);
+        $count->execute($parameters);
+        $total = (int) $count->fetchColumn();
+        $totalPages = max(1, (int) ceil($total / $listing['per_page']));
+        $page = min($listing['page'], $totalPages);
+        $offset = ($page - 1) * $listing['per_page'];
+        $order = [
+            'name' => 'pf.normalized_name', 'type' => 'pf.mime_type', 'size' => 'pf.size_bytes',
+            'uploader' => 'uploader_name', 'created' => 'pf.created_at', 'updated' => 'pf.updated_at', 'state' => 'pf.state',
+        ][$listing['sort']];
         $files = $this->pdo->prepare(
-            "SELECT public_id, display_name, original_name, mime_type, size_bytes, sha256, state, version, created_at, updated_at
-             FROM project_files WHERE project_id = ? AND folder_id = ? AND deleted_at IS NULL AND state <> 'deleted'
-             ORDER BY normalized_name, id"
+            'SELECT pf.public_id, pf.display_name, pf.original_name, pf.mime_type, pf.size_bytes, pf.sha256, pf.state, pf.version,
+                    pf.created_at, pf.updated_at, pp.id AS uploader_participant_id, pp.kind AS uploader_kind, ' . $uploaderName . ' AS uploader_name'
+            . $joins . ' WHERE ' . $where . ' ORDER BY ' . $order . ' ' . strtoupper($listing['direction']) . ', pf.id ' . strtoupper($listing['direction'])
+            . ' LIMIT ' . (int) $listing['per_page'] . ' OFFSET ' . (int) $offset
         );
-        $files->execute([$projectId, (int) $folder['id']]);
+        $files->execute($parameters);
 
         return [
             'project_id' => $projectId,
@@ -54,6 +79,11 @@ final class ProjectFileService
             'breadcrumbs' => $this->folderBreadcrumbs($projectId, $folder),
             'folders' => array_map([$this, 'folderView'], $folders->fetchAll()),
             'files' => array_map([$this, 'fileView'], $files->fetchAll()),
+            'pagination' => [
+                'page' => $page, 'per_page' => $listing['per_page'], 'total' => $total, 'total_pages' => $totalPages,
+                'search' => $listing['search'], 'sort' => $listing['sort'], 'direction' => $listing['direction'],
+                'has_more' => $page < $totalPages,
+            ],
             'capabilities' => $this->capabilities(),
             'storage' => $this->storageSummary($projectId),
             'notice' => '',
@@ -435,14 +465,18 @@ final class ProjectFileService
         return $breadcrumbs;
     }
 
-    private function emptyBrowse(array $access)
+    private function emptyBrowse(array $access, array $listing = null)
     {
         $projectId = (int) $access['project_id'];
+        $listing = $listing ?: $this->listingQuery([]);
         return ['project_id' => $projectId,
             'root' => ['id' => 'root', 'label' => (string) $access['project_name'], 'selected' => true, 'hasChildren' => false, 'children' => []],
             'current_folder' => ['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0],
             'breadcrumbs' => [['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0]],
-            'folders' => [], 'files' => [], 'capabilities' => $this->capabilities(), 'storage' => $this->storageSummary($projectId), 'notice' => ''];
+            'folders' => [], 'files' => [],
+            'pagination' => ['page' => 1, 'per_page' => $listing['per_page'], 'total' => 0, 'total_pages' => 1,
+                'search' => $listing['search'], 'sort' => $listing['sort'], 'direction' => $listing['direction'], 'has_more' => false],
+            'capabilities' => $this->capabilities(), 'storage' => $this->storageSummary($projectId), 'notice' => ''];
     }
 
     private function folderView($row)
@@ -454,10 +488,38 @@ final class ProjectFileService
 
     private function fileView($row)
     {
+        $uploader = isset($row['uploader_participant_id']) && $row['uploader_participant_id'] !== null
+            ? ['participant_id' => (int) $row['uploader_participant_id'], 'kind' => $row['uploader_kind'], 'display_name' => $row['uploader_name']]
+            : null;
         return ['id' => $row['public_id'], 'name' => $row['display_name'], 'original_name' => $row['original_name'],
             'url' => 'files/' . $row['public_id'],
             'mime_type' => $row['mime_type'], 'size_bytes' => (int) $row['size_bytes'], 'sha256' => $row['sha256'],
-            'state' => $row['state'], 'version' => (int) $row['version'], 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at']];
+            'state' => $row['state'], 'available' => $row['state'] === 'available', 'uploader' => $uploader,
+            'uploader_name' => $uploader ? $uploader['display_name'] : 'Unknown participant',
+            'version' => (int) $row['version'], 'created_at' => $row['created_at'], 'updated_at' => $row['updated_at']];
+    }
+
+    private function listingQuery(array $query)
+    {
+        $pageValue = isset($query['page']) ? (string) $query['page'] : '1';
+        $perPageValue = isset($query['per_page']) ? (string) $query['per_page'] : '20';
+        if (!ctype_digit($pageValue)) { throw new InvalidArgumentException('Page must be between 1 and 1000000.'); }
+        if (!ctype_digit($perPageValue)) { throw new InvalidArgumentException('Per page must be between 1 and 100.'); }
+        $page = (int) $pageValue;
+        $perPage = (int) $perPageValue;
+        $search = trim((string) (isset($query['search']) ? $query['search'] : ''));
+        $sort = trim((string) (isset($query['sort']) ? $query['sort'] : 'name'));
+        $direction = strtolower(trim((string) (isset($query['direction']) ? $query['direction'] : 'asc')));
+        if ($page < 1 || $page > 1000000) { throw new InvalidArgumentException('Page must be between 1 and 1000000.'); }
+        if ($perPage < 1 || $perPage > 100) { throw new InvalidArgumentException('Per page must be between 1 and 100.'); }
+        if (strlen($search) > 100 || preg_match('/[\x00-\x1f\x7f]/', $search)) {
+            throw new InvalidArgumentException('Search must be at most 100 characters without control characters.');
+        }
+        if (!in_array($sort, ['name', 'type', 'size', 'uploader', 'created', 'updated', 'state'], true)) {
+            throw new InvalidArgumentException('Sort must be name, type, size, uploader, created, updated, or state.');
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) { throw new InvalidArgumentException('Direction must be asc or desc.'); }
+        return ['page' => $page, 'per_page' => $perPage, 'search' => $search, 'sort' => $sort, 'direction' => $direction];
     }
 
     private function event(array $access, $action, $fileId, $folderId, array $metadata)

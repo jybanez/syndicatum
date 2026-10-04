@@ -22,6 +22,8 @@ try {
             'current_folder' => ['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0],
             'breadcrumbs' => [['id' => 'root', 'name' => (string) $access['project_name'], 'version' => 0]],
             'folders' => [], 'files' => [],
+            'pagination' => ['page' => 1, 'per_page' => 20, 'total' => 0, 'total_pages' => 1,
+                'search' => '', 'sort' => 'name', 'direction' => 'asc', 'has_more' => false],
             'capabilities' => ['create_folder' => false, 'upload' => false, 'rename' => false, 'move' => false, 'copy_link' => false, 'download' => false, 'delete' => false],
             'storage' => ['configured' => false, 'ready' => false, 'metadata_ready' => Db::tableExists($pdo, 'project_files')],
             'notice' => 'Ask an administrator to configure an available private storage location.',
@@ -31,7 +33,13 @@ try {
     $service = new ProjectFileService($pdo, new LocalFileStorage(dirname(dirname(__DIR__)), $configuredPath), $settings);
     if (Api::method() === 'GET') {
         (new RateLimiter($pdo))->hit('project-files.read', $projectId . ':' . $access['participant_id'], 240, 60, 60);
-        Api::json(['data' => $service->browse($access, isset($_GET['folder_id']) ? trim((string) $_GET['folder_id']) : 'root')]);
+        Api::json(['data' => $service->browse($access, isset($_GET['folder_id']) ? trim((string) $_GET['folder_id']) : 'root', [
+            'page' => isset($_GET['page']) ? $_GET['page'] : 1,
+            'per_page' => isset($_GET['per_page']) ? $_GET['per_page'] : 20,
+            'search' => isset($_GET['search']) ? $_GET['search'] : '',
+            'sort' => isset($_GET['sort']) ? $_GET['sort'] : 'name',
+            'direction' => isset($_GET['direction']) ? $_GET['direction'] : 'asc',
+        ])]);
     }
 
     $auth->requireCsrfForHuman($access['identity']);

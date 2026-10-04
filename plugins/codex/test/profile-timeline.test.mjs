@@ -175,7 +175,12 @@ test("profile file workflow lists canonical URLs and sends audited metadata muta
     return response({ file: { id: "11223344-5566-4777-8899-aabbccddeeff", name: "renamed.pdf", url: "files/11223344-5566-4777-8899-aabbccddeeff", version: 3 } });
   };
   const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
-  const listed = await client.projectFiles(profile.profile_id);
+  const listed = await client.projectFiles(profile.profile_id, { page: 2, per_page: 10, search: "report", sort: "updated", direction: "desc" });
+  assert.match(calls.at(-1).url, /page=2/);
+  assert.match(calls.at(-1).url, /per_page=10/);
+  assert.match(calls.at(-1).url, /search=report/);
+  assert.match(calls.at(-1).url, /sort=updated/);
+  assert.match(calls.at(-1).url, /direction=desc/);
   assert.equal(listed.files.files[0].url, "https://syndicatum.wizaya.com/files/11223344-5566-4777-8899-aabbccddeeff");
   assert.doesNotMatch(JSON.stringify(listed), /storage_key|source_path|secret-agent-token/);
   await client.renameProjectFile(profile.profile_id, {

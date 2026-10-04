@@ -85,6 +85,15 @@ export class ProfileTimelineClient {
     const query = new URLSearchParams({ project_id: String(profile.project_id) });
     const folderId = String(input.folder_id || "root").trim();
     if (folderId !== "root") query.set("folder_id", projectFileId(folderId, "folder"));
+    if (input.page !== undefined) query.set("page", boundedInteger(input.page, "page", 1, 1000000));
+    if (input.per_page !== undefined) query.set("per_page", boundedInteger(input.per_page, "per page", 1, 100));
+    const search = String(input.search || "").trim();
+    if (search) {
+      if (search.length > 100 || /[\x00-\x1f\x7f]/.test(search)) throw new Error("Search must be at most 100 characters without control characters.");
+      query.set("search", search);
+    }
+    if (input.sort !== undefined) query.set("sort", oneOf(input.sort, "sort", ["name", "type", "size", "uploader", "created", "updated", "state"]));
+    if (input.direction !== undefined) query.set("direction", oneOf(input.direction, "direction", ["asc", "desc"]));
     const result = await client.request(`/api/v1/project-files.php?${query}`);
     const data = result.data ?? result;
     return { profile: publicAgentProfile(profile), files: publicFilePayload(client, data) };
@@ -348,6 +357,20 @@ export class ProfileTimelineClient {
 function positiveId(value, label) {
   const normalized = String(value ?? "").trim();
   if (!/^[1-9][0-9]*$/.test(normalized)) throw new Error(`A valid Syndicatum ${label} ID is required.`);
+  return normalized;
+}
+
+function boundedInteger(value, label, minimum, maximum) {
+  const normalized = String(value ?? "").trim();
+  if (!/^[0-9]+$/.test(normalized)) throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`);
+  const number = Number(normalized);
+  if (!Number.isSafeInteger(number) || number < minimum || number > maximum) throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`);
+  return String(number);
+}
+
+function oneOf(value, label, allowed) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!allowed.includes(normalized)) throw new Error(`${label} must be one of: ${allowed.join(", ")}.`);
   return normalized;
 }
 

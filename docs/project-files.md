@@ -25,7 +25,11 @@ contents. Attaching a hosted file does not change external document permissions.
 
 1. Open the folder action beside the project menu to enter **Project Files**.
    Select a folder in the tree, create a subfolder with the plus action, or use
-   **Upload files** to add a batch within the configured limit.
+   **Upload files** to add a batch within the configured limit. The file grid
+   searches and sorts on the server and retrieves a bounded page at a time.
+   Desktop columns expose uploader, created/modified times, and availability;
+   the compact mobile row retains the essential name, size, modified time, and
+   action menu while the same metadata remains in the API.
 2. Use a file row’s menu to copy its link, move, download, rename, or delete it.
    Uploading the same filename into the same folder asks for confirmation before
    replacing its content. Each upload is validated independently; check the
@@ -77,15 +81,17 @@ uncertain result before starting a replacement operation.
 
 The Storage directory and Recovery backup directory serve different purposes.
 Database file records and message associations alone cannot restore file bytes.
-The existing canonical backup producer does not yet include the referenced
-project-file objects in a complete, verified backup/restore workflow. The
-[implementation checklist](v1-project-file-storage-implementation-checklist.md#9-gate-e--backup-restore-and-recovery-completeness)
-keeps that work open. Do not treat an existing encrypted backup or a SQL dump as
-complete protection for hosted Project Files.
+The current format-3 canonical backup producer inventories and streams referenced
+Project File objects with provider-neutral keys, sizes, MIME types, and SHA-256
+digests. Protected restore inspection authenticates that manifest and stages and
+verifies the file bytes before cutover. Windows creation and Linux/MySQL 8.4
+round-trip acceptance preserve the public IDs and confirm that the original
+URLs return byte-identical content after restore. Older backups or a SQL dump
+alone still do not protect hosted Project Files.
 
-Operators must preserve matching database metadata and storage content, account
-for writes during capture, and verify recovery before relying on a recovery set.
-Recovery needs intact public IDs, storage objects, and the correct public origin
-and routing for old URLs to work. This guide does not establish a supported
-combined restore procedure or extend the runtime/release claims in the
-[operations runbook](plugin-production-operations.md).
+Operators must still verify backup eligibility and storage health before relying
+on a recovery set. Recovery needs intact public IDs, storage objects, and the
+correct public origin and routing for old URLs to work. Missing/corrupt objects,
+unwritable targets, interrupted streams, changed storage roots, and repeated
+inspection/cutover remain explicit operational acceptance cases in the
+[implementation checklist](v1-project-file-storage-implementation-checklist.md#93-operational-recovery-cases).
