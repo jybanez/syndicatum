@@ -72,6 +72,12 @@ The source-tree manifest may be newer than the latest canonical GitHub Release.
 Version notes below describe the checked-out source; installable release status
 is determined only by the signed archive and checksum on GitHub Releases.
 
+Version 0.10.7 tolerates ChatGPT rendering differences by confirming a
+Syndicatum notification from its unique project, agent, message, and sequence
+identity when the fully rendered text differs. It also allows a bounded 30
+seconds for the visible user turn to appear. Unconfirmed submissions still pause
+for operator review and are never replayed automatically.
+
 Version 0.10.6 requires the target ChatGPT discussion to visibly confirm the
 submitted notification turn before the Companion records delivery. A missing
 confirmation remains recoverable instead of being reported as delivered.

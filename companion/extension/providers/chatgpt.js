@@ -4,6 +4,20 @@
     || document.querySelector("main form textarea")
     || document.querySelector("main form [contenteditable='true']");
   const normalizeText = value => String(value || "").replace(/\s+/g, " ").trim();
+  const notificationIdentity = value => {
+    const text = normalizeText(value);
+    const field = label => text.match(new RegExp(`\\b${label}\\s*[:#]?\\s*(\\d+)\\b`, "i"))?.[1] || null;
+    const identity = [field("project"), field("agent"), field("message"), field("sequence")];
+    return identity.every(Boolean) ? identity.join(":") : null;
+  };
+  const matchesNotification = (turn, text) => {
+    const actual = normalizeText(turn?.innerText || turn?.textContent);
+    const expected = normalizeText(text);
+    if (!actual || !expected) return false;
+    if (actual.includes(expected)) return true;
+    const expectedIdentity = notificationIdentity(expected);
+    return Boolean(expectedIdentity && notificationIdentity(actual) === expectedIdentity);
+  };
   const isVisibleTurn = turn => {
     if (!turn?.isConnected || turn.closest?.("[hidden], [aria-hidden='true'], [inert]")) return false;
     if (typeof turn.checkVisibility === "function") {
@@ -15,10 +29,9 @@
     }
     return turn.getClientRects().length > 0;
   };
-  const userTurns = () => [...document.querySelectorAll("[data-message-author-role='user']")].filter(isVisibleTurn);
+  const userTurns = () => [...new Set(document.querySelectorAll("[data-message-author-role='user'], [data-testid='user-message']"))].filter(isVisibleTurn);
   const matchingUserTurnCount = text => {
-    const expected = normalizeText(text);
-    return userTurns().filter(turn => normalizeText(turn.innerText || turn.textContent).includes(expected)).length;
+    return userTurns().filter(turn => matchesNotification(turn, text)).length;
   };
   const isBusy = () => Boolean(document.querySelector("[data-testid='stop-button'], button[aria-label*='Stop generating' i], button[aria-label='Stop']"));
 
@@ -56,21 +69,21 @@
   registry.chatgpt = {
     async deliver(text) {
       if (!/(?:^|\/)c\/[A-Za-z0-9_-]+\/?$/.test(location.pathname)) return { ok: false, retryable: false, code: "wrong_discussion" };
+      const before = matchingUserTurnCount(text);
+      if (before > 0) return { ok: true, confirmation: "existing_notification_turn", deduplicated: true };
       if (isBusy()) return { ok: false, retryable: true, code: "discussion_busy" };
       const composer = queryComposer();
       if (!composer) {
         const loggedOut = Boolean(document.querySelector("a[href*='auth/login'], button[data-testid*='login']"));
         return { ok: false, retryable: true, code: loggedOut ? "login_required" : "composer_not_found" };
       }
-      const before = matchingUserTurnCount(text);
-      if (before > 0) return { ok: true, confirmation: "existing_exact_user_turn", deduplicated: true };
       setComposerValue(composer, text);
       const send = await waitForSendButton();
       if (!send) return { ok: false, retryable: true, code: "send_unavailable" };
       send.click();
-      const deadline = Date.now() + 12000;
+      const deadline = Date.now() + 30000;
       while (Date.now() < deadline) {
-        if (matchingUserTurnCount(text) > before) return { ok: true, confirmation: "new_exact_user_turn" };
+        if (matchingUserTurnCount(text) > before) return { ok: true, confirmation: "new_notification_turn" };
         await wait(200);
       }
       return { ok: false, retryable: true, code: "submission_unconfirmed" };
