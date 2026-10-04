@@ -2566,19 +2566,26 @@ function renderMessageHeaderSeverity(host, message, severityLabel) {
 
 function renderMessageAttachmentIndicator(host, message) {
   const row = host.closest(".ui-timeline-item");
-  row?.querySelector(".message-attachment-indicator")?.remove();
+  const existing = row?.querySelector(".message-attachment-indicator");
   const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
   const timestamp = row?.querySelector(".ui-timeline-time");
-  if (!count || !timestamp?.parentElement) return;
+  if (!count || !timestamp?.parentElement) {
+    existing?.remove();
+    return;
+  }
   const label = `${count} attached ${count === 1 ? "file" : "files"}`;
-  const indicator = document.createElement("span");
-  indicator.className = "message-attachment-indicator";
+  const indicator = existing || document.createElement("span");
+  if (!existing) {
+    indicator.className = "message-attachment-indicator";
+    indicator.appendChild(state.factories.createIcon("actions.attach", {
+      size: 13,
+      decorative: false,
+      ariaLabel: label,
+    }));
+  }
   indicator.title = label;
-  indicator.appendChild(state.factories.createIcon("actions.attach", {
-    size: 13,
-    decorative: false,
-    ariaLabel: label,
-  }));
+  indicator.querySelector("[aria-label]")?.setAttribute("aria-label", label);
+  if (indicator.parentElement === timestamp.parentElement && indicator.nextSibling === timestamp) return;
   timestamp.parentElement.insertBefore(indicator, timestamp);
 }
 
@@ -2595,6 +2602,28 @@ function mountMessageCard(host, item) {
   let renderedContentKey = null;
   let markdownView = null;
   let attachmentMediaStrip = null;
+  let attachmentIndicatorObserver = null;
+  let attachmentIndicatorRow = null;
+  let attachmentIndicatorMessage = null;
+  let attachmentIndicatorRefreshQueued = false;
+  function observeAttachmentIndicator(message) {
+    attachmentIndicatorMessage = message;
+    const row = host.closest(".ui-timeline-item");
+    if (!row || row === attachmentIndicatorRow) return;
+    attachmentIndicatorObserver?.disconnect();
+    attachmentIndicatorRow = row;
+    attachmentIndicatorObserver = new MutationObserver(() => {
+      if (attachmentIndicatorRefreshQueued) return;
+      attachmentIndicatorRefreshQueued = true;
+      queueMicrotask(() => {
+        attachmentIndicatorRefreshQueued = false;
+        if (host.isConnected && attachmentIndicatorMessage) {
+          renderMessageAttachmentIndicator(host, attachmentIndicatorMessage);
+        }
+      });
+    });
+    attachmentIndicatorObserver.observe(row, { childList: true, subtree: true });
+  }
   function paint(nextItem = item) {
     const current = nextItem.raw;
     const severityLabel = messageSeverityLabel(current.severity);
@@ -2603,6 +2632,7 @@ function mountMessageCard(host, item) {
     // they survive timeline updates, collapse changes, and mode switches.
     renderMessageHeaderSeverity(host, current, severityLabel);
     renderMessageAttachmentIndicator(host, current);
+    observeAttachmentIndicator(current);
     if (renderedMessage === current && renderedContentKey === nextItem.contentKey) return;
     renderedMessage = current;
     renderedContentKey = nextItem.contentKey;
@@ -2687,6 +2717,11 @@ function mountMessageCard(host, item) {
   }
   paint(item);
   return { update: paint, destroy() {
+    attachmentIndicatorObserver?.disconnect();
+    attachmentIndicatorObserver = null;
+    attachmentIndicatorRow?.querySelector(".message-attachment-indicator")?.remove();
+    attachmentIndicatorRow = null;
+    attachmentIndicatorMessage = null;
     destroyTimelineResponsibilityActions(host);
     markdownView?.destroy();
     markdownView = null;
