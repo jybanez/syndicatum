@@ -23,11 +23,12 @@ supersedes the September current-state conclusions without deleting their dated
 evidence or run identifiers.
 
 The commercial category is now **the project operating layer for accountable
-human-and-AI teams**, with validation broadened to mixed human-and-AI project
-operations rather than only engineering and product teams. Current shipped
-foundations include the Work request lifecycle, Responsibility Inbox,
-milestones and deliverables, human-reviewed AI proposals, System Messages and
-integrations, Project Files and attachments, and Realtime.
+human-and-AI teams**. Mixed human-and-AI project operations, rather than only
+engineering and product teams, is the broadened validation hypothesis; it is
+not yet an established market claim. Current shipped foundations include the
+Work request lifecycle, Responsibility Inbox, milestones and deliverables,
+human-reviewed AI proposals, System Messages and integrations, Project Files
+and attachments, and Realtime.
 
 The following earlier gaps are closed or materially superseded:
 
@@ -44,14 +45,20 @@ The following earlier gaps are closed or materially superseded:
   content. Any remaining backup work is operational edge-case acceptance, not
   a missing Project File backup design.
 
-The principal unresolved commercial-readiness gap is external distribution and
-installed acceptance. The
+The principal unresolved production-distribution gap is external distribution
+and installed acceptance. The
 [production distribution gate](integration-distribution-production-gate.md)
 remains open for OpenAI directory approval, an immutable Codex stable ref and
 support window, Chrome Web Store and Edge Add-ons publication or managed
 updates, and exact installed compatibility evidence. Mobile remains gated.
 Consequently Syndicatum must not be described as production ready even where
 source, candidate-artifact, or pilot evidence is green.
+
+Commercial viability remains separately unproven. Phase 2 design-partner and
+pilot evidence must still show repeatable value and a credible willingness to
+continue or pay in the broadened segment. Closing production-distribution gates
+does not close that commercial-proof gate, and pilot interest does not replace
+installed production acceptance.
 
 The AGPL/open-core direction remains current. Near-term paid value is hosting,
 onboarding, implementation, integration setup, reliability, and support;

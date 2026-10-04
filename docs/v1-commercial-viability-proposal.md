@@ -14,8 +14,9 @@ Syndicatum's current category is:
 > **Syndicatum is the project operating layer for accountable human-and-AI
 > teams.**
 
-Validation now targets mixed human-and-AI project operations, not only
-engineering and product teams. Recruitment should test the operating model
+The current validation hypothesis targets mixed human-and-AI project
+operations, not only engineering and product teams. It is a segment to test,
+not an established market claim. Recruitment should test the operating model
 across suitable project environments without implying endorsement by, or
 naming, specific government agencies.
 
@@ -37,9 +38,14 @@ Production distribution remains open under the
 [integration distribution production gate](integration-distribution-production-gate.md).
 OpenAI directory approval, an immutable supported Codex stable ref, Chrome and
 Edge store publication or managed updates, and exact installed compatibility
-evidence remain blockers. Mobile remains gated. No source test, pilot install,
-or local artifact supports a production-ready claim until those external
-distribution and installed-acceptance gates close.
+evidence remain the principal production-distribution blockers. Mobile remains
+gated. No source test, pilot install, or local artifact supports a
+production-ready claim until those external distribution and
+installed-acceptance gates close.
+
+Commercial viability is a separate open gate. It is not proven until
+design-partner or pilot evidence demonstrates repeatable value and a credible
+willingness to continue or pay within the broadened validation segment.
 
 The licensing and packaging direction remains AGPL/open-core. Near-term paid
 value is managed hosting, onboarding, implementation, integration setup,

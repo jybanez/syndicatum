@@ -23,9 +23,10 @@ rewriting the dated September implementation evidence below.
 
 - **Category:** Syndicatum is the project operating layer for accountable
   human-and-AI teams.
-- **Validation segment:** mixed human-and-AI project operations, not only
-  engineering and product teams. Do not imply validation by, or name, specific
-  government agencies without separate authority and evidence.
+- **Validation hypothesis:** mixed human-and-AI project operations, not only
+  engineering and product teams. This is a segment to test, not an established
+  market claim. Do not imply validation by, or name, specific government
+  agencies without separate authority and evidence.
 - **Shipped foundations:** Work request lifecycle, Responsibility Inbox,
   project planning with milestones and deliverables, human-reviewed AI
   proposals, System Messages and integrations, Project Files and attachments,
@@ -37,11 +38,15 @@ rewriting the dated September implementation evidence below.
 - **Backup:** the old missing-Project-File-backup gap is superseded. Format-3
   full-clone backup inventories, streams, hashes, restores, and verifies file
   bytes; remaining items are operational edge-case acceptance.
-- **Distribution:** production remains blocked by the
+- **Production distribution:** production remains blocked by the
   [integration distribution production gate](integration-distribution-production-gate.md):
   OpenAI directory approval, an immutable Codex stable ref and support window,
   Chrome/Edge publication or managed updates, and exact installed compatibility
   evidence. Mobile remains gated.
+- **Commercial proof:** Phase 2 remains open. Commercial viability requires
+  design-partner or pilot evidence of repeatable value and a credible
+  willingness to continue or pay. Distribution readiness and commercial proof
+  are separate gates.
 - **Commercial model:** retain AGPL/open-core. Near-term paid value is hosting,
   onboarding, implementation, integration setup, reliability, and support;
   later value may include governance, audit, and enterprise controls.
