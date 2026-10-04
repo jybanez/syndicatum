@@ -3,11 +3,11 @@
 Status: active production-readiness contract. Last assessed 2026-10-04.
 
 Owner direction recorded 2026-10-04: productionize the Codex channel first,
-with Windows 11 as the initial target operating system. The planned support
-policy is the current stable release plus the immediately previous stable
-release; the first stable release has no stable predecessor. Neither is a
-production support claim until installed acceptance passes. OpenAI and
-Companion store publication remain later phases.
+with Windows 10 22H2 and Windows 11 as the initial target operating systems.
+The planned support policy is the current stable release plus the immediately
+previous stable release; the first stable release has no stable predecessor.
+Neither target is a production support claim until its installed acceptance
+passes. OpenAI and Companion store publication remain later phases.
 
 This document separates source capability, pilot distribution, and production
 distribution for Syndicatum's AI integrations. A source test, unpacked browser
@@ -173,7 +173,7 @@ The source versions below are test anchors, not production ranges.
 
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
-| `v1.0.0-rc.3` | Codex `0.2.0` candidate | Codex Desktop/CLI on Windows 11 | Source tests and deterministic tagged-release contract | None until the exact tagged release passes the Windows install/lifecycle/device rows. |
+| `v1.0.0-rc.3` | Codex `0.2.0` candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
 | `v1.0.0-rc.3` | Companion `0.10.6` | Chrome + ChatGPT web | Source tests; prior live evidence does not certify the current bind contract | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.6` | Chrome + Gemini web | Source tests and provider adapter contract | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.6` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
