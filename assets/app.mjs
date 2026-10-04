@@ -1192,7 +1192,16 @@ function projectFilesContent(payload, handlers = {}) {
           const label = document.createElement("span");
           label.className = "project-file-name-label";
           label.textContent = row.name || "Unnamed file";
-          cell.append(icon, label);
+          const copy = document.createElement("span");
+          copy.className = "project-file-name-copy";
+          const mobileMeta = document.createElement("span");
+          mobileMeta.className = "project-file-mobile-meta";
+          mobileMeta.textContent = [
+            recoverySize(Number(row.size_bytes || 0)),
+            row.updated_at ? formatDate(row.updated_at) : "",
+          ].filter(Boolean).join(" · ");
+          copy.append(label, mobileMeta);
+          cell.append(icon, copy);
           return cell;
         },
       },

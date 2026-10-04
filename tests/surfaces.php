@@ -1185,6 +1185,12 @@ try {
             && strpos($styles, 'height: min(66vh, 660px)') !== false
             && strpos($styles, '.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none;') !== false,
             'The Project Files modal needs a fixed-height two-column workspace.');
+        $suite->true(strpos($source, 'mobileMeta.className = "project-file-mobile-meta"') !== false
+            && strpos($styles, '.project-files-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }') !== false
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 0 !important; }') !== false
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-cell:nth-child(3) { display: none; }') !== false
+            && strpos($styles, '.project-file-mobile-meta { display: block; }') !== false,
+            'Project Files must become a bounded stacked workspace with a compact two-column file list on narrow screens.');
         $suite->true(strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv { display: flex; flex-direction: column; height: 100%; min-height: 0; }') !== false
             && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid { flex: 1 1 auto; width: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }') !== false
             && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid-table-wrap { min-height: 0; height: 100%; max-height: none; }') !== false,

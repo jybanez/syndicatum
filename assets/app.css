@@ -178,7 +178,9 @@ button, input, textarea { font: inherit; }
 .project-file-name-action:hover .project-file-name-label { color: var(--ui-accent); text-decoration: underline; text-underline-offset: 2px; }
 .project-file-name-action:focus-visible { border-radius: 4px; outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 .project-file-type-icon { flex: 0 0 auto; color: var(--ui-muted); }
+.project-file-name-copy { display: grid; min-width: 0; gap: 2px; }
 .project-file-name-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-file-mobile-meta { display: none; min-width: 0; overflow: hidden; color: var(--ui-muted); font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .project-files-current-folder-grid .ui-grid-cell:last-child { padding: 2px 6px; text-align: center; }
 .project-file-row-actions { display: inline-grid; width: 34px; min-width: 34px; height: 34px; place-items: center; padding: 0; }
 .project-files-load-error { min-height: 240px; display: grid; place-items: center; padding: 24px; color: var(--ui-danger, #ff8f9c); text-align: center; }
@@ -850,9 +852,25 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
   .project-agent-fields > .project-workflow-field:nth-child(n+4) { grid-column: auto; }
 }
 @media (max-width: 760px) {
-  .project-files-modal .ui-modal-body { overflow-y: auto; }
-  .project-files-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(230px, 1fr) minmax(280px, 1.2fr); grid-template-areas: "notice" "folders" "files"; height: auto; min-height: 0; }
-  .project-files-pane { min-height: 230px; }
+  .project-files-modal .ui-modal-body { min-height: 0; align-content: stretch; overflow: hidden; padding: 12px; }
+  .project-files-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
+  .project-files-notice { flex: 0 0 auto; }
+  .project-files-folders { flex: 0 0 min(24dvh, 180px); min-height: 140px; }
+  .project-files-list { flex: 1 1 0; min-height: 220px; }
+  .project-files-pane-header { min-height: 48px; padding: 6px 10px; }
+  .project-files-grid .ui-grid-table-wrap { overflow-x: hidden; }
+  .project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 0 !important; }
+  .project-files-current-folder-grid .ui-grid-table thead { display: none; }
+  .project-files-current-folder-grid .ui-grid-table col:nth-child(2),
+  .project-files-current-folder-grid .ui-grid-table col:nth-child(3),
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(2),
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(3) { display: none; }
+  .project-files-current-folder-grid .ui-grid-table col:first-child { width: auto !important; }
+  .project-files-current-folder-grid .ui-grid-table col:last-child { width: 44px !important; }
+  .project-files-current-folder-grid .ui-grid-cell:first-child { width: auto !important; padding: 7px 6px 7px 10px; }
+  .project-files-current-folder-grid .ui-grid-cell:last-child { width: 44px !important; padding: 4px 5px; }
+  .project-file-name-action { min-height: 40px; }
+  .project-file-mobile-meta { display: block; }
 }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
 .connection-label { color: var(--app-muted); font-size: 12px; }
