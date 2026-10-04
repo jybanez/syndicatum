@@ -7,6 +7,7 @@ require_once __DIR__ . '/PortableBackupArchive.php';
 require_once __DIR__ . '/InAppRestorePolicy.php';
 require_once __DIR__ . '/RealtimeIntegration.php';
 require_once __DIR__ . '/ProjectFileRestoreTarget.php';
+require_once __DIR__ . '/AuthService.php';
 
 final class CurrentRestoreWorker
 {
@@ -59,6 +60,11 @@ final class CurrentRestoreWorker
             foreach($restoreTables as $table){self::identifier($table);$actual=(int)$pdo->query('SELECT COUNT(*) FROM `'.$table.'`')->fetchColumn();$expected=(int)$manifest['sql']['row_counts'][$table];if($actual!==$expected)throw new RuntimeException('Restored row count differs for '.$table.'.');if(!hash_equals($manifest['sql']['row_hashes'][$table],$this->tableRowHash($pdo,$table)))throw new RuntimeException('Restored row content differs for '.$table.'.');}
             if($hasProjectFiles){$this->assertProjectFileInventory($pdo,$projectEntries);if($projectTarget!==null)$projectTarget->verify($stagedProjects);}
             $this->assertPreservedReferences($pdo,$restoreTables,$clearTables);
+            (new AuthService($pdo))->audit((int)$raw['initiated_by_user_id'],'restore.completed','restore',$id,[
+                'scope'=>'user_generated_data','restored_table_count'=>count($restoreTables),'restored_row_count'=>$rows,
+                'restored_project_file_count'=>count($projectEntries),'project_file_verification'=>'count_size_sha256',
+                'database_cutover'=>'committed','project_file_cutover'=>'verified_exact_keys'
+            ]);
             $this->publish($this->jobs->progress($id,'Verifying restored data',100));
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');$pdo->commit();if($projectTarget!==null)$projectTarget->commit();
             $this->publish($this->jobs->complete($id,count($restoreTables),$rows,count($projectEntries)));

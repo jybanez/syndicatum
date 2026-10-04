@@ -326,6 +326,15 @@ try {
         'Current project-file restore did not complete: ' . (is_array($completedRestore) ? (string) $completedRestore['failure_summary'] : 'missing job'));
     mysql84BackupAssert($completedRestore['restored_project_file_count'] === 1,
         'Current restore evidence did not report the restored Project File count.');
+    $restoreAudit = $target->prepare("SELECT metadata_json FROM administrative_audit_events WHERE action = 'restore.completed' AND subject_type = 'restore' AND subject_id = ? ORDER BY id DESC LIMIT 1");
+    $restoreAudit->execute([$restoreJob['operation_id']]);
+    $restoreAuditMetadata = json_decode((string) $restoreAudit->fetchColumn(), true);
+    mysql84BackupAssert(is_array($restoreAuditMetadata)
+        && (int) $restoreAuditMetadata['restored_project_file_count'] === 1
+        && $restoreAuditMetadata['project_file_verification'] === 'count_size_sha256'
+        && $restoreAuditMetadata['database_cutover'] === 'committed'
+        && $restoreAuditMetadata['project_file_cutover'] === 'verified_exact_keys',
+        'Current restore did not commit Project File verification and cutover audit evidence.');
     $restoredProjectPath = $temporaryRoot . '/project-target/' . str_replace('/', DIRECTORY_SEPARATOR, $projectStorageKey);
     mysql84BackupAssert(is_file($restoredProjectPath)
         && filesize($restoredProjectPath) === strlen($projectBytes)
@@ -376,6 +385,7 @@ try {
         'current_project_file_format' => $currentManifest['format_version'],
         'current_project_file_count' => $completedRestore['restored_project_file_count'],
         'current_project_file_sha256' => $projectSha256,
+        'current_project_file_audit_evidence' => true,
         'current_message_attachment_preserved' => true,
         'canonical_public_path' => $canonicalPath,
         'canonical_public_link_byte_identical' => true,

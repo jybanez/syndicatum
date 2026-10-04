@@ -456,11 +456,22 @@ cancellation, partial failure, and uncertain-outcome recovery.
 - [x] Preserve every canonical public ID, association, and permanent URL.
 - [x] Keep a partial or failed file restore staged; do not label the combined
   database/file recovery successful.
-- [ ] Include file-storage verification and cutover evidence in the recovery
+- [x] Include file-storage verification and cutover evidence in the recovery
   report and audit history.
-- [ ] Exercise a complete backup/restore round trip in the supported Linux
+- [x] Exercise a complete backup/restore round trip in the supported Linux
   Docker/POSIX recovery environment and confirm the original public links work.
-- [ ] Exercise Windows backup creation using the configured local storage root.
+- [x] Exercise Windows backup creation using the configured local storage root.
+
+Recovery evidence update (October 4, 2026): the Windows PHP 7.4 portability
+job inventories a configured local storage root, streams its Project File into
+the format-3 ZIP, creates and authenticates the encrypted backup envelope, and
+verifies the recovered inventory. The Ubuntu/MySQL 8.4 recovery job drives the
+production format-3 producer and in-app restore worker with a multi-megabyte
+Project File and timeline attachment, verifies database/file counts, sizes,
+SHA-256, public ID, provider-neutral key, and association fidelity, then serves
+the exact pre-restore `/files/{public_id}` path and confirms byte-identical
+content after restore. A successful cutover records those verification counts
+and methods in the durable `restore.completed` administrative audit event.
 
 ### 9.3 Operational recovery cases
 
@@ -488,7 +499,7 @@ after cutover.
   release packages by accident.
 - [ ] Add focused unit, schema, API, browser surface, security, backup, restore,
   package, Windows, and Linux Docker acceptance coverage.
-- [ ] Run the complete repository CI matrix, including clean install, migration,
+- [x] Run the complete repository CI matrix, including clean install, migration,
   canonical release, webroot access, MySQL compatibility, encrypted backup
   round trip, and Docker source acceptance.
 - [x] Request Commercial Assessor review of the user promise, public-link copy,
@@ -521,9 +532,9 @@ after cutover.
 - [x] Cross-project listing, attachment, replacement, and deletion fail safely.
 - [x] Deletion makes the old URL clearly unavailable and retains the approved
   audit/tombstone evidence.
-- [ ] Complete backup and restore verify counts, sizes, and checksums for both
+- [x] Complete backup and restore verify counts, sizes, and checksums for both
   metadata and content.
-- [ ] Restored URLs are byte-for-byte and character-for-character identical to
+- [x] Restored URLs are byte-for-byte and character-for-character identical to
   the originals.
 - [x] Documentation plainly states that anyone with the link can access the
   file.
