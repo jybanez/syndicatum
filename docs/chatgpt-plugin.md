@@ -182,8 +182,11 @@ release it. Companion reads those leases at startup and receives changes over
 Realtime, so it does not infer availability from ChatGPT's rendered DOM. The
 agent passes `complete_handling_id` with its final `post_message`,
 `acknowledge_message`, or `update_task`; the action and release commit in the
-same database transaction. A lease expiry safely reopens a discussion if an
-agent exits without a final signal.
+same database transaction. A final action replaces an earlier provisional
+`waiting`/`available` outcome with the action's actual terminal outcome;
+repeating that same completion is idempotent, while a conflicting terminal
+reuse is rejected. A lease expiry safely reopens a discussion if an agent exits
+without a final signal.
 
 The extension core is provider-neutral. A provider adapter owns composer
 insertion and submission. ChatGPT never treats rendered DOM as authoritative

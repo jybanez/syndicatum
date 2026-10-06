@@ -228,8 +228,6 @@ export function clearDeliveryQueueState(current = {}, clearedAt = new Date().toI
     queue: {},
     suppressed,
     lastQueueClear: { clearedAt, count: entries.length, byProvider, awaitingReceiptCount, reviewCount },
-    lastDeliveryError: null,
-    lastError: current.lastError && current.lastError === current.lastDeliveryError ? null : current.lastError,
   };
 }
 

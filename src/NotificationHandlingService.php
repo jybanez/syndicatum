@@ -107,8 +107,17 @@ class NotificationHandlingService
                 (int) $access['participant_id'], (int) $access['identity']['agent']['authenticated_agent_id']]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
             if (!$row) { throw new RuntimeException('NOTIFICATION_HANDLING_NOT_FOUND'); }
-            if ($row['active_slot'] !== null || !in_array($row['state'], ['available', 'waiting'], true)) {
-                $state = $outcome === 'waiting' ? 'waiting' : 'available';
+            $state = $outcome === 'waiting' ? 'waiting' : 'available';
+            $alreadyCompleted = $row['active_slot'] === null
+                && $row['lease_expires_at'] === null
+                && $row['state'] === $state
+                && $row['completion_outcome'] === $outcome
+                && $row['completed_at'] !== null;
+            $terminalOutcomes = ['responded', 'acknowledged', 'task_updated', 'completed', 'blocked', 'failed'];
+            if (!$alreadyCompleted && in_array($row['completion_outcome'], $terminalOutcomes, true)) {
+                throw new RuntimeException('NOTIFICATION_HANDLING_OUTCOME_CONFLICT');
+            }
+            if (!$alreadyCompleted) {
                 $now = Db::now();
                 $update = $this->pdo->prepare(
                     'UPDATE notification_handling_leases SET state = ?, active_slot = NULL,

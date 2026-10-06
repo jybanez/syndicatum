@@ -116,20 +116,22 @@ test("clears the active queue into persistent no-replay tombstones", () => {
   assert.deepEqual(patch.lastQueueClear, {
     clearedAt, count: 2, byProvider: { chatgpt: 1, gemini: 1 }, awaitingReceiptCount: 1, reviewCount: 1,
   });
-  assert.equal(patch.lastDeliveryError, null);
-  assert.equal(patch.lastError, null);
+  assert.equal("lastDeliveryError" in patch, false);
+  assert.equal("lastError" in patch, false);
+  assert.equal(current.lastDeliveryError, deliveryError);
+  assert.equal(current.lastError, deliveryError);
   assert.equal(current.accessToken, "preserved");
   assert.deepEqual(current.bindings, [{ agent_id: 41 }]);
 });
 
-test("queue clear preserves an unrelated top-level error", () => {
+test("queue clear preserves unrelated delivery and top-level errors", () => {
   const patch = clearDeliveryQueueState({
     queue: { one: { provider: "chatgpt", message: { id: 1 } } },
     lastDeliveryError: "delivery failed",
     lastError: "server unreachable",
   }, "2026-10-07T01:00:00Z");
-  assert.equal(patch.lastDeliveryError, null);
-  assert.equal(patch.lastError, "server unreachable");
+  assert.equal("lastDeliveryError" in patch, false);
+  assert.equal("lastError" in patch, false);
 });
 
 test("serializes deliveries by browser discussion instead of agent identity", () => {

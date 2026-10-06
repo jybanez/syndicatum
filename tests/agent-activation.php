@@ -8,6 +8,7 @@ require_once dirname(__DIR__) . '/src/AgentActivationService.php';
 require_once dirname(__DIR__) . '/src/ConnectorDeviceService.php';
 require_once dirname(__DIR__) . '/src/DiscussionBindingIntentService.php';
 require_once dirname(__DIR__) . '/src/ProjectRepository.php';
+require_once dirname(__DIR__) . '/src/ProjectTaskService.php';
 require_once dirname(__DIR__) . '/src/NotificationHandlingService.php';
 
 class AgentActivationTests
@@ -179,6 +180,69 @@ try {
             WHERE event_type = 'syndicatum.notification.handling_changed' ORDER BY id DESC LIMIT 1")->fetch();
         $suite->same(MessageOutbox::EVENT_NOTIFICATION_HANDLING_CHANGED, $handlingEvent['event_type']);
         $suite->same(false, json_decode($handlingEvent['payload_json'], true)['handling']['busy']);
+        $ownerAccess = [
+            'project_id' => $project['id'], 'participant_id' => $ownerParticipant,
+            'project_status' => 'active', 'role' => 'owner',
+            'identity' => ['kind' => 'human', 'user' => ['id' => $owner['id']]],
+        ];
+        $availableForResponse = $repository->createMessage($ownerAccess, [
+            'body' => 'Response after an early available release.',
+            'direct_participant_ids' => [$chatGptBindings[0]['participant_id']],
+        ]);
+        $repository->confirmNotificationReceipt($agentAccess, $availableForResponse['message']['id'],
+            $availableForResponse['message']['project_sequence']);
+        $availableHandling = $handlingService->setState($agentAccess,
+            $availableForResponse['message']['id'], $availableForResponse['message']['project_sequence'], 'available');
+        $suite->same('no_action', $availableHandling['completion_outcome']);
+        $responseAfterReleaseInput = [
+            'body' => 'The later final response records its actual outcome.',
+            'broadcast' => true,
+            'idempotency_key' => 'handling-response-after-available',
+            'complete_handling_id' => $availableHandling['handling_id'],
+        ];
+        $responseAfterRelease = $repository->createMessage($agentAccess, $responseAfterReleaseInput);
+        $suite->same('responded', $responseAfterRelease['notification_handling']['completion_outcome']);
+        $duplicateResponseAfterRelease = $repository->createMessage($agentAccess, $responseAfterReleaseInput);
+        $suite->same(false, $duplicateResponseAfterRelease['created']);
+        $suite->same('responded', $duplicateResponseAfterRelease['notification_handling']['completion_outcome']);
+        $suite->throws(function () use ($repository, $agentAccess, $availableForResponse, $availableHandling) {
+            $repository->acknowledge($agentAccess, $availableForResponse['message']['id'],
+                $availableHandling['handling_id']);
+        }, 'NOTIFICATION_HANDLING_OUTCOME_CONFLICT');
+
+        $availableForAcknowledgement = $repository->createMessage($ownerAccess, [
+            'body' => 'Acknowledgement after an early available release.',
+            'direct_participant_ids' => [$chatGptBindings[0]['participant_id']],
+        ]);
+        $repository->confirmNotificationReceipt($agentAccess, $availableForAcknowledgement['message']['id'],
+            $availableForAcknowledgement['message']['project_sequence']);
+        $ackHandling = $handlingService->setState($agentAccess,
+            $availableForAcknowledgement['message']['id'], $availableForAcknowledgement['message']['project_sequence'], 'available');
+        $acknowledgedAfterRelease = $repository->acknowledge($agentAccess,
+            $availableForAcknowledgement['message']['id'], $ackHandling['handling_id']);
+        $suite->same('acknowledged', $acknowledgedAfterRelease['notification_handling']['completion_outcome']);
+
+        $waitingForTask = $repository->createMessage($ownerAccess, [
+            'body' => 'Task update after an early waiting release.',
+            'direct_participant_ids' => [$chatGptBindings[0]['participant_id']],
+        ]);
+        $repository->confirmNotificationReceipt($agentAccess, $waitingForTask['message']['id'],
+            $waitingForTask['message']['project_sequence']);
+        $waitingHandling = $handlingService->setState($agentAccess,
+            $waitingForTask['message']['id'], $waitingForTask['message']['project_sequence'], 'waiting');
+        $suite->same('waiting', $waitingHandling['completion_outcome']);
+        $tasks = new ProjectTaskService($pdo);
+        $handlingTask = $tasks->create($agentAccess, [
+            'title' => 'Record the final handling outcome',
+            'assignee_participant_id' => $chatGptBindings[0]['participant_id'],
+        ]);
+        $handlingTask = $tasks->update($agentAccess, $handlingTask['id'], [
+            'version' => $handlingTask['version'],
+            'status' => 'in_progress',
+            'complete_handling_id' => $waitingHandling['handling_id'],
+        ]);
+        $suite->same('task_updated', $handlingTask['_notification_handling']['completion_outcome']);
+        $suite->same('available', $handlingTask['_notification_handling']['state']);
         $suite->throws(function () use ($service, $project, $agent, $owner) {
             $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
                 'enabled' => true, 'provider' => 'chatgpt', 'activation_driver' => 'responses_api',

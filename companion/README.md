@@ -90,7 +90,8 @@ Realtime repeat cannot submit the cleared message again. The operation preserves
 the authorized account, device, and discussion bindings, verifies that the queue
 count has not changed since the confirmation dialog opened, and records a
 provider/state summary of the clear. It does not mark messages delivered on the
-server.
+server or clear delivery/aggregate health errors whose origin cannot be proven
+to belong to the retired queue set.
 
 Version 0.10.19 isolates a rebound ChatGPT discussion from unresolved delivery
 history without discarding or replaying that history. Recovery keeps any
