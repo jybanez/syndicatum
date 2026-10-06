@@ -114,9 +114,42 @@ try {
         $suite->throws(function () use ($connector, $owner, $project, $agent, $created) {
             $connector->submitAgentReply(['user_id' => $owner['id']], 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id'], 'Browser capture must not post as ChatGPT');
         });
-        $connector->markNotificationDelivered(['user_id' => $owner['id']], 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
+        $device = ['user_id' => $owner['id']];
+        $status = $connector->notificationDeliveryStatus($device, 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
+        $suite->same(false, $status['received']);
+        $agentAccess = [
+            'project_id' => $project['id'],
+            'participant_id' => $chatGptBindings[0]['participant_id'],
+            'project_status' => 'active',
+            'role' => 'agent',
+            'identity' => ['kind' => 'agent', 'agent' => ['authenticated_agent_id' => $agent['agent_id']]],
+        ];
+        $repository = new ProjectRepository($pdo);
+        $pdo->prepare('INSERT INTO system_settings (setting_key, value_json, updated_at) VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE value_json = VALUES(value_json), updated_at = VALUES(updated_at)')
+            ->execute(['realtime.enabled', 'true', Db::now()]);
+        $suite->throws(function () use ($repository, $agentAccess, $created) {
+            $repository->confirmNotificationReceipt($agentAccess, $created['message']['id'], $created['message']['project_sequence'] + 1);
+        }, 'MESSAGE_SEQUENCE_MISMATCH');
+        $receipt = $repository->confirmNotificationReceipt($agentAccess, $created['message']['id'], $created['message']['project_sequence']);
+        $suite->same(true, $receipt['received']);
+        $suite->same(true, $receipt['created']);
         $suite->same(0, count($connector->pendingNotifications(['user_id' => $owner['id']], 'chatgpt')));
-        $connector->markNotificationDelivered(['user_id' => $owner['id']], 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
+        $status = $connector->notificationDeliveryStatus($device, 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
+        $suite->same(true, $status['received']);
+        $suite->same($created['message']['project_sequence'], $status['project_sequence']);
+        $acknowledged = $pdo->query('SELECT acknowledged_at FROM message_addressees WHERE message_id = ' . (int) $created['message']['id'] . ' AND participant_id = ' . (int) $chatGptBindings[0]['participant_id'])->fetchColumn();
+        $suite->same(null, $acknowledged);
+        $event = $pdo->query("SELECT event_type, payload_json FROM message_events_outbox
+            WHERE event_type = 'syndicatum.notification.received' ORDER BY id DESC LIMIT 1")->fetch();
+        $suite->same(MessageOutbox::EVENT_NOTIFICATION_RECEIVED, $event['event_type']);
+        $eventPayload = json_decode($event['payload_json'], true);
+        $suite->same($created['message']['id'], $eventPayload['receipt']['message_id']);
+        $suite->same($created['message']['project_sequence'], $eventPayload['receipt']['project_sequence']);
+        $eventCount = (int) $pdo->query("SELECT COUNT(*) FROM message_events_outbox WHERE event_type = 'syndicatum.notification.received'")->fetchColumn();
+        $duplicate = $repository->confirmNotificationReceipt($agentAccess, $created['message']['id'], $created['message']['project_sequence']);
+        $suite->same(false, $duplicate['created']);
+        $suite->same($eventCount, (int) $pdo->query("SELECT COUNT(*) FROM message_events_outbox WHERE event_type = 'syndicatum.notification.received'")->fetchColumn());
         $suite->throws(function () use ($service, $project, $agent, $owner) {
             $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
                 'enabled' => true, 'provider' => 'chatgpt', 'activation_driver' => 'responses_api',

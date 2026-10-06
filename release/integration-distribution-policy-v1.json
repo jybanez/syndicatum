@@ -1,13 +1,13 @@
 {
   "schema_version": 2,
   "policy_version": "1.0.0",
-  "assessed_on": "2026-10-04",
+  "assessed_on": "2026-10-06",
   "production_rule": "A channel is production only when production_eligible is true, it has a published identifier, and every required gate is passed with retained acceptance evidence for the exact published artifact.",
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
     "codex_plugin": "0.2.1",
-    "companion": "0.10.7"
+    "companion": "0.10.18"
   },
   "channels": [
     {
@@ -95,7 +95,7 @@
       ]
     },
     "companion": {
-      "tested_source_version": "0.10.7",
+      "tested_source_version": "0.10.18",
       "production_range": null,
       "providers": ["ChatGPT web", "Gemini web"]
     },

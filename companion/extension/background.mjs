@@ -1,4 +1,4 @@
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, DELIVERY_REVIEW_STATE, deliveryKey, deliveryReviewItems, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
+import { applyDeliveryReceipt, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, DELIVERY_REVIEW_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -346,7 +346,7 @@ async function recover(bindings) {
       if (binding && binding.provider === provider) {
         const queued = recoveryItem(binding, item.message);
         await stage(queued);
-        shards.add(deliveryShard(queued));
+        shards.add(deliveryShardKey(queued));
       }
     }
   }
@@ -355,7 +355,7 @@ async function recover(bindings) {
 
 async function enqueue(item) {
   await stage(item);
-  return drain(deliveryShard(item));
+  return drain(deliveryShardKey(item));
 }
 
 async function stage(item) {
@@ -372,23 +372,40 @@ async function stage(item) {
 
 async function quarantineLegacyDeliveryQueue() {
   return updateDeliveryState(current => {
-    if (Number(current.deliveryQueueVersion || 0) >= 2) return {};
+    const version = Number(current.deliveryQueueVersion || 0);
+    if (version >= 7) return {};
     const queue = { ...(current.queue || {}) };
-    const reviewRequestedAt = new Date().toISOString();
-    for (const [key, item] of Object.entries(queue)) {
-      queue[key] = {
-        ...item,
-        deliveryState: DELIVERY_REVIEW_STATE,
-        reviewReason: item.reviewReason || "upgrade_reconciliation_required",
-        reviewRequestedAt: item.reviewRequestedAt || reviewRequestedAt,
-      };
+    if (version < 2) {
+      const reviewRequestedAt = new Date().toISOString();
+      for (const [key, item] of Object.entries(queue)) {
+        queue[key] = {
+          ...item,
+          deliveryState: DELIVERY_REVIEW_STATE,
+          reviewReason: item.reviewReason || "upgrade_reconciliation_required",
+          reviewRequestedAt: item.reviewRequestedAt || reviewRequestedAt,
+        };
+      }
     }
-    return { queue, deliveryQueueVersion: 2 };
+    for (const [key, item] of Object.entries(queue)) {
+      if (item.provider === "chatgpt" && item.deliveryState === "submitting") {
+        queue[key] = { ...item, deliveryState: DELIVERY_AWAITING_RECEIPT_STATE };
+      }
+      if (String(item.lastError || "") === "provider_error"
+        && item.deliveryState !== DELIVERY_AWAITING_RECEIPT_STATE) {
+        queue[key] = {
+          ...queue[key],
+          deliveryState: DELIVERY_REVIEW_STATE,
+          reviewReason: item.reviewReason || "provider_exception",
+          reviewRequestedAt: item.reviewRequestedAt || new Date().toISOString(),
+        };
+      }
+    }
+    return {
+      queue,
+      deliveryQueueVersion: 7,
+      ...awaitingReceiptTransportErrorPatch(current, queue),
+    };
   });
-}
-
-function deliveryShard(item) {
-  return `${item.provider}:${item.project_id}:${item.agent_id}`;
 }
 
 async function updateDeliveryState(transform) {
@@ -401,10 +418,53 @@ async function updateDeliveryState(transform) {
   return updated;
 }
 
+async function settleDeliveryReceipt(receipt, source = "realtime") {
+  let settlement = null;
+  await updateDeliveryState(current => {
+    settlement = applyDeliveryReceipt(current, receipt);
+    return settlement.patch;
+  });
+  if (!settlement?.settled) return false;
+  const completedAt = String(receipt.received_at || new Date().toISOString());
+  await recordDeliveryDiagnostic({
+    key: settlement.key,
+    provider: settlement.item.provider,
+    projectId: settlement.item.project_id,
+    agentId: settlement.item.agent_id,
+    messageId: settlement.item.message.id,
+    queuedAt: settlement.item.queuedAt || null,
+    startedAt: settlement.item.submissionStartedAt || null,
+    completedAt,
+    attempts: Number(settlement.item.attempts || 0) + 1,
+    outcome: "agent_receipt_confirmed",
+    confirmation: `syndicatum_mcp_receipt_${source}`,
+  });
+  return true;
+}
+
+async function reconcileDeliveryReceipt(item) {
+  const query = new URLSearchParams({
+    provider: item.provider,
+    project_id: String(item.project_id),
+    agent_id: String(item.agent_id),
+    message_id: String(item.message.id),
+  });
+  const status = await api(`/api/v1/connector-notification-deliveries.php?${query}`);
+  if (!status?.received) return false;
+  return settleDeliveryReceipt({
+    provider: item.provider,
+    project_id: item.project_id,
+    agent_id: item.agent_id,
+    message_id: item.message.id,
+    project_sequence: item.message.project_sequence,
+    received_at: status.received_at,
+  }, "recovery");
+}
+
 async function drain(shard = null) {
   if (shard === null) {
     const current = await state();
-    const shards = [...new Set(Object.values(current.queue || {}).map(deliveryShard))];
+    const shards = [...new Set(Object.values(current.queue || {}).map(deliveryShardKey))];
     await Promise.all(shards.map(value => drain(value)));
     return;
   }
@@ -412,17 +472,21 @@ async function drain(shard = null) {
   const running = (async () => {
     while (true) {
       const current = await state();
-      const entry = Object.entries(current.queue || {}).find(([, candidate]) => deliveryShard(candidate) === shard);
+      const entry = Object.entries(current.queue || {}).find(([, candidate]) => deliveryShardKey(candidate) === shard);
       if (!entry) return;
       const [key, queuedItem] = entry;
       if (queuedItem.deliveryState === DELIVERY_REVIEW_STATE) return;
+      if (["submitting", DELIVERY_AWAITING_RECEIPT_STATE].includes(queuedItem.deliveryState)) {
+        await reconcileDeliveryReceipt(queuedItem);
+        return;
+      }
       let item = queuedItem;
       const startedAt = new Date().toISOString();
       try {
         let result = null;
         if (item.provider === "gemini") {
           result = await deliver(item);
-          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { code: result?.code || null, retryable: result?.retryable !== false });
+          if (!result?.ok) throw Object.assign(new Error(result?.message || result?.code || "Delivery failed."), { code: result?.code || null, retryable: result?.retryable !== false });
           const response = String(result.responseText || "").trim();
           if (!response) throw new Error("Gemini completed without a capturable response.");
           await api("/api/v1/connector-agent-replies.php", {
@@ -430,15 +494,30 @@ async function drain(shard = null) {
             body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id, response }),
           });
         } else if (!item.browserDeliveredAt) {
+          const submissionStartedAt = new Date().toISOString();
+          if (item.provider === "chatgpt") {
+            item = { ...item, submissionStartedAt, deliveryState: "submitting" };
+            await updateDeliveryState(current => {
+              const queue = { ...(current.queue || {}) };
+              if (queue[key]) queue[key] = { ...queue[key], submissionStartedAt, deliveryState: "submitting" };
+              return { queue };
+            });
+          }
           const result = await deliver(item);
-          if (!result?.ok) throw Object.assign(new Error(result?.code || "Delivery failed."), { code: result?.code || null, retryable: result?.retryable !== false });
+          if (!result?.ok) throw Object.assign(new Error(result?.message || result?.code || "Delivery failed."), { code: result?.code || null, retryable: result?.retryable !== false });
           const browserDeliveredAt = new Date().toISOString();
-          item = { ...item, browserDeliveredAt, browserDelivery: result };
+          item = { ...item, browserDeliveredAt, browserDelivery: result,
+            ...(item.provider === "chatgpt" ? { deliveryState: DELIVERY_AWAITING_RECEIPT_STATE } : {}) };
           await updateDeliveryState(current => {
             const queue = { ...(current.queue || {}) };
-            if (queue[key]) queue[key] = { ...queue[key], browserDeliveredAt, browserDelivery: result };
+            if (queue[key]) queue[key] = { ...queue[key], browserDeliveredAt, browserDelivery: result,
+              ...(item.provider === "chatgpt" ? { deliveryState: DELIVERY_AWAITING_RECEIPT_STATE } : {}) };
             return { queue };
           });
+        }
+        if (item.provider === "chatgpt") {
+          await reconcileDeliveryReceipt(item);
+          return;
         }
         if (item.provider !== "gemini") {
           await api("/api/v1/connector-notification-deliveries.php", { method: "POST", body: JSON.stringify({ provider: item.provider, project_id: item.project_id, agent_id: item.agent_id, message_id: item.message.id }) });
@@ -465,6 +544,10 @@ async function drain(shard = null) {
         });
       } catch (error) {
         const deliveryError = `Delivery pending: ${String(error?.message || error)}`;
+        const preSubmissionFailure = item.provider === "chatgpt" && [
+          "wrong_discussion", "discussion_busy", "login_required", "composer_not_found", "send_unavailable",
+        ].includes(String(error?.code || error?.message || ""));
+        const awaitingReceipt = item.provider === "chatgpt" && item.submissionStartedAt && !preSubmissionFailure;
         const requiresReview = isUncertainDeliveryFailure(error);
         const failedAt = new Date().toISOString();
         await updateDeliveryState(current => {
@@ -474,10 +557,34 @@ async function drain(shard = null) {
             attempts: Number(queue[key].attempts || 0) + 1,
             lastAttemptAt: failedAt,
             lastError: String(error?.message || error),
-            ...(requiresReview ? { deliveryState: DELIVERY_REVIEW_STATE, reviewRequestedAt: failedAt } : {}),
+            ...(awaitingReceipt ? { deliveryState: DELIVERY_AWAITING_RECEIPT_STATE }
+              : preSubmissionFailure ? { deliveryState: "pending", submissionStartedAt: null }
+                : requiresReview ? { deliveryState: DELIVERY_REVIEW_STATE, reviewRequestedAt: failedAt } : {}),
           };
-          return { queue, lastDeliveryError: deliveryError, lastError: deliveryError };
+          return {
+            queue,
+            // Once a ChatGPT submission may have occurred, the MCP receipt is
+            // authoritative. Preserve unrelated health errors and clear only
+            // stale channel-closure fields; never invite an automatic replay.
+            ...deliveryFailureHealthPatch(current, queue, awaitingReceipt, deliveryError),
+          };
         });
+        if (awaitingReceipt) {
+          await recordDeliveryDiagnostic({
+            key,
+            provider: item.provider,
+            projectId: item.project_id,
+            agentId: item.agent_id,
+            messageId: item.message.id,
+            queuedAt: item.queuedAt || null,
+            startedAt,
+            completedAt: failedAt,
+            attempts: Number(item.attempts || 0) + 1,
+            outcome: DELIVERY_AWAITING_RECEIPT_STATE,
+            confirmation: "browser_submission_outcome_uncertain",
+          });
+          return;
+        }
         if (requiresReview) {
           await recordDeliveryDiagnostic({
             key,
@@ -510,7 +617,7 @@ async function resolveDeliveryReview(key, resolution) {
     const queue = { ...(current.queue || {}) };
     const item = queue[key];
     if (!item || item.deliveryState !== DELIVERY_REVIEW_STATE) throw new Error("This delivery no longer requires review. Refresh Companion status.");
-    shard = deliveryShard(item);
+    shard = deliveryShardKey(item);
     if (resolution === "discard_stale") {
       delete queue[key];
       return { queue, lastDeliveryError: null, lastError: null };
@@ -617,6 +724,9 @@ async function connectProject(projectId) {
           if (bindingAcceptsMessage(binding, envelope.payload.message)) deliveries.push(enqueue(recoveryItem(binding, envelope.payload.message)));
         }
         await Promise.allSettled(deliveries);
+      }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.notification.received" && envelope.payload?.receipt) {
+        await settleDeliveryReceipt(envelope.payload.receipt, "realtime");
       }
     };
     socket.onclose = () => {

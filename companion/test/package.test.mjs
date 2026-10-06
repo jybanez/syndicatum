@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.7");
+  assert.equal(manifest.version, "0.10.18");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -108,23 +108,32 @@ test("recovery and delivery are isolated so one participant cannot block the oth
   assert.match(source, /const drainRunning = new Map\(\)/);
   assert.match(source, /Promise\.all\(Object\.keys\(PROVIDERS\)\.map/);
   assert.match(source, /Promise\.all\(\[\.\.\.shards\]\.map\(shard => drain\(shard\)\)\)/);
-  assert.match(source, /deliveryShard\(candidate\) === shard/);
+  assert.match(source, /deliveryShardKey\(candidate\) === shard/);
+  assert.match(source, /Object\.values\(current\.queue \|\| \{\}\)\.map\(deliveryShardKey\)/);
+  assert.doesNotMatch(source, /\bdeliveryShard\b/);
+  assert.match(source, /reviewReason: item\.reviewReason \|\| "provider_exception"/);
   assert.match(source, /Promise\.allSettled\(deliveries\)/);
   assert.doesNotMatch(source, /let drainRunning = null/);
 });
 
-test("uncertain browser submissions pause their shard until explicit operator review", async () => {
+test("ChatGPT submissions wait for an explicit MCP receipt without automatic replay", async () => {
   const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
   const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
   const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
   assert.match(background, /quarantineLegacyDeliveryQueue/);
-  assert.match(background, /deliveryQueueVersion: 2/);
+  assert.match(background, /deliveryQueueVersion: 7/);
+  assert.match(background, /syndicatum\.notification\.received/);
+  assert.match(background, /reconcileDeliveryReceipt/);
+  assert.match(background, /DELIVERY_AWAITING_RECEIPT_STATE/);
   assert.match(background, /upgrade_reconciliation_required/);
   assert.match(background, /deliveryState === DELIVERY_REVIEW_STATE/);
   assert.match(background, /if \(requiresReview\)[\s\S]*?return;[\s\S]*?chrome\.alarms\.create\(RETRY_ALARM/);
   assert.match(background, /operator_confirmed_exact_user_turn/);
   assert.match(background, /operatorRetryAuthorizedAt/);
   assert.match(background, /queue: prioritizeDeliveryReview\(queue, key, resolved\)/);
+  assert.match(background, /awaitingReceiptTransportErrorPatch/);
+  assert.match(background, /deliveryFailureHealthPatch\(current, queue, awaitingReceipt, deliveryError\)/);
+  assert.match(background, /result\?\.message \|\| result\?\.code/);
   assert.match(html, /id="delivery-review"/);
   assert.match(html, /Copy safe review metadata/);
   assert.match(popup, /syndicatum\.resolve-delivery-review/);
@@ -182,25 +191,25 @@ test("release archives are deterministic and updates are recoverable", async () 
   assert.doesNotMatch(updater.match(/param\([\s\S]*?\n\)/)?.[0] || "", /\$MyInvocation/);
 });
 
-test("ChatGPT adapter confirms the uniquely identified injected turn without capturing its response", async () => {
+test("ChatGPT adapter submits through the composer without inspecting rendered turns", async () => {
   const source = await readFile(new URL("providers/chatgpt.js", extensionUrl), "utf8");
-  assert.match(source, /matchingUserTurnCount/);
-  assert.match(source, /notificationIdentity/);
-  assert.match(source, /project.*agent.*message.*sequence/s);
-  assert.match(source, /filter\(isVisibleTurn\)/);
-  assert.match(source, /checkVisibility\(\{ checkOpacity: true, checkVisibilityCSS: true \}\)/);
-  assert.match(source, /\[hidden\], \[aria-hidden='true'\], \[inert\]/);
-  assert.match(source, /new_notification_turn/);
-  assert.match(source, /Date\.now\(\) \+ 30000/);
+  assert.match(source, /submitted_awaiting_agent_receipt/);
+  assert.match(source, /send\.click\(\)/);
+  assert.doesNotMatch(source, /querySelectorAll/);
+  assert.doesNotMatch(source, /matchingUserTurnCount|notificationIdentity|isVisibleTurn/);
   assert.doesNotMatch(source, /waitForResponse/);
   assert.doesNotMatch(source, /responseText: captured/);
-  assert.doesNotMatch(source, /userTurnCount\(\) > before/);
 });
 
 test("Gemini adapter confirms the exact injected turn", async () => {
   const source = await readFile(new URL("providers/gemini.js", extensionUrl), "utf8");
   assert.match(source, /registry\.gemini/);
-  assert.match(source, /matchingUserTurnCount/);
+  assert.match(source, /matchingUserTurns/);
+  assert.match(source, /responseAfterUserTurn/);
+  assert.match(source, /compareDocumentPosition/);
+  assert.match(source, /Node\.DOCUMENT_POSITION_FOLLOWING/);
+  assert.match(source, /!nextUserTurn \|\| follows\(nextUserTurn, turn\)/);
+  assert.doesNotMatch(source, /assistantTurns\(\)\[minimumIndex\]|beforeResponses|responseIndex/);
   assert.match(source, /new_exact_user_turn/);
   assert.match(source, /waitForResponse/);
   assert.match(source, /responseText: captured/);

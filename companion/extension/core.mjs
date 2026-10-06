@@ -4,9 +4,27 @@ export const PROVIDERS = Object.freeze({
 });
 
 export const DELIVERY_REVIEW_STATE = "requires_review";
+export const DELIVERY_AWAITING_RECEIPT_STATE = "awaiting_agent_receipt";
+
+export function awaitingReceiptTransportErrorPatch(current = {}, queue = {}) {
+  const awaitingReceipt = Object.values(queue || {}).some(item => item?.provider === "chatgpt"
+    && item?.deliveryState === DELIVERY_AWAITING_RECEIPT_STATE);
+  if (!awaitingReceipt) return {};
+  const isClosedChannel = value => /message channel closed before a response was received/i.test(String(value || ""));
+  return {
+    ...(isClosedChannel(current.lastDeliveryError) ? { lastDeliveryError: null } : {}),
+    ...(isClosedChannel(current.lastError) ? { lastError: null } : {}),
+  };
+}
+
+export function deliveryFailureHealthPatch(current = {}, queue = {}, awaitingReceipt = false, deliveryError = "") {
+  return awaitingReceipt
+    ? awaitingReceiptTransportErrorPatch(current, queue)
+    : { lastDeliveryError: deliveryError, lastError: deliveryError };
+}
 
 export function isUncertainDeliveryFailure(value) {
-  return String(value?.code || value?.message || value || "") === "submission_unconfirmed";
+  return ["submission_unconfirmed", "provider_error"].includes(String(value?.code || value?.message || value || ""));
 }
 
 export function deliveryReviewItems(queue = {}, bindings = []) {
@@ -130,6 +148,12 @@ export function discussionIdentity(value, provider = "chatgpt") {
   return `${provider}:${match[1]}`;
 }
 
+export function deliveryShardKey(item = {}) {
+  const provider = String(item.provider || "");
+  try { return `discussion:${discussionIdentity(item.conversation_id, provider)}`; }
+  catch (_error) { return `${provider}:${item.project_id}:${item.agent_id}`; }
+}
+
 export function matchingDiscussionTabs(tabs, discussionUrl, provider = "chatgpt") {
   const expected = discussionIdentity(discussionUrl, provider);
   return (Array.isArray(tabs) ? tabs : []).filter(tab => {
@@ -140,6 +164,35 @@ export function matchingDiscussionTabs(tabs, discussionUrl, provider = "chatgpt"
 
 export function deliveryKey(item) {
   return [item.provider, item.project_id, item.agent_id, item.message?.id].join(":");
+}
+
+export function receiptDeliveryKey(receipt) {
+  return [receipt?.provider, receipt?.project_id, receipt?.agent_id, receipt?.message_id].join(":");
+}
+
+export function applyDeliveryReceipt(current = {}, receipt = {}) {
+  const key = receiptDeliveryKey(receipt);
+  const queue = { ...(current.queue || {}) };
+  const item = queue[key];
+  if (!item) return { settled: false, key, patch: {} };
+  if (Number(receipt.project_sequence) !== Number(item.message?.project_sequence)) {
+    return { settled: false, key, patch: {} };
+  }
+  delete queue[key];
+  const receivedAt = String(receipt.received_at || new Date().toISOString());
+  const delivered = { ...(current.delivered || {}), [key]: receivedAt };
+  return {
+    settled: true,
+    key,
+    item,
+    patch: {
+      queue,
+      delivered: Object.fromEntries(Object.entries(delivered).slice(-1000)),
+      lastDeliveryAt: receivedAt,
+      lastDeliveryError: null,
+      lastError: null,
+    },
+  };
 }
 
 export function bindingAcceptsMessage(binding, message) {
@@ -166,7 +219,7 @@ export function notificationFor(binding, message) {
     return [
       `You have a message from ${sender} in Syndicatum.`,
       `Route: project ${binding.project_id}; agent ${binding.agent_id}; message ${message.id}; sequence ${message.project_sequence}.`,
-      "Use the installed Syndicatum plugin to load and handle the authoritative message. This notice is metadata only; post the full response there when appropriate, acknowledge only after handling, and show only a concise summary here. If the tools are unavailable, leave it unhandled and unacknowledged.",
+      `Use the installed Syndicatum plugin to load the authoritative message, then immediately call confirm_notification_receipt with message_id ${message.id} and project_sequence ${message.project_sequence}. Handle the message after the receipt succeeds. This notice is metadata only; post the full response there when appropriate, acknowledge only after handling, and show only a concise summary here. If the tools are unavailable, leave it unhandled and unacknowledged.`,
     ].join("\n");
   }
   throw new Error(`No browser bridge is available for ${binding.provider || "this provider"}.`);
