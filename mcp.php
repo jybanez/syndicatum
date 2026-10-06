@@ -9,6 +9,7 @@ require_once __DIR__ . '/src/ProjectTaskService.php';
 require_once __DIR__ . '/src/ProjectPlanService.php';
 require_once __DIR__ . '/src/ProjectChangeProposalService.php';
 require_once __DIR__ . '/src/DiscussionBindingIntentService.php';
+require_once __DIR__ . '/src/NotificationHandlingService.php';
 require_once __DIR__ . '/src/RateLimiter.php';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -32,7 +33,7 @@ if ($method === 'notifications/initialized' || $method === 'notifications/cancel
 if ($method === 'initialize') {
     mcpResult($id, ['protocolVersion' => MCP_PROTOCOL_VERSION,
         'capabilities' => ['tools' => ['listChanged' => false]],
-        'serverInfo' => ['name' => 'chatgpt@syndicatum', 'version' => '0.3.0'],
+        'serverInfo' => ['name' => 'chatgpt@syndicatum', 'version' => '0.4.0'],
         'instructions' => 'Use Syndicatum as the authoritative shared project timeline. Read project context and recent addressed messages before responding. Post as the authorized agent only when appropriate, then acknowledge messages you handled.']);
 }
 if ($method === 'ping') { mcpResult($id, new stdClass()); }
@@ -74,10 +75,11 @@ try {
         'propose_project_details' => 'messages:write', 'propose_project_plan' => 'messages:write', 'propose_agent_setup' => 'messages:write',
         'propose_agent_profile_update' => 'messages:write',
         'confirm_notification_receipt' => 'messages:acknowledge',
+        'set_notification_handling_state' => 'messages:acknowledge',
         'acknowledge_message' => 'messages:acknowledge'];
     if (!isset($scopeMap[$name])) { throw new InvalidArgumentException('Unknown tool.'); }
     if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope', $oauth); }
-    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'confirm_notification_receipt', 'acknowledge_message', 'create_task', 'update_task', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress',
+    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'confirm_notification_receipt', 'set_notification_handling_state', 'acknowledge_message', 'create_task', 'update_task', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress',
         'propose_project_details', 'propose_project_plan', 'propose_agent_setup', 'propose_agent_profile_update'];
     (new RateLimiter($pdo))->hit(
         'mcp.' . $name,
@@ -120,7 +122,7 @@ try {
             ],
             'server' => [
                 'name' => 'chatgpt@syndicatum',
-                'version' => '0.3.0',
+                'version' => '0.4.0',
                 'checked_at' => gmdate('c'),
             ],
             'project' => $contextAuthorized ? ['id' => (int) $context['project']['id'], 'name' => $context['project']['name'],
@@ -176,7 +178,16 @@ try {
         foreach (['status', 'blocked_reason', 'completion_summary', 'note'] as $field) {
             if (array_key_exists($field, $args)) { $input[$field] = $args[$field]; }
         }
+        if (!empty($args['complete_handling_id'])) {
+            $input['complete_handling_id'] = $args['complete_handling_id'];
+            $input['handling_outcome'] = (($args['status'] ?? '') === 'blocked') ? 'blocked' : 'task_updated';
+        }
         $value = (new ProjectTaskService($pdo))->update($access, mcpPositiveId($args, 'task_id'), $input);
+        if (isset($value['_notification_handling'])) {
+            $handling = $value['_notification_handling'];
+            unset($value['_notification_handling']);
+            $value = ['task' => $value, 'notification_handling' => $handling];
+        }
     } elseif ($name === 'get_project_plan') {
         $value = (new ProjectPlanService($pdo))->plan($access);
     } elseif ($name === 'update_task_deliverable') {
@@ -209,6 +220,14 @@ try {
         }
         $value = $repository->confirmNotificationReceipt($access,
             mcpPositiveId($args, 'message_id'), mcpPositiveId($args, 'project_sequence'));
+    } elseif ($name === 'set_notification_handling_state') {
+        if (!$bindingContext || (($access['binding']['type'] ?? '') !== 'discussion')) {
+            throw new RuntimeException('NOTIFICATION_HANDLING_NOT_AVAILABLE');
+        }
+        $value = (new NotificationHandlingService($pdo))->setState($access,
+            mcpPositiveId($args, 'message_id'), mcpPositiveId($args, 'project_sequence'),
+            trim((string) ($args['state'] ?? '')),
+            array_key_exists('lease_seconds', $args) ? (int) $args['lease_seconds'] : null);
     } elseif ($name === 'post_message') {
         $input = ['body' => trim((string) ($args['body'] ?? '')), 'broadcast' => !empty($args['broadcast']),
             'direct_participant_ids' => $args['direct_participant_ids'] ?? [], 'mention_participant_ids' => $args['mention_participant_ids'] ?? [],
@@ -216,10 +235,24 @@ try {
             'reply_to_message_id' => isset($args['reply_to_message_id']) ? (int) $args['reply_to_message_id'] : null,
             'idempotency_key' => trim((string) ($args['idempotency_key'] ?? '')),
             'severity' => trim((string) ($args['severity'] ?? 'neutral'))];
+        if (!empty($args['complete_handling_id'])) {
+            $input['complete_handling_id'] = $args['complete_handling_id'];
+            $input['handling_outcome'] = (($args['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded';
+        }
         $created = $repository->createMessage($access, $input);
         $value = ['message' => mcpMessage($created['message']), 'created' => (bool) $created['created']];
+        if (!empty($created['notification_handling'])) {
+            $value['notification_handling'] = $created['notification_handling'];
+        }
     } else {
-        $value = mcpMessage($repository->acknowledge($access, mcpPositiveId($args, 'message_id')));
+        $acknowledged = $repository->acknowledge($access, mcpPositiveId($args, 'message_id'),
+            !empty($args['complete_handling_id']) ? $args['complete_handling_id'] : null);
+        $value = mcpMessage(!empty($args['complete_handling_id'])
+            ? $acknowledged['message'] : $acknowledged);
+        if (!empty($args['complete_handling_id']) && !empty($acknowledged['notification_handling'])) {
+            $value = ['message' => $value,
+                'notification_handling' => $acknowledged['notification_handling']];
+        }
     }
     mcpResult($id, ['content' => [['type' => 'text', 'text' => json_encode($value, JSON_UNESCAPED_SLASHES)]],
         'structuredContent' => ['result' => $value], 'isError' => false]);
@@ -229,7 +262,9 @@ try {
     $known = ['PROJECT_NOT_FOUND', 'PROJECT_NAME_AMBIGUOUS', 'AGENT_NAME_AMBIGUOUS', 'AGENT_PROVIDER_MISMATCH',
         'BINDING_REQUIRES_OAUTH', 'DISCUSSION_BINDING_REQUIRED', 'MESSAGE_NOT_FOUND', 'PROJECT_WRITE_FORBIDDEN',
         'INTERACTIVE_CONTEXT_NOT_FOUND', 'INTERACTIVE_CONTEXT_AMBIGUOUS',
-        'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', 'MESSAGE_SEQUENCE_MISMATCH', 'NOTIFICATION_RECEIPT_NOT_AVAILABLE', 'IDEMPOTENCY_KEY_CONFLICT', 'PROJECT_ARCHIVED', 'RATE_LIMITED',
+        'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', 'MESSAGE_SEQUENCE_MISMATCH', 'NOTIFICATION_RECEIPT_NOT_AVAILABLE',
+        'NOTIFICATION_HANDLING_NOT_AVAILABLE', 'NOTIFICATION_RECEIPT_REQUIRED', 'NOTIFICATION_HANDLING_NOT_FOUND', 'NOTIFICATION_HANDLING_ALREADY_ACTIVE',
+        'IDEMPOTENCY_KEY_CONFLICT', 'PROJECT_ARCHIVED', 'RATE_LIMITED',
         'TASK_NOT_FOUND', 'TASK_WRITE_FORBIDDEN', 'TASK_VERSION_CONFLICT', 'TASK_INVALID_TRANSITION',
         'PROJECT_PLAN_PROGRESS_FORBIDDEN', 'MILESTONE_NOT_FOUND', 'DELIVERABLE_NOT_FOUND', 'MILESTONE_VERSION_CONFLICT', 'DELIVERABLE_VERSION_CONFLICT',
         'MILESTONE_DELIVERABLES_INCOMPLETE', 'DELIVERABLE_TASKS_INCOMPLETE',
@@ -275,10 +310,16 @@ function mcpTools()
             $binding + ['limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 50], 'before' => ['type' => 'string'], 'after' => ['type' => 'string'],
                 'query' => ['type' => 'string'], 'addressed_to_me' => ['type' => 'boolean'], 'unacknowledged_only' => ['type' => 'boolean']], [], $read),
         $tool('get_message', 'Get one message', 'Read one canonical Syndicatum message by its numeric ID.', $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1]], ['message_id'], $read),
-        $tool('confirm_notification_receipt', 'Confirm notification receipt', 'Immediately after get_message successfully loads the exact browser-delivered notification, send its message ID and project sequence to Syndicatum. This confirms receipt to Companion without acknowledging that the work is complete.',
+        $tool('confirm_notification_receipt', 'Confirm notification receipt', 'Immediately after get_message successfully loads the exact browser-delivered notification, send its message ID and project sequence to Syndicatum. This confirms receipt to Companion without acknowledging that the work is complete. Then call set_notification_handling_state so Companion knows whether this discussion is available or actively working.',
             $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1],
                 'project_sequence' => ['type' => 'integer', 'minimum' => 1]],
             ['message_id', 'project_sequence'], $write),
+        $tool('set_notification_handling_state', 'Set notification handling state', 'After confirming receipt and evaluating the message, declare whether this discussion is responding, working, waiting, or available. Responding and working create or renew a bounded busy lease that pauses further Companion delivery. Waiting and available release the discussion. Return handling_id and pass it to the final post, acknowledgement, or task action so the release is recorded with that action.',
+            $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1],
+                'project_sequence' => ['type' => 'integer', 'minimum' => 1],
+                'state' => ['type' => 'string', 'enum' => ['responding','working','waiting','available']],
+                'lease_seconds' => ['type' => 'integer', 'minimum' => 60, 'maximum' => 1800]],
+            ['message_id', 'project_sequence', 'state'], $write),
         $tool('list_tasks', 'List project tasks', 'Read shared project tasks. Assignment indicates responsibility and never limits visibility.',
             $binding + ['status' => ['type' => 'string'], 'assigned_to_me' => ['type' => 'boolean'],
                 'assignee_participant_id' => ['type' => 'integer', 'minimum' => 1], 'query' => ['type' => 'string']], [], $read),
@@ -294,7 +335,8 @@ function mcpTools()
         $tool('update_task', 'Update assigned task state', 'Move an assigned task through its authorized lifecycle using the latest version. Agents may start, block, or submit their own tasks; supervisors may review direct reports.',
             $binding + ['task_id' => ['type' => 'integer', 'minimum' => 1], 'version' => ['type' => 'integer', 'minimum' => 1],
                 'status' => ['type' => 'string', 'enum' => ['open','in_progress','in_review','blocked','completed','cancelled']],
-                'blocked_reason' => ['type' => 'string'], 'completion_summary' => ['type' => 'string'], 'note' => ['type' => 'string']],
+                'blocked_reason' => ['type' => 'string'], 'completion_summary' => ['type' => 'string'], 'note' => ['type' => 'string'],
+                'complete_handling_id' => ['type' => 'string', 'description' => 'Optional handling_id to release after this final task action succeeds.']],
             ['task_id', 'version'], $write),
         $tool('get_project_plan', 'Get project plan', 'Read milestones, deliverables, task-backed progress, optimistic versions, and the current agent\'s progress-update permission.', $binding, [], $read),
         $tool('update_task_deliverable', 'Update task deliverable', 'Link or unlink an existing task to an approved-plan deliverable using the task\'s latest version and an evidence note. Requires the agent\'s explicit plan-progress permission and cannot change task ownership or lifecycle.',
@@ -335,7 +377,7 @@ function mcpTools()
                 'role_instructions' => ['type' => 'string', 'maxLength' => 20000],
                 'supervising_participant_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
                 'rationale' => ['type' => 'string', 'maxLength' => 4000]], ['target_agent_id'], $write),
-        $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent, optionally attaching up to 20 existing files from the project. Addressees indicate expected responders, not visibility.',
+        $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent, optionally attaching up to 20 existing files from the project. Addressees indicate expected responders, not visibility. Pass complete_handling_id on the final response or clarification so Companion can release the discussion.',
             $binding + ['body' => ['type' => 'string', 'minLength' => 1], 'direct_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'mention_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]], 'broadcast' => ['type' => 'boolean'],
                 'attachment_file_ids' => ['type' => 'array', 'maxItems' => 20, 'uniqueItems' => true,
@@ -343,8 +385,12 @@ function mcpTools()
                     'items' => ['type' => 'string']],
                 'reply_to_message_id' => ['type' => 'integer', 'minimum' => 1],
                 'severity' => ['type' => 'string', 'enum' => ['neutral','info','success','warning','error','critical'], 'default' => 'neutral'],
-                'idempotency_key' => ['type' => 'string', 'maxLength' => 160]], ['body', 'idempotency_key'], $write),
-        $tool('acknowledge_message', 'Acknowledge a message', 'Acknowledge a message that was addressed to the authorized agent.', $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1]], ['message_id'], $write),
+                'idempotency_key' => ['type' => 'string', 'maxLength' => 160],
+                'complete_handling_id' => ['type' => 'string', 'description' => 'Optional handling_id to release after this final message succeeds.'],
+                'handling_outcome' => ['type' => 'string', 'enum' => ['responded','waiting'], 'default' => 'responded']], ['body', 'idempotency_key'], $write),
+        $tool('acknowledge_message', 'Acknowledge a message', 'Acknowledge a message that was addressed to the authorized agent. Pass complete_handling_id when acknowledgement finishes the current notification handling.', $binding + [
+            'message_id' => ['type' => 'integer', 'minimum' => 1],
+            'complete_handling_id' => ['type' => 'string', 'description' => 'Optional handling_id to release after acknowledgement succeeds.']], ['message_id'], $write),
     ];
 }
 

@@ -74,6 +74,14 @@ paths:
       responses:
         '200': { description: Idempotent delivery receipt }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/connector-notification-handling.php:
+    get:
+      summary: Return active authoritative handling leases for this device's bound discussions
+      parameters:
+        - { name: provider, in: query, required: true, schema: { type: string, enum: [chatgpt, gemini] } }
+      responses:
+        '200': { description: Active, unexpired handling states for authorized bindings }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
   /api/v1/connector-agent-replies.php:
     post:
       summary: Submit one captured Gemini response through its authorized discussion binding

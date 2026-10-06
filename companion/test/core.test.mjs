@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyDeliveryReceipt, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, receiptDeliveryKey, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
+import { applyDeliveryReceipt, applyNotificationHandlingState, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, clearDeliveryQueueState, companionDiagnostics, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionHasActiveHandling, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, mergeQueuedDelivery, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, receiptDeliveryKey, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -56,12 +56,103 @@ test("routes only to the addressed participant", () => { assert.equal(bindingAcc
 test("does not route an agent's own message back to itself", () => assert.equal(bindingAcceptsMessage(binding, { ...message, sender: { participant_id: 44 }, addressees: [{ participant_id: 44 }] }), false));
 test("creates a stable provider-scoped delivery key", () => assert.equal(deliveryKey({ ...binding, message }), "chatgpt:3:30:91"));
 
+test("moves only never-submitted ChatGPT deliveries to a rebound discussion", () => {
+  const queuedAt = "2026-10-06T02:00:00Z";
+  const oldDiscussion = "https://chatgpt.com/c/old-discussion";
+  const newDiscussion = "https://chatgpt.com/c/new-discussion";
+  const pending = mergeQueuedDelivery({
+    provider: "chatgpt", project_id: 2, agent_id: 41, conversation_id: oldDiscussion,
+    deliveryState: "pending", queuedAt, attempts: 2,
+  }, {
+    provider: "chatgpt", project_id: 2, agent_id: 41, conversation_id: newDiscussion,
+    message: { id: 7801, project_sequence: 3435 },
+  }, "2026-10-06T03:00:00Z");
+  assert.equal(pending.conversation_id, newDiscussion);
+  assert.equal(pending.queuedAt, queuedAt);
+  assert.equal(pending.attempts, 2);
+
+  for (const existing of [
+    { deliveryState: "submitting", submissionStartedAt: queuedAt },
+    { deliveryState: DELIVERY_AWAITING_RECEIPT_STATE, browserDeliveredAt: queuedAt },
+    { deliveryState: "requires_review", lastError: "submission_unconfirmed" },
+  ]) {
+    const preserved = mergeQueuedDelivery({
+      provider: "chatgpt", project_id: 2, agent_id: 41, conversation_id: oldDiscussion,
+      queuedAt, ...existing,
+    }, {
+      provider: "chatgpt", project_id: 2, agent_id: 41, conversation_id: newDiscussion,
+      message: { id: 7700, project_sequence: 3390 },
+    });
+    assert.equal(preserved.conversation_id, oldDiscussion);
+    assert.equal(preserved.deliveryState, existing.deliveryState);
+  }
+});
+
+test("clears the active queue into persistent no-replay tombstones", () => {
+  const clearedAt = "2026-10-07T01:00:00Z";
+  const deliveryError = "Delivery pending: submission_unconfirmed";
+  const current = {
+    queue: {
+      "chatgpt:2:41:7801": {
+        provider: "chatgpt", project_id: 2, agent_id: 41,
+        message: { id: 7801 }, deliveryState: DELIVERY_AWAITING_RECEIPT_STATE, attempts: 2,
+      },
+      "gemini:2:34:7805": {
+        provider: "gemini", project_id: 2, agent_id: 34,
+        message: { id: 7805 }, deliveryState: "requires_review", attempts: 1,
+      },
+    },
+    suppressed: { "chatgpt:2:41:7000": { clearedAt: "earlier" } },
+    lastDeliveryError: deliveryError,
+    lastError: deliveryError,
+    accessToken: "preserved",
+    bindings: [{ agent_id: 41 }],
+  };
+  const patch = clearDeliveryQueueState(current, clearedAt);
+  assert.deepEqual(patch.queue, {});
+  assert.equal(patch.suppressed["chatgpt:2:41:7000"].clearedAt, "earlier");
+  assert.equal(patch.suppressed["chatgpt:2:41:7801"].deliveryState, DELIVERY_AWAITING_RECEIPT_STATE);
+  assert.equal(patch.suppressed["gemini:2:34:7805"].attempts, 1);
+  assert.deepEqual(patch.lastQueueClear, {
+    clearedAt, count: 2, byProvider: { chatgpt: 1, gemini: 1 }, awaitingReceiptCount: 1, reviewCount: 1,
+  });
+  assert.equal(patch.lastDeliveryError, null);
+  assert.equal(patch.lastError, null);
+  assert.equal(current.accessToken, "preserved");
+  assert.deepEqual(current.bindings, [{ agent_id: 41 }]);
+});
+
+test("queue clear preserves an unrelated top-level error", () => {
+  const patch = clearDeliveryQueueState({
+    queue: { one: { provider: "chatgpt", message: { id: 1 } } },
+    lastDeliveryError: "delivery failed",
+    lastError: "server unreachable",
+  }, "2026-10-07T01:00:00Z");
+  assert.equal(patch.lastDeliveryError, null);
+  assert.equal(patch.lastError, "server unreachable");
+});
+
 test("serializes deliveries by browser discussion instead of agent identity", () => {
   const first = { provider: "gemini", project_id: 2, agent_id: 37, conversation_id: "https://gemini.google.com/app/shared-thread" };
   const second = { provider: "gemini", project_id: 2, agent_id: 54, conversation_id: "https://gemini.google.com/app/shared-thread" };
   const other = { ...second, conversation_id: "https://gemini.google.com/app/other-thread" };
   assert.equal(deliveryShardKey(first), deliveryShardKey(second));
   assert.notEqual(deliveryShardKey(first), deliveryShardKey(other));
+});
+
+test("authoritative handling leases gate only their bound discussion and expire safely", () => {
+  const item = { provider: "chatgpt", project_id: 2, agent_id: 41,
+    conversation_id: "https://chatgpt.com/c/commercial" };
+  const active = { ...item, handling_id: "lease-one", message_id: 100,
+    busy: true, state: "working", lease_expires_at: "2026-10-07T02:10:00Z" };
+  const states = applyNotificationHandlingState({}, active);
+  assert.equal(discussionHasActiveHandling(states, item, Date.parse("2026-10-07T02:09:00Z")), true);
+  assert.equal(discussionHasActiveHandling(states, { ...item,
+    conversation_id: "https://chatgpt.com/c/another" }, Date.parse("2026-10-07T02:09:00Z")), false);
+  assert.equal(discussionHasActiveHandling(states, item, Date.parse("2026-10-07T02:11:00Z")), false);
+  const released = applyNotificationHandlingState(states, { ...active,
+    busy: false, state: "available", lease_expires_at: null });
+  assert.equal(discussionHasActiveHandling(released, item, Date.parse("2026-10-07T02:09:00Z")), false);
 });
 test("maps an agent receipt to the exact queued delivery", () => {
   const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };

@@ -48,6 +48,7 @@ The current PHP deployment exposes static endpoint files. These map directly to 
 | `/api/v1/connector-realtime-admission.php?project_id={project}` | GET | `/api/v1/connector/projects/{project}/realtime-admission` |
 | `/api/v1/connector-pending-notifications.php?provider={provider}` | GET | `/api/v1/connector/pending-notifications` |
 | `/api/v1/connector-notification-deliveries.php` | POST | `/api/v1/connector/notification-deliveries` |
+| `/api/v1/connector-notification-handling.php?provider={provider}` | GET | `/api/v1/connector/notification-handling` |
 | `/api/v1/connector-agent-replies.php` | POST | `/api/v1/connector/agent-replies` |
 
 Human-only application endpoints such as `/api/v1/notifications.php`,

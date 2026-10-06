@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.18");
+  assert.equal(manifest.version, "0.10.21");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -143,6 +143,11 @@ test("ChatGPT submissions wait for an explicit MCP receipt without automatic rep
   assert.match(popup, /discard_stale/);
   assert.match(popup, /review\.agentName/);
   assert.match(popup, /\$\{review\.agentName\} \(agent \$\{review\.agentId\}\)/);
+  assert.match(html, /id="clear-queue-dialog"/);
+  assert.match(html, /Type <strong>CLEAR<\/strong>/);
+  assert.match(popup, /syndicatum\.clear-delivery-queue/);
+  assert.match(background, /clearDeliveryQueueState/);
+  assert.match(background, /current\.suppressed\?\.\[key\]/);
 });
 
 test("popup separates connection health and exposes timestamp diagnostics", async () => {

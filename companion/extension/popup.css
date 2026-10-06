@@ -7,6 +7,8 @@ h1 { font-size: 16px; margin: 0; } header p { color: #9fb1cc; margin: 1px 0 0; }
 label { display: block; color: #b7c7df; margin-bottom: 6px; }
 input, button { box-sizing: border-box; border-radius: 8px; border: 1px solid #405477; background: #121f34; color: inherit; padding: 10px 12px; }
 input { width: 100%; margin-bottom: 10px; } button { cursor: pointer; background: #234b87; font-weight: 650; }
+.danger-action { border-color: #8d4551; background: #4a2028; color: #ffd2d9; }
+#open-clear-queue { width: 100%; margin-top: 12px; }
 #connect { width: 100%; }.row { display: flex; justify-content: space-between; border-bottom: 1px solid #263853; padding: 8px 0; }.row span { color: #9fb1cc; }
 .row strong { max-width: 230px; overflow-wrap: anywhere; text-align: right; }
 .health-value::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #8290a6; vertical-align: 1px; }

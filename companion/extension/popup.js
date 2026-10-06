@@ -1,6 +1,6 @@
 import { companionDiagnostics } from "./core.mjs";
 
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","delivery-review","delivery-review-list","copy-review","copy-review-result","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","delivery-review","delivery-review-list","copy-review","copy-review-result","open-clear-queue","clear-queue-dialog","clear-queue-summary","clear-queue-confirmation","clear-queue-error","cancel-clear-queue","confirm-clear-queue","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
 const extension = { id: chrome.runtime.id, version: chrome.runtime.getManifest().version };
 let latestStatus = null;
@@ -102,6 +102,7 @@ function render(data) {
   elements.error.hidden = !health.error;
   elements.error.textContent = health.error || "";
   renderDeliveryReviews(data.deliveryReviews || []);
+  elements["open-clear-queue"].hidden = !Number(health.queuedCount || 0);
   elements["last-server-check"].textContent = timestamp(data.lastServerCheckAt);
   elements["last-sync"].textContent = timestamp(data.lastSyncAt);
   elements["last-realtime"].textContent = timestamp(data.lastRealtimeAt);
@@ -143,6 +144,35 @@ elements.connect.addEventListener("click", async () => {
 });
 elements.refresh.addEventListener("click", () => action({ type: "syndicatum.refresh" }));
 elements.disconnect.addEventListener("click", () => action({ type: "syndicatum.disconnect" }));
+elements["open-clear-queue"].addEventListener("click", () => {
+  const count = Number(latestStatus?.health?.queuedCount || 0);
+  if (!count) return;
+  elements["clear-queue-summary"].textContent = `This will clear all ${count} currently queued delivery items.`;
+  elements["clear-queue-confirmation"].value = "";
+  elements["clear-queue-confirmation"].removeAttribute("aria-invalid");
+  elements["clear-queue-error"].hidden = true;
+  elements["clear-queue-dialog"].showModal();
+  elements["clear-queue-confirmation"].focus();
+});
+elements["cancel-clear-queue"].addEventListener("click", () => elements["clear-queue-dialog"].close("cancel"));
+elements["clear-queue-confirmation"].addEventListener("input", () => {
+  if (elements["clear-queue-confirmation"].value === "CLEAR") {
+    elements["clear-queue-confirmation"].removeAttribute("aria-invalid");
+    elements["clear-queue-error"].hidden = true;
+  }
+});
+elements["confirm-clear-queue"].addEventListener("click", async () => {
+  if (elements["clear-queue-confirmation"].value !== "CLEAR") {
+    elements["clear-queue-confirmation"].setAttribute("aria-invalid", "true");
+    elements["clear-queue-error"].textContent = "Confirmation — type CLEAR exactly to clear the delivery queue.";
+    elements["clear-queue-error"].hidden = false;
+    elements["clear-queue-confirmation"].focus();
+    return;
+  }
+  const expectedCount = Number(latestStatus?.health?.queuedCount || 0);
+  const cleared = await action({ type: "syndicatum.clear-delivery-queue", expectedCount });
+  if (cleared) elements["clear-queue-dialog"].close("cleared");
+});
 elements["copy-diagnostics"].addEventListener("click", async () => {
   if (!latestStatus) return;
   try {

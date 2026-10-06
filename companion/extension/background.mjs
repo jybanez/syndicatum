@@ -1,4 +1,4 @@
-import { applyDeliveryReceipt, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, DELIVERY_REVIEW_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
+import { applyDeliveryReceipt, applyNotificationHandlingState, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, clearDeliveryQueueState, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, DELIVERY_REVIEW_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionHasActiveHandling, isUncertainDeliveryFailure, matchingDiscussionTabs, mergeQueuedDelivery, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -9,6 +9,7 @@ const heartbeatTimers = new Map();
 let running = null;
 let queueWrites = Promise.resolve();
 const drainRunning = new Map();
+let clearingQueue = false;
 let authorizationPoll = null;
 let authorizationTimer = null;
 let nextAuthorizationPollAt = 0;
@@ -324,6 +325,7 @@ async function resolveBindingIntent(request, sender) {
     await save({ lastBindingMessage: `Discussion Binding: Successful — ${result.project_name || "project"} / ${result.agent_name || "agent"}.`, lastError: null });
     try {
       const bindings = await refreshBindings();
+      await refreshNotificationHandlingStates();
       await recover(bindings);
     } catch (error) {
       result.companion_sync_warning = "The binding succeeded, but Companion refresh is pending. Refresh Companion to check delivery.";
@@ -353,6 +355,19 @@ async function recover(bindings) {
   await Promise.all([...shards].map(shard => drain(shard)));
 }
 
+async function refreshNotificationHandlingStates() {
+  const batches = await Promise.all(Object.keys(PROVIDERS).map(provider =>
+    api(`/api/v1/connector-notification-handling.php?provider=${encodeURIComponent(provider)}`)));
+  let handlingStates = {};
+  for (const batch of batches) {
+    for (const handling of (Array.isArray(batch) ? batch : [])) {
+      handlingStates = applyNotificationHandlingState(handlingStates, handling);
+    }
+  }
+  await save({ handlingStates });
+  return handlingStates;
+}
+
 async function enqueue(item) {
   await stage(item);
   return drain(deliveryShardKey(item));
@@ -362,9 +377,9 @@ async function stage(item) {
   queueWrites = queueWrites.then(async () => {
     const current = await state();
     const key = deliveryKey(item);
-    if (current.delivered?.[key]) return;
+    if (current.delivered?.[key] || current.suppressed?.[key]) return;
     const existing = current.queue?.[key] || {};
-    const queue = { ...(current.queue || {}), [key]: { ...existing, ...item, attempts: existing.attempts || 0, queuedAt: existing.queuedAt || new Date().toISOString() } };
+    const queue = { ...(current.queue || {}), [key]: mergeQueuedDelivery(existing, item) };
     await save({ queue });
   });
   await queueWrites;
@@ -422,7 +437,19 @@ async function settleDeliveryReceipt(receipt, source = "realtime") {
   let settlement = null;
   await updateDeliveryState(current => {
     settlement = applyDeliveryReceipt(current, receipt);
-    return settlement.patch;
+    if (!settlement?.settled) return settlement.patch;
+    const provisional = {
+      provider: settlement.item.provider,
+      project_id: settlement.item.project_id,
+      agent_id: settlement.item.agent_id,
+      conversation_id: settlement.item.conversation_id,
+      message_id: settlement.item.message.id,
+      state: "evaluating",
+      busy: true,
+      lease_expires_at: new Date(Date.now() + 60000).toISOString(),
+    };
+    return { ...settlement.patch,
+      handlingStates: applyNotificationHandlingState(current.handlingStates, provisional) };
   });
   if (!settlement?.settled) return false;
   const completedAt = String(receipt.received_at || new Date().toISOString());
@@ -462,6 +489,7 @@ async function reconcileDeliveryReceipt(item) {
 }
 
 async function drain(shard = null) {
+  if (clearingQueue) return;
   if (shard === null) {
     const current = await state();
     const shards = [...new Set(Object.values(current.queue || {}).map(deliveryShardKey))];
@@ -475,6 +503,10 @@ async function drain(shard = null) {
       const entry = Object.entries(current.queue || {}).find(([, candidate]) => deliveryShardKey(candidate) === shard);
       if (!entry) return;
       const [key, queuedItem] = entry;
+      if (discussionHasActiveHandling(current.handlingStates, queuedItem)) {
+        await chrome.alarms.create(RETRY_ALARM, { delayInMinutes: 1 });
+        return;
+      }
       if (queuedItem.deliveryState === DELIVERY_REVIEW_STATE) return;
       if (["submitting", DELIVERY_AWAITING_RECEIPT_STATE].includes(queuedItem.deliveryState)) {
         await reconcileDeliveryReceipt(queuedItem);
@@ -641,6 +673,27 @@ async function resolveDeliveryReview(key, resolution) {
   return publicStatus();
 }
 
+async function clearDeliveryQueue(expectedCount) {
+  const expected = Number(expectedCount);
+  if (!Number.isInteger(expected) || expected < 1) throw new Error("Refresh Companion before clearing the delivery queue.");
+  if (clearingQueue || drainRunning.size) throw new Error("A delivery is currently active. Wait for it to finish, then refresh before clearing.");
+  clearingQueue = true;
+  try {
+    const clearWrite = queueWrites.then(async () => {
+      if (drainRunning.size) throw new Error("A delivery started before the queue could be cleared. Wait for it to finish, then refresh.");
+      const current = await state();
+      const actual = Object.keys(current.queue || {}).length;
+      if (actual !== expected) throw new Error(`The delivery queue changed from ${expected} to ${actual} items. Refresh and review it before clearing.`);
+      await save(clearDeliveryQueueState(current));
+    });
+    queueWrites = clearWrite.catch(() => undefined);
+    await clearWrite;
+  } finally {
+    clearingQueue = false;
+  }
+  return publicStatus();
+}
+
 async function deliver(item) {
   const url = normalizeDiscussionUrl(item.conversation_id, item.provider);
   const providerTabs = await chrome.tabs.query({ url: `https://${PROVIDERS[item.provider].host}/*` });
@@ -728,6 +781,13 @@ async function connectProject(projectId) {
       if (envelope?.phase === "event" && envelope.type === "syndicatum.notification.received" && envelope.payload?.receipt) {
         await settleDeliveryReceipt(envelope.payload.receipt, "realtime");
       }
+      if (envelope?.phase === "event" && envelope.type === "syndicatum.notification.handling_changed" && envelope.payload?.handling) {
+        const handling = envelope.payload.handling;
+        await updateDeliveryState(current => ({
+          handlingStates: applyNotificationHandlingState(current.handlingStates, handling),
+        }));
+        if (!handling.busy) await drain(deliveryShardKey(handling));
+      }
     };
     socket.onclose = () => {
       if (sockets.get(projectId) !== socket) return;
@@ -754,6 +814,7 @@ async function start(forceAuthorization = false) {
     if (!current.accessToken) { if (current.pending) await pollAuthorization({ force: forceAuthorization }); return; }
     await quarantineLegacyDeliveryQueue();
     const bindings = await refreshBindings();
+    await refreshNotificationHandlingStates();
     await recover(bindings);
     await drain();
     await chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 5 });
@@ -775,7 +836,7 @@ async function disconnect() {
 async function publicStatus() {
   const current = await state();
   const health = companionHealth(current, { realtimeProjectCount: heartbeatTimers.size });
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, reviewCount: health.reviewCount, deliveryReviews: deliveryReviewItems(current.queue, current.bindings), realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, reviewCount: health.reviewCount, deliveryReviews: deliveryReviewItems(current.queue, current.bindings), realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastQueueClear: current.lastQueueClear || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -788,6 +849,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     : action === "syndicatum.cancel-server-migration" ? cancelServerMigration()
     : action === "syndicatum.refresh" ? start(true).then(publicStatus)
     : action === "syndicatum.resolve-delivery-review" ? resolveDeliveryReview(request.key, request.resolution)
+    : action === "syndicatum.clear-delivery-queue" ? clearDeliveryQueue(request.expectedCount)
     : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)
     : action === "syndicatum.status" ? publicStatus()
     : null;

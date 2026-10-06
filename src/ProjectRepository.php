@@ -9,6 +9,7 @@ require_once __DIR__ . '/ResponsesApiActivationService.php';
 require_once __DIR__ . '/ResponsibilityEventService.php';
 require_once __DIR__ . '/ProjectGovernancePolicy.php';
 require_once __DIR__ . '/MessageSeverity.php';
+require_once __DIR__ . '/NotificationHandlingService.php';
 
 class ProjectRepository
 {
@@ -513,7 +514,13 @@ class ProjectRepository
             if ($existingRow !== false) {
                 $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
                     [$preAttachmentRequestFingerprint, $legacyRequestFingerprint]);
-                return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
+                $handling = !empty($input['complete_handling_id'])
+                    ? (new NotificationHandlingService($this->pdo))->complete(
+                        $access, $input['complete_handling_id'],
+                        (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded')
+                    : null;
+                return ['message' => $this->message($access, $existingRow['id']),
+                    'created' => false, 'notification_handling' => $handling];
             }
         }
 
@@ -644,8 +651,15 @@ class ProjectRepository
             (new AgentWebhookService($this->pdo))->enqueueMessageCreated($projectId, $messageId, $message);
             (new WorkspaceAgentTriggerService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
             (new ResponsesApiActivationService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
+            $handling = null;
+            if (!empty($input['complete_handling_id'])) {
+                $handling = (new NotificationHandlingService($this->pdo))->complete(
+                    $access, $input['complete_handling_id'],
+                    (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded');
+            }
             $this->pdo->commit();
-            return ['message' => $message, 'created' => true];
+            return ['message' => $message, 'created' => true,
+                'notification_handling' => $handling];
         } catch (PDOException $exception) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -659,7 +673,13 @@ class ProjectRepository
                 if ($existingRow !== false) {
                     $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
                         [$preAttachmentRequestFingerprint, $legacyRequestFingerprint]);
-                    return ['message' => $this->message($access, $existingRow['id']), 'created' => false];
+                    $handling = !empty($input['complete_handling_id'])
+                        ? (new NotificationHandlingService($this->pdo))->complete(
+                            $access, $input['complete_handling_id'],
+                            (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded')
+                        : null;
+                    return ['message' => $this->message($access, $existingRow['id']),
+                        'created' => false, 'notification_handling' => $handling];
                 }
             }
             throw $exception;
@@ -749,23 +769,35 @@ class ProjectRepository
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
-    public function acknowledge(array $access, $messageId)
+    public function acknowledge(array $access, $messageId, $completeHandlingId = null)
     {
-        $this->message($access, $messageId);
-        $now = Db::now();
-        $statement = $this->pdo->prepare(
-            'UPDATE message_addressees SET seen_at = COALESCE(seen_at, ?), acknowledged_at = COALESCE(acknowledged_at, ?)
-             WHERE message_id = ? AND participant_id = ?'
-        );
-        $statement->execute([$now, $now, (int) $messageId, (int) $access['participant_id']]);
-        if ($statement->rowCount() === 0) {
-            $exists = $this->pdo->prepare('SELECT COUNT(*) FROM message_addressees WHERE message_id = ? AND participant_id = ?');
-            $exists->execute([(int) $messageId, (int) $access['participant_id']]);
-            if ((int) $exists->fetchColumn() === 0) {
-                throw new RuntimeException('MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT');
+        $this->pdo->beginTransaction();
+        try {
+            $this->message($access, $messageId);
+            $now = Db::now();
+            $statement = $this->pdo->prepare(
+                'UPDATE message_addressees SET seen_at = COALESCE(seen_at, ?), acknowledged_at = COALESCE(acknowledged_at, ?)
+                 WHERE message_id = ? AND participant_id = ?'
+            );
+            $statement->execute([$now, $now, (int) $messageId, (int) $access['participant_id']]);
+            if ($statement->rowCount() === 0) {
+                $exists = $this->pdo->prepare('SELECT COUNT(*) FROM message_addressees WHERE message_id = ? AND participant_id = ?');
+                $exists->execute([(int) $messageId, (int) $access['participant_id']]);
+                if ((int) $exists->fetchColumn() === 0) {
+                    throw new RuntimeException('MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT');
+                }
             }
+            $message = $this->message($access, $messageId);
+            $handling = $completeHandlingId === null ? null
+                : (new NotificationHandlingService($this->pdo))->complete(
+                    $access, $completeHandlingId, 'acknowledged');
+            $this->pdo->commit();
+            return $completeHandlingId === null ? $message
+                : ['message' => $message, 'notification_handling' => $handling];
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
         }
-        return $this->message($access, $messageId);
     }
 
     public function confirmNotificationReceipt(array $access, $messageId, $projectSequence)

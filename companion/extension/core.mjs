@@ -154,6 +154,25 @@ export function deliveryShardKey(item = {}) {
   catch (_error) { return `${provider}:${item.project_id}:${item.agent_id}`; }
 }
 
+export function applyNotificationHandlingState(states = {}, handling = {}) {
+  const next = { ...(states || {}) };
+  const key = deliveryShardKey(handling);
+  const expiresAt = Date.parse(String(handling.lease_expires_at || ""));
+  if (handling.busy === true && Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+    next[key] = { ...handling };
+  } else {
+    delete next[key];
+  }
+  return next;
+}
+
+export function discussionHasActiveHandling(states = {}, item = {}, now = Date.now()) {
+  const handling = states?.[deliveryShardKey(item)];
+  if (!handling?.busy) return false;
+  const expiresAt = Date.parse(String(handling.lease_expires_at || ""));
+  return Number.isFinite(expiresAt) && expiresAt > now;
+}
+
 export function matchingDiscussionTabs(tabs, discussionUrl, provider = "chatgpt") {
   const expected = discussionIdentity(discussionUrl, provider);
   return (Array.isArray(tabs) ? tabs : []).filter(tab => {
@@ -164,6 +183,54 @@ export function matchingDiscussionTabs(tabs, discussionUrl, provider = "chatgpt"
 
 export function deliveryKey(item) {
   return [item.provider, item.project_id, item.agent_id, item.message?.id].join(":");
+}
+
+export function mergeQueuedDelivery(existing = {}, incoming = {}, queuedAt = new Date().toISOString()) {
+  const provider = String(existing.provider || incoming.provider || "");
+  const uncertainChatGptSubmission = provider === "chatgpt" && Boolean(
+    existing.submissionStartedAt
+    || existing.browserDeliveredAt
+    || ["submitting", DELIVERY_AWAITING_RECEIPT_STATE, DELIVERY_REVIEW_STATE].includes(existing.deliveryState)
+  );
+  const routed = uncertainChatGptSubmission && existing.conversation_id
+    ? { ...incoming, conversation_id: existing.conversation_id }
+    : incoming;
+  return {
+    ...existing,
+    ...routed,
+    attempts: existing.attempts || 0,
+    queuedAt: existing.queuedAt || queuedAt,
+  };
+}
+
+export function clearDeliveryQueueState(current = {}, clearedAt = new Date().toISOString()) {
+  const entries = Object.entries(current.queue || {});
+  const suppressed = { ...(current.suppressed || {}) };
+  const byProvider = {};
+  let awaitingReceiptCount = 0;
+  let reviewCount = 0;
+  for (const [key, item] of entries) {
+    const provider = String(item?.provider || "unknown");
+    byProvider[provider] = Number(byProvider[provider] || 0) + 1;
+    if (item?.deliveryState === DELIVERY_AWAITING_RECEIPT_STATE) awaitingReceiptCount += 1;
+    if (item?.deliveryState === DELIVERY_REVIEW_STATE) reviewCount += 1;
+    suppressed[key] = {
+      clearedAt,
+      provider,
+      projectId: String(item?.project_id ?? ""),
+      agentId: String(item?.agent_id ?? ""),
+      messageId: String(item?.message?.id ?? ""),
+      deliveryState: String(item?.deliveryState || "pending"),
+      attempts: Number(item?.attempts || 0),
+    };
+  }
+  return {
+    queue: {},
+    suppressed,
+    lastQueueClear: { clearedAt, count: entries.length, byProvider, awaitingReceiptCount, reviewCount },
+    lastDeliveryError: null,
+    lastError: current.lastError && current.lastError === current.lastDeliveryError ? null : current.lastError,
+  };
 }
 
 export function receiptDeliveryKey(receipt) {
@@ -217,7 +284,7 @@ export function notificationFor(binding, message) {
     return [
       `You have a message from ${sender} in Syndicatum.`,
       `Route: project ${binding.project_id}; agent ${binding.agent_id}; message ${message.id}; sequence ${message.project_sequence}.`,
-      `Use the installed Syndicatum plugin to load the authoritative message, then immediately call confirm_notification_receipt with message_id ${message.id} and project_sequence ${message.project_sequence}. Handle the message after the receipt succeeds. This notice is metadata only; post the full response there when appropriate, acknowledge only after handling, and show only a concise summary here. If the tools are unavailable, leave it unhandled and unacknowledged.`,
+      `Use the installed Syndicatum plugin to load the authoritative message, then immediately call confirm_notification_receipt with message_id ${message.id} and project_sequence ${message.project_sequence}. After reading it, call set_notification_handling_state: use responding or working when this discussion must remain busy, otherwise waiting or available. Renew an active lease if work continues. Pass its handling_id as complete_handling_id with the final post_message, acknowledge_message, or update_task so the release is committed with that action. This notice is metadata only; post the full response there when appropriate and show only a concise summary here. If the tools are unavailable, leave it unhandled and unacknowledged.`,
     ].join("\n");
   }
   throw new Error(`No browser bridge is available for ${binding.provider || "this provider"}.`);
