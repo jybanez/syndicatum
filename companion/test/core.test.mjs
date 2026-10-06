@@ -75,6 +75,30 @@ test("maps an agent receipt to the exact queued delivery", () => {
   assert.deepEqual(Object.keys(settled.patch.queue), ["chatgpt:3:30:92"]);
   assert.equal(settled.patch.lastDeliveryAt, receipt.received_at);
 });
+test("an exact receipt preserves unrelated health errors", () => {
+  const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };
+  const current = {
+    queue: {
+      "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } },
+    },
+    lastServerError: "server unreachable",
+    lastRealtimeError: "Realtime connection failed; reconnecting.",
+    lastDeliveryError: "another delivery failed",
+    lastError: "account authorization expired",
+  };
+  const settled = applyDeliveryReceipt(current, receipt);
+  assert.equal(settled.settled, true);
+  assert.deepEqual(settled.patch.queue, {});
+  assert.equal(settled.patch.lastDeliveryAt, receipt.received_at);
+  assert.equal("lastServerError" in settled.patch, false);
+  assert.equal("lastRealtimeError" in settled.patch, false);
+  assert.equal("lastDeliveryError" in settled.patch, false);
+  assert.equal("lastError" in settled.patch, false);
+  assert.equal(current.lastServerError, "server unreachable");
+  assert.equal(current.lastRealtimeError, "Realtime connection failed; reconnecting.");
+  assert.equal(current.lastDeliveryError, "another delivery failed");
+  assert.equal(current.lastError, "account authorization expired");
+});
 test("does not settle a queue item when the receipt sequence differs", () => {
   const current = { queue: { "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } } } };
   const settled = applyDeliveryReceipt(current, { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 99 });

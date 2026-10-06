@@ -189,8 +189,6 @@ export function applyDeliveryReceipt(current = {}, receipt = {}) {
       queue,
       delivered: Object.fromEntries(Object.entries(delivered).slice(-1000)),
       lastDeliveryAt: receivedAt,
-      lastDeliveryError: null,
-      lastError: null,
     },
   };
 }

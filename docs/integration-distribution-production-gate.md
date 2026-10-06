@@ -176,7 +176,7 @@ The source versions below are test anchors, not production ranges.
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
 | `v1.0.0-rc.3` | Codex `0.2.1` candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.0` installed acceptance identified a handshake-version defect | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
-| `v1.0.0-rc.3` | Companion `0.10.18` | Chrome + ChatGPT web | Source tests and installed receipt/correlation acceptance; store-managed publication remains open | None until reviewed store build passes. |
+| `v1.0.0-rc.3` | Companion `0.10.18` | Chrome + ChatGPT web | Source tests, installed/offline receipt fixtures, and installed queue/identity continuity evidence; live server/MCP receipt acceptance remains pending deployment and one separately authorized end-to-end test | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.18` | Chrome + Gemini web | Source tests and installed exact-turn correlation acceptance | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.18` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
 
