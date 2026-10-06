@@ -7,6 +7,7 @@ require_once __DIR__ . '/RealtimeIntegration.php';
 class MessageOutbox
 {
     const EVENT_MESSAGE_CREATED = 'syndicatum.message.created';
+    const EVENT_NOTIFICATION_RECEIVED = 'syndicatum.notification.received';
     const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
     const EVENT_TASK_UPDATED = 'syndicatum.task.updated';
     const EVENT_PROJECT_PROPOSALS_CHANGED = 'syndicatum.project_proposals.changed';
@@ -57,6 +58,50 @@ class MessageOutbox
             $now,
         ]);
 
+        return $this->findById((int) $this->pdo->lastInsertId());
+    }
+
+    /**
+     * Publish the agent-originated MCP receipt that proves a browser-delivered
+     * notification reached the bound agent. Call this in the same transaction
+     * that records the receipt on message_addressees.
+     */
+    public function enqueueNotificationReceived($projectId, $messageId, $projectSequence,
+        $agentId, $participantId, $receivedAt)
+    {
+        $eventUuid = self::uuidV4();
+        $payload = [
+            'event_id' => $eventUuid,
+            'type' => self::EVENT_NOTIFICATION_RECEIVED,
+            'project_id' => (int) $projectId,
+            'sequence' => (int) $projectSequence,
+            'receipt' => [
+                'provider' => 'chatgpt',
+                'project_id' => (int) $projectId,
+                'agent_id' => (int) $agentId,
+                'participant_id' => (int) $participantId,
+                'message_id' => (int) $messageId,
+                'project_sequence' => (int) $projectSequence,
+                'received_at' => (string) $receivedAt,
+            ],
+        ];
+        $payloadJson = json_encode($payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payloadJson === false) {
+            throw new RuntimeException('Unable to encode the notification receipt event.');
+        }
+        $now = Db::now();
+        $statement = $this->pdo->prepare(
+            'INSERT INTO message_events_outbox
+             (event_uuid, project_id, message_id, event_type, project_sequence, payload_json,
+              attempt_count, available_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)'
+        );
+        $statement->execute([
+            $eventUuid, (int) $projectId, (int) $messageId,
+            self::EVENT_NOTIFICATION_RECEIVED, (int) $projectSequence,
+            $payloadJson, $now, $now,
+        ]);
         return $this->findById((int) $this->pdo->lastInsertId());
     }
 

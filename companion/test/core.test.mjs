@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, deliveryKey, deliveryReviewItems, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
+import { applyDeliveryReceipt, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, companionDiagnostics, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, receiptDeliveryKey, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -55,11 +55,99 @@ test("matches the current ChatGPT URL when the stored project path differs", () 
 test("routes only to the addressed participant", () => { assert.equal(bindingAcceptsMessage(binding, message), true); assert.equal(bindingAcceptsMessage({ ...binding, participant_id: 45 }, message), false); });
 test("does not route an agent's own message back to itself", () => assert.equal(bindingAcceptsMessage(binding, { ...message, sender: { participant_id: 44 }, addressees: [{ participant_id: 44 }] }), false));
 test("creates a stable provider-scoped delivery key", () => assert.equal(deliveryKey({ ...binding, message }), "chatgpt:3:30:91"));
+
+test("serializes deliveries by browser discussion instead of agent identity", () => {
+  const first = { provider: "gemini", project_id: 2, agent_id: 37, conversation_id: "https://gemini.google.com/app/shared-thread" };
+  const second = { provider: "gemini", project_id: 2, agent_id: 54, conversation_id: "https://gemini.google.com/app/shared-thread" };
+  const other = { ...second, conversation_id: "https://gemini.google.com/app/other-thread" };
+  assert.equal(deliveryShardKey(first), deliveryShardKey(second));
+  assert.notEqual(deliveryShardKey(first), deliveryShardKey(other));
+});
+test("maps an agent receipt to the exact queued delivery", () => {
+  const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };
+  assert.equal(receiptDeliveryKey(receipt), "chatgpt:3:30:91");
+  const current = { queue: {
+    "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } },
+    "chatgpt:3:30:92": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 92, project_sequence: 18 } },
+  } };
+  const settled = applyDeliveryReceipt(current, receipt);
+  assert.equal(settled.settled, true);
+  assert.deepEqual(Object.keys(settled.patch.queue), ["chatgpt:3:30:92"]);
+  assert.equal(settled.patch.lastDeliveryAt, receipt.received_at);
+});
+test("an exact receipt preserves unrelated health errors", () => {
+  const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };
+  const current = {
+    queue: {
+      "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } },
+    },
+    lastServerError: "server unreachable",
+    lastRealtimeError: "Realtime connection failed; reconnecting.",
+    lastDeliveryError: "another delivery failed",
+    lastError: "account authorization expired",
+  };
+  const settled = applyDeliveryReceipt(current, receipt);
+  assert.equal(settled.settled, true);
+  assert.deepEqual(settled.patch.queue, {});
+  assert.equal(settled.patch.lastDeliveryAt, receipt.received_at);
+  assert.equal("lastServerError" in settled.patch, false);
+  assert.equal("lastRealtimeError" in settled.patch, false);
+  assert.equal("lastDeliveryError" in settled.patch, false);
+  assert.equal("lastError" in settled.patch, false);
+  assert.equal(current.lastServerError, "server unreachable");
+  assert.equal(current.lastRealtimeError, "Realtime connection failed; reconnecting.");
+  assert.equal(current.lastDeliveryError, "another delivery failed");
+  assert.equal(current.lastError, "account authorization expired");
+});
+test("does not settle a queue item when the receipt sequence differs", () => {
+  const current = { queue: { "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } } } };
+  const settled = applyDeliveryReceipt(current, { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 99 });
+  assert.equal(settled.settled, false);
+  assert.deepEqual(settled.patch, {});
+});
+
+test("clears only stale channel errors for ChatGPT items awaiting an MCP receipt", () => {
+  const queue = { one: { provider: "chatgpt", deliveryState: DELIVERY_AWAITING_RECEIPT_STATE } };
+  assert.deepEqual(awaitingReceiptTransportErrorPatch({
+    lastDeliveryError: "A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received",
+    lastError: "server unreachable",
+  }, queue), { lastDeliveryError: null });
+  assert.deepEqual(awaitingReceiptTransportErrorPatch({
+    lastDeliveryError: "delivery API unavailable",
+    lastError: "message channel closed before a response was received",
+  }, queue), { lastError: null });
+  assert.deepEqual(awaitingReceiptTransportErrorPatch({
+    lastDeliveryError: "delivery API unavailable",
+    lastError: "server unreachable",
+  }, queue), {});
+  assert.deepEqual(awaitingReceiptTransportErrorPatch({
+    lastDeliveryError: "message channel closed before a response was received",
+  }, { one: { provider: "chatgpt", deliveryState: "pending" } }), {});
+});
+
+test("runtime delivery failure health patches preserve unrelated errors while awaiting a receipt", () => {
+  const queue = { one: { provider: "chatgpt", deliveryState: DELIVERY_AWAITING_RECEIPT_STATE } };
+  assert.deepEqual(deliveryFailureHealthPatch({
+    lastDeliveryError: "other delivery failure",
+    lastError: "server unreachable",
+  }, queue, true, "Delivery pending: message channel closed before a response was received"), {});
+  assert.deepEqual(deliveryFailureHealthPatch({
+    lastDeliveryError: "message channel closed before a response was received",
+    lastError: "server unreachable",
+  }, queue, true, "Delivery pending: message channel closed before a response was received"), { lastDeliveryError: null });
+  assert.deepEqual(deliveryFailureHealthPatch({}, queue, false, "Delivery pending: composer_not_found"), {
+    lastDeliveryError: "Delivery pending: composer_not_found",
+    lastError: "Delivery pending: composer_not_found",
+  });
+});
 test("ChatGPT receives only an MCP-first metadata notification", () => {
   const text = notificationFor({ ...binding, project_name: "Test Project" }, { ...message, uuid: "message-uuid", body: "Please answer this exact project request." });
   assert.match(text, /message 91/);
   assert.match(text, /sequence 17/);
   assert.match(text, /installed Syndicatum plugin/);
+  assert.match(text, /confirm_notification_receipt/);
+  assert.match(text, /message_id 91/);
+  assert.match(text, /project_sequence 17/);
   assert.match(text, /post the full response there/);
   assert.match(text, /show only a concise summary here/);
   assert.match(text, /leave it unhandled and unacknowledged/);
@@ -101,6 +189,7 @@ test("reports independent server, account, realtime, binding, and delivery healt
 });
 test("classifies uncertain submissions and exposes only allowlisted review metadata", () => {
   assert.equal(isUncertainDeliveryFailure({ code: "submission_unconfirmed" }), true);
+  assert.equal(isUncertainDeliveryFailure({ code: "provider_error" }), true);
   assert.equal(isUncertainDeliveryFailure(new Error("network unavailable")), false);
   const queue = {
     "chatgpt:2:41:4451": {

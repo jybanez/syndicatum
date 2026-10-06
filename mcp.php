@@ -73,10 +73,11 @@ try {
         'get_message' => 'messages:read', 'post_message' => 'messages:write',
         'propose_project_details' => 'messages:write', 'propose_project_plan' => 'messages:write', 'propose_agent_setup' => 'messages:write',
         'propose_agent_profile_update' => 'messages:write',
+        'confirm_notification_receipt' => 'messages:acknowledge',
         'acknowledge_message' => 'messages:acknowledge'];
     if (!isset($scopeMap[$name])) { throw new InvalidArgumentException('Unknown tool.'); }
     if (!$oauth->hasScope($access, $scopeMap[$name])) { mcpAuthenticationRequired($id, 'insufficient_scope', $oauth); }
-    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'acknowledge_message', 'create_task', 'update_task', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress',
+    $writeTools = ['prepare_discussion_binding', 'prepare_interactive_context', 'post_message', 'confirm_notification_receipt', 'acknowledge_message', 'create_task', 'update_task', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress',
         'propose_project_details', 'propose_project_plan', 'propose_agent_setup', 'propose_agent_profile_update'];
     (new RateLimiter($pdo))->hit(
         'mcp.' . $name,
@@ -202,6 +203,12 @@ try {
         $value = (new ProjectChangeProposalService($pdo))->proposeAgentProfileUpdate($access, $args);
     } elseif ($name === 'get_message') {
         $value = mcpMessage($repository->message($access, mcpPositiveId($args, 'message_id')));
+    } elseif ($name === 'confirm_notification_receipt') {
+        if (!$bindingContext || (($access['binding']['type'] ?? '') !== 'discussion')) {
+            throw new RuntimeException('NOTIFICATION_RECEIPT_NOT_AVAILABLE');
+        }
+        $value = $repository->confirmNotificationReceipt($access,
+            mcpPositiveId($args, 'message_id'), mcpPositiveId($args, 'project_sequence'));
     } elseif ($name === 'post_message') {
         $input = ['body' => trim((string) ($args['body'] ?? '')), 'broadcast' => !empty($args['broadcast']),
             'direct_participant_ids' => $args['direct_participant_ids'] ?? [], 'mention_participant_ids' => $args['mention_participant_ids'] ?? [],
@@ -222,7 +229,7 @@ try {
     $known = ['PROJECT_NOT_FOUND', 'PROJECT_NAME_AMBIGUOUS', 'AGENT_NAME_AMBIGUOUS', 'AGENT_PROVIDER_MISMATCH',
         'BINDING_REQUIRES_OAUTH', 'DISCUSSION_BINDING_REQUIRED', 'MESSAGE_NOT_FOUND', 'PROJECT_WRITE_FORBIDDEN',
         'INTERACTIVE_CONTEXT_NOT_FOUND', 'INTERACTIVE_CONTEXT_AMBIGUOUS',
-        'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', 'IDEMPOTENCY_KEY_CONFLICT', 'PROJECT_ARCHIVED', 'RATE_LIMITED',
+        'MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT', 'MESSAGE_SEQUENCE_MISMATCH', 'NOTIFICATION_RECEIPT_NOT_AVAILABLE', 'IDEMPOTENCY_KEY_CONFLICT', 'PROJECT_ARCHIVED', 'RATE_LIMITED',
         'TASK_NOT_FOUND', 'TASK_WRITE_FORBIDDEN', 'TASK_VERSION_CONFLICT', 'TASK_INVALID_TRANSITION',
         'PROJECT_PLAN_PROGRESS_FORBIDDEN', 'MILESTONE_NOT_FOUND', 'DELIVERABLE_NOT_FOUND', 'MILESTONE_VERSION_CONFLICT', 'DELIVERABLE_VERSION_CONFLICT',
         'MILESTONE_DELIVERABLES_INCOMPLETE', 'DELIVERABLE_TASKS_INCOMPLETE',
@@ -268,6 +275,10 @@ function mcpTools()
             $binding + ['limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 50], 'before' => ['type' => 'string'], 'after' => ['type' => 'string'],
                 'query' => ['type' => 'string'], 'addressed_to_me' => ['type' => 'boolean'], 'unacknowledged_only' => ['type' => 'boolean']], [], $read),
         $tool('get_message', 'Get one message', 'Read one canonical Syndicatum message by its numeric ID.', $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1]], ['message_id'], $read),
+        $tool('confirm_notification_receipt', 'Confirm notification receipt', 'Immediately after get_message successfully loads the exact browser-delivered notification, send its message ID and project sequence to Syndicatum. This confirms receipt to Companion without acknowledging that the work is complete.',
+            $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1],
+                'project_sequence' => ['type' => 'integer', 'minimum' => 1]],
+            ['message_id', 'project_sequence'], $write),
         $tool('list_tasks', 'List project tasks', 'Read shared project tasks. Assignment indicates responsibility and never limits visibility.',
             $binding + ['status' => ['type' => 'string'], 'assigned_to_me' => ['type' => 'boolean'],
                 'assignee_participant_id' => ['type' => 'integer', 'minimum' => 1], 'query' => ['type' => 'string']], [], $read),

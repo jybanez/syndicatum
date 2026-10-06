@@ -72,6 +72,55 @@ The source-tree manifest may be newer than the latest canonical GitHub Release.
 Version notes below describe the checked-out source; installable release status
 is determined only by the signed archive and checksum on GitHub Releases.
 
+Version 0.10.18 replaces ChatGPT DOM inspection as delivery proof. After the
+metadata notice is submitted, the queue waits without replaying it. The bound
+agent loads the exact authoritative message and calls
+`confirm_notification_receipt`; Syndicatum records that receipt, publishes an
+exact Realtime event, and Companion clears only the matching queue item. Receipt
+does not acknowledge the message—acknowledgement remains a separate action after
+the agent has handled it. A status query recovers receipts missed during a
+Realtime disconnect or service-worker restart. If Chrome closes the content-
+script response channel after a possible submission, including during browser
+session restoration, Companion keeps the exact item awaiting its MCP receipt
+without presenting that transient channel closure as a connection failure.
+Existing 0.10.12 queue state is preserved during this migration. Stale channel
+errors are classified and cleared per field in both migration and live delivery
+failure handling, so an unrelated server, account, Realtime, or delivery error
+is never erased.
+
+Version 0.10.18 also serializes browser delivery by exact discussion rather
+than agent identity, preventing two bindings that share one Gemini discussion
+from racing and capturing each other's response. Generic provider exceptions
+pause for explicit review instead of automatic retry, and retain their specific
+adapter message when one is available.
+
+Gemini response capture is anchored to the exact visible user turn in document
+order. It accepts only the first assistant response after that turn and before
+the next user turn, rather than assuming the user-turn and response arrays have
+matching indexes. Recovery can therefore reuse an existing exact prompt and its
+visible response without submitting the prompt again.
+
+Version 0.10.11 recognizes the current ChatGPT user-message layout even when
+the visible notification has neither a known author-role attribute nor a
+conversation-turn test ID. The bounded fallback searches visible containers in
+the conversation region and still requires the complete route identity plus a
+Syndicatum notice marker.
+
+Version 0.10.10 keeps the 0.10.9 identity and visibility safeguards while
+allowing ChatGPT conversation-turn containers outside a `main` element. This
+matches current layouts without accepting route-only assistant summaries.
+
+Version 0.10.9 also recognizes a visible ChatGPT Syndicatum notification when
+the current conversation UI exposes it only through its conversation-turn
+article. This fallback requires the complete project, agent, message, and
+sequence identity plus a Syndicatum notice marker, so assistant summaries or
+unrelated route text cannot confirm delivery.
+
+Version 0.10.8 confirms an automatic post-binding status prompt by its unique
+binding-request ID when ChatGPT renders the `@Syndicatum` mention differently
+from the submitted text. This prevents a successful status check from remaining
+labelled `submission_unconfirmed` without weakening uncertain-delivery handling.
+
 Version 0.10.7 tolerates ChatGPT rendering differences by confirming a
 Syndicatum notification from its unique project, agent, message, and sequence
 identity when the fully rendered text differs. It also allows a bounded 30
@@ -148,13 +197,13 @@ remains visible with Retry and Close actions. It also retains Gemini discussion
 delivery and keeps each joined Realtime connection active with protocol health
 requests, reconnects safely when a worker resumes, and prefers the active or
 most recent tab with the same stable conversation ID after `/c/`, even when the
-ChatGPT project path or slug differs. It confirms the exact notification turn before
-recording delivery. It retains only a bounded metadata-only diagnostic history;
+ChatGPT project path or slug differs. Current ChatGPT delivery confirmation uses
+the MCP receipt described above, not the rendered turn. It retains only a bounded metadata-only diagnostic history;
 notification text is not copied into diagnostics.
 
 ## Provider contract
 
-Each content adapter registers `globalThis.SyndicatumProviderAdapters[provider]` with an asynchronous `deliver(text, hooks)` method. Notification-only adapters return `{ ok: true }` after the injected user turn is visible. Two-way adapters return `{ ok: true, responseText }` only after the injected user turn and its settled assistant response are visible. All adapters return `{ ok: false, retryable, code }` on failure. Core routing and durable delivery keys remain provider-independent.
+Each content adapter registers `globalThis.SyndicatumProviderAdapters[provider]` with an asynchronous `deliver(text, hooks)` method. The ChatGPT adapter returns after one composer submission and the durable queue remains pending until the server receives the exact MCP receipt. Two-way adapters return `{ ok: true, responseText }` only after the injected user turn and its settled assistant response are visible. All adapters return `{ ok: false, retryable, code }` on failure. Core routing and durable delivery keys remain provider-independent.
 
 ## Current scope
 

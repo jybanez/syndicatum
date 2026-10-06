@@ -8,9 +8,14 @@
     || document.querySelector("main [contenteditable='true']");
   const userTurns = () => outermost([...document.querySelectorAll("user-query, [data-test-id='user-query'], .user-query-container, [id^='user-query-content-']")]);
   const assistantTurns = () => outermost([...document.querySelectorAll("model-response, [data-test-id='model-response'], .model-response, response-container, [id^='model-response-message-contentr_']")]);
-  const matchingUserTurnCount = text => {
+  const matchingUserTurns = text => {
     const expected = normalizeText(text);
-    return userTurns().filter(turn => normalizeText(turn.innerText || turn.textContent).includes(expected)).length;
+    return userTurns().filter(turn => normalizeText(turn.innerText || turn.textContent).includes(expected));
+  };
+  const follows = (candidate, anchor) => Boolean(anchor?.compareDocumentPosition?.(candidate) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const responseAfterUserTurn = userTurn => {
+    const nextUserTurn = userTurns().find(turn => turn !== userTurn && follows(turn, userTurn));
+    return assistantTurns().find(turn => follows(turn, userTurn) && (!nextUserTurn || follows(nextUserTurn, turn))) || null;
   };
   const isBusy = () => Boolean(document.querySelector("button[aria-label*='Stop response' i], button[aria-label*='Stop generating' i], button.stop-button"));
 
@@ -50,14 +55,13 @@
     return null;
   }
 
-  async function waitForResponse(minimumIndex, timeoutMs = 180000) {
+  async function waitForResponse(userTurn, timeoutMs = 180000) {
     const deadline = Date.now() + timeoutMs;
     let candidate = null;
     let stableText = "";
     let stableSince = 0;
     while (Date.now() < deadline) {
-      const turns = assistantTurns();
-      candidate = turns[minimumIndex] || null;
+      candidate = responseAfterUserTurn(userTurn);
       const text = responseText(candidate);
       if (candidate && text) {
         if (text !== stableText) {
@@ -82,23 +86,24 @@
         const loggedOut = Boolean(document.querySelector("a[href*='accounts.google.com'], a[href*='ServiceLogin']"));
         return { ok: false, retryable: true, code: loggedOut ? "login_required" : "composer_not_found" };
       }
-      const before = matchingUserTurnCount(text);
-      const responseIndex = userTurns().findIndex(turn => normalizeText(turn.innerText || turn.textContent).includes(normalizeText(text)));
-      if (before > 0) {
+      const existingMatches = matchingUserTurns(text);
+      if (existingMatches.length > 0) {
+        const exactUserTurn = existingMatches[existingMatches.length - 1];
         await hooks.accepted?.({ confirmation: "existing_exact_user_turn", deduplicated: true });
-        const captured = await waitForResponse(responseIndex < 0 ? Math.max(0, assistantTurns().length - 1) : responseIndex);
+        const captured = await waitForResponse(exactUserTurn);
         return { ok: true, confirmation: "existing_exact_user_turn", deduplicated: true, responseText: captured };
       }
-      const beforeResponses = assistantTurns().length;
       setComposerValue(composer, text);
       const send = await waitForSendButton();
       if (!send) return { ok: false, retryable: true, code: "send_unavailable" };
       send.click();
       const deadline = Date.now() + 12000;
       while (Date.now() < deadline) {
-        if (matchingUserTurnCount(text) > before) {
+        const submittedMatches = matchingUserTurns(text);
+        if (submittedMatches.length > 0) {
+          const exactUserTurn = submittedMatches[submittedMatches.length - 1];
           await hooks.accepted?.({ confirmation: "new_exact_user_turn" });
-          const captured = await waitForResponse(beforeResponses);
+          const captured = await waitForResponse(exactUserTurn);
           return { ok: true, confirmation: "new_exact_user_turn", responseText: captured };
         }
         await wait(200);

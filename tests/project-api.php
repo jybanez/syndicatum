@@ -384,7 +384,7 @@ try {
             $tools[$tool['name']] = $tool['inputSchema'];
         }
         foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
-            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'acknowledge_message'] as $name) {
+            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'confirm_notification_receipt', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
             $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
         }
@@ -401,6 +401,7 @@ try {
         $suite->same(true, $tools['post_message']['properties']['attachment_file_ids']['uniqueItems']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
+        $suite->same(['message_id', 'project_sequence'], $tools['confirm_notification_receipt']['required']);
     });
 
     $suite->test('plan-progress permission links an existing task without granting broader task edits', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $agentOne, $pdo) {
@@ -1057,6 +1058,7 @@ try {
             'propose_agent_setup' => ['display_name' => 'Unbound agent proposal'],
             'propose_agent_profile_update' => ['target_agent_id' => 1, 'role_title' => 'Unbound profile proposal'],
             'post_message' => ['body' => 'Unbound call must not post', 'broadcast' => true],
+            'confirm_notification_receipt' => ['message_id' => 1, 'project_sequence' => 1],
             'acknowledge_message' => ['message_id' => 1],
         ];
         foreach ([[], ['binding_context_id' => 'not-a-confirmed-context']] as $context) {

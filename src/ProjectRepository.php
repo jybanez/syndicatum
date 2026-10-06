@@ -768,6 +768,86 @@ class ProjectRepository
         return $this->message($access, $messageId);
     }
 
+    public function confirmNotificationReceipt(array $access, $messageId, $projectSequence)
+    {
+        if (($access['identity']['kind'] ?? '') !== 'agent') {
+            throw new RuntimeException('NOTIFICATION_RECEIPT_NOT_AVAILABLE');
+        }
+        $messageId = (int) $messageId;
+        $projectSequence = (int) $projectSequence;
+        if ($messageId < 1 || $projectSequence < 1) {
+            throw new InvalidArgumentException('message_id and project_sequence must be positive integers.');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare(
+                "SELECT m.project_sequence, ma.notified_at, pp.agent_id, b.runtime_type AS provider
+                 FROM messages m
+                 JOIN message_addressees ma ON ma.message_id = m.id AND ma.participant_id = ?
+                 JOIN project_participants pp ON pp.id = ma.participant_id
+                    AND pp.project_id = m.project_id AND pp.kind = 'agent' AND pp.status = 'active'
+                 JOIN project_agents pa ON pa.project_id = pp.project_id AND pa.agent_id = pp.agent_id
+                    AND pa.status = 'active'
+                 JOIN agent_activation_bindings b ON b.project_id = pp.project_id
+                    AND b.agent_id = pp.agent_id AND b.enabled = 1
+                    AND b.runtime_type = 'chatgpt' AND b.activation_driver = 'browser_companion'
+                 WHERE m.id = ? AND m.project_id = ? AND m.deleted_at IS NULL
+                 LIMIT 1 FOR UPDATE"
+            );
+            $statement->execute([
+                (int) $access['participant_id'], $messageId,
+                (int) $access['project_id'],
+            ]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                throw new RuntimeException('MESSAGE_NOT_ADDRESSED_TO_PARTICIPANT');
+            }
+            if ((int) $row['project_sequence'] !== $projectSequence) {
+                throw new RuntimeException('MESSAGE_SEQUENCE_MISMATCH');
+            }
+            if (strtolower(trim((string) $row['provider'])) !== 'chatgpt') {
+                throw new RuntimeException('NOTIFICATION_RECEIPT_NOT_AVAILABLE');
+            }
+
+            $created = $row['notified_at'] === null;
+            $receivedAt = $created ? Db::now() : $row['notified_at'];
+            if ($created) {
+                $update = $this->pdo->prepare(
+                    'UPDATE message_addressees SET notified_at = ?
+                     WHERE message_id = ? AND participant_id = ? AND notified_at IS NULL'
+                );
+                $update->execute([
+                    $receivedAt, $messageId, (int) $access['participant_id'],
+                ]);
+                if ($this->settings->get('realtime.enabled') === true) {
+                    $this->outbox->enqueueNotificationReceived(
+                        (int) $access['project_id'], $messageId, $projectSequence,
+                        (int) $row['agent_id'], (int) $access['participant_id'],
+                        $receivedAt
+                    );
+                }
+            }
+            $this->pdo->commit();
+            return [
+                'received' => true,
+                'created' => $created,
+                'provider' => 'chatgpt',
+                'project_id' => (int) $access['project_id'],
+                'agent_id' => (int) $row['agent_id'],
+                'participant_id' => (int) $access['participant_id'],
+                'message_id' => $messageId,
+                'project_sequence' => $projectSequence,
+                'received_at' => $receivedAt,
+            ];
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     public function updateMessage(array $access, $messageId, array $input)
     {
         $this->requireWritableProject($access);

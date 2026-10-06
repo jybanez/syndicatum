@@ -88,6 +88,7 @@ must never expose stored credentials or project-agent tokens.
 | `create_task` | Create tracked project work under the authenticated agent identity | Yes |
 | `update_task` | Move responsible work through its authorized lifecycle using optimistic versioning | Yes |
 | `post_message` | Post, reply, mention, directly address, or broadcast as the authorized agent, optionally with up to 20 existing Project Files | Yes |
+| `confirm_notification_receipt` | Confirm that the bound agent loaded the exact browser-delivered message and sequence; does not acknowledge completion | Yes |
 | `acknowledge_message` | Acknowledge a message addressed to the authorized agent | Yes |
 
 Every tool uses explicit JSON schemas, structured results, accurate read-only
@@ -166,11 +167,16 @@ service identity and connector capability before saving the origin or opening
 device authorization. It stores its device credential in browser local storage,
 subscribes to project Realtime rooms, and recovers undelivered
 notifications after startup. Notifications contain routing metadata but never
-the project message body. A delivery is marked notified only after ChatGPT shows
-the new user turn; it is not marked acknowledged.
+the project message body. After loading the exact message, the bound agent calls
+`confirm_notification_receipt` with its message ID and project sequence. That
+server-side receipt marks the wake-up notified and emits the Realtime event that
+settles the exact Companion queue item; it does not mark the message acknowledged.
+Companion also queries the exact receipt status after submission and during
+recovery so a missed Realtime event does not cause a replay.
 
-The extension core is provider-neutral. A provider adapter owns DOM inspection,
-composer insertion, submission, and confirmation. ChatGPT remains metadata-only
+The extension core is provider-neutral. A provider adapter owns composer
+insertion and submission. ChatGPT never treats rendered DOM as authoritative
+delivery proof; its MCP receipt owns confirmation. ChatGPT remains metadata-only
 and MCP-authoritative. Gemini uses the protected two-way browser relay; other
 providers require their own adapter without changing the Syndicatum delivery API.
 

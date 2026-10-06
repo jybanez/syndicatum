@@ -218,6 +218,40 @@ class ConnectorDeviceService
         return ['delivered' => true, 'message_id' => (int) $messageId];
     }
 
+    public function notificationDeliveryStatus(array $device, $provider, $projectId,
+        $agentId, $messageId)
+    {
+        $provider = $this->connectorProvider($provider);
+        $driver = $this->connectorDriver($provider);
+        $statement = $this->pdo->prepare(
+            "SELECT ma.notified_at, m.project_sequence
+             FROM message_addressees ma
+             JOIN messages m ON m.id = ma.message_id
+             JOIN project_participants target ON target.id = ma.participant_id
+                AND target.kind = 'agent'
+             JOIN agent_activation_bindings b ON b.project_id = target.project_id
+                AND b.agent_id = target.agent_id
+             JOIN project_members pm ON pm.project_id = b.project_id
+                AND pm.user_id = ? AND pm.status = 'active'
+             WHERE ma.message_id = ? AND b.project_id = ? AND b.agent_id = ?
+                AND b.enabled = 1 AND b.created_by_user_id = ?
+                AND b.runtime_type = ? AND b.activation_driver = ?
+             LIMIT 1"
+        );
+        $statement->execute([
+            (int) $device['user_id'], (int) $messageId, (int) $projectId,
+            (int) $agentId, (int) $device['user_id'], $provider, $driver,
+        ]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { throw new RuntimeException('NOTIFICATION_NOT_FOUND'); }
+        return [
+            'received' => $row['notified_at'] !== null,
+            'received_at' => $row['notified_at'],
+            'project_sequence' => (int) $row['project_sequence'],
+            'message_id' => (int) $messageId,
+        ];
+    }
+
     public function submitAgentReply(array $device, $provider, $projectId, $agentId, $messageId, $body)
     {
         $provider = $this->connectorProvider($provider);

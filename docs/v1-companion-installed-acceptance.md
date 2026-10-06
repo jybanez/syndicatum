@@ -36,6 +36,7 @@ existing production agent identity.
 | New-agent success | Prepare a unique new agent name in another disposable discussion and press Continue. | Exactly one ChatGPT agent is created only after Continue, the bound IDs are shown, and `diagnose_connection` returns those same IDs. A retry must not create a second agent. |
 | Refresh/recovery failure | After server confirmation, make Companion binding refresh temporarily unavailable in a controlled test. | The UI still reports the binding as successful, shows a refresh warning, and does not claim successful notification delivery. Recovery refresh later discovers the binding. |
 | Reconnect/reopen | Reopen the bound discussion and reconnect the Companion after a controlled browser or worker restart. | The confirmed identity remains visible or is correctly re-established from authoritative state without silently changing the server, project, or agent. A status check is pending or unknown until the protected tool returns its result. |
+| Notification receipt | Deliver a uniquely identified message to the bound discussion and let the agent load it. | The agent calls `confirm_notification_receipt` with the exact message ID and project sequence. Companion clears only that queue item through Realtime or exact status recovery. The addressee is notified but remains unacknowledged until handling finishes. No rendered-DOM inspection is used as proof. |
 
 For each case, compare the browser observation with the authoritative Project
 API/MCP result and the server audit/participant/binding rows using an
