@@ -384,7 +384,7 @@ try {
             $tools[$tool['name']] = $tool['inputSchema'];
         }
         foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
-            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'confirm_notification_receipt', 'acknowledge_message'] as $name) {
+            'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'confirm_notification_receipt', 'set_notification_handling_state', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
             $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
         }
@@ -402,6 +402,11 @@ try {
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
         $suite->same(['message_id', 'project_sequence'], $tools['confirm_notification_receipt']['required']);
+        $suite->same(['message_id', 'project_sequence', 'state'], $tools['set_notification_handling_state']['required']);
+        $suite->same(['responding','working','waiting','available'], $tools['set_notification_handling_state']['properties']['state']['enum']);
+        $suite->true(isset($tools['post_message']['properties']['complete_handling_id']));
+        $suite->true(isset($tools['acknowledge_message']['properties']['complete_handling_id']));
+        $suite->true(isset($tools['update_task']['properties']['complete_handling_id']));
     });
 
     $suite->test('plan-progress permission links an existing task without granting broader task edits', function () use ($suite, $baseUrl, $humanHeaders, $agentOneHeaders, $projectOne, $agentOne, $pdo) {

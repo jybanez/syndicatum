@@ -8,6 +8,7 @@ class MessageOutbox
 {
     const EVENT_MESSAGE_CREATED = 'syndicatum.message.created';
     const EVENT_NOTIFICATION_RECEIVED = 'syndicatum.notification.received';
+    const EVENT_NOTIFICATION_HANDLING_CHANGED = 'syndicatum.notification.handling_changed';
     const EVENT_PARTICIPANTS_CHANGED = 'syndicatum.participants.changed';
     const EVENT_TASK_UPDATED = 'syndicatum.task.updated';
     const EVENT_PROJECT_PROPOSALS_CHANGED = 'syndicatum.project_proposals.changed';
@@ -102,6 +103,31 @@ class MessageOutbox
             self::EVENT_NOTIFICATION_RECEIVED, (int) $projectSequence,
             $payloadJson, $now, $now,
         ]);
+        return $this->findById((int) $this->pdo->lastInsertId());
+    }
+
+    public function enqueueNotificationHandlingChanged(array $handling)
+    {
+        $eventUuid = self::uuidV4();
+        $payload = [
+            'event_id' => $eventUuid,
+            'type' => self::EVENT_NOTIFICATION_HANDLING_CHANGED,
+            'project_id' => (int) $handling['project_id'],
+            'sequence' => (int) $handling['project_sequence'],
+            'handling' => $handling,
+        ];
+        $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payloadJson === false) { throw new RuntimeException('Unable to encode the notification handling event.'); }
+        $now = Db::now();
+        $statement = $this->pdo->prepare(
+            'INSERT INTO message_events_outbox
+             (event_uuid, project_id, message_id, event_type, project_sequence, payload_json,
+              attempt_count, available_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)'
+        );
+        $statement->execute([$eventUuid, (int) $handling['project_id'],
+            (int) $handling['message_id'], self::EVENT_NOTIFICATION_HANDLING_CHANGED,
+            (int) $handling['project_sequence'], $payloadJson, $now, $now]);
         return $this->findById((int) $this->pdo->lastInsertId());
     }
 

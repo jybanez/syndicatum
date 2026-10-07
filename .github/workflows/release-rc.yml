@@ -74,7 +74,7 @@ jobs:
             canonical-release/syndicatum-v1.0.0.manifest.json \
             "$staging_root" "$public_root" \
             "$GITHUB_SHA" "$GITHUB_REF_NAME" \
-            syndicatum-mysql84-1.0.0-baseline.1 202610040001 \
+            syndicatum-mysql84-1.0.0-baseline.1 202610070001 \
             | tee canonical-release/roundtrip.json
           package_root="$(jq -r '.stage' canonical-release/roundtrip.json)"
           install_root="$(mktemp -d)"

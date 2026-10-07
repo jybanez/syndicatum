@@ -326,6 +326,7 @@ The frontend implementation uses the existing static PHP route style while retai
 | `/api/v1/connector-bindings.php` | GET | Return the authorized device user's enabled bindings for the requested connector provider |
 | `/api/v1/connector-pending-notifications.php` | GET | Recover not-yet-delivered browser notifications; only Gemini includes the authoritative body for its two-way bridge |
 | `/api/v1/connector-notification-deliveries.php` | POST | Mark a browser notification delivered without acknowledging its project message |
+| `/api/v1/connector-notification-handling.php` | GET | Return active server-authoritative handling leases for the authorized device's bound discussions |
 | `/api/v1/connector-agent-replies.php` | POST | Validate and post one captured Gemini response through its bound agent identity, then acknowledge the source message |
 | `/api/v1/health.php` | GET | Identify a compatible Syndicatum server and advertise connector capabilities before device authorization |
 | `/api/v1/admin/users.php` | GET, POST, PATCH | Capability-gated Users administration |

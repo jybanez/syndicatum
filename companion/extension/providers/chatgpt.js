@@ -3,7 +3,6 @@
   const queryComposer = () => document.querySelector("#prompt-textarea")
     || document.querySelector("main form textarea")
     || document.querySelector("main form [contenteditable='true']");
-  const isBusy = () => Boolean(document.querySelector("[data-testid='stop-button'], button[aria-label*='Stop generating' i], button[aria-label='Stop']"));
 
   function setComposerValue(element, text) {
     element.focus();
@@ -39,7 +38,6 @@
   registry.chatgpt = {
     async deliver(text) {
       if (!/(?:^|\/)c\/[A-Za-z0-9_-]+\/?$/.test(location.pathname)) return { ok: false, retryable: false, code: "wrong_discussion" };
-      if (isBusy()) return { ok: false, retryable: true, code: "discussion_busy" };
       const composer = queryComposer();
       if (!composer) {
         const loggedOut = Boolean(document.querySelector("a[href*='auth/login'], button[data-testid*='login']"));

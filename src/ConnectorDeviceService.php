@@ -3,6 +3,7 @@
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/AuthService.php';
 require_once __DIR__ . '/ProjectRepository.php';
+require_once __DIR__ . '/NotificationHandlingService.php';
 
 class ConnectorDeviceService
 {
@@ -187,6 +188,12 @@ class ConnectorDeviceService
                 'message' => $message,
             ];
         }, $statement->fetchAll());
+    }
+
+    public function notificationHandlingStates(array $device, $provider = 'chatgpt')
+    {
+        $provider = $this->connectorProvider($provider);
+        return (new NotificationHandlingService($this->pdo))->activeForDevice($device, $provider);
     }
 
     public function markNotificationDelivered(array $device, $provider, $projectId, $agentId, $messageId)

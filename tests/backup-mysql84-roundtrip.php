@@ -224,7 +224,7 @@ try {
     }
     sort($resetTables, SORT_STRING);
     sort($excludedTables, SORT_STRING);
-    mysql84BackupAssert(count($resetTables) === 17 && count($excludedTables) === 3, 'Closed table-policy counts changed unexpectedly.');
+    mysql84BackupAssert(count($resetTables) === 18 && count($excludedTables) === 3, 'Closed table-policy counts changed unexpectedly.');
     foreach ($resetTables as $table) {
         mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() === 0, 'Reset table was revived: ' . $table);
     }
@@ -364,7 +364,7 @@ try {
         'baseline_id' => $baselineArray['baseline_id'],
         'baseline_metadata_sha256' => hash_file('sha256', $baselinePath),
         'table_count' => count($baselineArray['tables']),
-        'policy_counts' => ['durable' => 47, 'reset' => 17, 'excluded' => 3],
+        'policy_counts' => ['durable' => 47, 'reset' => 18, 'excluded' => 3],
         'envelope_sha256' => $produced['envelope_sha256'],
         'archive_sha256' => $produced['archive_sha256'],
         'manifest_sha256' => $produced['manifest_sha256'],

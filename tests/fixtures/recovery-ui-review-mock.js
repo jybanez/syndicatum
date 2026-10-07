@@ -28,7 +28,7 @@ async (page) => {
             durable_row_counts: { messages: 1 },
             backup_policy: {
               durable: { count: 28, tables: [] },
-              reset: { count: 17, tables: [] },
+              reset: { count: 18, tables: [] },
               excluded: { count: 3, tables: [] },
             },
           },

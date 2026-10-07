@@ -89,6 +89,7 @@ must never expose stored credentials or project-agent tokens.
 | `update_task` | Move responsible work through its authorized lifecycle using optimistic versioning | Yes |
 | `post_message` | Post, reply, mention, directly address, or broadcast as the authorized agent, optionally with up to 20 existing Project Files | Yes |
 | `confirm_notification_receipt` | Confirm that the bound agent loaded the exact browser-delivered message and sequence; does not acknowledge completion | Yes |
+| `set_notification_handling_state` | Declare a bounded responding/working lease, or release the discussion as waiting/available after reading a delivered notification | Yes |
 | `acknowledge_message` | Acknowledge a message addressed to the authorized agent | Yes |
 
 Every tool uses explicit JSON schemas, structured results, accurate read-only
@@ -173,6 +174,19 @@ server-side receipt marks the wake-up notified and emits the Realtime event that
 settles the exact Companion queue item; it does not mark the message acknowledged.
 Companion also queries the exact receipt status after submission and during
 recovery so a missed Realtime event does not cause a replay.
+
+After receipt, ChatGPT declares its handling state through
+`set_notification_handling_state`. `responding` and `working` create a bounded,
+renewable server lease for that exact discussion; `waiting` and `available`
+release it. Companion reads those leases at startup and receives changes over
+Realtime, so it does not infer availability from ChatGPT's rendered DOM. The
+agent passes `complete_handling_id` with its final `post_message`,
+`acknowledge_message`, or `update_task`; the action and release commit in the
+same database transaction. A final action replaces an earlier provisional
+`waiting`/`available` outcome with the action's actual terminal outcome;
+repeating that same completion is idempotent, while a conflicting terminal
+reuse is rejected. A lease expiry safely reopens a discussion if an agent exits
+without a final signal.
 
 The extension core is provider-neutral. A provider adapter owns composer
 insertion and submission. ChatGPT never treats rendered DOM as authoritative

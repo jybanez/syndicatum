@@ -3,6 +3,7 @@
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/MessageOutbox.php';
 require_once __DIR__ . '/SystemMessageService.php';
+require_once __DIR__ . '/NotificationHandlingService.php';
 
 class ProjectTaskService
 {
@@ -158,7 +159,14 @@ class ProjectTaskService
         foreach (['blocked_reason', 'completion_summary'] as $field) {
             if (array_key_exists($field, $input)) { $sets[] = $field . ' = ?'; $values[] = trim((string) $input[$field]) ?: null; }
         }
-        if (!$sets) { return $current; }
+        if (!$sets) {
+            if (!empty($input['complete_handling_id'])) {
+                $current['_notification_handling'] = (new NotificationHandlingService($this->pdo))->complete(
+                    $access, $input['complete_handling_id'],
+                    (($input['handling_outcome'] ?? '') === 'blocked') ? 'blocked' : 'task_updated');
+            }
+            return $current;
+        }
         $sets[] = 'version = version + 1'; $sets[] = 'updated_at = ?'; $values[] = Db::now();
         $values[] = (int) $taskId; $values[] = (int) $access['project_id']; $values[] = (int) $current['version'];
         $this->pdo->beginTransaction();
@@ -176,6 +184,11 @@ class ProjectTaskService
             if (($current['assignee_participant_id'] === null ? null : (int) $current['assignee_participant_id'])
                 !== ($task['assignee_participant_id'] === null ? null : (int) $task['assignee_participant_id'])) {
                 $this->systemMessages->taskAssigned($access, $task, $current['assignee_participant_id']);
+            }
+            if (!empty($input['complete_handling_id'])) {
+                $task['_notification_handling'] = (new NotificationHandlingService($this->pdo))->complete(
+                    $access, $input['complete_handling_id'],
+                    (($input['handling_outcome'] ?? '') === 'blocked') ? 'blocked' : 'task_updated');
             }
             $this->pdo->commit();
             return $task;

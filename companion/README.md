@@ -62,7 +62,7 @@ or all websites; its manifest limits host access to Syndicatum and ChatGPT.
 5. Continue only after the background discovery check identifies a compatible Syndicatum server, then approve the device in that deployment.
 6. In a ChatGPT discussion, run `@Syndicatum bind <project name> <agent name>` and confirm the prepared binding in the Companion.
 
-The browser must remain signed in to the selected provider. If it is closed or the discussion is busy, delivery stays pending and is recovered when the browser starts again. ChatGPT browser delivery marks only the wake-up as notified; the project message remains unacknowledged until ChatGPT handles it through MCP. Successful Gemini two-way delivery posts the captured response as the bound agent and then acknowledges the originating project message.
+The browser must remain signed in to the selected provider. If it is closed or Syndicatum reports an active handling lease for the discussion, delivery stays pending and is recovered when the browser starts again or the lease is released. ChatGPT browser delivery marks only the wake-up as notified; the project message remains unacknowledged until ChatGPT handles it through MCP. Successful Gemini two-way delivery posts the captured response as the bound agent and then acknowledges the originating project message.
 
 The companion also injects its packaged provider adapter on demand when a
 matching discussion tab was already open before the extension was installed or
@@ -71,6 +71,35 @@ reloaded. It never downloads or executes remote code.
 The source-tree manifest may be newer than the latest canonical GitHub Release.
 Version notes below describe the checked-out source; installable release status
 is determined only by the signed archive and checksum on GitHub Releases.
+
+Version 0.10.21 replaces DOM-based ChatGPT busy detection with authoritative
+notification handling leases. After confirming receipt, an agent declares the
+discussion responding, working, waiting, or available. Responding and working
+pause additional delivery for that exact discussion; final replies,
+acknowledgements, and task actions can release the lease, and Realtime wakes the
+queue immediately. Companion reconciles active leases over HTTP after reconnects
+and treats expiry as bounded crash recovery. A short provisional lease closes
+the gap between receipt and the agent's handling decision. Browser DOM access is
+now limited to the unavoidable composer/send interaction and is never used to
+infer agent availability or delivery confirmation.
+
+Version 0.10.20 adds an explicit, confirmed **Clear delivery queue** operation.
+It removes every currently queued item from active delivery while retaining a
+persistent no-replay tombstone for each delivery key, so a later refresh or
+Realtime repeat cannot submit the cleared message again. The operation preserves
+the authorized account, device, and discussion bindings, verifies that the queue
+count has not changed since the confirmation dialog opened, and records a
+provider/state summary of the clear. It does not mark messages delivered on the
+server or clear delivery/aggregate health errors whose origin cannot be proven
+to belong to the retired queue set.
+
+Version 0.10.19 isolates a rebound ChatGPT discussion from unresolved delivery
+history without discarding or replaying that history. Recovery keeps any
+already-submitted, receipt-waiting, or review-required item attached to the
+discussion where its browser outcome became uncertain. Only items that have
+never started submission adopt the new binding, so a full or retired discussion
+cannot block safe pending work from reaching its replacement. Exact receipt
+reconciliation and per-discussion serialization remain unchanged.
 
 Version 0.10.18 replaces ChatGPT DOM inspection as delivery proof. After the
 metadata notice is submitted, the queue waits without replaying it. The bound

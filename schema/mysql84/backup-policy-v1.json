@@ -32,6 +32,7 @@
     "message_file_attachments": {"backup_policy": "durable"},
     "message_revisions": {"backup_policy": "durable"},
     "messages": {"backup_policy": "durable"},
+    "notification_handling_leases": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "oauth_access_tokens": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "oauth_authorization_codes": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "oauth_clients": {"backup_policy": "durable"},

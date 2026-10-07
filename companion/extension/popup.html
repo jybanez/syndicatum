@@ -28,6 +28,7 @@
         <button id="copy-review" class="secondary diagnostics-button" type="button">Copy safe review metadata</button><span id="copy-review-result" class="copy-result" role="status" aria-live="polite"></span>
       </section>
       <details id="diagnostics"><summary>Diagnostics</summary><dl><div><dt>Version</dt><dd id="diagnostic-version">—</dd></div><div><dt>Last server check</dt><dd id="last-server-check">Never</dd></div><div><dt>Last binding sync</dt><dd id="last-sync">Never</dd></div><div><dt>Last Realtime join</dt><dd id="last-realtime">Never</dd></div><div><dt>Last delivery</dt><dd id="last-delivery">Never</dd></div></dl><button id="copy-diagnostics" class="secondary diagnostics-button" type="button">Copy diagnostics</button><span id="copy-result" class="copy-result" role="status" aria-live="polite"></span></details>
+      <button id="open-clear-queue" class="danger-action" type="button" hidden>Clear delivery queue</button>
       <div class="actions"><button id="refresh" type="button">Refresh</button><button id="disconnect" class="secondary" type="button">Disconnect</button></div>
     </section>
     <dialog id="server-dialog">
@@ -38,6 +39,17 @@
         <input id="new-base-url" type="url" placeholder="http://syndicatumserver.com" autocomplete="url" spellcheck="false">
         <p id="server-change-error" class="error" hidden></p>
         <div class="actions"><button id="cancel-server-change" class="secondary" value="cancel" type="button">Cancel</button><button id="confirm-server-change" value="default" type="button">Validate &amp; Continue</button></div>
+      </form>
+    </dialog>
+    <dialog id="clear-queue-dialog">
+      <form method="dialog" novalidate>
+        <h2>Clear delivery queue</h2>
+        <p id="clear-queue-summary"></p>
+        <p>Cleared items will not be submitted, retried, or re-queued on this Companion. Account authorization and discussion bindings are preserved.</p>
+        <label for="clear-queue-confirmation">Type <strong>CLEAR</strong> to continue</label>
+        <input id="clear-queue-confirmation" autocomplete="off" spellcheck="false" aria-describedby="clear-queue-error">
+        <p id="clear-queue-error" class="error" role="alert" hidden></p>
+        <div class="actions"><button id="cancel-clear-queue" class="secondary" type="button">Cancel</button><button id="confirm-clear-queue" class="danger-action" type="button">Clear queue</button></div>
       </form>
     </dialog>
   </main>

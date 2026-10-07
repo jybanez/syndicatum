@@ -5,13 +5,12 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../extension/providers/chatgpt.js", import.meta.url), "utf8");
 
-function adapterFor({ pathname = "/c/test-discussion", busy = false, composer = null, send = null } = {}) {
+function adapterFor({ pathname = "/c/test-discussion", composer = null, send = null } = {}) {
   let queryAllCalls = 0;
   const context = {
     HTMLTextAreaElement: class {}, HTMLInputElement: class {}, InputEvent: class {},
     document: {
       querySelector(selector) {
-        if (selector.includes("stop-button")) return busy ? {} : null;
         if (selector.includes("prompt-textarea")) return composer;
         if (selector.includes("send-button")) return send;
         return null;
@@ -40,7 +39,6 @@ test("ChatGPT submits once and waits for an explicit agent receipt", async () =>
 
 test("ChatGPT reports clear pre-submission failures", async () => {
   assert.equal((await adapterFor({ pathname: "/" }).adapter.deliver("notice")).code, "wrong_discussion");
-  assert.equal((await adapterFor({ busy: true }).adapter.deliver("notice")).code, "discussion_busy");
   assert.equal((await adapterFor().adapter.deliver("notice")).code, "composer_not_found");
 });
 
