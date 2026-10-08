@@ -1,4 +1,4 @@
-import { applyDeliveryReceipt, applyNotificationHandlingState, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, clearDeliveryQueueState, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, DELIVERY_REVIEW_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionHasActiveHandling, isUncertainDeliveryFailure, matchingDiscussionTabs, mergeQueuedDelivery, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
+import { applyDeliveryReceipt, applyNotificationHandlingState, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, clearDeliveryQueueState, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, DELIVERY_REVIEW_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionHasActiveHandling, isUncertainDeliveryFailure, legacySettledDeliveryErrorPatch, matchingDiscussionTabs, mergeQueuedDelivery, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, PROVIDERS, recoveryItem, selectDeliveryTab, serverFailureKind } from "./core.mjs";
 
 const STATE_KEY = "syndicatumCompanion";
 const RETRY_ALARM = "syndicatum-retry";
@@ -388,7 +388,7 @@ async function stage(item) {
 async function quarantineLegacyDeliveryQueue() {
   return updateDeliveryState(current => {
     const version = Number(current.deliveryQueueVersion || 0);
-    if (version >= 7) return {};
+    if (version >= 8) return {};
     const queue = { ...(current.queue || {}) };
     if (version < 2) {
       const reviewRequestedAt = new Date().toISOString();
@@ -417,8 +417,9 @@ async function quarantineLegacyDeliveryQueue() {
     }
     return {
       queue,
-      deliveryQueueVersion: 7,
+      deliveryQueueVersion: 8,
       ...awaitingReceiptTransportErrorPatch(current, queue),
+      ...legacySettledDeliveryErrorPatch(current, queue),
     };
   });
 }
@@ -598,7 +599,7 @@ async function drain(shard = null) {
             // Once a ChatGPT submission may have occurred, the MCP receipt is
             // authoritative. Preserve unrelated health errors and clear only
             // stale channel-closure fields; never invite an automatic replay.
-            ...deliveryFailureHealthPatch(current, queue, awaitingReceipt, deliveryError),
+            ...deliveryFailureHealthPatch(current, queue, awaitingReceipt, deliveryError, key, failedAt),
           };
         });
         if (awaitingReceipt) {
@@ -652,7 +653,7 @@ async function resolveDeliveryReview(key, resolution) {
     shard = deliveryShardKey(item);
     if (resolution === "discard_stale") {
       delete queue[key];
-      return { queue, lastDeliveryError: null, lastError: null };
+      return { queue, lastDeliveryError: null, lastDeliveryErrorKey: null, lastDeliveryErrorAt: null, lastError: null };
     }
     if (resolution === "confirm_visible" && item.provider !== "chatgpt") throw new Error("Only a ChatGPT metadata notification can be confirmed from an existing visible turn.");
     const resolvedAt = new Date().toISOString();
@@ -667,7 +668,7 @@ async function resolveDeliveryReview(key, resolution) {
         browserDelivery: { ok: true, confirmation: "operator_confirmed_exact_user_turn" },
       } : { operatorRetryAuthorizedAt: resolvedAt, browserDeliveredAt: null, browserDelivery: null }),
     };
-    return { queue: prioritizeDeliveryReview(queue, key, resolved), lastDeliveryError: null, lastError: null };
+    return { queue: prioritizeDeliveryReview(queue, key, resolved), lastDeliveryError: null, lastDeliveryErrorKey: null, lastDeliveryErrorAt: null, lastError: null };
   });
   await drain(shard);
   return publicStatus();

@@ -7,7 +7,7 @@
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
     "codex_plugin": "0.2.2",
-    "companion": "0.10.23"
+    "companion": "0.10.24"
   },
   "channels": [
     {
@@ -95,7 +95,7 @@
       ]
     },
     "companion": {
-      "tested_source_version": "0.10.23",
+      "tested_source_version": "0.10.24",
       "production_range": null,
       "providers": ["ChatGPT web", "Gemini web"]
     },

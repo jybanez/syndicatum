@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyDeliveryReceipt, applyNotificationHandlingState, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, clearDeliveryQueueState, companionDiagnostics, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionHasActiveHandling, discussionIdentity, isUncertainDeliveryFailure, matchingDiscussionTabs, mergeQueuedDelivery, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, receiptDeliveryKey, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
+import { applyDeliveryReceipt, applyNotificationHandlingState, awaitingReceiptTransportErrorPatch, bindingAcceptsMessage, bindingInventorySignature, bindingsFromResponse, clearDeliveryQueueState, companionDiagnostics, companionHealth, DELIVERY_AWAITING_RECEIPT_STATE, deliveryFailureHealthPatch, deliveryKey, deliveryReviewItems, deliveryShardKey, discussionHasActiveHandling, discussionIdentity, isUncertainDeliveryFailure, legacySettledDeliveryErrorPatch, matchingDiscussionTabs, mergeQueuedDelivery, normalizeBaseUrl, normalizeDiscussionUrl, notificationFor, prioritizeDeliveryReview, providerForDiscussionUrl, receiptDeliveryKey, selectDeliveryTab, serverFailureKind } from "../extension/core.mjs";
 
 const binding = { provider: "chatgpt", project_id: 3, agent_id: 30, participant_id: 44, agent_name: "Reviewer" };
 const message = { id: 91, project_sequence: 17, sender: { participant_id: 8, display_name: "Jonathan" }, addressees: [{ participant_id: 44, reason: "direct" }] };
@@ -193,6 +193,57 @@ test("an exact receipt preserves unrelated health errors", () => {
   assert.equal(current.lastDeliveryError, "another delivery failed");
   assert.equal(current.lastError, "account authorization expired");
 });
+test("an exact receipt clears only the matching delivery error", () => {
+  const key = "chatgpt:3:30:91";
+  const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };
+  const deliveryError = "Delivery pending: send_unavailable";
+  const settled = applyDeliveryReceipt({
+    queue: { [key]: { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } } },
+    lastDeliveryError: deliveryError,
+    lastDeliveryErrorKey: key,
+    lastDeliveryErrorAt: "2026-10-06T00:59:00Z",
+    lastError: deliveryError,
+    lastServerError: "server error to preserve",
+  }, receipt);
+  assert.equal(settled.settled, true);
+  assert.deepEqual(settled.patch.queue, {});
+  assert.equal(settled.patch.lastDeliveryError, null);
+  assert.equal(settled.patch.lastDeliveryErrorKey, null);
+  assert.equal(settled.patch.lastDeliveryErrorAt, null);
+  assert.equal(settled.patch.lastError, null);
+  assert.equal("lastServerError" in settled.patch, false);
+});
+test("a receipt does not clear an error owned by another delivery", () => {
+  const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };
+  const settled = applyDeliveryReceipt({
+    queue: { "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } } },
+    lastDeliveryError: "Delivery pending: send_unavailable",
+    lastDeliveryErrorKey: "chatgpt:3:30:92",
+    lastError: "Delivery pending: send_unavailable",
+  }, receipt);
+  assert.equal("lastDeliveryError" in settled.patch, false);
+  assert.equal("lastDeliveryErrorKey" in settled.patch, false);
+  assert.equal("lastError" in settled.patch, false);
+});
+test("legacy migration clears only a settled unscoped send-unavailable error", () => {
+  const current = {
+    queue: {},
+    lastDeliveryError: "Delivery pending: send_unavailable",
+    lastError: "Delivery pending: send_unavailable",
+    lastDeliveryAt: "2026-10-08T18:17:53Z",
+    lastDeliveryDiagnostic: { outcome: "agent_receipt_confirmed", completedAt: "2026-10-08T18:17:53Z" },
+  };
+  assert.deepEqual(legacySettledDeliveryErrorPatch(current, current.queue), {
+    lastDeliveryError: null, lastDeliveryErrorKey: null, lastDeliveryErrorAt: null, lastError: null,
+  });
+  assert.deepEqual(legacySettledDeliveryErrorPatch({ ...current, lastError: null }, {}), {
+    lastDeliveryError: null, lastDeliveryErrorKey: null, lastDeliveryErrorAt: null,
+  });
+  assert.deepEqual(legacySettledDeliveryErrorPatch({ ...current, queue: { pending: {} } }, { pending: {} }), {});
+  assert.deepEqual(legacySettledDeliveryErrorPatch({ ...current, lastError: "server unavailable" }, {}), {});
+  assert.deepEqual(legacySettledDeliveryErrorPatch({ ...current, lastDeliveryError: "Delivery pending: composer_not_found", lastError: "Delivery pending: composer_not_found" }, {}), {});
+  assert.deepEqual(legacySettledDeliveryErrorPatch({ ...current, lastDeliveryDiagnostic: { outcome: "pending", completedAt: current.lastDeliveryAt } }, {}), {});
+});
 test("does not settle a queue item when the receipt sequence differs", () => {
   const current = { queue: { "chatgpt:3:30:91": { provider: "chatgpt", project_id: 3, agent_id: 30, message: { id: 91, project_sequence: 17 } } } };
   const settled = applyDeliveryReceipt(current, { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 99 });
@@ -229,8 +280,10 @@ test("runtime delivery failure health patches preserve unrelated errors while aw
     lastDeliveryError: "message channel closed before a response was received",
     lastError: "server unreachable",
   }, queue, true, "Delivery pending: message channel closed before a response was received"), { lastDeliveryError: null });
-  assert.deepEqual(deliveryFailureHealthPatch({}, queue, false, "Delivery pending: composer_not_found"), {
+  assert.deepEqual(deliveryFailureHealthPatch({}, queue, false, "Delivery pending: composer_not_found", "chatgpt:2:41:4451", "2026-10-06T01:00:00Z"), {
     lastDeliveryError: "Delivery pending: composer_not_found",
+    lastDeliveryErrorKey: "chatgpt:2:41:4451",
+    lastDeliveryErrorAt: "2026-10-06T01:00:00Z",
     lastError: "Delivery pending: composer_not_found",
   });
 });
