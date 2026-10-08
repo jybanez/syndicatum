@@ -160,11 +160,11 @@ class ProjectTaskService
             if (array_key_exists($field, $input)) { $sets[] = $field . ' = ?'; $values[] = trim((string) $input[$field]) ?: null; }
         }
         if (!$sets) {
-            if (!empty($input['complete_handling_id'])) {
-                $current['_notification_handling'] = (new NotificationHandlingService($this->pdo))->complete(
-                    $access, $input['complete_handling_id'],
-                    (($input['handling_outcome'] ?? '') === 'blocked') ? 'blocked' : 'task_updated');
-            }
+            $handlingService = new NotificationHandlingService($this->pdo);
+            $current['_notification_handling'] = !empty($input['complete_handling_id'])
+                ? $handlingService->complete($access, $input['complete_handling_id'],
+                    (($input['handling_outcome'] ?? '') === 'blocked') ? 'blocked' : 'task_updated')
+                : $handlingService->completeCurrent($access, 'task_updated');
             return $current;
         }
         $sets[] = 'version = version + 1'; $sets[] = 'updated_at = ?'; $values[] = Db::now();
@@ -185,11 +185,11 @@ class ProjectTaskService
                 !== ($task['assignee_participant_id'] === null ? null : (int) $task['assignee_participant_id'])) {
                 $this->systemMessages->taskAssigned($access, $task, $current['assignee_participant_id']);
             }
-            if (!empty($input['complete_handling_id'])) {
-                $task['_notification_handling'] = (new NotificationHandlingService($this->pdo))->complete(
-                    $access, $input['complete_handling_id'],
-                    (($input['handling_outcome'] ?? '') === 'blocked') ? 'blocked' : 'task_updated');
-            }
+            $handlingService = new NotificationHandlingService($this->pdo);
+            $task['_notification_handling'] = !empty($input['complete_handling_id'])
+                ? $handlingService->complete($access, $input['complete_handling_id'],
+                    (($input['handling_outcome'] ?? '') === 'blocked') ? 'blocked' : 'task_updated')
+                : $handlingService->completeCurrent($access, 'task_updated');
             $this->pdo->commit();
             return $task;
         } catch (Exception $exception) {

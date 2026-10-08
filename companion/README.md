@@ -72,6 +72,13 @@ The source-tree manifest may be newer than the latest canonical GitHub Release.
 Version notes below describe the checked-out source; installable release status
 is determined only by the signed archive and checksum on GitHub Releases.
 
+Version 0.10.23 makes notification handling resilient when ChatGPT retains an
+older or incomplete MCP tool snapshot. Confirming receipt now establishes the
+bounded responding lease on the server, and a successful existing final
+message, acknowledgement, or task action releases that lease automatically.
+The standalone handling-state tool remains the preferred way to explicitly
+change or renew a state, but its absence no longer prevents safe completion.
+
 Version 0.10.22 makes ChatGPT composer discovery tolerate delayed single-page
 application rendering and current unified-composer markup. Discovery is bounded,
 rejects hidden or disabled candidates, and cancels safely if the tab navigates to

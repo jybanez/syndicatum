@@ -514,11 +514,11 @@ class ProjectRepository
             if ($existingRow !== false) {
                 $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
                     [$preAttachmentRequestFingerprint, $legacyRequestFingerprint]);
+                $handlingService = new NotificationHandlingService($this->pdo);
                 $handling = !empty($input['complete_handling_id'])
-                    ? (new NotificationHandlingService($this->pdo))->complete(
-                        $access, $input['complete_handling_id'],
+                    ? $handlingService->complete($access, $input['complete_handling_id'],
                         (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded')
-                    : null;
+                    : $handlingService->completeCurrent($access, 'responded');
                 return ['message' => $this->message($access, $existingRow['id']),
                     'created' => false, 'notification_handling' => $handling];
             }
@@ -651,12 +651,11 @@ class ProjectRepository
             (new AgentWebhookService($this->pdo))->enqueueMessageCreated($projectId, $messageId, $message);
             (new WorkspaceAgentTriggerService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
             (new ResponsesApiActivationService($this->pdo))->enqueueMessageCreated($projectId, $messageId);
-            $handling = null;
-            if (!empty($input['complete_handling_id'])) {
-                $handling = (new NotificationHandlingService($this->pdo))->complete(
-                    $access, $input['complete_handling_id'],
-                    (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded');
-            }
+            $handlingService = new NotificationHandlingService($this->pdo);
+            $handling = !empty($input['complete_handling_id'])
+                ? $handlingService->complete($access, $input['complete_handling_id'],
+                    (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded')
+                : $handlingService->completeCurrent($access, 'responded');
             $this->pdo->commit();
             return ['message' => $message, 'created' => true,
                 'notification_handling' => $handling];
@@ -673,11 +672,11 @@ class ProjectRepository
                 if ($existingRow !== false) {
                     $this->assertMatchingMessageRequest($existingRow, $requestFingerprint,
                         [$preAttachmentRequestFingerprint, $legacyRequestFingerprint]);
+                    $handlingService = new NotificationHandlingService($this->pdo);
                     $handling = !empty($input['complete_handling_id'])
-                        ? (new NotificationHandlingService($this->pdo))->complete(
-                            $access, $input['complete_handling_id'],
+                        ? $handlingService->complete($access, $input['complete_handling_id'],
                             (($input['handling_outcome'] ?? '') === 'waiting') ? 'waiting' : 'responded')
-                        : null;
+                        : $handlingService->completeCurrent($access, 'responded');
                     return ['message' => $this->message($access, $existingRow['id']),
                         'created' => false, 'notification_handling' => $handling];
                 }
@@ -788,9 +787,10 @@ class ProjectRepository
                 }
             }
             $message = $this->message($access, $messageId);
-            $handling = $completeHandlingId === null ? null
-                : (new NotificationHandlingService($this->pdo))->complete(
-                    $access, $completeHandlingId, 'acknowledged');
+            $handlingService = new NotificationHandlingService($this->pdo);
+            $handling = $completeHandlingId === null
+                ? $handlingService->completeCurrent($access, 'acknowledged', $messageId)
+                : $handlingService->complete($access, $completeHandlingId, 'acknowledged');
             $this->pdo->commit();
             return $completeHandlingId === null ? $message
                 : ['message' => $message, 'notification_handling' => $handling];
@@ -860,6 +860,8 @@ class ProjectRepository
                     );
                 }
             }
+            $handling = (new NotificationHandlingService($this->pdo))->ensureResponding(
+                $access, $messageId, $projectSequence);
             $this->pdo->commit();
             return [
                 'received' => true,
@@ -871,6 +873,7 @@ class ProjectRepository
                 'message_id' => $messageId,
                 'project_sequence' => $projectSequence,
                 'received_at' => $receivedAt,
+                'notification_handling' => $handling,
             ];
         } catch (Exception $exception) {
             if ($this->pdo->inTransaction()) {

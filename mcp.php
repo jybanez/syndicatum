@@ -336,7 +336,7 @@ function mcpTools()
             $binding + ['url' => ['type' => 'string', 'format' => 'uri', 'minLength' => 1, 'maxLength' => 4096],
                 'max_bytes' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 1048576, 'default' => 65536]],
             ['url'], $read),
-        $tool('confirm_notification_receipt', 'Confirm notification receipt', 'Immediately after get_message successfully loads the exact browser-delivered notification, send its message ID and project sequence to Syndicatum. This confirms receipt to Companion without acknowledging that the work is complete. Then call set_notification_handling_state so Companion knows whether this discussion is available or actively working.',
+        $tool('confirm_notification_receipt', 'Confirm notification receipt', 'Immediately after get_message successfully loads the exact browser-delivered notification, send its message ID and project sequence to Syndicatum. This confirms receipt without acknowledging completion and automatically starts a bounded responding lease. Use set_notification_handling_state when available to change or renew that state; existing final post, acknowledgement, or task tools also release the current lease automatically.',
             $binding + ['message_id' => ['type' => 'integer', 'minimum' => 1],
                 'project_sequence' => ['type' => 'integer', 'minimum' => 1]],
             ['message_id', 'project_sequence'], $write),
@@ -358,7 +358,7 @@ function mcpTools()
                 'assignee_participant_id' => ['type' => 'integer', 'minimum' => 1],
                 'due_at' => ['type' => 'string', 'description' => 'Optional date and time'],
                 'source_message_id' => ['type' => 'integer', 'minimum' => 1]], ['title'], $write),
-        $tool('update_task', 'Update assigned task state', 'Move an assigned task through its authorized lifecycle using the latest version. Agents may start, block, or submit their own tasks; supervisors may review direct reports.',
+        $tool('update_task', 'Update assigned task state', 'Move an assigned task through its authorized lifecycle using the latest version. Agents may start, block, or submit their own tasks; supervisors may review direct reports. A successful update automatically releases the current notification lease; complete_handling_id remains available for exact explicit correlation.',
             $binding + ['task_id' => ['type' => 'integer', 'minimum' => 1], 'version' => ['type' => 'integer', 'minimum' => 1],
                 'status' => ['type' => 'string', 'enum' => ['open','in_progress','in_review','blocked','completed','cancelled']],
                 'blocked_reason' => ['type' => 'string'], 'completion_summary' => ['type' => 'string'], 'note' => ['type' => 'string'],
@@ -403,7 +403,7 @@ function mcpTools()
                 'role_instructions' => ['type' => 'string', 'maxLength' => 20000],
                 'supervising_participant_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
                 'rationale' => ['type' => 'string', 'maxLength' => 4000]], ['target_agent_id'], $write),
-        $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent, optionally attaching up to 20 existing files from the project. Addressees indicate expected responders, not visibility. Pass complete_handling_id on the final response or clarification so Companion can release the discussion.',
+        $tool('post_message', 'Post a project message', 'Post or reply as the authorized Syndicatum agent, optionally attaching up to 20 existing files from the project. Addressees indicate expected responders, not visibility. A successful post automatically releases the current notification lease; complete_handling_id remains available for exact explicit correlation.',
             $binding + ['body' => ['type' => 'string', 'minLength' => 1], 'direct_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]],
                 'mention_participant_ids' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1]], 'broadcast' => ['type' => 'boolean'],
                 'attachment_file_ids' => ['type' => 'array', 'maxItems' => 20, 'uniqueItems' => true,
@@ -414,7 +414,7 @@ function mcpTools()
                 'idempotency_key' => ['type' => 'string', 'maxLength' => 160],
                 'complete_handling_id' => ['type' => 'string', 'description' => 'Optional handling_id to release after this final message succeeds.'],
                 'handling_outcome' => ['type' => 'string', 'enum' => ['responded','waiting'], 'default' => 'responded']], ['body', 'idempotency_key'], $write),
-        $tool('acknowledge_message', 'Acknowledge a message', 'Acknowledge a message that was addressed to the authorized agent. Pass complete_handling_id when acknowledgement finishes the current notification handling.', $binding + [
+        $tool('acknowledge_message', 'Acknowledge a message', 'Acknowledge a message that was addressed to the authorized agent. A successful acknowledgement automatically releases that message\'s current notification lease; complete_handling_id remains available for exact explicit correlation.', $binding + [
             'message_id' => ['type' => 'integer', 'minimum' => 1],
             'complete_handling_id' => ['type' => 'string', 'description' => 'Optional handling_id to release after acknowledgement succeeds.']], ['message_id'], $write),
     ];
