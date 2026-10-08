@@ -137,6 +137,8 @@ try {
         $receipt = $repository->confirmNotificationReceipt($agentAccess, $created['message']['id'], $created['message']['project_sequence']);
         $suite->same(true, $receipt['received']);
         $suite->same(true, $receipt['created']);
+        $suite->same('responding', $receipt['notification_handling']['state']);
+        $suite->same(true, $receipt['notification_handling']['busy']);
         $suite->same(0, count($connector->pendingNotifications(['user_id' => $owner['id']], 'chatgpt')));
         $status = $connector->notificationDeliveryStatus($device, 'chatgpt', $project['id'], $agent['agent_id'], $created['message']['id']);
         $suite->same(true, $status['received']);
@@ -152,6 +154,8 @@ try {
         $eventCount = (int) $pdo->query("SELECT COUNT(*) FROM message_events_outbox WHERE event_type = 'syndicatum.notification.received'")->fetchColumn();
         $duplicate = $repository->confirmNotificationReceipt($agentAccess, $created['message']['id'], $created['message']['project_sequence']);
         $suite->same(false, $duplicate['created']);
+        $suite->same($receipt['notification_handling']['handling_id'],
+            $duplicate['notification_handling']['handling_id']);
         $suite->same($eventCount, (int) $pdo->query("SELECT COUNT(*) FROM message_events_outbox WHERE event_type = 'syndicatum.notification.received'")->fetchColumn());
         $handlingService = new NotificationHandlingService($pdo);
         $handling = $handlingService->setState($agentAccess, $created['message']['id'],
@@ -243,6 +247,52 @@ try {
         ]);
         $suite->same('task_updated', $handlingTask['_notification_handling']['completion_outcome']);
         $suite->same('available', $handlingTask['_notification_handling']['state']);
+
+        $fallbackAcknowledgement = $repository->createMessage($ownerAccess, [
+            'body' => 'Complete through the cached acknowledgement schema.',
+            'direct_participant_ids' => [$chatGptBindings[0]['participant_id']],
+        ]);
+        $fallbackAcknowledgementReceipt = $repository->confirmNotificationReceipt($agentAccess,
+            $fallbackAcknowledgement['message']['id'],
+            $fallbackAcknowledgement['message']['project_sequence']);
+        $repository->acknowledge($agentAccess, $fallbackAcknowledgement['message']['id']);
+        $fallbackAcknowledgementRow = $pdo->query("SELECT state, completion_outcome, active_slot
+            FROM notification_handling_leases WHERE handling_uuid = "
+            . $pdo->quote($fallbackAcknowledgementReceipt['notification_handling']['handling_id']))->fetch();
+        $suite->same('available', $fallbackAcknowledgementRow['state']);
+        $suite->same('acknowledged', $fallbackAcknowledgementRow['completion_outcome']);
+        $suite->same(null, $fallbackAcknowledgementRow['active_slot']);
+
+        $fallbackResponseRequest = $repository->createMessage($ownerAccess, [
+            'body' => 'Complete through the cached post schema.',
+            'direct_participant_ids' => [$chatGptBindings[0]['participant_id']],
+        ]);
+        $repository->confirmNotificationReceipt($agentAccess,
+            $fallbackResponseRequest['message']['id'],
+            $fallbackResponseRequest['message']['project_sequence']);
+        $fallbackResponse = $repository->createMessage($agentAccess, [
+            'body' => 'This existing post action also releases the lease.',
+            'broadcast' => true,
+            'idempotency_key' => 'handling-fallback-response',
+        ]);
+        $suite->same('responded', $fallbackResponse['notification_handling']['completion_outcome']);
+        $suite->same(false, $fallbackResponse['notification_handling']['busy']);
+
+        $fallbackTaskRequest = $repository->createMessage($ownerAccess, [
+            'body' => 'Complete through the cached task schema.',
+            'direct_participant_ids' => [$chatGptBindings[0]['participant_id']],
+        ]);
+        $repository->confirmNotificationReceipt($agentAccess,
+            $fallbackTaskRequest['message']['id'], $fallbackTaskRequest['message']['project_sequence']);
+        $fallbackTask = $tasks->create($agentAccess, [
+            'title' => 'Complete through cached task update',
+            'assignee_participant_id' => $chatGptBindings[0]['participant_id'],
+        ]);
+        $fallbackTask = $tasks->update($agentAccess, $fallbackTask['id'], [
+            'version' => $fallbackTask['version'], 'status' => 'in_progress',
+        ]);
+        $suite->same('task_updated', $fallbackTask['_notification_handling']['completion_outcome']);
+        $suite->same(false, $fallbackTask['_notification_handling']['busy']);
         $suite->throws(function () use ($service, $project, $agent, $owner) {
             $service->configure($project['id'], $agent['agent_id'], $owner['id'], [
                 'enabled' => true, 'provider' => 'chatgpt', 'activation_driver' => 'responses_api',

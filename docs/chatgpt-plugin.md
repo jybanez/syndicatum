@@ -190,7 +190,12 @@ Companion also queries the exact receipt status after submission and during
 recovery so a missed Realtime event does not cause a replay.
 
 After receipt, ChatGPT declares its handling state through
-`set_notification_handling_state`. `responding` and `working` create a bounded,
+Receipt confirmation also starts a bounded `responding` lease, so a client with
+an older or incomplete tool snapshot still prevents overlapping delivery.
+Successful `post_message`, `acknowledge_message`, and `update_task` calls release
+the active discussion lease automatically. When exposed,
+`set_notification_handling_state` remains the explicit control:
+`responding` and `working` create a bounded,
 renewable server lease for that exact discussion; `waiting` and `available`
 release it. Companion reads those leases at startup and receives changes over
 Realtime, so it does not infer availability from ChatGPT's rendered DOM. The

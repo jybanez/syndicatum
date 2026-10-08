@@ -18,6 +18,26 @@ class NotificationHandlingService
         $this->outbox = new MessageOutbox($pdo);
     }
 
+    public function ensureResponding(array $access, $messageId, $projectSequence)
+    {
+        $this->requireDiscussionAgent($access);
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) { $this->pdo->beginTransaction(); }
+        try {
+            $this->messageContext($access, $messageId, $projectSequence, true);
+            $existing = $this->rowForMessage(
+                (int) $messageId, (int) $access['participant_id'], true);
+            $result = $existing
+                ? $this->publicState($existing)
+                : $this->setState($access, $messageId, $projectSequence, 'responding');
+            if ($ownsTransaction) { $this->pdo->commit(); }
+            return $result;
+        } catch (Exception $exception) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
+    }
+
     public function setState(array $access, $messageId, $projectSequence, $state, $leaseSeconds = null)
     {
         $this->requireDiscussionAgent($access);
@@ -129,6 +149,42 @@ class NotificationHandlingService
             }
             if ($ownsTransaction) { $this->pdo->commit(); }
             return $this->publicState($row);
+        } catch (Exception $exception) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
+    }
+
+    public function completeCurrent(array $access, $outcome, $messageId = null)
+    {
+        if (($access['identity']['kind'] ?? '') !== 'agent'
+            || (($access['binding']['type'] ?? '') !== 'discussion')) {
+            return null;
+        }
+        $discussionReference = trim((string) ($access['binding']['discussion_reference'] ?? ''));
+        $agentId = (int) ($access['identity']['agent']['authenticated_agent_id'] ?? 0);
+        if ($discussionReference === '' || $agentId < 1) { return null; }
+
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) { $this->pdo->beginTransaction(); }
+        try {
+            $sql = "SELECT * FROM notification_handling_leases
+                    WHERE project_id = ? AND participant_id = ? AND agent_id = ?
+                      AND provider = 'chatgpt' AND conversation_hash = ?
+                      AND active_slot = 1 AND lease_expires_at > ?";
+            $values = [(int) $access['project_id'], (int) $access['participant_id'],
+                $agentId, hash('sha256', $discussionReference), Db::now()];
+            if ($messageId !== null) {
+                $sql .= ' AND message_id = ?';
+                $values[] = (int) $messageId;
+            }
+            $sql .= ' ORDER BY id DESC LIMIT 1 FOR UPDATE';
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute($values);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            $result = $row ? $this->complete($access, $row['handling_uuid'], $outcome) : null;
+            if ($ownsTransaction) { $this->pdo->commit(); }
+            return $result;
         } catch (Exception $exception) {
             if ($ownsTransaction && $this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $exception;

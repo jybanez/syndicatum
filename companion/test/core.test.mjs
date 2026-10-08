@@ -242,6 +242,9 @@ test("ChatGPT receives only an MCP-first metadata notification", () => {
   assert.match(text, /confirm_notification_receipt/);
   assert.match(text, /message_id 91/);
   assert.match(text, /project_sequence 17/);
+  assert.match(text, /receipt starts a bounded responding lease/);
+  assert.match(text, /actions automatically release the current lease/);
+  assert.match(text, /If set_notification_handling_state is available/);
   assert.match(text, /post the full response there/);
   assert.match(text, /show only a concise summary here/);
   assert.match(text, /leave it unhandled and unacknowledged/);
