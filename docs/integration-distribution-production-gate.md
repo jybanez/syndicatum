@@ -24,7 +24,7 @@ installed-client acceptance gates below remain open.
 | Integration | Current channel | Classification | Production blocker |
 | --- | --- | --- | --- |
 | ChatGPT hosted MCP | Developer/custom MCP connection | Development | No approved public OpenAI plugin listing; current public-review artifact, domain challenge, scans, reviewer materials, and directory identity are not retained. |
-| Codex connector | Git-backed local marketplace; `codex-v0.2.1` stable candidate | Pilot | The immutable `codex-v0.2.0` release and provenance are published, but installed acceptance found a handshake-version defect and an unresolved Windows cache-lock rollback failure. The patch candidate and exact installed clean-install/update/rollback/device evidence remain open. |
+| Codex connector | Git-backed local marketplace; `codex-v0.2.2` source candidate | Pilot | The immutable `codex-v0.2.0` release and provenance are published, but installed acceptance found a handshake-version defect and an unresolved Windows cache-lock rollback failure. The current source candidate adds bounded agent content readers; an immutable release and exact installed clean-install/update/rollback/device evidence remain open. |
 | Companion for Chrome | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required and unpacked extensions do not auto-update. No Chrome Web Store identifier or reviewed listing exists. |
 | Companion for Edge | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required. No Edge Add-ons identifier, Partner Center certification, or store-managed update acceptance exists. |
 | Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion distribution blockers and still needs exact installed-version provider acceptance. |
@@ -57,7 +57,7 @@ The following evidence was current on 2026-10-04:
 
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
-- Codex stable candidate: `0.2.1` (`codex-v0.2.1`); `0.2.0` is published but
+- Codex source candidate: `0.2.2` (`codex-v0.2.2`); `0.2.0` is published but
   not promoted after installed acceptance found a handshake-version defect and
   does not qualify as a supported predecessor;
 - Companion source manifest: `0.10.21`;
@@ -175,7 +175,7 @@ The source versions below are test anchors, not production ranges.
 
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
-| `v1.0.0-rc.3` | Codex `0.2.1` candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.0` installed acceptance identified a handshake-version defect | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
+| `v1.0.0-rc.3` | Codex `0.2.2` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.0` installed acceptance identified a handshake-version defect | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
 | `v1.0.0-rc.3` | Companion `0.10.21` | Chrome + ChatGPT web | Source tests for MCP receipt, server-authoritative handling leases, per-discussion delivery gating, Realtime release, safe rebound-discussion isolation, and confirmed bulk queue retirement; installed end-to-end handling-lease acceptance remains pending | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.21` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.21` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |

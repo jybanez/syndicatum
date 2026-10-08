@@ -59,6 +59,9 @@ test("timeline skill uses configured project shared storage without assuming acc
   const source = await readFile(skillUrl, "utf8");
   assert.match(source, /syndicatum_list_project_files/);
   assert.match(source, /syndicatum_upload_project_file/);
+  assert.match(source, /syndicatum_read_project_file/);
+  assert.match(source, /syndicatum_read_public_url/);
+  assert.match(source, /HTTPS-only/);
   assert.match(source, /replace_file_id/);
   assert.match(source, /one permanent public URL/);
   assert.match(source, /never sends or returns the local path/);

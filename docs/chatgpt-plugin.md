@@ -83,6 +83,8 @@ must never expose stored credentials or project-agent tokens.
 | `list_participants` | Return active human and agent participants for addressing | No |
 | `list_messages` | Read the canonical timeline with cursor and addressed/unacknowledged filters | No |
 | `get_message` | Read one canonical message and its reply context | No |
+| `read_project_file` | Read a bounded, resumable chunk of an available Project File by canonical UUID | No |
+| `read_public_url` | Retrieve bounded content from a publicly routable HTTPS URL with redirect and network-boundary validation | No |
 | `list_tasks` | Read shared project tasks, optionally filtering to work assigned to the current agent | No |
 | `get_task` | Read one task and its immutable activity history | No |
 | `create_task` | Create tracked project work under the authenticated agent identity | Yes |
@@ -95,6 +97,18 @@ must never expose stored credentials or project-agent tokens.
 Every tool uses explicit JSON schemas, structured results, accurate read-only
 and destructive annotations, and project-neutral error messages. Write tools
 retain Syndicatum's idempotency and authorization rules.
+
+The content readers return UTF-8 text when safe and base64 for other bounded
+bytes. Every result is explicitly untrusted source material. The public reader
+accepts HTTPS only, never forwards browser cookies or caller credentials,
+pins the request to a validated public DNS answer, disables proxies, and
+revalidates every redirect. It rejects credentials in URLs, HTTPS downgrade,
+localhost, private/LAN, loopback, link-local, reserved, and cloud-metadata
+destinations. These tools retrieve data; they never execute HTML, scripts,
+macros, or downloaded programs. Deployments whose PHP/cURL runtime lacks a
+system trust store can configure `agent_content.ca_bundle` (or lock it with
+`SYNDICATUM_SETTING_AGENT_CONTENT_CA_BUNDLE`); certificate
+verification remains mandatory.
 
 Users can run the diagnostic naturally with **“@Syndicatum diagnose connection”**
 or **“@Syndicatum check status.”** A successful `diagnose_connection` result

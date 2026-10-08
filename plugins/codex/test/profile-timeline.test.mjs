@@ -194,6 +194,32 @@ test("profile file workflow lists canonical URLs and sends audited metadata muta
   });
 });
 
+test("profile content readers send bounded project IDs and HTTPS URLs to the server", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes("/projects.php")) return response([{ id: 3, participant_id: 41, name: "BimoPerks" }]);
+    const request = JSON.parse(options.body);
+    return response(request.operation === "read_project_file"
+      ? { source: "project_file", content: "evidence", content_encoding: "utf-8" }
+      : { source: "public_url", content: "public evidence", content_encoding: "utf-8" });
+  };
+  const client = new ProfileTimelineClient({}, fetchImpl, async () => profile);
+  const file = await client.readProjectFile(profile.profile_id, {
+    file_id: "11223344-5566-4777-8899-aabbccddeeff", offset: 5, max_bytes: 100,
+  });
+  assert.equal(file.content.content, "evidence");
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    operation: "read_project_file", file_id: "11223344-5566-4777-8899-aabbccddeeff", offset: 5, max_bytes: 100,
+  });
+  const website = await client.readPublicUrl(profile.profile_id, { url: "https://example.com/a", max_bytes: 200 });
+  assert.equal(website.content.content, "public evidence");
+  assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+    operation: "read_public_url", url: "https://example.com/a", max_bytes: 200,
+  });
+  assert.match(calls.at(-1).url, /agent-content\.php\?project_id=3/);
+});
+
 test("profile file upload chunks locally without transmitting the source path", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-file-tool-"));
   const sourcePath = path.join(root, "artifact.bin");

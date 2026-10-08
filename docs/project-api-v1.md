@@ -99,7 +99,10 @@ The profile-bound Codex MCP exposes the canonical file service through
 `syndicatum_list_project_files`, `syndicatum_create_project_folder`,
 `syndicatum_upload_project_file`, `syndicatum_rename_project_file`,
 `syndicatum_move_project_file`, `syndicatum_download_project_file`, and
-`syndicatum_delete_project_file`.
+`syndicatum_delete_project_file`. `syndicatum_read_project_file` reads bounded,
+resumable content directly into the agent context. `syndicatum_read_public_url`
+is separate from Project Files and retrieves only publicly routable HTTPS
+content with DNS/IP validation and redirect revalidation.
 
 The upload tool reads one explicit absolute path on the Codex device and sends
 the bytes as resumable 1 MiB chunks. The path itself is not sent to Syndicatum
@@ -114,6 +117,14 @@ Download reads the same anonymous canonical URL used by the browser. It requires
 an explicit absolute device-local destination and preserves an existing file
 unless `overwrite` is true. Tool results omit device paths, server paths,
 storage keys, and credentials.
+
+`POST /api/v1/agent-content.php?project_id={id}` backs both read tools. Project
+file reads accept a canonical file UUID, offset, and maximum byte count and
+reauthorize the file in the caller's project. Public URL reads accept no
+cookies, credentials, custom headers, or HTTP URLs; they reject private,
+loopback, link-local, reserved, and redirect-downgrade destinations. Responses
+return UTF-8 text when safe or base64 for other bytes, plus MIME type, byte
+counts, hashes, truncation state, and an explicit untrusted-content notice.
 
 Project context and bootstrap include the optional canonical
 `project.google_drive_url`. When configured, `effective_instructions` also tells

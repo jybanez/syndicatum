@@ -99,6 +99,35 @@ export class ProfileTimelineClient {
     return { profile: publicAgentProfile(profile), files: publicFilePayload(client, data) };
   }
 
+  async readProjectFile(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const result = await client.request(`/api/v1/agent-content.php?project_id=${encodeURIComponent(profile.project_id)}`, {
+      method: "POST",
+      body: JSON.stringify({
+        operation: "read_project_file",
+        file_id: projectFileId(input.file_id, "file"),
+        offset: Number(boundedInteger(input.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER)),
+        max_bytes: Number(boundedInteger(input.max_bytes ?? 65536, "max bytes", 1, 1048576)),
+      }),
+    });
+    return { profile: publicAgentProfile(profile), content: result.data ?? result };
+  }
+
+  async readPublicUrl(profileId, input = {}) {
+    const { profile, client } = await this.context(profileId);
+    const url = String(input.url || "").trim();
+    if (!url || url.length > 4096) throw new Error("URL must be between 1 and 4096 characters.");
+    const result = await client.request(`/api/v1/agent-content.php?project_id=${encodeURIComponent(profile.project_id)}`, {
+      method: "POST",
+      body: JSON.stringify({
+        operation: "read_public_url",
+        url,
+        max_bytes: Number(boundedInteger(input.max_bytes ?? 65536, "max bytes", 1, 1048576)),
+      }),
+    });
+    return { profile: publicAgentProfile(profile), content: result.data ?? result };
+  }
+
   async createProjectFolder(profileId, input = {}) {
     return this.projectFileMutation(profileId, {
       operation: "create_folder", name: requiredText(input.name, "Folder name"),

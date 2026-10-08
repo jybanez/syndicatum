@@ -68,6 +68,7 @@ class SettingsService
             'google.scopes' => ['section' => 'integrations', 'type' => 'string', 'default' => 'openid email profile', 'max' => 500],
             'google.timeout_seconds' => ['section' => 'integrations', 'type' => 'integer', 'default' => 10, 'min' => 1, 'max' => 30],
             'google.ca_bundle' => ['section' => 'integrations', 'type' => 'string', 'default' => '', 'max' => 1024],
+            'agent_content.ca_bundle' => ['section' => 'integrations', 'type' => 'string', 'default' => '', 'max' => 1024],
             'security.self_registration_enabled' => ['section' => 'security', 'type' => 'boolean', 'default' => true],
             'operations.legacy_api_enabled' => ['section' => 'operations', 'type' => 'boolean', 'default' => true],
             'operations.poll_interval_seconds' => ['section' => 'operations', 'type' => 'integer', 'default' => 15, 'min' => 3, 'max' => 300],
