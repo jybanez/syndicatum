@@ -17,10 +17,52 @@ export function awaitingReceiptTransportErrorPatch(current = {}, queue = {}) {
   };
 }
 
-export function deliveryFailureHealthPatch(current = {}, queue = {}, awaitingReceipt = false, deliveryError = "") {
+export function matchingDeliveryErrorPatch(current = {}, key = "") {
+  if (!key || String(current.lastDeliveryErrorKey || "") !== String(key)) return {};
+  const deliveryError = current.lastDeliveryError;
+  return {
+    lastDeliveryError: null,
+    lastDeliveryErrorKey: null,
+    lastDeliveryErrorAt: null,
+    ...(deliveryError && current.lastError === deliveryError ? { lastError: null } : {}),
+  };
+}
+
+export function legacySettledDeliveryErrorPatch(current = {}, queue = {}) {
+  const diagnostic = current.lastDeliveryDiagnostic || {};
+  const deliveryError = String(current.lastDeliveryError || "");
+  const lastDeliveryAt = String(current.lastDeliveryAt || "");
+  const completedAt = String(diagnostic.completedAt || "");
+  const clearedAt = Date.parse(String(current.lastQueueClear?.clearedAt || ""));
+  const settledAt = Date.parse(lastDeliveryAt);
+  const exactSettledReceipt = diagnostic.outcome === "agent_receipt_confirmed"
+    && completedAt !== "" && completedAt === lastDeliveryAt;
+  const topLevelErrorIsCompatible = !current.lastError || current.lastError === deliveryError;
+  const safeLegacyError = deliveryError === "Delivery pending: send_unavailable"
+    && topLevelErrorIsCompatible
+    && !current.lastDeliveryErrorKey
+    && Object.keys(queue || {}).length === 0
+    && exactSettledReceipt
+    && (!Number.isFinite(clearedAt) || !Number.isFinite(settledAt) || clearedAt <= settledAt);
+  return safeLegacyError
+    ? {
+        lastDeliveryError: null,
+        lastDeliveryErrorKey: null,
+        lastDeliveryErrorAt: null,
+        ...(current.lastError === deliveryError ? { lastError: null } : {}),
+      }
+    : {};
+}
+
+export function deliveryFailureHealthPatch(current = {}, queue = {}, awaitingReceipt = false, deliveryError = "", key = "", failedAt = null) {
   return awaitingReceipt
     ? awaitingReceiptTransportErrorPatch(current, queue)
-    : { lastDeliveryError: deliveryError, lastError: deliveryError };
+    : {
+        lastDeliveryError: deliveryError,
+        lastDeliveryErrorKey: key || null,
+        lastDeliveryErrorAt: failedAt || null,
+        lastError: deliveryError,
+      };
 }
 
 export function isUncertainDeliveryFailure(value) {
@@ -254,6 +296,7 @@ export function applyDeliveryReceipt(current = {}, receipt = {}) {
       queue,
       delivered: Object.fromEntries(Object.entries(delivered).slice(-1000)),
       lastDeliveryAt: receivedAt,
+      ...matchingDeliveryErrorPatch(current, key),
     },
   };
 }

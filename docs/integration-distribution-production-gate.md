@@ -60,7 +60,7 @@ The following evidence was current on 2026-10-04:
 - Codex source candidate: `0.2.2` (`codex-v0.2.2`); `0.2.0` is published but
   not promoted after installed acceptance found a handshake-version defect and
   does not qualify as a supported predecessor;
-- Companion source manifest: `0.10.23`;
+- Companion source manifest: `0.10.24`;
 - live `scripts/verify-plugin-publication.ps1` passed against
   `https://syndicatum.wizaya.com`, including service health, support/privacy/
   terms pages, OAuth metadata and PKCE, protected-resource audience, MCP
@@ -176,9 +176,9 @@ The source versions below are test anchors, not production ranges.
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
 | `v1.0.0-rc.3` | Codex `0.2.2` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.0` installed acceptance identified a handshake-version defect | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
-| `v1.0.0-rc.3` | Companion `0.10.23` | Chrome + ChatGPT web | Source tests for receipt-established handling leases, automatic release through existing final actions, explicit state control, per-discussion delivery gating, Realtime release, safe rebound-discussion isolation, confirmed bulk queue retirement, delayed composer discovery, unified-composer compatibility, and navigation cancellation; installed end-to-end acceptance remains pending | None until reviewed store build passes. |
-| `v1.0.0-rc.3` | Companion `0.10.23` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
-| `v1.0.0-rc.3` | Companion `0.10.23` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
+| `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + ChatGPT web | Source tests for delivery-error provenance and matching settlement, receipt-established handling leases, automatic release through existing final actions, explicit state control, per-discussion delivery gating, Realtime release, safe rebound-discussion isolation, confirmed bulk queue retirement, delayed composer discovery, unified-composer compatibility, and navigation cancellation; installed 0.10.23 delivery/lease acceptance retained, while exact 0.10.24 installed acceptance is pending | None until reviewed store build passes. |
+| `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
+| `v1.0.0-rc.3` | Companion `0.10.24` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
 
 Before the first production release, replace the null production ranges and
 empty OS list in the machine-readable policy with reviewed values, name the

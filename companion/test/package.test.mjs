@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.23");
+  assert.equal(manifest.version, "0.10.24");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -121,7 +121,7 @@ test("ChatGPT submissions wait for an explicit MCP receipt without automatic rep
   const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
   const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
   assert.match(background, /quarantineLegacyDeliveryQueue/);
-  assert.match(background, /deliveryQueueVersion: 7/);
+  assert.match(background, /deliveryQueueVersion: 8/);
   assert.match(background, /syndicatum\.notification\.received/);
   assert.match(background, /reconcileDeliveryReceipt/);
   assert.match(background, /DELIVERY_AWAITING_RECEIPT_STATE/);
@@ -132,7 +132,7 @@ test("ChatGPT submissions wait for an explicit MCP receipt without automatic rep
   assert.match(background, /operatorRetryAuthorizedAt/);
   assert.match(background, /queue: prioritizeDeliveryReview\(queue, key, resolved\)/);
   assert.match(background, /awaitingReceiptTransportErrorPatch/);
-  assert.match(background, /deliveryFailureHealthPatch\(current, queue, awaitingReceipt, deliveryError\)/);
+  assert.match(background, /deliveryFailureHealthPatch\(current, queue, awaitingReceipt, deliveryError, key, failedAt\)/);
   assert.match(background, /result\?\.message \|\| result\?\.code/);
   assert.match(html, /id="delivery-review"/);
   assert.match(html, /Copy safe review metadata/);
