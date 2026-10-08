@@ -72,6 +72,12 @@ The source-tree manifest may be newer than the latest canonical GitHub Release.
 Version notes below describe the checked-out source; installable release status
 is determined only by the signed archive and checksum on GitHub Releases.
 
+Version 0.10.22 makes ChatGPT composer discovery tolerate delayed single-page
+application rendering and current unified-composer markup. Discovery is bounded,
+rejects hidden or disabled candidates, and cancels safely if the tab navigates to
+another discussion before submission. A missing composer remains a retryable
+pre-submission failure and never weakens MCP receipt or no-replay protections.
+
 Version 0.10.21 replaces DOM-based ChatGPT busy detection with authoritative
 notification handling leases. After confirming receipt, an agent declares the
 discussion responding, working, waiting, or available. Responding and working
