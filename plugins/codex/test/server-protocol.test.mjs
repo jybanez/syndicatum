@@ -51,6 +51,8 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
     "syndicatum_get_task",
     "syndicatum_get_project_plan",
     "syndicatum_list_project_files",
+    "syndicatum_read_project_file",
+    "syndicatum_read_public_url",
     "syndicatum_create_project_folder",
     "syndicatum_upload_project_file",
     "syndicatum_rename_project_file",
@@ -103,6 +105,9 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
   assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_delete_project_file")?.annotations?.destructiveHint, true);
   assert.match(discoveredTools.find(tool => tool.name === "syndicatum_upload_project_file")?.description || "", /never sent to Syndicatum/i);
   assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_download_project_file")?.inputSchema?.properties?.overwrite?.default, false);
+  assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_read_project_file")?.inputSchema?.properties?.max_bytes?.maximum, 1048576);
+  assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_read_public_url")?.inputSchema?.properties?.max_bytes?.default, 65536);
+  assert.match(discoveredTools.find(tool => tool.name === "syndicatum_read_public_url")?.description || "", /publicly routable HTTPS/i);
   assert.equal(discoveredTools.find(tool => tool.name === "claim_agent_profile")?.annotations?.destructiveHint, true);
   child.kill(); await once(child, "close");
 });

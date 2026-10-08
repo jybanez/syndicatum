@@ -2185,6 +2185,13 @@
       "mode": 420
     },
     {
+      "source": "src/AgentContentReader.php",
+      "action": "ship",
+      "path": "app/src/AgentContentReader.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "src/ProjectFileChunkUploadStore.php",
       "action": "ship",
       "path": "app/src/ProjectFileChunkUploadStore.php",
@@ -3203,6 +3210,13 @@
       "source": "api/v1/project-files.php",
       "action": "ship",
       "path": "app/api/v1/project-files.php",
+      "role": "application",
+      "mode": 420
+    },
+    {
+      "source": "api/v1/agent-content.php",
+      "action": "ship",
+      "path": "app/api/v1/agent-content.php",
       "role": "application",
       "mode": 420
     },

@@ -348,6 +348,7 @@ jobs:
           php tests/project-status.php | tee ci-evidence/project-status.txt
           php tests/project-plan.php | tee ci-evidence/project-plan.txt
           php tests/agent-activation.php | tee ci-evidence/agent-activation.txt
+          php tests/agent-content-reader.php | tee ci-evidence/agent-content-reader.txt
           php tests/chatgpt-oauth.php | tee ci-evidence/chatgpt-oauth.txt
           php tests/mcp-connection-health.php | tee ci-evidence/mcp-connection-health.txt
           php tests/operational-health.php | tee ci-evidence/operational-health.txt

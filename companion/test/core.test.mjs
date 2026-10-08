@@ -143,18 +143,19 @@ test("serializes deliveries by browser discussion instead of agent identity", ()
 });
 
 test("authoritative handling leases gate only their bound discussion and expire safely", () => {
+  const now = Date.now();
   const item = { provider: "chatgpt", project_id: 2, agent_id: 41,
     conversation_id: "https://chatgpt.com/c/commercial" };
   const active = { ...item, handling_id: "lease-one", message_id: 100,
-    busy: true, state: "working", lease_expires_at: "2026-10-07T02:10:00Z" };
+    busy: true, state: "working", lease_expires_at: new Date(now + 60_000).toISOString() };
   const states = applyNotificationHandlingState({}, active);
-  assert.equal(discussionHasActiveHandling(states, item, Date.parse("2026-10-07T02:09:00Z")), true);
+  assert.equal(discussionHasActiveHandling(states, item, now), true);
   assert.equal(discussionHasActiveHandling(states, { ...item,
-    conversation_id: "https://chatgpt.com/c/another" }, Date.parse("2026-10-07T02:09:00Z")), false);
-  assert.equal(discussionHasActiveHandling(states, item, Date.parse("2026-10-07T02:11:00Z")), false);
+    conversation_id: "https://chatgpt.com/c/another" }, now), false);
+  assert.equal(discussionHasActiveHandling(states, item, now + 120_000), false);
   const released = applyNotificationHandlingState(states, { ...active,
     busy: false, state: "available", lease_expires_at: null });
-  assert.equal(discussionHasActiveHandling(released, item, Date.parse("2026-10-07T02:09:00Z")), false);
+  assert.equal(discussionHasActiveHandling(released, item, now), false);
 });
 test("maps an agent receipt to the exact queued delivery", () => {
   const receipt = { provider: "chatgpt", project_id: 3, agent_id: 30, message_id: 91, project_sequence: 17, received_at: "2026-10-06T01:00:00Z" };

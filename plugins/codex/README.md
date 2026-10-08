@@ -58,13 +58,14 @@ ref and acceptance evidence named in the
 ## Stable Windows channel
 
 The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
-The current candidate is `codex-v0.2.1`; it corrects the MCP handshake version
-reported by the published `codex-v0.2.0` release. After the current release
+The current source candidate is `codex-v0.2.2`; it adds bounded project-file and
+public-HTTPS content readers while retaining the handshake correction introduced
+by `0.2.1`. After the current release
 workflow and the applicable installed-client acceptance pass, use the immutable
 Git marketplace ref:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.1
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.2
 codex plugin add codex@syndicatum
 ```
 
@@ -96,7 +97,10 @@ restart, and credential-configuration tools still require an explicit approval.
 
 Profile-bound project-file tools use the same audited Project API V1 service as
 the browser Files modal. Agents can list files, create folders, upload in
-resumable 1 MiB chunks, rename, move, download, and delete. Upload and download
+resumable 1 MiB chunks, rename, move, download, and delete.
+`syndicatum_read_project_file` returns a bounded, resumable content chunk directly
+to the agent, while `syndicatum_read_public_url` retrieves only publicly routable
+HTTPS content and revalidates every redirect. Upload and download
 paths remain device-local: they are never transmitted as metadata or returned
 in tool results. File results contain the single permanent public URL used by
 the browser; rename, move, and explicitly confirmed same-name replacement do
