@@ -142,8 +142,24 @@ test("background status distinguishes an authorized device with no usable discus
   await mkdir(manager.files.root, { recursive: true });
   await writeFile(manager.files.backgroundLock, `${process.pid}\n`, "utf8");
   await writeFile(manager.files.listenerLock, `${process.pid}\n`, "utf8");
-  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "authorized_idle", unavailableBindings: 2 }), "utf8");
+  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "authorized_idle", unavailableBindings: 2, updatedAt: new Date().toISOString() }), "utf8");
   const status = await manager.status();
   assert.equal(status.readiness, "authorized_idle");
+  assert.equal(status.healthFresh, true);
   assert.equal(status.listenerReason, "authorized_without_local_routes");
+});
+
+test("background status rejects stale health even when the process owns the listener", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-stale-health-"));
+  const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
+  await mkdir(manager.files.root, { recursive: true });
+  await writeFile(manager.files.backgroundLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.listenerLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "ready", updatedAt: "2000-01-01T00:00:00.000Z" }), "utf8");
+  const status = await manager.status();
+  assert.equal(status.running, true);
+  assert.equal(status.ownsListener, true);
+  assert.equal(status.healthFresh, false);
+  assert.equal(status.readiness, "stale_health");
+  assert.equal(status.listenerReason, "background_health_stale");
 });

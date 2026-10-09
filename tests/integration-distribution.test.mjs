@@ -49,6 +49,17 @@ test("distribution classifications match the exact source package versions", asy
         "Exact-byte provenance failed for 41 text files because the Git marketplace checkout converted LF to CRLF under core.autocrlf=true; initialize, fresh-task health, adversarial isolation, and same-version recovery evidence also remain incomplete.",
       ],
     },
+    {
+      version: "0.2.3",
+      ref: "codex-v0.2.3",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "Windows 10 and Windows 11 verified the exact tagged marketplace and installed package bytes, expected tool catalog, protected public identity continuity, project-scoped reads, and live connector ownership; Windows 10 also captured serverInfo.version 0.2.3 from the installed server in isolated temporary state.",
+        "Background health was only a startup snapshot without a heartbeat or age gate; no safe cross-project negative fixture was available and same-version recovery remains unexercised.",
+      ],
+    },
   ]);
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);

@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ListenerLock } from "./listener-lock.mjs";
 import { pluginPaths } from "./paths.mjs";
+import { isHealthFresh } from "./health-heartbeat.mjs";
 
 const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE = "SyndicatumCodexConnector";
@@ -97,9 +98,10 @@ export class BackgroundServiceManager {
     const running = Boolean(pid && isProcessAlive(pid));
     const ownsListener = Boolean(running && listenerPid === pid);
     const currentHealth = running && Number(health?.pid) === pid ? health : null;
-    const readiness = readinessState({ running, ownsListener, health: currentHealth });
-    const listenerReason = ownsListener ? (readiness === "authorized_idle" ? "authorized_without_local_routes" : "listener_owned") : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : readiness === "startup_error" ? "listener_startup_failed" : "listener_starting";
-    return { supported: ["win32", "darwin"].includes(this.platform), platform: this.platform, installed: Boolean(metadata), running, ownsListener, listenerReason, pid, listenerPid, readiness, health: currentHealth, startupMethod: metadata?.startupMethod || null, startupDiagnostic: metadata?.startupDiagnostic || null, startupLog: this.files.backgroundStartupLog, metadata };
+    const healthFresh = isHealthFresh(currentHealth);
+    const readiness = readinessState({ running, ownsListener, health: currentHealth, healthFresh });
+    const listenerReason = readiness === "stale_health" ? "background_health_stale" : ownsListener ? (readiness === "authorized_idle" ? "authorized_without_local_routes" : "listener_owned") : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : readiness === "startup_error" ? "listener_startup_failed" : "listener_starting";
+    return { supported: ["win32", "darwin"].includes(this.platform), platform: this.platform, installed: Boolean(metadata), running, ownsListener, listenerReason, pid, listenerPid, readiness, healthFresh, health: currentHealth, startupMethod: metadata?.startupMethod || null, startupDiagnostic: metadata?.startupDiagnostic || null, startupLog: this.files.backgroundStartupLog, metadata };
   }
 
   async restart() {
@@ -268,11 +270,12 @@ function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function isProcessAlive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error.code === "EPERM"; } }
 function readinessState(status) {
   if (!status.running) return "stopped";
+  if (status.health && status.healthFresh === false) return "stale_health";
   if (status.health?.state === "authorized_idle") return "authorized_idle";
   if (status.health?.state === "error") return "startup_error";
   return status.ownsListener ? "ready" : "starting_listener";
 }
-function isHealthyBackground(status) { return Boolean(status?.running && status?.ownsListener && !["startup_error", "stopped"].includes(readinessState(status))); }
+function isHealthyBackground(status) { return Boolean(status?.running && status?.ownsListener && !["startup_error", "stale_health", "stopped"].includes(readinessState(status))); }
 function sanitizedError(error) { return String(error?.message || error || "Unknown startup failure").replace(/[\r\n]+/g, " ").slice(0, 1000); }
 function xml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
 
