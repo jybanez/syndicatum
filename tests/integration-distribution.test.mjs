@@ -5,6 +5,7 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const policyUrl = new URL("release/integration-distribution-policy-v1.json", root);
 const publicPluginUrl = new URL("plugins/openai-public/plugin.json", root);
+const publicMcpUrl = new URL("plugins/openai-public/mcp.json", root);
 const pluginUrl = new URL("plugins/codex/.codex-plugin/plugin.json", root);
 const companionUrl = new URL("companion/extension/manifest.json", root);
 
@@ -45,6 +46,18 @@ test("distribution classifications match the exact source package versions", asy
   assert.match(policy.compatibility.planned_support_policy, /previous promoted stable/i);
   assert.match(policy.compatibility.planned_support_policy, /does not create a support entitlement/i);
   assert.equal(policy.compatibility.companion.tested_source_version, companion.version);
+  assert.deepEqual(policy.compatibility.companion.installed_acceptance, [
+    {
+      version: companion.version,
+      channel: "unpacked-pilot",
+      environment: "Chrome on Windows 11",
+      status: "passed",
+      evidence: ["docs/evidence/companion-0.10.24-installed-acceptance-2026-10-09.md"],
+      production_supported: false,
+      production_blocker: "The accepted package was loaded unpacked; Chrome Web Store and Edge Add-ons publication and store-managed update acceptance remain open.",
+    },
+  ]);
+  await readFile(new URL(policy.compatibility.companion.installed_acceptance[0].evidence[0], root));
 
   const ids = new Set(policy.channels.map(channel => channel.id));
   for (const id of [
@@ -91,20 +104,44 @@ test("non-production channels retain at least one explicit unresolved gate", asy
 });
 
 test("public plugin listing metadata stays within submission limits", async () => {
-  const plugin = await readJson(pluginUrl);
-  const listing = plugin.interface;
+  const [plugin, mcp] = await Promise.all([
+    readJson(publicPluginUrl),
+    readJson(publicMcpUrl),
+  ]);
+  const openai = plugin.extensions?.["com.openai"];
+  const listing = openai?.interface;
+  const review = openai?.review;
 
   assert.ok(plugin.version.match(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/));
+  assert.ok(listing, "Portable OpenAI plugin requires extensions.com.openai.interface");
   assert.ok(listing.displayName.length <= 30);
   assert.ok(listing.shortDescription.length <= 30);
   assert.ok(listing.longDescription.length <= 4000);
   assert.ok(listing.developerName.length <= 80);
   assert.ok(Array.isArray(listing.capabilities) && listing.capabilities.length <= 20);
+  assert.ok(Array.isArray(listing.defaultPrompt) && listing.defaultPrompt.length <= 3);
+  for (const prompt of listing.defaultPrompt) assert.ok(prompt.length <= 128);
   for (const key of ["websiteURL", "supportURL", "privacyPolicyURL", "termsOfServiceURL"]) {
     const url = new URL(listing[key]);
     assert.equal(url.protocol, "https:", `${key} must use HTTPS`);
     assert.ok(listing[key].length <= 1024);
   }
+  for (const key of ["composerIcon", "logo"]) {
+    assert.match(listing[key], /^\.\/assets\//, `${key} must be a package-relative asset`);
+  }
+
+  assert.equal(review.test_cases.positive.length, 5);
+  assert.equal(review.test_cases.negative.length, 3);
+  for (const testCase of review.test_cases.positive) {
+    assert.ok(testCase.prompt);
+    assert.ok(testCase.tools_triggered);
+    assert.ok(testCase.expected_behavior);
+  }
+  assert.equal(mcp.$schema, "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json");
+  const servers = Object.values(mcp.mcpServers ?? {});
+  assert.equal(servers.length, 1);
+  assert.equal(servers[0].type, "streamable-http");
+  assert.equal(new URL(servers[0].url).protocol, "https:");
 });
 
 test("mobile work remains gated until explicit owner approval", async () => {

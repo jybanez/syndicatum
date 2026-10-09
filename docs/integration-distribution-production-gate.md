@@ -1,6 +1,6 @@
 # Integration distribution production gate
 
-Status: active production-readiness contract. Last assessed 2026-10-04.
+Status: active production-readiness contract. Last assessed 2026-10-09.
 
 Owner direction recorded 2026-10-04: productionize the Codex channel first,
 with Windows 10 22H2 and Windows 11 as the initial target operating systems.
@@ -27,7 +27,7 @@ installed-client acceptance gates below remain open.
 | Codex connector | Git-backed local marketplace; `codex-v0.2.2` source candidate | Pilot | The immutable `codex-v0.2.0` release and provenance are published, but installed acceptance found a handshake-version defect and an unresolved Windows cache-lock rollback failure. The current source candidate adds bounded agent content readers; an immutable release and exact installed clean-install/update/rollback/device evidence remain open. |
 | Companion for Chrome | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required and unpacked extensions do not auto-update. No Chrome Web Store identifier or reviewed listing exists. |
 | Companion for Edge | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required. No Edge Add-ons identifier, Partner Center certification, or store-managed update acceptance exists. |
-| Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion distribution blockers and still needs exact installed-version provider acceptance. |
+| Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion store-distribution blockers. Exact 0.10.24 ChatGPT delivery is accepted; the latest retained Gemini-specific installed correlation evidence remains 0.10.18. |
 | Mobile application | None | Gated | It remains excluded until the owner explicitly approves mobile implementation. |
 
 The Codex package and the hosted OpenAI plugin are distinct distribution
@@ -53,7 +53,7 @@ install, or inferred compatibility result into publication evidence.
 
 ## Verified repository and service evidence
 
-The following evidence was current on 2026-10-04:
+The following evidence was current on 2026-10-09:
 
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
@@ -61,6 +61,12 @@ The following evidence was current on 2026-10-04:
   not promoted after installed acceptance found a handshake-version defect and
   does not qualify as a supported predecessor;
 - Companion source manifest: `0.10.24`;
+- Companion 0.10.24 installed acceptance passed on Chrome/Windows 11 for the
+  unpacked pilot channel, including artifact/backup integrity, reload with
+  identity and binding preservation, zero queued/review items, removal of the
+  stale delivery error without replay, exact receipt confirmation, normal reply,
+  and automatic handling-lease release. See the
+  [sanitized acceptance record](evidence/companion-0.10.24-installed-acceptance-2026-10-09.md);
 - live `scripts/verify-plugin-publication.ps1` passed against
   `https://syndicatum.wizaya.com`, including service health, support/privacy/
   terms pages, OAuth metadata and PKCE, protected-resource audience, MCP
@@ -108,7 +114,7 @@ MCP were the hosted public endpoint. Create the public-review artifact only
 after the portal-generated server identity/domain challenge is available and
 keep reviewer credentials outside the package.
 
-Official references, checked 2026-10-04:
+Official references, checked 2026-10-09:
 
 - [OpenAI plugin submission](https://developers.openai.com/plugins/deploy/submission/)
 - [OpenAI plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines/)
@@ -161,7 +167,7 @@ listing metadata, availability, privacy/purpose/permission declarations,
 certification notes, review result, and Add-ons identifier. Each package update
 must increment the manifest version and complete certification.
 
-Official references, checked 2026-10-04:
+Official references, checked 2026-10-09:
 
 - [Chrome Web Store policies](https://developer.chrome.com/docs/webstore/program-policies/policies)
 - [Chrome distribution and testing channels](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution)
@@ -176,7 +182,7 @@ The source versions below are test anchors, not production ranges.
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
 | `v1.0.0-rc.3` | Codex `0.2.2` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.0` installed acceptance identified a handshake-version defect | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
-| `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + ChatGPT web | Source tests for delivery-error provenance and matching settlement, receipt-established handling leases, automatic release through existing final actions, explicit state control, per-discussion delivery gating, Realtime release, safe rebound-discussion isolation, confirmed bulk queue retirement, delayed composer discovery, unified-composer compatibility, and navigation cancellation; installed 0.10.23 delivery/lease acceptance retained, while exact 0.10.24 installed acceptance is pending | None until reviewed store build passes. |
+| `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + ChatGPT web on Windows 11 | Source tests plus exact installed 0.10.24 unpacked-pilot acceptance: verified artifact and rollback backup, in-place update/reload, identity/auth/binding preservation, healthy Realtime, zero queue/review, stale-error retirement without replay, exact receipt, one normal reply, and automatic lease release | None until the exact reviewed Chrome Web Store build passes publication and store-managed lifecycle acceptance. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
 
@@ -230,6 +236,8 @@ identifiers and sanitized observations.
 
 For installed Companion and Codex identity recovery, use
 [`v1-companion-installed-acceptance.md`](v1-companion-installed-acceptance.md).
+The current sanitized Companion result is
+[`evidence/companion-0.10.24-installed-acceptance-2026-10-09.md`](evidence/companion-0.10.24-installed-acceptance-2026-10-09.md).
 For provider behavior, keep
 [`v1-cross-provider-contract-matrix.md`](v1-cross-provider-contract-matrix.md)
 and [`v1-provider-error-recovery-matrix.md`](v1-provider-error-recovery-matrix.md)

@@ -59,7 +59,7 @@ jobs:
           $notes = @"
           Syndicatum for Codex $env:GITHUB_REF_NAME
 
-          Initial stable channel for Windows. Install the repository marketplace using the immutable tag, then install codex@syndicatum. The release assets are deterministic provenance records for the exact marketplace snapshot; installation remains through the tagged Git marketplace.
+          Immutable Windows stable-channel candidate. Install the repository marketplace using the exact tag, then install codex@syndicatum. The release assets are deterministic provenance records for the exact marketplace snapshot; installation remains through the tagged Git marketplace. Publication alone does not create a production-support claim: the exact tag must still pass the retained install, update, rollback, restart, device, revocation, and project-isolation acceptance matrix.
           "@
           gh release create $env:GITHUB_REF_NAME `
             --repo $env:GITHUB_REPOSITORY `
