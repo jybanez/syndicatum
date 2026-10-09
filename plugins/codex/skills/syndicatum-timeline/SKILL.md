@@ -23,6 +23,11 @@ request, not as the ChatGPT Companion discussion-binding flow.
 3. The code expires after 15 minutes, is single-use, and is shown only once. Ask
    the operator to paste it into the Codex task that will own the identity.
 4. Determine the exact server URL; never guess it. Call `claim_agent_profile`.
+   When the handoff includes project and agent IDs, pass both IDs and treat them
+   as authoritative; names are display context only. Never select or reuse a
+   profile from its identity name alone. If multiple profiles share a display
+   name, match the exact server and project, or stop for operator choice when
+   the requested project cannot be established.
    Do not repeat the code in commentary, output, logs, or timeline messages.
 5. After a successful first-time claim, call `syndicatum_get_bootstrap` with the
    returned profile ID, then call `syndicatum_post_message` to broadcast a short
