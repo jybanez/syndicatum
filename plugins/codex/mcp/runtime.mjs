@@ -24,7 +24,7 @@ export class PluginRuntime {
       if (local.mode === "device" && this.manageBackground) {
         const background = await this.background.ensureRunning();
         if (background.supported) {
-          this.status = { state: background.running && background.ownsListener ? "ready" : "starting", role: "background", background };
+          this.status = { state: aggregateBackgroundState(background), role: "background", background };
           return this.status;
         }
       }
@@ -117,8 +117,7 @@ export class PluginRuntime {
     if (!config) return pairing ? { state: pairing.state, pairing } : this.status;
     this.pairing?.stop();
     const background = this.manageBackground ? await this.background.status() : null;
-    const ready = !background?.supported || (background.running && background.ownsListener);
-    const state = background?.readiness === "authorized_idle" ? "authorized_idle" : ready ? "ready" : background?.readiness === "startup_error" ? "error" : "starting";
+    const state = aggregateBackgroundState(background);
     return { state, mode: "device", deviceId: config.deviceId, role: this.manageBackground ? "background" : this.status.role, background, pairing };
   }
   async migrateServer(syndicatumUrl) {
@@ -189,6 +188,15 @@ export class PluginRuntime {
     clearTimeout(this.reloadTimer);
     this.reloadTimer = setTimeout(() => void this.start(), 250);
   }
+}
+
+export function aggregateBackgroundState(background) {
+  if (!background?.supported) return "ready";
+  if (background.readiness === "authorized_idle") return "authorized_idle";
+  if (background.readiness === "startup_error") return "error";
+  if (background.readiness === "stale_health") return "stale_health";
+  if (background.readiness === "ready") return "ready";
+  return background.running && background.ownsListener && background.readiness == null ? "ready" : "starting";
 }
 
 export async function selectAvailableBindings(bindings, accessImpl = access) {

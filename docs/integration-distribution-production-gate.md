@@ -24,7 +24,7 @@ installed-client acceptance gates below remain open.
 | Integration | Current channel | Classification | Production blocker |
 | --- | --- | --- | --- |
 | ChatGPT hosted MCP | Developer/custom MCP connection | Development | No approved public OpenAI plugin listing; current public-review artifact, domain challenge, scans, reviewer materials, and directory identity are not retained. |
-| Codex connector | Git-backed local marketplace; `codex-v0.2.4` source candidate | Pilot | Immutable `0.2.0`, `0.2.2`, and `0.2.3` releases are published but unpromoted. Windows 10/11 acceptance of `0.2.3` passed exact marketplace/installed bytes, catalog, identity/scope, connector ownership, and an isolated installed-server handshake, then found that background health had no heartbeat/age gate. The current candidate adds the heartbeat and stale-age rejection; immutable publication and exact installed recovery/isolation/device evidence remain open. |
+| Codex connector | Git-backed local marketplace; `codex-v0.2.5` source candidate | Pilot | Immutable releases through `0.2.4` are published but unpromoted. Windows 10/11 acceptance of `0.2.4` passed exact bytes, catalog, identity/scope, listener ownership, heartbeat advancement, and background-manager stale-health rejection, then found that aggregate connector status still reported ready over nested stale health. The current candidate fixes that fail-closed propagation; immutable publication and exact installed acceptance remain open. |
 | Companion for Chrome | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required and unpacked extensions do not auto-update. No Chrome Web Store identifier or reviewed listing exists. |
 | Companion for Edge | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required. No Edge Add-ons identifier, Partner Center certification, or store-managed update acceptance exists. |
 | Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion store-distribution blockers. Exact 0.10.24 ChatGPT delivery is accepted; the latest retained Gemini-specific installed correlation evidence remains 0.10.18. |
@@ -57,12 +57,14 @@ The following evidence was current on 2026-10-10:
 
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
-- Codex source candidate: `0.2.4` (`codex-v0.2.4`). `0.2.0`, `0.2.2`, and
-  `0.2.3` are published but unpromoted. Windows 10/11 acceptance of `0.2.3`
-  verified exact marketplace and installed bytes, the expected catalog,
-  identity/scope continuity, connector ownership, and an isolated installed
-  handshake. It also established that health timestamps were startup snapshots
-  rather than heartbeats. See the
+- Codex source candidate: `0.2.5` (`codex-v0.2.5`). Releases through `0.2.4`
+  are published but unpromoted. Windows 10/11 acceptance of `0.2.4` verified
+  exact marketplace and installed bytes, the expected catalog, identity/scope
+  continuity, connector ownership, advancing heartbeat timestamps, and
+  background-manager stale-health rejection. It also established that the
+  aggregate runtime still reported ready over nested stale health. See the
+  [0.2.4 sanitized acceptance record](evidence/codex-0.2.4-windows-installed-acceptance-2026-10-10.md),
+  the
   [0.2.3 sanitized acceptance record](evidence/codex-0.2.3-windows-installed-acceptance-2026-10-10.md)
   and the earlier
   [0.2.2 record](evidence/codex-0.2.2-windows11-installed-acceptance-2026-10-09.md);
@@ -188,7 +190,7 @@ The source versions below are test anchors, not production ranges.
 
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
-| `v1.0.0-rc.3` | Codex `0.2.4` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.3` Windows 10/11 acceptance passed exact provenance, installed catalog, identity/scope, connector ownership, and isolated handshake, while health heartbeat/age, safe negative isolation, and same-version recovery remained open | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
+| `v1.0.0-rc.3` | Codex `0.2.5` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.4` Windows 10/11 acceptance passed exact provenance, installed catalog, identity/scope, connector ownership, heartbeat advancement, and isolated stale-health detection, while aggregate fail-closed status, safe cross-project isolation, and lifecycle evidence remained open | None until the exact tagged release passes each claimed Windows install/lifecycle/device row. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + ChatGPT web on Windows 11 | Source tests plus exact installed 0.10.24 unpacked-pilot acceptance: verified artifact and rollback backup, in-place update/reload, identity/auth/binding preservation, healthy Realtime, zero queue/review, stale-error retirement without replay, exact receipt, one normal reply, and automatic lease release | None until the exact reviewed Chrome Web Store build passes publication and store-managed lifecycle acceptance. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
