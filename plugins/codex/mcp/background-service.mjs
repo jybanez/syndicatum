@@ -1,6 +1,7 @@
 import { ListenerLock } from "./listener-lock.mjs";
 import { pluginPaths } from "./paths.mjs";
 import { PluginRuntime } from "./runtime.mjs";
+import { isHealthFresh, startHealthHeartbeat } from "./health-heartbeat.mjs";
 import { appendFile, readFile, rename, writeFile } from "node:fs/promises";
 
 const files = pluginPaths();
@@ -17,6 +18,8 @@ if (!ownership.acquired) {
 const runtime = new PluginRuntime(process.env, { manageBackground: false });
 let stopping = false;
 let retryTimer = null;
+let healthHeartbeat = null;
+let healthWriteQueue = Promise.resolve();
 const keepAlive = setInterval(() => {}, 60_000);
 
 async function run() {
@@ -29,14 +32,20 @@ async function run() {
   }
 }
 
-async function writeHealth(status) {
+function writeHealth(status) {
   const health = { pid: process.pid, updatedAt: new Date().toISOString(), state: status.state, role: status.role || "background",
     bindings: Number(status.bindings || 0), projects: Number(status.projects || 0), unavailableBindings: Number(status.unavailableBindings || 0),
     ...(status.error ? { error: String(status.error).slice(0, 500) } : {}) };
+  const operation = healthWriteQueue.then(() => writeHealthFile(health));
+  healthWriteQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function writeHealthFile(health) {
   const temporary = `${files.backgroundHealth}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(health, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   await rename(temporary, files.backgroundHealth);
-  if (status.state === "error") runtime.logger("background").error(status.error || "Connector startup failed.");
+  if (health.state === "error") runtime.logger("background").error(health.error || "Connector startup failed.");
 }
 
 async function stop() {
@@ -44,6 +53,7 @@ async function stop() {
   stopping = true;
   clearTimeout(retryTimer);
   clearInterval(keepAlive);
+  await healthHeartbeat?.stop();
   await runtime.stop();
   await serviceLock.release();
   process.exit(0);
@@ -53,12 +63,18 @@ process.once("SIGINT", () => void stop());
 process.once("SIGTERM", () => void stop());
 process.once("SIGHUP", () => void stop());
 await run();
+healthHeartbeat = startHealthHeartbeat({
+  snapshot: () => runtime.status,
+  write: writeHealth,
+  onError: error => runtime.logger("background").error(`Health heartbeat failed: ${String(error?.message || error)}`),
+});
 
 async function healthyExistingOwner(ownerPid) {
   if (!ownerPid || !isProcessAlive(ownerPid)) return false;
   try {
     const health = JSON.parse(await readFile(files.backgroundHealth, "utf8"));
-    return Number(health?.pid) === ownerPid && ["running", "ready", "authorized_idle"].includes(String(health?.state || ""));
+    return Number(health?.pid) === ownerPid && isHealthFresh(health)
+      && ["running", "ready", "authorized_idle"].includes(String(health?.state || ""));
   } catch (_error) {
     return false;
   }

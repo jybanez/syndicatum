@@ -1604,6 +1604,13 @@
       "mode": 420
     },
     {
+      "source": "plugins/codex/mcp/health-heartbeat.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/health-heartbeat.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
       "source": "plugins/codex/mcp/codex-driver.mjs",
       "action": "ship",
       "path": "plugins/codex/mcp/codex-driver.mjs",
@@ -1752,6 +1759,13 @@
     },
     {
       "source": "plugins/codex/test/background-service-manager.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/health-heartbeat.test.mjs",
       "action": "exclude",
       "path": "",
       "role": "",

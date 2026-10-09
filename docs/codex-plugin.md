@@ -102,15 +102,15 @@ ref and acceptance evidence named in the
 The owner-approved first production targets are Windows 10 22H2 and Windows 11.
 Stable Codex plugin releases use an immutable `codex-v<version>` Git tag whose
 version must exactly match `plugins/codex/.codex-plugin/plugin.json`. The current
-source candidate is `codex-v0.2.3`; it enforces LF bytes across the Git
-marketplace package so Windows `core.autocrlf` cannot invalidate release
-provenance. It retains the bounded content readers from `0.2.2` and the MCP
-handshake correction introduced by `0.2.1`. Published releases `0.2.0` and
-`0.2.2` remain unpromoted. After the current tag's release workflow
+source candidate is `codex-v0.2.4`; it adds a periodic background-health
+heartbeat and rejects stale health by age. It retains the LF checkout
+contract from `0.2.3`, the bounded content readers from `0.2.2`, and the MCP
+handshake correction introduced by `0.2.1`. Published releases `0.2.0`,
+`0.2.2`, and `0.2.3` remain unpromoted. After the current tag's release workflow
 and the applicable installed-client acceptance pass, install it with:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.3
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.4
 codex plugin add codex@syndicatum
 ```
 
