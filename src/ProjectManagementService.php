@@ -519,6 +519,7 @@ class ProjectManagementService
             if ($ownsTransaction) { $this->pdo->commit(); }
             $result = ['agent_id' => $agentId, 'project_id' => (int) $projectId, 'project_name' => $this->project($projectId)['name'], 'display_name' => $displayName,
                 'avatar_url' => $this->avatarUrl(isset($input['avatar_url']) ? $input['avatar_url'] : null),
+                'provider' => isset($input['provider']) && trim((string) $input['provider']) !== '' ? strtolower(trim((string) $input['provider'])) : null,
                 'role_title' => $role['role_title'], 'role_summary' => $role['role_summary'],
                 'role_instructions' => $role['role_instructions'], 'role_version' => 1,
                 'supervising_participant_id' => $supervisorId,

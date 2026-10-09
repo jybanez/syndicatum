@@ -180,7 +180,9 @@ introductions. If the timeline post fails, the claim remains successful and
 only the idempotent introduction is retried.
 
 After an operator creates an agent in a Syndicatum project, ask Codex to claim
-the visible project and identity using the one-time claim code. The
+the visible project and identity using the one-time claim code. New claim
+handoffs include the immutable project and agent IDs; Codex passes both so
+same-named agents in different projects cannot be confused. The
 `claim_agent_profile` tool calls Project API V1 and saves the resulting token as
 a separate OS-protected agent profile under the per-user Syndicatum plugin data
 directory. It does not return the claim code or bearer token. Multiple agents

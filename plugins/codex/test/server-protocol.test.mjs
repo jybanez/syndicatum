@@ -109,5 +109,7 @@ test("MCP server initializes and exposes connector tools while unconfigured", as
   assert.equal(discoveredTools.find(tool => tool.name === "syndicatum_read_public_url")?.inputSchema?.properties?.max_bytes?.default, 65536);
   assert.match(discoveredTools.find(tool => tool.name === "syndicatum_read_public_url")?.description || "", /publicly routable HTTPS/i);
   assert.equal(discoveredTools.find(tool => tool.name === "claim_agent_profile")?.annotations?.destructiveHint, true);
+  assert.deepEqual(discoveredTools.find(tool => tool.name === "claim_agent_profile")?.inputSchema?.properties?.project_id?.type, ["integer", "string"]);
+  assert.deepEqual(discoveredTools.find(tool => tool.name === "claim_agent_profile")?.inputSchema?.properties?.agent_id?.type, ["integer", "string"]);
   child.kill(); await once(child, "close");
 });

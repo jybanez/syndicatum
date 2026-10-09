@@ -33,7 +33,7 @@ const remoteDestructiveAnnotations = { readOnlyHint: false, destructiveHint: tru
 const tools = [
   {
     name: "claim_agent_profile",
-    description: "Claim a project-scoped Syndicatum agent identity and save it as a separate locally protected profile. The claim code and token are never returned.",
+    description: "Claim a project-scoped Syndicatum agent identity and save it as a separate locally protected profile. Supply the immutable project and agent IDs when the handoff provides them so same-named identities in different projects cannot be confused. The claim code and token are never returned.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
@@ -42,6 +42,8 @@ const tools = [
         syndicatum_url: { type: "string", description: "Syndicatum server base URL, for example https://syndicatumserver.com" },
         project: { type: "string", description: "Visible Syndicatum project name or slug" },
         identity: { type: "string", description: "Visible agent identity name" },
+        project_id: { type: ["integer", "string"], description: "Immutable Syndicatum project ID; provide together with agent_id when shown in the claim handoff" },
+        agent_id: { type: ["integer", "string"], description: "Immutable Syndicatum agent ID; provide together with project_id when shown in the claim handoff" },
         claim_code: { type: "string", description: "One-time claim code issued by a Syndicatum project administrator" },
         project_root: { type: "string", description: "Optional project directory; defaults to the current task directory" },
         replace_existing: { type: "boolean", description: "Replace an existing project credential only when explicitly intended" },
@@ -369,7 +371,7 @@ process.once("SIGINT", async () => { await runtime.stop(); process.exit(0); });
 process.once("SIGTERM", async () => { await runtime.stop(); process.exit(0); });
 
 async function callTool(name, args) {
-  if (name === "claim_agent_profile") return textResult(await claimAgentProfile({ syndicatumUrl: args.syndicatum_url, project: args.project, identity: args.identity, claimCode: args.claim_code, projectRoot: args.project_root, replaceExisting: args.replace_existing === true }));
+  if (name === "claim_agent_profile") return textResult(await claimAgentProfile({ syndicatumUrl: args.syndicatum_url, project: args.project, identity: args.identity, projectId: args.project_id, agentId: args.agent_id, claimCode: args.claim_code, projectRoot: args.project_root, replaceExisting: args.replace_existing === true }));
   if (name === "syndicatum_list_profiles") return textResult((await listAgentProfiles()).map(publicAgentProfile));
   if (name === "syndicatum_list_projects") return textResult(await timeline.projects(args.profile_id));
   if (name === "syndicatum_get_bootstrap") return textResult(await timeline.bootstrap(args.profile_id));
