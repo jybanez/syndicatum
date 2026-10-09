@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "policy_version": "1.0.0",
-  "assessed_on": "2026-10-06",
+  "assessed_on": "2026-10-09",
   "production_rule": "A channel is production only when production_eligible is true, it has a published identifier, and every required gate is passed with retained acceptance evidence for the exact published artifact.",
   "release_train": {
     "application": "v1.0.0-rc.3",
@@ -97,7 +97,20 @@
     "companion": {
       "tested_source_version": "0.10.24",
       "production_range": null,
-      "providers": ["ChatGPT web", "Gemini web"]
+      "providers": ["ChatGPT web", "Gemini web"],
+      "installed_acceptance": [
+        {
+          "version": "0.10.24",
+          "channel": "unpacked-pilot",
+          "environment": "Chrome on Windows 11",
+          "status": "passed",
+          "evidence": [
+            "docs/evidence/companion-0.10.24-installed-acceptance-2026-10-09.md"
+          ],
+          "production_supported": false,
+          "production_blocker": "The accepted package was loaded unpacked; Chrome Web Store and Edge Add-ons publication and store-managed update acceptance remain open."
+        }
+      ]
     },
     "supported_operating_systems": [],
     "support_window": null,
