@@ -3,6 +3,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -17,6 +19,56 @@ SPEC.loader.exec_module(BUILDER)
 
 
 class CodexPluginPackageTest(unittest.TestCase):
+    def test_marketplace_checkout_preserves_release_bytes(self):
+        sources = BUILDER.package_sources(ROOT)
+        attribute_input = "".join(f"{path.as_posix()}\n" for path, _ in sources)
+        result = subprocess.run(
+            ["git", "check-attr", "--stdin", "text", "eol"],
+            cwd=ROOT,
+            input=attribute_input.encode("utf-8"),
+            capture_output=True,
+            check=True,
+        )
+        attributes: dict[str, dict[str, str]] = {}
+        for line in result.stdout.decode("utf-8").splitlines():
+            path, attribute, value = line.split(": ", 2)
+            attributes.setdefault(path, {})[attribute] = value
+
+        for path, _ in sources:
+            name = path.as_posix()
+            values = attributes[name]
+            if path.suffix.lower() in BUILDER.TEXT_SUFFIXES:
+                self.assertEqual(values["text"], "set", name)
+                self.assertEqual(values["eol"], "lf", name)
+            else:
+                self.assertEqual(values["text"], "unset", name)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Path(temporary) / "fixture"
+            checkout = Path(temporary) / "checkout"
+            fixture.mkdir()
+            shutil.copyfile(ROOT / ".gitattributes", fixture / ".gitattributes")
+            for path, data in sources:
+                destination = fixture / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(data)
+            for command in (
+                ["git", "init", "--quiet"],
+                ["git", "config", "user.email", "tests@syndicatum.invalid"],
+                ["git", "config", "user.name", "Syndicatum Tests"],
+                ["git", "config", "core.autocrlf", "true"],
+                ["git", "add", "."],
+                ["git", "commit", "--quiet", "-m", "fixture"],
+            ):
+                subprocess.run(command, cwd=fixture, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "-c", "core.autocrlf=true", "clone", "--quiet", str(fixture), str(checkout)],
+                check=True,
+                capture_output=True,
+            )
+            for path, data in sources:
+                self.assertEqual((checkout / path).read_bytes(), data, path.as_posix())
+
     def test_builder_is_deterministic_and_records_stable_identity(self):
         plugin = json.loads(
             (ROOT / "plugins/codex/.codex-plugin/plugin.json").read_text(encoding="utf-8")
