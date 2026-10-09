@@ -3871,7 +3871,19 @@ function openAddProjectModal() {
       const result = unwrap(await request(API.manageProjects, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (dismissed) return;
       const project = result.project || result; const claims = Array.isArray(project.agent_claims) ? project.agent_claims : []; delete project.agent_claims; project.id = id(project.id || project.project_id); project.collection = "My"; project.human_count = Number(project.human_count ?? 1); project.agent_count = Number(project.agent_count ?? includedAgents.length); project.message_count = Number(project.message_count ?? 0); workflow.createdProject = project; state.projects.unshift(project);
       const success = document.createElement("div"); success.className = "project-workflow-success"; const h2 = document.createElement("h2"); h2.textContent = `${project.name} was created`; const note = document.createElement("p"); note.textContent = claims.length ? "Save these one-time claims now. They expire in 15 minutes and are not shown again." : "The project is ready to use."; success.append(h2, note);
-      if (claims.length) { const list = document.createElement("div"); list.className = "project-claim-list"; claims.forEach((claim) => { const card = document.createElement("div"); const name = document.createElement("strong"); name.textContent = claim.display_name; const code = document.createElement("code"); code.textContent = claim.claim_code; card.append(name, code); list.append(card); }); success.append(list); }
+      if (claims.length) {
+        const list = document.createElement("div"); list.className = "project-claim-list";
+        claims.forEach((claim) => {
+          const card = document.createElement("div"); const name = document.createElement("strong"); name.textContent = claim.display_name;
+          const code = document.createElement("code"); code.textContent = claim.claim_code;
+          const scope = document.createElement("span"); scope.textContent = `Project ID ${claim.project_id} · Agent ID ${claim.agent_id}`;
+          const instruction = agentClaimInstruction(claim, project.name);
+          const copy = document.createElement("button"); copy.type = "button"; copy.className = "ui-button ui-button-secondary"; copy.textContent = "Copy agent message";
+          copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(instruction); state.components.toast.success("Agent message copied."); } catch { state.components.toast.error("Could not copy the agent message."); } });
+          card.append(name, scope, code, copy); list.append(card);
+        });
+        success.append(list);
+      }
       stack.push({ id: "complete", title: "Project created", content: success }); modal.setTitle("Project created"); modal.setActions([{ id: "close", label: "Close" }, { id: "open", label: "Open project", variant: "primary", closeOnClick: false, async onClick() { await modal.close({ reason: "open-project" }); void switchProject(project.id); return false; } }]); state.components.toast.success("Project created.");
     } catch (error) { if (dismissed || error.name === "AbortError") return; modal.setBusy(false); const requestError = document.createElement("div"); requestError.className = "project-workflow-errors ui-alert ui-alert-danger"; requestError.setAttribute("role", "alert"); requestError.textContent = error.message; content.prepend(requestError); state.components.toast.error(error.message); return; }
     modal.setBusy(false);
@@ -5542,15 +5554,7 @@ function showAgentCredentialResult(result) {
     const identity = result.display_name || agent?.display_name || "";
     const provider = String(result.provider || agent?.provider || "codex").toLowerCase();
     claimCode = String(result.claim_code);
-    if (provider === "codex") {
-      agentInstruction = `In Codex Desktop, use the installed local Syndicatum plugin tool claim_agent_profile to claim the “${identity}” identity in “${projectName}” at ${window.location.origin} with this one-time claim code: ${claimCode}. Do not use the ChatGPT OAuth-connected Syndicatum app for this claim.`;
-    } else if (provider === "chatgpt") {
-      agentInstruction = "This ChatGPT agent uses Syndicatum OAuth for project identity and the browser companion for delivery. Do not enter this claim code in ChatGPT or the Companion; browser delivery does not use it. Keep it only for a separate direct API integration that explicitly supports Syndicatum agent claiming.";
-    } else if (provider === "gemini") {
-      agentInstruction = "This Gemini agent uses the browser companion for delivery. Do not enter this claim code in Gemini or the Companion; browser delivery does not use it. Keep it only for a separate Syndicatum integration that explicitly supports agent-profile claiming. Gemini still needs that integration to load and respond to the authoritative project timeline.";
-    } else {
-      agentInstruction = `Use this one-time claim code only with a Syndicatum integration that explicitly supports agent-profile claiming for the “${identity}” identity in “${projectName}”: ${claimCode}.`;
-    }
+    agentInstruction = agentClaimInstruction({ ...result, display_name: identity, provider, claim_code: claimCode }, projectName);
     rows.push([{ type: "text", content: `Project: ${projectName}` }]);
     rows.push([{ type: "text", content: `Project ID: ${result.project_id || selectedProjectId()}` }]);
     rows.push([{ type: "text", content: `Identity: ${identity}` }]);
@@ -5568,6 +5572,19 @@ function showAgentCredentialResult(result) {
     mountCredentialCopyAction(modal, ".agent-message-copy-row", agentInstruction, "Copy agent message", "Agent message copied.");
   }
   modal.open();
+}
+
+function agentClaimInstruction(result, fallbackProjectName = "") {
+  const projectName = result.project_name || fallbackProjectName || state.project?.name || "";
+  const projectId = result.project_id || selectedProjectId();
+  const identity = result.display_name || "";
+  const agentId = result.agent_id;
+  const claimCode = String(result.claim_code || "");
+  const provider = String(result.provider || "codex").toLowerCase();
+  if (provider === "codex") return `In Codex Desktop, use the installed local Syndicatum plugin tool claim_agent_profile to claim the “${identity}” identity in “${projectName}” at ${window.location.origin}, using Project ID ${projectId} and Agent ID ${agentId}, with this one-time claim code: ${claimCode}. Pass both IDs to the tool and use the returned profile ID for bootstrap and all later project work. Do not use the ChatGPT OAuth-connected Syndicatum app for this claim.`;
+  if (provider === "chatgpt") return "This ChatGPT agent uses Syndicatum OAuth for project identity and the browser companion for delivery. Do not enter this claim code in ChatGPT or the Companion; browser delivery does not use it. Keep it only for a separate direct API integration that explicitly supports Syndicatum agent claiming.";
+  if (provider === "gemini") return "This Gemini agent uses the browser companion for delivery. Do not enter this claim code in Gemini or the Companion; browser delivery does not use it. Keep it only for a separate Syndicatum integration that explicitly supports agent-profile claiming. Gemini still needs that integration to load and respond to the authoritative project timeline.";
+  return `Use this one-time claim code only with a Syndicatum integration that explicitly supports agent-profile claiming for the “${identity}” identity in “${projectName}” (Project ID ${projectId}, Agent ID ${agentId}): ${claimCode}.`;
 }
 
 function mountCredentialCopyAction(modal, selector, value, label, successMessage) {

@@ -8,14 +8,21 @@ export async function claimAgentProfile(input, { fetchImpl = fetch, cwd = proces
   const identity = String(input.identity || "").trim();
   const claimCode = String(input.claimCode || "").trim();
   if (!project || !identity || !claimCode) throw new Error("Project, identity, and claim code are required.");
+  const hasProjectId = input.projectId !== undefined && input.projectId !== null && String(input.projectId).trim() !== "";
+  const hasAgentId = input.agentId !== undefined && input.agentId !== null && String(input.agentId).trim() !== "";
+  if (hasProjectId !== hasAgentId) throw new Error("Project ID and agent ID must be provided together.");
+  const projectId = hasProjectId ? positiveId(input.projectId, "project") : null;
+  const agentId = hasAgentId ? positiveId(input.agentId, "agent") : null;
 
   const projectRoot = path.resolve(String(input.projectRoot || cwd));
   const rootStatus = await stat(projectRoot).catch(() => null);
   if (!rootStatus?.isDirectory()) throw new Error("The project root does not exist or is not a directory.");
   await migrateLegacyProjectCredential(projectRoot, env, { ...(storeTokenImpl ? { storeTokenImpl } : {}) });
   const existing = (await listAgentProfiles(env)).find(profile => profile.syndicatum_url === new URL(syndicatumUrl).origin.toLowerCase()
-    && String(profile.project_name || "").toLowerCase() === project.toLowerCase()
-    && String(profile.identity || "").toLowerCase() === identity.toLowerCase());
+    && (projectId
+      ? Number(profile.project_id) === Number(projectId) && Number(profile.agent_id) === Number(agentId)
+      : String(profile.project_name || "").toLowerCase() === project.toLowerCase()
+        && String(profile.identity || "").toLowerCase() === identity.toLowerCase()));
   if (existing && !input.replaceExisting) {
     throw new Error(`Syndicatum profile ${existing.profile_id} already exists. Set replace_existing only when intentionally rotating this agent's credential.`);
   }
@@ -23,7 +30,9 @@ export async function claimAgentProfile(input, { fetchImpl = fetch, cwd = proces
   const response = await fetchImpl(new URL("/api/v1/agent-claim.php", `${syndicatumUrl}/`), {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ project, identity, claim_code: claimCode }),
+    body: JSON.stringify(projectId
+      ? { project_id: Number(projectId), agent_id: Number(agentId), project, identity, claim_code: claimCode }
+      : { project, identity, claim_code: claimCode }),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -33,6 +42,9 @@ export async function claimAgentProfile(input, { fetchImpl = fetch, cwd = proces
   }
   const claimed = payload?.data || {};
   if (!String(claimed.token || "").trim()) throw new Error("Syndicatum accepted the claim but did not return an agent token.");
+  if (projectId && (Number(claimed.project_id) !== Number(projectId) || Number(claimed.agent_id) !== Number(agentId))) {
+    throw new Error("Syndicatum returned a different project or agent than the requested claim. No credential was stored.");
+  }
 
   const credential = await storeAgentProfile({
     syndicatumUrl,
@@ -62,4 +74,10 @@ function normalizeBaseUrl(value) {
     throw new Error("Syndicatum must use HTTPS except during localhost development.");
   }
   return url.href.replace(/\/+$/, "");
+}
+
+function positiveId(value, label) {
+  const normalized = String(value ?? "").trim();
+  if (!/^[1-9][0-9]*$/.test(normalized)) throw new Error(`A valid Syndicatum ${label} ID is required.`);
+  return normalized;
 }

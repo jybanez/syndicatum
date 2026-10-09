@@ -52,6 +52,52 @@ test("two agents sharing one project root receive distinct protected credential 
   assert.equal((await loadAgentProfile(developer.profileId, env, { loadTokenImpl: protectedLoad })).token, "secret-token-30");
 });
 
+test("immutable IDs keep same-named agents in different projects isolated", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-same-name-projects-"));
+  const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-same-name-profiles-"));
+  const env = { ...process.env, SYNDICATUM_PLUGIN_DATA: data, SYNDICATUM_AGENT_TOKEN: "" };
+  let requestBody;
+  const result = await claimAgentProfile({
+    syndicatumUrl: "https://syndicatum.wizaya.com", project: "PBB Map", identity: "Alfred",
+    projectId: 10, agentId: 69, claimCode: "map-code", projectRoot: root,
+  }, {
+    env, storeTokenImpl: protectedStore,
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return new Response(JSON.stringify({ data: { project_id: 10, participant_id: 82, agent_id: 69, project_name: "PBB Map", display_name: "Alfred", token: "map-secret", token_prefix: "map" } }), { status: 201, headers: { "Content-Type": "application/json" } });
+    },
+  });
+  assert.deepEqual(requestBody, { project_id: 10, agent_id: 69, project: "PBB Map", identity: "Alfred", claim_code: "map-code" });
+  assert.equal(result.profileId, agentProfileId("https://syndicatum.wizaya.com", 10, 69));
+  assert.notEqual(result.profileId, agentProfileId("https://syndicatum.wizaya.com", 8, 59));
+});
+
+test("an ID-scoped claim refuses a mismatched server response before storing credentials", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-mismatched-claim-"));
+  const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-mismatched-profiles-"));
+  const env = { ...process.env, SYNDICATUM_PLUGIN_DATA: data, SYNDICATUM_AGENT_TOKEN: "" };
+  await assert.rejects(() => claimAgentProfile({
+    syndicatumUrl: "https://syndicatum.wizaya.com", project: "PBB Map", identity: "Alfred",
+    projectId: 10, agentId: 69, claimCode: "map-code", projectRoot: root,
+  }, {
+    env, storeTokenImpl: protectedStore,
+    fetchImpl: async () => new Response(JSON.stringify({ data: { project_id: 8, participant_id: 70, agent_id: 59, project_name: "PBB Hotline", display_name: "Alfred", token: "wrong-secret", token_prefix: "wrong" } }), { status: 201, headers: { "Content-Type": "application/json" } }),
+  }), /different project or agent/);
+  assert.equal((await listAgentProfiles(env)).length, 0);
+});
+
+test("a partial immutable identity scope is rejected before the claim request", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-partial-claim-scope-"));
+  const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-partial-claim-profiles-"));
+  const env = { ...process.env, SYNDICATUM_PLUGIN_DATA: data, SYNDICATUM_AGENT_TOKEN: "" };
+  let called = false;
+  await assert.rejects(() => claimAgentProfile({
+    syndicatumUrl: "https://syndicatum.wizaya.com", project: "PBB Map", identity: "Alfred",
+    projectId: 10, claimCode: "map-code", projectRoot: root,
+  }, { env, storeTokenImpl: protectedStore, fetchImpl: async () => { called = true; } }), /must be provided together/);
+  assert.equal(called, false);
+});
+
 test("a device-token environment override cannot replace a claimed agent credential", async () => {
   const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-profile-boundary-"));
   const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-profile-project-"));
