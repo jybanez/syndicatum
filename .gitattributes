@@ -6,3 +6,6 @@ tests/fixtures/*.jsonl text eol=lf
 vendor/pbb-helper/dist/helpers.ui.bundle.min.js text eol=lf
 vendor/pbb-helper/dist/helpers.ui.bundle.min.css text eol=lf
 vendor/pbb-helper/js/ui/ui.loader.js text eol=lf
+.agents/plugins/marketplace.json text eol=lf
+plugins/codex/** text eol=lf
+plugins/codex/assets/*.png -text

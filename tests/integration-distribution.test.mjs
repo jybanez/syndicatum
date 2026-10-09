@@ -38,6 +38,17 @@ test("distribution classifications match the exact source package versions", asy
         "Windows rollback and restoration acceptance is open after plugin-cache backup failed with access denied.",
       ],
     },
+    {
+      version: "0.2.2",
+      ref: "codex-v0.2.2",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "Windows 11 restored the exact tagged marketplace and loaded codex@syndicatum 0.2.2 with the expected tools, connector, and protected identity.",
+        "Exact-byte provenance failed for 41 text files because the Git marketplace checkout converted LF to CRLF under core.autocrlf=true; initialize, fresh-task health, adversarial isolation, and same-version recovery evidence also remain incomplete.",
+      ],
+    },
   ]);
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);

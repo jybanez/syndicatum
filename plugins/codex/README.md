@@ -58,14 +58,15 @@ ref and acceptance evidence named in the
 ## Stable Windows channel
 
 The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
-The current source candidate is `codex-v0.2.2`; it adds bounded project-file and
-public-HTTPS content readers while retaining the handshake correction introduced
-by `0.2.1`. After the current release
+The current source candidate is `codex-v0.2.3`; it enforces LF bytes across the
+Git marketplace package so Windows `core.autocrlf` cannot invalidate release
+provenance. It retains the bounded content readers from `0.2.2` and the
+handshake correction introduced by `0.2.1`. After the current release
 workflow and the applicable installed-client acceptance pass, use the immutable
 Git marketplace ref:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.2
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.3
 codex plugin add codex@syndicatum
 ```
 
