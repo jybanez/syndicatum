@@ -60,6 +60,17 @@ test("distribution classifications match the exact source package versions", asy
         "Background health was only a startup snapshot without a heartbeat or age gate; no safe cross-project negative fixture was available and same-version recovery remains unexercised.",
       ],
     },
+    {
+      version: "0.2.4",
+      ref: "codex-v0.2.4",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "Windows 10 and Windows 11 verified exact release and installed bytes, the 38-tool catalog, protected identity and project scope, live listener ownership, advancing heartbeat timestamps, and fail-closed background-manager stale-health detection.",
+        "Installed PluginRuntime.currentStatus still reported top-level ready for a nested stale_health background, so aggregate connector status did not fail closed.",
+      ],
+    },
   ]);
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);

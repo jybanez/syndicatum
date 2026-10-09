@@ -92,3 +92,16 @@ test("connector status is rebuilt from persisted configuration instead of stale 
   const status = await runtime.currentStatus();
   assert.equal(status.state, "ready"); assert.equal(status.deviceId, "device-ready"); assert.equal(status.background.pid, 91);
 });
+
+test("connector status fails closed when background health is stale", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-stale-health-"));
+  const root = path.join(localAppData, "Syndicatum", "CodexPlugin"); await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, "connector.config.json"), JSON.stringify({ mode: "device", syndicatumUrl: "https://syndicatum.example", deviceId: "device-stale" }), "utf8");
+  const background = { supported: true, running: true, ownsListener: true, healthFresh: false, readiness: "stale_health", listenerReason: "background_health_stale" };
+  const runtime = new PluginRuntime({ SYNDICATUM_PLUGIN_DATA: root, SYNDICATUM_AGENT_TOKEN: "test-token" }, { background: { async status() { return background; } } });
+
+  const status = await runtime.currentStatus();
+
+  assert.equal(status.state, "stale_health");
+  assert.equal(status.background, background);
+});

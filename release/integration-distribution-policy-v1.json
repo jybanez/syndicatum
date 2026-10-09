@@ -6,7 +6,7 @@
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
-    "codex_plugin": "0.2.4",
+    "codex_plugin": "0.2.5",
     "companion": "0.10.24"
   },
   "channels": [
@@ -76,10 +76,10 @@
   "compatibility": {
     "application_release": "v1.0.0-rc.3",
     "codex_plugin": {
-      "tested_source_version": "0.2.4",
+      "tested_source_version": "0.2.5",
       "production_range": null,
       "initial_stable_ref": "codex-v0.2.0",
-      "current_candidate_ref": "codex-v0.2.4",
+      "current_candidate_ref": "codex-v0.2.5",
       "release_history": [
         {
           "version": "0.2.0",
@@ -112,6 +112,17 @@
           "findings": [
             "Windows 10 and Windows 11 verified the exact tagged marketplace and installed package bytes, expected tool catalog, protected public identity continuity, project-scoped reads, and live connector ownership; Windows 10 also captured serverInfo.version 0.2.3 from the installed server in isolated temporary state.",
             "Background health was only a startup snapshot without a heartbeat or age gate; no safe cross-project negative fixture was available and same-version recovery remains unexercised."
+          ]
+        },
+        {
+          "version": "0.2.4",
+          "ref": "codex-v0.2.4",
+          "publication_status": "published",
+          "promotion_status": "not_promoted",
+          "production_supported": false,
+          "findings": [
+            "Windows 10 and Windows 11 verified exact release and installed bytes, the 38-tool catalog, protected identity and project scope, live listener ownership, advancing heartbeat timestamps, and fail-closed background-manager stale-health detection.",
+            "Installed PluginRuntime.currentStatus still reported top-level ready for a nested stale_health background, so aggregate connector status did not fail closed."
           ]
         }
       ]
