@@ -100,7 +100,7 @@ export class BackgroundServiceManager {
     const currentHealth = running && Number(health?.pid) === pid ? health : null;
     const healthFresh = isHealthFresh(currentHealth);
     const readiness = readinessState({ running, ownsListener, health: currentHealth, healthFresh });
-    const listenerReason = readiness === "stale_health" ? "background_health_stale" : ownsListener ? (readiness === "authorized_idle" ? "authorized_without_local_routes" : "listener_owned") : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : readiness === "startup_error" ? "listener_startup_failed" : "listener_starting";
+    const listenerReason = readiness === "stale_health" ? "background_health_stale" : readiness === "starting_listener" && ownsListener ? "listener_reloading" : ownsListener ? (readiness === "authorized_idle" ? "authorized_without_local_routes" : "listener_owned") : !running ? "background_not_running" : listenerPid ? "listener_owned_by_other_process" : readiness === "startup_error" ? "listener_startup_failed" : "listener_starting";
     return { supported: ["win32", "darwin"].includes(this.platform), platform: this.platform, installed: Boolean(metadata), running, ownsListener, listenerReason, pid, listenerPid, readiness, healthFresh, health: currentHealth, startupMethod: metadata?.startupMethod || null, startupDiagnostic: metadata?.startupDiagnostic || null, startupLog: this.files.backgroundStartupLog, metadata };
   }
 
@@ -273,9 +273,10 @@ function readinessState(status) {
   if (status.health && status.healthFresh === false) return "stale_health";
   if (status.health?.state === "authorized_idle") return "authorized_idle";
   if (status.health?.state === "error") return "startup_error";
+  if (["starting", "configured", "reloading"].includes(String(status.health?.state || ""))) return "starting_listener";
   return status.ownsListener ? "ready" : "starting_listener";
 }
-function isHealthyBackground(status) { return Boolean(status?.running && status?.ownsListener && !["startup_error", "stale_health", "stopped"].includes(readinessState(status))); }
+function isHealthyBackground(status) { return Boolean(status?.running && status?.ownsListener && ["ready", "authorized_idle"].includes(readinessState(status))); }
 function sanitizedError(error) { return String(error?.message || error || "Unknown startup failure").replace(/[\r\n]+/g, " ").slice(0, 1000); }
 function xml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
 

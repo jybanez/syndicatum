@@ -105,3 +105,32 @@ test("connector status fails closed when background health is stale", async () =
   assert.equal(status.state, "stale_health");
   assert.equal(status.background, background);
 });
+
+test("connector status fails closed while background configuration reload is pending", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-configuring-"));
+  const root = path.join(localAppData, "Syndicatum", "CodexPlugin"); await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, "connector.config.json"), JSON.stringify({ mode: "device", syndicatumUrl: "https://syndicatum.example", deviceId: "device-configuring" }), "utf8");
+  const background = { supported: true, running: true, ownsListener: true, readiness: "starting_listener", health: { state: "reloading", bindings: 38, projects: 7 } };
+  const runtime = new PluginRuntime({ SYNDICATUM_PLUGIN_DATA: root, SYNDICATUM_AGENT_TOKEN: "test-token" }, { background: { async status() { return background; } } });
+
+  const status = await runtime.currentStatus();
+
+  assert.equal(status.state, "starting");
+  assert.notEqual(status.state, "ready");
+  assert.equal(status.background, background);
+});
+
+test("configuration changes preserve route counts while scheduling a listener reload", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-config-reload-"));
+  const root = path.join(localAppData, "Syndicatum", "CodexPlugin"); await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, "connector.config.json"), JSON.stringify({ mode: "device", syndicatumUrl: "https://syndicatum.example", deviceId: "device-reload" }), "utf8");
+  const runtime = new PluginRuntime({ SYNDICATUM_PLUGIN_DATA: root, SYNDICATUM_AGENT_TOKEN: "test-token" }, { manageBackground: false });
+  runtime.status = { state: "running", mode: "device", deviceId: "device-reload", bindings: 38, projects: 7, unavailableBindings: 0 };
+  let reloads = 0;
+  runtime.scheduleReload = () => { reloads += 1; };
+
+  await runtime.handleConfigChange();
+
+  assert.deepEqual(runtime.status, { state: "reloading", mode: "device", deviceId: "device-reload", bindings: 38, projects: 7, unavailableBindings: 0 });
+  assert.equal(reloads, 1);
+});

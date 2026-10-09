@@ -163,3 +163,35 @@ test("background status rejects stale health even when the process owns the list
   assert.equal(status.readiness, "stale_health");
   assert.equal(status.listenerReason, "background_health_stale");
 });
+
+test("background status does not report ready while configuration reload is pending", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-config-reload-health-"));
+  const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
+  await mkdir(manager.files.root, { recursive: true });
+  await writeFile(manager.files.backgroundLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.listenerLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "reloading", bindings: 38, projects: 7, updatedAt: new Date().toISOString() }), "utf8");
+
+  const status = await manager.status();
+
+  assert.equal(status.running, true);
+  assert.equal(status.ownsListener, true);
+  assert.equal(status.readiness, "starting_listener");
+  assert.equal(status.listenerReason, "listener_reloading");
+  assert.notEqual(status.readiness, "ready");
+});
+
+test("background status rejects legacy configured-only health as not ready", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-configured-health-"));
+  const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
+  await mkdir(manager.files.root, { recursive: true });
+  await writeFile(manager.files.backgroundLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.listenerLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "configured", bindings: 0, projects: 0, updatedAt: new Date().toISOString() }), "utf8");
+
+  const status = await manager.status();
+
+  assert.equal(status.readiness, "starting_listener");
+  assert.equal(status.listenerReason, "listener_reloading");
+  assert.notEqual(status.readiness, "ready");
+});
