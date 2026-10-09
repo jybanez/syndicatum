@@ -176,13 +176,27 @@ export class PluginRuntime {
     try {
       this.configWatcher = watch(files.root, (_event, filename) => {
         if (String(filename) === path.basename(files.config)) {
-          this.pairing?.stop();
-          void this.configuredDevice().then(config => { if (config) this.status = { state: "configured", mode: "device", deviceId: config.deviceId }; });
+          void this.handleConfigChange();
         } else if (String(filename) === path.basename(files.pairingState)) {
           void loadPairingState(this.env).then(pairing => { if (pairing?.state === "ready") this.pairing?.stop(); }).catch(() => {});
         }
       });
     } catch (_error) { /* Status still re-reads persisted state if directory watching is unavailable. */ }
+  }
+  async handleConfigChange() {
+    this.pairing?.stop();
+    try {
+      const config = await this.configuredDevice();
+      if (!config) {
+        this.status = { state: "unconfigured" };
+        this.scheduleReload();
+        return;
+      }
+      this.status = { ...this.status, state: "reloading", mode: "device", deviceId: config.deviceId };
+      this.scheduleReload();
+    } catch (error) {
+      this.status = { ...this.status, state: "error", stage: "configuration_reload", error: String(error?.message || error) };
+    }
   }
   scheduleReload() {
     clearTimeout(this.reloadTimer);

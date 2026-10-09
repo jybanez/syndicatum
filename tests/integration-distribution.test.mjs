@@ -71,6 +71,17 @@ test("distribution classifications match the exact source package versions", asy
         "Installed PluginRuntime.currentStatus still reported top-level ready for a nested stale_health background, so aggregate connector status did not fail closed.",
       ],
     },
+    {
+      version: "0.2.5",
+      ref: "codex-v0.2.5",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "Windows 10 verified exact release and installed bytes, the 38-tool catalog, protected identity and project scope, listener ownership, advancing heartbeat, and end-to-end stale_health propagation through PluginRuntime.currentStatus.",
+        "Windows 11 found that a connector-configuration watcher replaced live running status with a configured-only object, dropping route counters to zero while aggregate status still reported ready; real delivery attempts also failed because the bound target thread had no rollout.",
+      ],
+    },
   ]);
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);

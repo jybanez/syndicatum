@@ -102,16 +102,17 @@ ref and acceptance evidence named in the
 The owner-approved first production targets are Windows 10 22H2 and Windows 11.
 Stable Codex plugin releases use an immutable `codex-v<version>` Git tag whose
 version must exactly match `plugins/codex/.codex-plugin/plugin.json`. The current
-source candidate is `codex-v0.2.5`; it propagates stale background health
-through aggregate connector status instead of reporting ready. It retains the
-heartbeat and age gate from `0.2.4`, the LF checkout contract from `0.2.3`, the
+source candidate is `codex-v0.2.6`; it reloads the listener when connector
+configuration changes, preserves route counters while reload is pending, and
+refuses to report configured-only health as ready. It retains aggregate
+stale-health propagation from `0.2.5`, the heartbeat and age gate from `0.2.4`, the LF checkout contract from `0.2.3`, the
 bounded content readers from `0.2.2`, and the MCP handshake correction
-introduced by `0.2.1`. Published releases `0.2.0`, `0.2.2`, `0.2.3`, and
-`0.2.4` remain unpromoted. After the current tag's release workflow
+introduced by `0.2.1`. Published releases `0.2.0`, `0.2.2`, `0.2.3`, `0.2.4`,
+and `0.2.5` remain unpromoted. After the current tag's release workflow
 and the applicable installed-client acceptance pass, install it with:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.5
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.6
 codex plugin add codex@syndicatum
 ```
 
