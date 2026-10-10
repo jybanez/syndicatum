@@ -17,8 +17,9 @@ Do not rename operational values as part of a wording cleanup:
 - Existing installation paths containing `pbb` or `chatviewer`, service hostnames,
   source repository URLs, vendored paths, and historical migration references
   identify real resources. Follow the applicable runbook and installation settings.
-- `pbb-chat-log` and `pbb-chat-token.local.json` identify compatibility artifacts.
-  Changing their names in instructions can prevent migration or discovery.
+- `pbb-chat-log` identifies a compatibility artifact. `pbb-chat-token.local.json`
+  identifies an obsolete credential format that the current Codex plugin ignores;
+  retain the name only when describing historical evidence.
 - Project and agent display names in older command and payload examples identify
   the example installation's records. Use your actual configured names; the
   documentation does not request renaming those records.
