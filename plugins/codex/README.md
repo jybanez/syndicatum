@@ -58,7 +58,10 @@ ref and acceptance evidence named in the
 ## Stable Windows channel
 
 The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
-The current source candidate is `codex-v0.2.6`; it reloads the listener when
+The current source candidate is `codex-v0.2.7`; it ignores the obsolete
+checkout-local `pbb-chat-token.local.json` format during modern protected-profile
+claims. It retains the listener reload and fail-closed health corrections from
+`0.2.6`, which reloads the listener when
 connector configuration changes, preserves route counters while reload is
 pending, and refuses to report configured-only health as ready. It retains the
 aggregate stale-health propagation from `0.2.5`, the heartbeat and age gate from `0.2.4`, the LF checkout contract from
@@ -68,14 +71,14 @@ workflow and the applicable installed-client acceptance pass, use the immutable
 Git marketplace ref:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.6
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.7
 codex plugin add codex@syndicatum
 ```
 
 The release ZIP, checksum, and manifest are provenance for the tagged
 marketplace snapshot, not a separate installer. The planned support policy
 covers the current and immediately previous stable release. Published releases
-`0.2.0`, `0.2.2`, `0.2.3`, `0.2.4`, and `0.2.5` remain prior releases, but none is a
+`0.2.0`, `0.2.2`, `0.2.3`, `0.2.4`, `0.2.5`, and `0.2.6` remain prior releases, but none is a
 production-support claim. An unpromoted published predecessor does not receive
 support merely because it exists. See the production gate for the required
 Windows acceptance evidence before treating this candidate as

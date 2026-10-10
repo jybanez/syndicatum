@@ -82,6 +82,17 @@ test("distribution classifications match the exact source package versions", asy
         "Windows 11 found that a connector-configuration watcher replaced live running status with a configured-only object, dropping route counters to zero while aggregate status still reported ready; real delivery attempts also failed because the bound target thread had no rollout.",
       ],
     },
+    {
+      version: "0.2.6",
+      ref: "codex-v0.2.6",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "Windows 10 and Windows 11 verified exact release and installed bytes, the 38-tool catalog, protected project-scoped identity and reads, listener ownership, recovered nonzero routes, advancing heartbeat, and installed-code reload and fail-closed health behavior.",
+        "Active routed delivery remains open, and a modern new-agent claim can be blocked before contacting Syndicatum when the checkout contains the obsolete pbb-chat-token.local.json format.",
+      ],
+    },
   ]);
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);

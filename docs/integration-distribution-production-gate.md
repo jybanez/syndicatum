@@ -24,7 +24,7 @@ installed-client acceptance gates below remain open.
 | Integration | Current channel | Classification | Production blocker |
 | --- | --- | --- | --- |
 | ChatGPT hosted MCP | Developer/custom MCP connection | Development | No approved public OpenAI plugin listing; current public-review artifact, domain challenge, scans, reviewer materials, and directory identity are not retained. |
-| Codex connector | Git-backed local marketplace; `codex-v0.2.6` source candidate | Pilot | Immutable releases through `0.2.5` are published but unpromoted. Windows 10 accepted exact `0.2.5` bytes, catalog, scope, heartbeat, and aggregate stale-health propagation. Windows 11 then found that the configuration watcher dropped live route counters while health still reported ready, and its bound target thread had no rollout. The current candidate reloads on configuration changes and fails closed for configured-only health; immutable publication, exact installed acceptance, and a valid routed-delivery binding remain open. |
+| Codex connector | Git-backed local marketplace; `codex-v0.2.7` source candidate | Pilot | Immutable releases through `0.2.6` are published but unpromoted. Windows 10 and Windows 11 accepted exact `0.2.6` installed/fresh-task behavior with recovered routes and fail-closed health, while active routed delivery remains open. A later new-agent attempt showed that obsolete checkout-local credential state could still block a modern claim before the request reached Syndicatum. The current candidate removes that obsolete migration dependency entirely; immutable publication, exact installed claim acceptance, and a valid routed-delivery binding remain open. |
 | Companion for Chrome | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required and unpacked extensions do not auto-update. No Chrome Web Store identifier or reviewed listing exists. |
 | Companion for Edge | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required. No Edge Add-ons identifier, Partner Center certification, or store-managed update acceptance exists. |
 | Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion store-distribution blockers. Exact 0.10.24 ChatGPT delivery is accepted; the latest retained Gemini-specific installed correlation evidence remains 0.10.18. |
@@ -57,13 +57,16 @@ The following evidence was current on 2026-10-10:
 
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
-- Codex source candidate: `0.2.6` (`codex-v0.2.6`). Releases through `0.2.5`
-  are published but unpromoted. Windows 10 acceptance of `0.2.5` verified exact
-  marketplace and installed bytes, the expected catalog, identity/scope
-  continuity, connector ownership, advancing heartbeat timestamps, and
-  end-to-end stale-health rejection. Windows 11 verified those static/runtime
-  gates but found configured-only health dropping route counters while still
-  reported ready, plus a bound target thread with no rollout. See the
+- Codex source candidate: `0.2.7` (`codex-v0.2.7`). Releases through `0.2.6`
+  are published but unpromoted. Windows 10 and Windows 11 acceptance of `0.2.6`
+  verified exact marketplace and installed bytes, the expected catalog,
+  project-scoped identity and reads, recovered routes, connector ownership,
+  advancing heartbeat timestamps, and installed-code reload and fail-closed
+  health behavior. Active routed delivery remains open, and a later new-agent
+  attempt exposed the obsolete checkout-local credential migration dependency
+  removed by `0.2.7`. See the
+  [0.2.6 installed/fresh-task acceptance record](evidence/codex-0.2.6-windows-installed-acceptance-2026-10-10.md),
+  the
   [0.2.5 sanitized acceptance record](evidence/codex-0.2.5-windows-installed-acceptance-2026-10-10.md),
   the
   [0.2.4 sanitized acceptance record](evidence/codex-0.2.4-windows-installed-acceptance-2026-10-10.md),
@@ -193,7 +196,7 @@ The source versions below are test anchors, not production ranges.
 
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
-| `v1.0.0-rc.3` | Codex `0.2.6` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.5` Windows 10 passed exact provenance, installed catalog, identity/scope, connector ownership, heartbeat advancement, and aggregate stale-health propagation. Windows 11 remained qualified by configured-only health, dropped route counters, and an invalid target-thread rollout. | None until the exact tagged release passes each claimed Windows install/lifecycle/device row and routed delivery succeeds through a valid binding. |
+| `v1.0.0-rc.3` | Codex `0.2.7` source candidate | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Source tests and deterministic tagged-release contract; `0.2.6` passed exact installed/fresh-task acceptance on both targets with explicit S5 startup/baseline qualifications. The current candidate removes obsolete checkout-local credential migration from protected-profile claims. | None until the exact tagged release passes installed claim acceptance and routed delivery succeeds through a valid binding. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + ChatGPT web on Windows 11 | Source tests plus exact installed 0.10.24 unpacked-pilot acceptance: verified artifact and rollback backup, in-place update/reload, identity/auth/binding preservation, healthy Realtime, zero queue/review, stale-error retirement without replay, exact receipt, one normal reply, and automatic lease release | None until the exact reviewed Chrome Web Store build passes publication and store-managed lifecycle acceptance. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |
