@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { claimAgentProfile } from "../mcp/profile-claim.mjs";
-import { agentProfileId, listAgentProfiles, loadAgentProfile, migrateLegacyProjectCredential } from "../mcp/agent-profile-store.mjs";
+import { agentProfileId, listAgentProfiles, loadAgentProfile } from "../mcp/agent-profile-store.mjs";
 
 const protectedStore = async (file, token) => {
   await mkdir(path.dirname(file), { recursive: true });
@@ -130,14 +130,32 @@ test("an existing profile blocks claim consumption unless replacement is explici
   assert.equal(called, false);
 });
 
-test("a complete legacy project credential migrates to the protected profile store and is removed", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-legacy-project-"));
-  const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-legacy-profiles-"));
+test("a legacy project credential file is ignored and preserved during a new claim", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "syndicatum-incomplete-legacy-project-"));
+  const data = await mkdtemp(path.join(os.tmpdir(), "syndicatum-incomplete-legacy-profiles-"));
   const env = { ...process.env, SYNDICATUM_PLUGIN_DATA: data, SYNDICATUM_AGENT_TOKEN: "" };
   const legacyFile = path.join(root, "pbb-chat-token.local.json");
-  await writeFile(legacyFile, JSON.stringify({ project_id: 3, participant_id: 41, agent_id: 29, project_name: "BimoPerks", identity: "Code Planner-Reviewer", token: "legacy-secret", token_prefix: "legacy", claimed_at: "2026-09-13T00:00:00Z", chatviewer_url: "https://syndicatum.wizaya.com" }));
-  const migrated = await migrateLegacyProjectCredential(root, env, { storeTokenImpl: protectedStore });
-  assert.equal(migrated.profile_id, agentProfileId("https://syndicatum.wizaya.com", 3, 29));
-  await assert.rejects(readFile(legacyFile), error => error.code === "ENOENT");
-  assert.equal((await loadAgentProfile(migrated.profile_id, env, { loadTokenImpl: protectedLoad })).token, "legacy-secret");
+  const legacy = "not even valid JSON";
+  await writeFile(legacyFile, legacy);
+
+  try {
+    const claimed = await claimAgentProfile({
+      syndicatumUrl: "https://syndicatum.wizaya.com",
+      project: "PBB Map",
+      identity: "Helper",
+      claimCode: "new-project-code",
+      projectRoot: root,
+    }, {
+      fetchImpl: async () => claimResponse(31, 43, "Helper"),
+      env,
+      storeTokenImpl: protectedStore,
+    });
+
+    assert.equal(claimed.profileId, agentProfileId("https://syndicatum.wizaya.com", 3, 31));
+    assert.equal(await readFile(legacyFile, "utf8"), legacy);
+    assert.equal((await listAgentProfiles(env)).length, 1);
+  } finally {
+    await rm(data, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
 });

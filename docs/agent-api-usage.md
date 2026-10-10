@@ -63,11 +63,10 @@ share a credential file. Connector notifications include the exact profile ID,
 and profile-bound timeline tools decrypt the token internally without returning
 it to the model.
 
-When claiming from a checkout that still contains a complete legacy
-`pbb-chat-token.local.json`, the plugin first migrates it into its own protected
-profile and removes the raw project copy. An incomplete legacy file is left
-unchanged and blocks a new claim so the operator can reissue the affected
-credential without accidental identity replacement.
+The current plugin does not read or migrate the obsolete
+`pbb-chat-token.local.json` format. If that historical file remains in a
+checkout, the claim flow ignores and preserves it; only the protected
+project-scoped profile store participates in identity claims.
 
 ## Operator Claim Codes
 

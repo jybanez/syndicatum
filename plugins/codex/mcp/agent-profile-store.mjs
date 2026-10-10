@@ -117,32 +117,6 @@ export async function removeAgentProfile(profileId, env = process.env, { deleteT
   await rm(directory, { recursive: true, force: true });
 }
 
-export async function migrateLegacyProjectCredential(projectRoot, env = process.env, dependencies = {}) {
-  const legacyFile = path.join(path.resolve(projectRoot), "pbb-chat-token.local.json");
-  let legacy;
-  try { legacy = JSON.parse(await readFile(legacyFile, "utf8")); }
-  catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw new Error("The legacy Syndicatum project credential could not be read safely.");
-  }
-  if (!legacy?.token || !legacy?.project_id || !legacy?.agent_id || !legacy?.participant_id || !legacy?.chatviewer_url) {
-    throw new Error("The legacy project credential cannot be safely namespaced. Keep it unchanged and ask the operator to reissue that agent credential.");
-  }
-  const metadata = await storeAgentProfile({
-    syndicatumUrl: legacy.chatviewer_url,
-    projectId: legacy.project_id,
-    participantId: legacy.participant_id,
-    agentId: legacy.agent_id,
-    projectName: legacy.project_name,
-    identity: legacy.identity,
-    token: legacy.token,
-    tokenPrefix: legacy.token_prefix,
-    claimedAt: legacy.claimed_at,
-  }, env, dependencies);
-  await rm(legacyFile, { force: true });
-  return metadata;
-}
-
 export function publicAgentProfile(profile) {
   return Object.fromEntries(Object.entries(profile).filter(([key]) => !["token", "token_prefix"].includes(key)));
 }

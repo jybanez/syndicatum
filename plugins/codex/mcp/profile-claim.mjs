@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { listAgentProfiles, migrateLegacyProjectCredential, storeAgentProfile } from "./agent-profile-store.mjs";
+import { listAgentProfiles, storeAgentProfile } from "./agent-profile-store.mjs";
 
 export async function claimAgentProfile(input, { fetchImpl = fetch, cwd = process.cwd(), env = process.env, storeTokenImpl } = {}) {
   const syndicatumUrl = normalizeBaseUrl(input.syndicatumUrl);
@@ -17,7 +17,6 @@ export async function claimAgentProfile(input, { fetchImpl = fetch, cwd = proces
   const projectRoot = path.resolve(String(input.projectRoot || cwd));
   const rootStatus = await stat(projectRoot).catch(() => null);
   if (!rootStatus?.isDirectory()) throw new Error("The project root does not exist or is not a directory.");
-  await migrateLegacyProjectCredential(projectRoot, env, { ...(storeTokenImpl ? { storeTokenImpl } : {}) });
   const existing = (await listAgentProfiles(env)).find(profile => profile.syndicatum_url === new URL(syndicatumUrl).origin.toLowerCase()
     && (projectId
       ? Number(profile.project_id) === Number(projectId) && Number(profile.agent_id) === Number(agentId)
