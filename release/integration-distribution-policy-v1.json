@@ -6,7 +6,7 @@
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
-    "codex_plugin": "0.2.6",
+    "codex_plugin": "0.2.7",
     "companion": "0.10.24"
   },
   "channels": [
@@ -76,10 +76,10 @@
   "compatibility": {
     "application_release": "v1.0.0-rc.3",
     "codex_plugin": {
-      "tested_source_version": "0.2.6",
+      "tested_source_version": "0.2.7",
       "production_range": null,
       "initial_stable_ref": "codex-v0.2.0",
-      "current_candidate_ref": "codex-v0.2.6",
+      "current_candidate_ref": "codex-v0.2.7",
       "release_history": [
         {
           "version": "0.2.0",
@@ -134,6 +134,17 @@
           "findings": [
             "Windows 10 verified exact release and installed bytes, the 38-tool catalog, protected identity and project scope, listener ownership, advancing heartbeat, and end-to-end stale_health propagation through PluginRuntime.currentStatus.",
             "Windows 11 found that a connector-configuration watcher replaced live running status with a configured-only object, dropping route counters to zero while aggregate status still reported ready; real delivery attempts also failed because the bound target thread had no rollout."
+          ]
+        },
+        {
+          "version": "0.2.6",
+          "ref": "codex-v0.2.6",
+          "publication_status": "published",
+          "promotion_status": "not_promoted",
+          "production_supported": false,
+          "findings": [
+            "Windows 10 and Windows 11 verified exact release and installed bytes, the 38-tool catalog, protected project-scoped identity and reads, listener ownership, recovered nonzero routes, advancing heartbeat, and installed-code reload and fail-closed health behavior.",
+            "Active routed delivery remains open, and a modern new-agent claim can be blocked before contacting Syndicatum when the checkout contains the obsolete pbb-chat-token.local.json format."
           ]
         }
       ]
