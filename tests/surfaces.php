@@ -506,6 +506,25 @@ try {
         $suite->true(strpos($index, 'Everyone active in this project will be notified.') !== false, 'Composer broadcast warning must not describe broadcasts as response tagging.');
     });
 
+    $suite->test('Reply message IDs link back to their canonical timeline parent', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $styles = file_get_contents($root . '/assets/app.css');
+        $suite->true(strpos($source, 'const repliedMessageId = id(current.reply_to_message_id || current.reply_to?.id || "");') !== false
+            && strpos($source, 'repliedMessageLink.textContent = `#${repliedMessageId}`;') !== false
+            && strpos($source, 'document.createTextNode(" - ")') !== false
+            && strpos($source, 'currentMessageId.textContent = `#${current.id}`;') !== false,
+            'Reply cards must show the replied message ID before the current message ID while top-level cards retain one ID.');
+        $suite->true(strpos($source, 'try { await jumpToMessage(repliedMessageId); }') !== false
+            && strpos($source, 'repliedMessageLink.setAttribute("aria-busy", "true");') !== false
+            && strpos($source, 'const payload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: messageId })}`);') !== false
+            && strpos($source, 'state.messages = sortAndDedupe([...state.messages, message]);') !== false
+            && strpos($source, 'scrollToItem?.(messageId, { align: "center", focus: true })') !== false,
+            'Clicking a replied message ID must canonically load an off-page parent and scroll it into focused view.');
+        $suite->true(strpos($source, 'repliedMessageLink.setAttribute("aria-label", `Go to replied message ${repliedMessageId}`);') !== false
+            && strpos($styles, '.message-card-id-link:focus-visible') !== false,
+            'The replied-message navigation control must expose a keyboard-visible accessible label and focus treatment.');
+    });
+
     $suite->test('System messages are visually distinct and keep their actor and task context', function () use ($suite, $root) {
         $source = file_get_contents($root . '/assets/app.mjs');
         $styles = file_get_contents($root . '/assets/app.css');

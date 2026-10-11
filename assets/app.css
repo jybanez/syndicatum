@@ -255,6 +255,10 @@ button, input, textarea { font: inherit; }
 .message-action.ui-button-borderless { min-height: 30px; padding: 4px 7px; color: var(--app-accent); }
 .revision-label { color: var(--app-muted); font-size: 11px; }
 .message-card-id { min-width: 0; margin-left: auto; color: var(--app-muted); font-size: 11px; line-height: 1.2; text-align: right; overflow-wrap: anywhere; }
+.message-card-id-link { appearance: none; border: 0; padding: 0; color: var(--app-accent); background: transparent; font: inherit; line-height: inherit; cursor: pointer; }
+.message-card-id-link:hover { text-decoration: underline; }
+.message-card-id-link:disabled { opacity: .7; cursor: wait; }
+.message-card-id-link:focus-visible { border-radius: 3px; outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 .linked-message-task-list { display: grid; gap: 8px; }
 .linked-message-task { display: grid; gap: 4px; width: 100%; padding: 12px; color: var(--ui-text); text-align: left; cursor: pointer; }
 .linked-message-task span { color: var(--app-muted); font-size: 12px; }
