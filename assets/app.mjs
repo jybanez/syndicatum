@@ -2825,8 +2825,35 @@ function mountMessageCard(host, item) {
     }
     const messageId = document.createElement("span");
     messageId.className = "message-card-id";
-    messageId.textContent = `#${current.id}`;
-    messageId.title = `Message ID ${current.id}`;
+    const repliedMessageId = id(current.reply_to_message_id || current.reply_to?.id || "");
+    if (repliedMessageId) {
+      const repliedMessageLink = document.createElement("button");
+      repliedMessageLink.type = "button";
+      repliedMessageLink.className = "message-card-id-link";
+      repliedMessageLink.textContent = `#${repliedMessageId}`;
+      repliedMessageLink.title = `Go to replied message ${repliedMessageId}`;
+      repliedMessageLink.setAttribute("aria-label", `Go to replied message ${repliedMessageId}`);
+      repliedMessageLink.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        repliedMessageLink.disabled = true;
+        repliedMessageLink.setAttribute("aria-busy", "true");
+        try { await jumpToMessage(repliedMessageId); }
+        finally {
+          if (repliedMessageLink.isConnected) {
+            repliedMessageLink.disabled = false;
+            repliedMessageLink.removeAttribute("aria-busy");
+          }
+        }
+      });
+      const currentMessageId = document.createElement("span");
+      currentMessageId.textContent = `#${current.id}`;
+      currentMessageId.title = `Message ID ${current.id}`;
+      messageId.append(repliedMessageLink, document.createTextNode(" - "), currentMessageId);
+    } else {
+      messageId.textContent = `#${current.id}`;
+      messageId.title = `Message ID ${current.id}`;
+    }
     footer.append(actions, messageId);
     details.appendChild(footer);
     host.appendChild(details);
@@ -3404,7 +3431,7 @@ function timelineItems(messages) {
     iconHtml: timelineMarkerHtml(message.sender, message.message_kind),
     contextMenu: messageContextMenu(message),
     raw: message,
-    contentKey: `${message.updated_at}|severity:${message.severity}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|attachments:${(message.attachments || []).map((file) => `${file.id}:${file.version}:${file.state}`).join(",")}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
+    contentKey: `${message.updated_at}|severity:${message.severity}|reply:${message.reply_to_message_id || ""}|${message.current_participant_state?.acknowledged_at || ""}|${message.revision_count}|attachments:${(message.attachments || []).map((file) => `${file.id}:${file.version}:${file.state}`).join(",")}|tasks:${messageLinkedTasks(message.id).map((task) => task.id).join(",")}`,
   }));
 }
 
@@ -9133,8 +9160,23 @@ function openResponsibilityMessage(messageId) {
 }
 async function jumpToMessage(messageId) {
   if (!state.messages.some((message) => id(message.id) === id(messageId))) {
-    state.components.toast.info("That message is outside the currently loaded timeline. Use search to locate it.", { title: "Message not loaded" });
-    return;
+    if (state.mode !== "expanded") {
+      state.components.toast.info("That message is outside the currently loaded timeline. Use search to locate it.", { title: "Message not loaded" });
+      return;
+    }
+    const projectId = selectedProjectId();
+    const generation = state.generation;
+    try {
+      const payload = await request(`${API.message}?${new URLSearchParams({ project_id: projectId, id: messageId })}`);
+      if (generation !== state.generation || projectId !== selectedProjectId()) return;
+      const message = normalizeMessage(unwrap(payload));
+      if (!message.id) throw new Error("The referenced message was unavailable.");
+      state.messages = sortAndDedupe([...state.messages, message]);
+      renderTimeline("replace", state.messages);
+    } catch (error) {
+      state.components.toast.error(error.message || "The referenced message could not be loaded.", { title: "Unable to open reply" });
+      return;
+    }
   }
   state.components.timeline?.setCollapsed(messageId, false);
   const result = await state.components.timeline?.scrollToItem?.(messageId, { align: "center", focus: true });
