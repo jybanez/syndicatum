@@ -178,7 +178,7 @@ const state = {
 const el = Object.fromEntries([
   "app-shell", "navbar-host", "workspace-surface", "admin-surface",
   "workspace-splitter-host", "workspace-inner-splitter-host", "workspace-work-splitter-host", "project-navigation-column", "project-messages-column", "project-tasks-column", "project-participants-column",
-  "project-search-mount", "workspace-project-list", "project-list-actions-trigger", "project-list-actions-icon",
+  "project-search-mount", "workspace-project-list", "project-active-tab-bridge", "project-list-actions-trigger", "project-list-actions-icon",
   "status-badge", "project-title", "participant-list", "task-list", "task-count", "task-search-mount", "task-filter-trigger", "task-filter-icon", "task-filter-count", "task-filter-popover-content", "task-status-filter", "task-sort-trigger", "task-sort-icon", "task-refresh-trigger", "task-refresh-icon", "new-task-trigger", "new-task-icon",
   "participant-search", "new-message-trigger", "new-message-icon", "project-status-trigger", "project-status-icon", "project-plan-trigger", "project-plan-icon", "project-info-trigger", "project-info-icon", "project-files-trigger", "project-files-icon", "project-actions-trigger", "project-actions-icon", "team-actions-trigger", "team-actions-icon", "connection-label",
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
@@ -848,7 +848,10 @@ function mountWorkspaceSplitters() {
     maxRatio: 0.36,
     paneA: el.project_navigation_column,
     paneB: el.workspace_inner_splitter_host,
-    onResize(ratio) { writeLocalPreference("syndicatum.workspace.projectsRatio", ratio); },
+    onResize(ratio) {
+      writeLocalPreference("syndicatum.workspace.projectsRatio", ratio);
+      scheduleProjectActiveTabBridgeSync();
+    },
   });
   syncTeamVisibility();
 }
@@ -3650,12 +3653,44 @@ function renderWorkspaceActions() {
   });
 }
 
+let projectActiveTabBridgeSyncFrame = 0;
+
+function scheduleProjectActiveTabBridgeSync() {
+  if (projectActiveTabBridgeSyncFrame) return;
+  projectActiveTabBridgeSyncFrame = requestAnimationFrame(() => {
+    projectActiveTabBridgeSyncFrame = 0;
+    syncProjectActiveTabBridge();
+  });
+}
+
+function syncProjectActiveTabBridge() {
+  const bridge = el.project_active_tab_bridge;
+  const activeCard = el.workspace_project_list.querySelector(".project-card.is-active");
+  if (!bridge || !activeCard || !window.matchMedia("(min-width: 981px)").matches) {
+    if (bridge) bridge.hidden = true;
+    return;
+  }
+  const columnRect = el.project_navigation_column.getBoundingClientRect();
+  const cardRect = activeCard.getBoundingClientRect();
+  const top = Math.max(0, cardRect.top - columnRect.top);
+  const bottom = Math.min(columnRect.height, cardRect.bottom - columnRect.top);
+  if (bottom <= top) {
+    bridge.hidden = true;
+    return;
+  }
+  bridge.style.top = `${top}px`;
+  bridge.style.height = `${bottom - top}px`;
+  bridge.style.width = `${Math.max(0, columnRect.right - cardRect.right + 1)}px`;
+  bridge.hidden = false;
+}
+
 function renderWorkspace() {
   renderWorkspaceActions();
   const query = state.projectSearch.toLocaleLowerCase();
   const projects = state.projects.filter((project) => !query || `${project.name} ${project.description || ""} ${project.role || ""}`.toLocaleLowerCase().includes(query));
   el.workspace_project_list.replaceChildren();
   if (!projects.length) {
+    el.project_active_tab_bridge.hidden = true;
     const empty = document.createElement("div"); empty.className = "empty-state ui-panel";
     empty.textContent = state.projects.length ? "No projects match your search." : "No projects yet. Create one to start collaborating.";
     el.workspace_project_list.append(empty); return;
@@ -3700,6 +3735,7 @@ function renderWorkspace() {
     card.addEventListener("click", () => void openWorkspaceProject(project, card));
     el.workspace_project_list.append(card);
   });
+  scheduleProjectActiveTabBridgeSync();
 }
 
 async function openWorkspaceProject(project, trigger) {
@@ -10226,6 +10262,9 @@ async function bootstrap() {
   });
   el.project_search_mount.appendChild(projectSearch.wrap);
   projectSearch.bind({ on(target, eventName, handler) { target.addEventListener(eventName, handler); } });
+  el.workspace_project_list.addEventListener("scroll", syncProjectActiveTabBridge, { passive: true });
+  window.addEventListener("resize", scheduleProjectActiveTabBridgeSync, { passive: true });
+  window.matchMedia("(min-width: 981px)").addEventListener("change", scheduleProjectActiveTabBridgeSync);
   const taskSearch = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search tasks", clearText: "Clear", inputClass: "ui-input",
     onChange(value) { state.taskSearch = value.trim(); renderTasks(); },

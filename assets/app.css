@@ -693,6 +693,7 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
 .project-card-stat { display: inline-flex; align-items: center; gap: 5px; }
 .project-card-stat-icon { display: inline-grid; place-items: center; width: 16px; height: 16px; color: var(--app-accent); line-height: 0; }
 .project-card-stat-icon svg { width: 16px; height: 16px; }
+.project-active-tab-bridge { display: none; }
 .empty-state { padding: 18px; color: var(--app-muted); }
 .project-overview { display: grid; gap: 12px; }
 .participant-section { padding: 0 2px 16px; }
@@ -937,6 +938,29 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
   border: 0;
 }
 .syndicatum-google-button:hover { opacity: .92; }
+
+@media (min-width: 981px) {
+  .project-navigation-column { position: relative; padding-right: 0; }
+  .project-navigation-column .project-filter-row { margin-right: 4px; }
+  .project-navigation-column .project-list { padding-right: 4px; }
+  .project-active-tab-bridge {
+    position: absolute;
+    right: 0;
+    z-index: 2;
+    display: block;
+    pointer-events: none;
+    border-top: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
+    border-bottom: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
+    background: color-mix(in srgb, var(--ui-accent) 12%, var(--app-panel));
+  }
+  .project-navigation-column .project-card.is-active {
+    width: calc(100% + 4px);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right-color: transparent;
+  }
+  .project-navigation-column .project-card.is-active:hover { transform: none; }
+}
 
 @media (max-width: 1180px) {
   .app-topbar { grid-template-columns: minmax(220px, 1fr) minmax(220px, 320px); }

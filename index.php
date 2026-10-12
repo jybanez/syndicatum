@@ -34,6 +34,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                             </button>
                         </div>
                         <div class="project-list column-scroll-region" id="workspace-project-list"></div>
+                        <div class="project-active-tab-bridge" id="project-active-tab-bridge" aria-hidden="true" hidden></div>
                     </aside>
 
                     <div class="workspace-inner-splitter-host" id="workspace-inner-splitter-host">
