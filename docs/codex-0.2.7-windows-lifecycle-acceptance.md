@@ -67,6 +67,17 @@ that allowlist must remain byte-identical. Existing credentials, bindings,
 project data, uploaded files, application deployment, and unrelated state must
 not be copied into project storage or changed by plugin-version transitions.
 
+Create the external backup with
+`scripts/codex-windows-lifecycle-backup.ps1`. The helper accepts only fully
+qualified paths on ready fixed local volumes, proves that its new backup subtree
+does not overlap the webroot or any managed/protected source in either direction,
+rejects reparse points throughout all path chains and source trees, measures the
+complete pre-copy inventory (including empty directories), and requires measured
+capacity plus a safety margin. It writes only beneath the new backup subtree,
+persists and hashes the manifest, then revalidates the backup and unchanged
+sources from that persisted manifest. Any failure is a stop condition: retain the
+partial evidence and do not clean up or replay automatically.
+
 ## Read-only baseline on every target
 
 Record a sanitized baseline before closing Codex Desktop:
