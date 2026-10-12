@@ -1004,8 +1004,7 @@ try {
             && strpos($app, 'async function uploadPastedMessageAttachments(projectId, files, { signal } = {})') !== false
             && strpos($app, 'paste: (files, { signal }) => uploadPastedMessageAttachments(projectId, files, { signal })') !== false
             && strpos($app, 'pastedProjectFileValidationError(file, maximumBytes)') !== false
-            && strpos($app, 'function preparePastedProjectFile(file, usedNames, timestamp = new Date())') !== false
-            && strpos($app, 'const isGenericScreenshot = /^image\\.png$/i.test(originalName)') !== false
+            && strpos($app, 'import { preparePastedProjectFile } from "./pasted-file-naming.mjs?v=20261012062000";') !== false
             && strpos($app, 'const prepared = selected.map((file) => preparePastedProjectFile(file, usedNames))') !== false
             && strpos($app, 'for (const file of valid)') !== false
             && strpos($app, 'uploadProjectFile(projectId, context.folder, known, file, { signal })') !== false,

@@ -15,6 +15,7 @@ import {
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003150000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202610040001";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
+import { preparePastedProjectFile } from "./pasted-file-naming.mjs?v=20261012062000";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
@@ -8672,36 +8673,6 @@ function createMessageAttachmentPicker(projectId) {
 
 const MESSAGE_ATTACHMENTS_FOLDER_ID = "attachments";
 const MESSAGE_ATTACHMENTS_FOLDER_NAME = "attachments";
-
-function pastedScreenshotTimestamp(date = new Date()) {
-  const part = (value, length = 2) => String(value).padStart(length, "0");
-  return `${date.getFullYear()}${part(date.getMonth() + 1)}${part(date.getDate())}`
-    + `-${part(date.getHours())}${part(date.getMinutes())}${part(date.getSeconds())}`
-    + `-${part(date.getMilliseconds(), 3)}`;
-}
-
-function preparePastedProjectFile(file, usedNames, timestamp = new Date()) {
-  const originalName = String(file?.name || "").trim();
-  const isGenericScreenshot = /^image\.png$/i.test(originalName)
-    && String(file?.type || "").toLocaleLowerCase() === "image/png";
-  if (!isGenericScreenshot) {
-    if (originalName) usedNames.add(projectFileNameKey(originalName));
-    return file;
-  }
-
-  const base = `screenshot-${pastedScreenshotTimestamp(timestamp)}`;
-  let candidate = `${base}.png`;
-  let suffix = 2;
-  while (usedNames.has(projectFileNameKey(candidate))) {
-    candidate = `${base}-${suffix}.png`;
-    suffix += 1;
-  }
-  usedNames.add(projectFileNameKey(candidate));
-  return new File([file], candidate, {
-    type: file.type || "image/png",
-    lastModified: Number(file.lastModified || Date.now()),
-  });
-}
 
 function pastedProjectFileValidationError(file, maximumBytes) {
   const nameError = validProjectFileName(file?.name);
