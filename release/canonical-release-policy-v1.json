@@ -1310,6 +1310,13 @@
       "mode": 420
     },
     {
+      "source": "assets/pasted-file-naming.mjs",
+      "action": "ship",
+      "path": "app/assets/pasted-file-naming.mjs",
+      "role": "application",
+      "mode": 420
+    },
+    {
       "source": "assets/responsibility-action-flow.mjs",
       "action": "ship",
       "path": "app/assets/responsibility-action-flow.mjs",

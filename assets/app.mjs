@@ -15,6 +15,7 @@ import {
 import { guideArticle, searchGuide } from "./user-guide-content.mjs?v=20261003150000";
 import { mountCurrentBackup } from "./current-backup-ui.mjs?v=202610040001";
 import { mountCurrentRestore } from "./current-restore-ui.mjs?v=202609232355";
+import { preparePastedProjectFile } from "./pasted-file-naming.mjs?v=20261012062000";
 
 const GOOGLE_SIGN_IN_ICON = '<img class="syndicatum-google-button-image" src="assets/google-signin-dark.svg" alt="">';
 const SYNDICATUM_BRAND_ICON = '<img class="syndicatum-brand-icon" src="assets/brand/svg/syndicatum-standard-color.svg?v=20260907115852" alt="" aria-hidden="true">';
@@ -8705,6 +8706,8 @@ async function uploadPastedMessageAttachments(projectId, files, { signal } = {})
   const selected = Array.from(files || []);
   if (!selected.length) return [];
   const context = await pastedMessageAttachmentContext(projectId, signal);
+  const usedNames = new Set(context.files.map((file) => projectFileNameKey(file?.name)));
+  const prepared = selected.map((file) => preparePastedProjectFile(file, usedNames));
   const maximumBytes = Number(context.storage?.max_upload_bytes || 25 * 1024 * 1024);
   const availableDraftSlots = Math.max(0, 20 - state.draft.attachments.length);
   if (!availableDraftSlots) throw new Error("A message can include no more than 20 project files.");
@@ -8712,7 +8715,7 @@ async function uploadPastedMessageAttachments(projectId, files, { signal } = {})
     Math.max(1, Number(context.storage?.max_files_per_action || 10)));
   const valid = [];
   const rejected = [];
-  for (const file of selected) {
+  for (const file of prepared) {
     const error = pastedProjectFileValidationError(file, maximumBytes);
     if (error) rejected.push(`${file?.name || "File"}: ${error}`);
     else if (valid.length >= maximumFiles) rejected.push(`${file.name}: choose no more than ${maximumFiles} files at a time.`);
