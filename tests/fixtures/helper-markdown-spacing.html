@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Syndicatum Helper Markdown spacing acceptance</title>
+  <link rel="stylesheet" href="../../vendor/pbb-helper/dist/helpers.ui.bundle.min.css?v=0.21.304" data-ui-bundle="ui">
+  <link rel="stylesheet" href="../../assets/app.css">
+  <style>
+    body { margin: 24px; background: var(--ui-bg, #0b1524); color: var(--ui-text, #e5edf8); }
+    main { display: grid; gap: 16px; max-width: 720px; margin: 0 auto; }
+    section { padding: 16px; border: 1px solid var(--ui-border, #30435e); border-radius: 10px; }
+    h1, h2 { margin-block: 0 12px; }
+    #results[data-status="pass"] { color: #62d28f; }
+    #results[data-status="fail"] { color: #ff7b7b; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Markdown spacing acceptance</h1>
+  <p id="results" data-status="pending">Running…</p>
+  <section><h2>Original spacing case</h2><div id="original" class="message-card-body"></div></section>
+  <section><h2>Compact and expanded states</h2><div id="compact" class="message-card-body"></div></section>
+  <section><h2>Code and fallback whitespace</h2><div id="code" class="message-card-body"></div><div id="fallback" class="message-card-body"></div></section>
+</main>
+<script type="module">
+  import { uiLoader } from "../../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.304";
+
+  const results = document.querySelector("#results");
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  try {
+    const createMarkdownView = await uiLoader.get("ui.markdown");
+    const originalHost = document.querySelector("#original");
+    originalHost.style.whiteSpace = "pre-wrap";
+    const original = createMarkdownView(originalHost, {
+      markdown: "First line\nSecond line\n\nSecond paragraph",
+      profile: "full",
+    });
+    const originalContent = originalHost.querySelector(".ui-markdown-content");
+    assert(getComputedStyle(originalContent).whiteSpace === "normal", "Markdown content must not inherit host pre-wrap whitespace.");
+    assert(originalContent.querySelectorAll("p").length === 2, "Paragraph structure must remain intact.");
+    assert(getComputedStyle(originalContent.querySelector("p")).whiteSpace === "pre-wrap", "Soft line breaks must remain preserved inside paragraphs.");
+
+    const compactHost = document.querySelector("#compact");
+    compactHost.style.whiteSpace = "pre-wrap";
+    const compact = createMarkdownView(compactHost, {
+      markdown: "First compact line\nSecond compact line\n\nA second paragraph that makes the compact view expand when requested.",
+      profile: "compact",
+      maxLines: 2,
+    });
+    const compactContent = compactHost.querySelector(".ui-markdown-content");
+    assert(compactContent.classList.contains("is-clamped"), "Compact content must start clamped.");
+    const clampedHeight = compactContent.getBoundingClientRect().height;
+    const toggle = compactHost.querySelector(".ui-markdown-toggle");
+    assert(toggle && !toggle.hidden, "Compact content must expose its expansion control.");
+    toggle.click();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    assert(!compactContent.classList.contains("is-clamped"), "Expanded content must remove the clamp.");
+    assert(compactContent.getBoundingClientRect().height > clampedHeight, "Expanded content must reveal additional content.");
+
+    const code = createMarkdownView(document.querySelector("#code"), {
+      markdown: "```\nalpha\n  beta\n```",
+      profile: "full",
+    });
+    assert(document.querySelector("#code pre code").textContent === "alpha\n  beta", "Code indentation must remain intact.");
+
+    const fallbackSource = "alpha\n  beta\n" + "x".repeat(300000);
+    const fallback = createMarkdownView(document.querySelector("#fallback"), { markdown: fallbackSource, profile: "full" });
+    const plain = document.querySelector("#fallback .ui-markdown-plain");
+    assert(fallback.getState().fallback && plain.textContent.startsWith("alpha\n  beta\n"), "Fallback text must preserve source whitespace.");
+    assert(getComputedStyle(plain).whiteSpace === "pre-wrap", "Fallback display must preserve whitespace.");
+
+    results.dataset.status = "pass";
+    results.textContent = "PASS — original, soft-break, paragraph, compact, expanded, code, and fallback states";
+    window.__markdownAcceptance = { original, compact, code, fallback };
+  } catch (error) {
+    results.dataset.status = "fail";
+    results.textContent = `FAIL — ${error.stack || error.message}`;
+  }
+</script>
+</body>
+</html>

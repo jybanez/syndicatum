@@ -746,7 +746,7 @@ try {
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
             && strpos($loader, 'const UI_TIMELINE_REV = "0.21.299";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.300";') !== false,
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.304";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -913,7 +913,7 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.300 retains planning contracts and provides canonical Timeline and clipboard adapters', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.304 retains application contracts and fixes Markdown host-whitespace inheritance', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $appCss = file_get_contents($root . '/assets/app.css');
         $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
@@ -921,14 +921,15 @@ try {
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
+        $markdownAcceptance = file_get_contents($root . '/tests/fixtures/helper-markdown-spacing.html');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.300') !== false,
-                'Every Helper entry point must use the canonical 0.21.300 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.304') !== false,
+                'Every Helper entry point must use the canonical 0.21.304 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.300') !== false,
-                $surface . ' must use the matching canonical 0.21.300 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.304') !== false,
+                $surface . ' must use the matching canonical 0.21.304 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -963,6 +964,17 @@ try {
             && strpos($bundleCss, '.ui-markdown-content') !== false
             && strpos($app, 'createMarkdownView: await uiLoader.get("ui.markdown", options)') !== false,
             'Authored content must use the canonical sanitized Helper Markdown component.');
+        $suite->true(strpos($bundleCss, '.ui-markdown-content{min-width:0;max-width:100%;line-height:1.5;white-space:normal}') !== false
+            && strpos($bundleCss, '.ui-markdown-content p,.ui-markdown-plain{white-space:pre-wrap}') !== false
+            && strpos($bundleCss, '.ui-markdown-content.is-clamped') !== false
+            && strpos($bundleCss, 'white-space:pre-wrap') !== false,
+            'Canonical Markdown must ignore host pre-wrap whitespace while preserving paragraphs, compact clamping, code, and fallback text whitespace.');
+        $suite->true(strpos($markdownAcceptance, 'originalHost.style.whiteSpace = "pre-wrap"') !== false
+            && strpos($markdownAcceptance, 'profile: "compact"') !== false
+            && strpos($markdownAcceptance, 'toggle.click()') !== false
+            && strpos($markdownAcceptance, 'Code indentation must remain intact.') !== false
+            && strpos($markdownAcceptance, 'Fallback text must preserve source whitespace.') !== false,
+            'The application fixture must exercise the original host-whitespace case plus compact, expanded, code, and fallback states.');
         $suite->true(strpos($app, 'markdown: String(current.body || ""), profile: "full"') !== false
             && strpos($app, 'const description = markdown(task.description') !== false
             && strpos($app, 'markdown(task.acceptance_criteria') !== false
@@ -1069,15 +1081,15 @@ try {
         $suite->true(strpos($bundleJs, 'source:"paste"') !== false
             && strpos($bundleJs, 'The paste adapter must return canonical file records or no result.') !== false,
             'The Helper composer must expose the reviewed custom clipboard-file adapter contract.');
-        $suite->same('f6206b5f1ff8ad698517108802e913771223354dd693f5f677f43d77a09f4a6d',
+        $suite->same('319d35543911d5adbe51c427e9498612370a1508c52de8ec2d20f33a6bc70a9c',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match canonical release 0.21.300 exactly.');
-        $suite->same('b6f33b219fe0e049b665f3ecdc658758c5738e8ea07ef6e0f9e91aebdab26405',
+            'The vendored Helper JavaScript must match canonical release 0.21.304 exactly.');
+        $suite->same('1c5a6aa5c33a67ac7baa39805e522861c8e77ee85fcde27a103acd787bc9239a',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match canonical release 0.21.300 exactly.');
-        $suite->same('77a3a0a2a7db80cfb61cff04424dd36e62a8f5d2167c12b7a71adf88c1c41ba9',
+            'The vendored Helper stylesheet must match canonical release 0.21.304 exactly.');
+        $suite->same('0275554a2947d945ae14ea6e5428b86f2de1ae7d5cf6f3983d64191898db19c8',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match canonical release 0.21.300 exactly.');
+            'The vendored Helper loader must match canonical release 0.21.304 exactly.');
         $suite->same('a7a8668869be48a47202f24b1fd5f20b14a41cc818fa65b89a1c9c41a0a90cf7',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.icons.files.js'),
             'The vendored Helper file icon pack must match canonical release 0.21.229 exactly.');

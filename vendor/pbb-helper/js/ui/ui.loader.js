@@ -3,7 +3,7 @@ const UI_COMPONENTS_CSS = "../../css/ui/ui.components.css?v=0.21.234";
 const INCIDENT_BASE_CSS = "../../css/incident/incident.css";
 const UI_OVERLAY_ROUTING_REV = "0.21.236";
 const UI_AUDIO_REV = "0.21.272";
-const UI_ICONS_REV = "0.21.298";
+const UI_ICONS_REV = "0.21.302";
 const UI_FILE_INPUT_REV = "0.21.108";
 const UI_CHAT_REV = "0.21.120";
 const UI_PASSWORD_REV = "0.21.66";
@@ -20,8 +20,8 @@ const UI_DEVICE_PRIMER_REV = "0.21.235";
 const UI_GAME_REV = "0.21.112";
 const UI_INSPECTION_REV = "0.21.1";
 const UI_TIMELINE_REV = "0.21.299";
-const UI_BUNDLE_REV = "0.21.300";
-const UI_GAME_BUNDLE_REV = "0.21.298";
+const UI_BUNDLE_REV = "0.21.304";
+const UI_GAME_BUNDLE_REV = "0.21.302";
 const UI_INSPECTION_BUNDLE_REV = "0.21.1";
 const UI_BUNDLE_JS = `../../dist/helpers.ui.bundle.min.js?v=${UI_BUNDLE_REV}`;
 const UI_BUNDLE_CSS = `../../dist/helpers.ui.bundle.min.css?v=${UI_BUNDLE_REV}`;
@@ -42,7 +42,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
   },
   "ui.markdown.viewer": {
     js: "./ui.file.viewer.js?v=0.21.223",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.markdown.css?v=0.21.217", "../../css/ui/ui.file.viewer.css?v=0.21.223"],
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.markdown.css?v=0.21.304", "../../css/ui/ui.file.viewer.css?v=0.21.223"],
     deps: [], export: "createMarkdownViewer",
   },
   "ui.csv.viewer": {
@@ -52,7 +52,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
   },
   "ui.markdown": {
     js: "./ui.markdown.js?v=0.21.217",
-    css: [UI_TOKENS_CSS, "../../css/ui/ui.markdown.css?v=0.21.217"],
+    css: [UI_TOKENS_CSS, "../../css/ui/ui.markdown.css?v=0.21.304"],
     deps: [], export: "createMarkdownView",
   },
   "ui.inline.text": {
@@ -518,13 +518,13 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createMapLocationPerson",
   },
   "ui.map.drawing.maplibre": {
-    js: "./ui.map.drawing.maplibre.js?v=0.21.299",
+    js: "./ui.map.drawing.maplibre.js?v=0.21.302",
     css: [],
     deps: [],
     export: "createMapLibreDrawingAdapter",
   },
   "ui.map.drawing": {
-    js: "./ui.map.drawing.js?v=0.21.298",
+    js: "./ui.map.drawing.js?v=0.21.302",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.map.drawing.css?v=0.21.297"],
     deps: [],
     export: "createMapDrawingTools",
