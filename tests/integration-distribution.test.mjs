@@ -10,6 +10,7 @@ const pluginUrl = new URL("plugins/codex/.codex-plugin/plugin.json", root);
 const companionUrl = new URL("companion/extension/manifest.json", root);
 const codexLifecycleUrl = new URL("docs/codex-0.2.7-windows-lifecycle-acceptance.md", root);
 const codexLifecycleTransitionUrl = new URL("scripts/codex-windows-lifecycle-transition.ps1", root);
+const codexLifecycleBackupUrl = new URL("scripts/codex-windows-lifecycle-backup.ps1", root);
 
 const readJson = async url => JSON.parse(await readFile(url, "utf8"));
 
@@ -185,9 +186,10 @@ test("distribution classifications match the exact source package versions", asy
 });
 
 test("Codex lifecycle procedure names the reviewed Windows transition and fail-closed fixtures", async () => {
-  const [procedure, transition] = await Promise.all([
+  const [procedure, transition, backup] = await Promise.all([
     readFile(codexLifecycleUrl, "utf8"),
     readFile(codexLifecycleTransitionUrl, "utf8"),
+    readFile(codexLifecycleBackupUrl, "utf8"),
   ]);
 
   assert.match(procedure, /\.codex-marketplace-install\.json/);
@@ -210,6 +212,13 @@ test("Codex lifecycle procedure names the reviewed Windows transition and fail-c
   assert.match(transition, /Get-CimInstance Win32_Process/);
   assert.match(transition, /\[IO\.FileShare\]::None/);
   assert.match(transition, /Assert-ManagedStateQuiescent\s+\n\s*if \(\$Mode -eq 'RejectFixture'\)/);
+  assert.match(procedure, /codex-windows-lifecycle-backup\.ps1/);
+  assert.match(backup, /Test-PathOverlap/);
+  assert.match(backup, /Reparse point in path chain/);
+  assert.match(backup, /type = 'directory'/);
+  assert.match(backup, /Insufficient calculated backup capacity/);
+  assert.match(backup, /Detached manifest hash mismatch/);
+  assert.match(backup, /Persisted-manifest tree revalidation failed/);
 });
 
 test("non-production channels retain at least one explicit unresolved gate", async () => {
