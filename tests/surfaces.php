@@ -1878,8 +1878,12 @@ try {
             && strpos($styles, 'border-bottom-right-radius: 0;') !== false
             && strpos($styles, '.project-navigation-column .project-card.is-active:hover { transform: none; }') !== false
             && strpos($source, 'function syncProjectActiveTabBridge()') !== false
-            && strpos($source, 'requestAnimationFrame(syncProjectActiveTabBridge);') !== false
+            && strpos($source, 'function scheduleProjectActiveTabBridgeSync()') !== false
+            && strpos($source, 'scheduleProjectActiveTabBridgeSync();') !== false
             && strpos($source, 'el.workspace_project_list.addEventListener("scroll", syncProjectActiveTabBridge, { passive: true });') !== false
+            && strpos($source, 'window.addEventListener("resize", scheduleProjectActiveTabBridgeSync, { passive: true });') !== false
+            && strpos($source, 'window.matchMedia("(min-width: 981px)").addEventListener("change", scheduleProjectActiveTabBridgeSync);') !== false
+            && strpos($source, 'writeLocalPreference("syndicatum.workspace.projectsRatio", ratio);') !== false
             && strpos($index, 'id="project-active-tab-bridge" aria-hidden="true" hidden') !== false,
             'On desktop, the active project must meet the splitter as a fixed vertical tab while inactive cards remain inset and mobile keeps the existing cards.');
         $suite->true(strpos($source, 'project.unread_message_count') !== false

@@ -848,7 +848,10 @@ function mountWorkspaceSplitters() {
     maxRatio: 0.36,
     paneA: el.project_navigation_column,
     paneB: el.workspace_inner_splitter_host,
-    onResize(ratio) { writeLocalPreference("syndicatum.workspace.projectsRatio", ratio); },
+    onResize(ratio) {
+      writeLocalPreference("syndicatum.workspace.projectsRatio", ratio);
+      scheduleProjectActiveTabBridgeSync();
+    },
   });
   syncTeamVisibility();
 }
@@ -3650,6 +3653,16 @@ function renderWorkspaceActions() {
   });
 }
 
+let projectActiveTabBridgeSyncFrame = 0;
+
+function scheduleProjectActiveTabBridgeSync() {
+  if (projectActiveTabBridgeSyncFrame) return;
+  projectActiveTabBridgeSyncFrame = requestAnimationFrame(() => {
+    projectActiveTabBridgeSyncFrame = 0;
+    syncProjectActiveTabBridge();
+  });
+}
+
 function syncProjectActiveTabBridge() {
   const bridge = el.project_active_tab_bridge;
   const activeCard = el.workspace_project_list.querySelector(".project-card.is-active");
@@ -3722,7 +3735,7 @@ function renderWorkspace() {
     card.addEventListener("click", () => void openWorkspaceProject(project, card));
     el.workspace_project_list.append(card);
   });
-  requestAnimationFrame(syncProjectActiveTabBridge);
+  scheduleProjectActiveTabBridgeSync();
 }
 
 async function openWorkspaceProject(project, trigger) {
@@ -10250,6 +10263,8 @@ async function bootstrap() {
   el.project_search_mount.appendChild(projectSearch.wrap);
   projectSearch.bind({ on(target, eventName, handler) { target.addEventListener(eventName, handler); } });
   el.workspace_project_list.addEventListener("scroll", syncProjectActiveTabBridge, { passive: true });
+  window.addEventListener("resize", scheduleProjectActiveTabBridgeSync, { passive: true });
+  window.matchMedia("(min-width: 981px)").addEventListener("change", scheduleProjectActiveTabBridgeSync);
   const taskSearch = state.factories.createSearchField({
     classPrefix: "ui-search", placeholder: "Search tasks", clearText: "Clear", inputClass: "ui-input",
     onChange(value) { state.taskSearch = value.trim(); renderTasks(); },
