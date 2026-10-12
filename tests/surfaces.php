@@ -636,6 +636,22 @@ try {
             'Timeline content must keep a visible gutter before the Helper-owned scrollbar.');
         $suite->true(strpos($styles, '#timeline-host .ui-timeline-group-label { position: sticky;') === false,
             'Legacy sticky positioning must not override the Helper timeline floating-date implementation.');
+        $suite->true(strpos($index, 'id="timeline-scroll-top" aria-label="Scroll to top of timeline"') !== false
+            && strpos($index, 'id="timeline-scroll-bottom" aria-label="Scroll to bottom of timeline"') !== false,
+            'The timeline must expose accessible top and bottom scroll shortcuts.');
+        $suite->true(strpos($source, 'function syncTimelineScrollShortcuts()') !== false
+            && strpos($source, 'viewport.scrollHeight > viewport.clientHeight + 1') !== false
+            && strpos($source, 'viewport.scrollTop <= 1') !== false
+            && strpos($source, 'viewport.scrollTop >= maximumScroll - 1') !== false
+            && strpos($source, 'scrollTimelineToBoundary("top")') !== false
+            && strpos($source, 'scrollTimelineToBoundary("bottom")') !== false,
+            'Timeline shortcuts must follow the canonical viewport and hide at their respective boundaries.');
+        $suite->true(strpos($styles, '.timeline-scroll-shortcut { position: absolute; left: 50%;') !== false
+            && strpos($styles, 'border-radius: 50%;') !== false
+            && strpos($styles, 'opacity: .48;') !== false
+            && strpos($styles, '.timeline-scroll-shortcut:hover, .timeline-scroll-shortcut:focus-visible') !== false
+            && strpos($styles, 'opacity: 1;') !== false,
+            'Timeline shortcuts must be centered, circular, borderless, translucent, and opaque on hover or keyboard focus.');
         $filterTrigger = strpos($index, 'id="filter-popover-trigger"');
         $searchMount = strpos($index, 'id="search-mount"');
         $collapseAction = strpos($index, 'id="timeline-collapse-toggle"');
