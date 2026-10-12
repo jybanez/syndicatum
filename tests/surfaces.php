@@ -1883,6 +1883,8 @@ try {
             && strpos($styles, '.project-navigation-column { position: relative; padding-right: 0; }') !== false
             && strpos($styles, '.project-navigation-column .project-list { padding-right: 4px; }') !== false
             && strpos($styles, '.project-active-tab-bridge {') !== false
+            && strpos($styles, '.workspace-outer-splitter > .ui-splitter-divider.has-project-active-tab::after {') !== false
+            && strpos($styles, 'width: calc(50% - 4px);') !== false
             && strpos($styles, 'pointer-events: none;') !== false
             && strpos($styles, '.project-navigation-column .project-card.is-active {') !== false
             && strpos($styles, 'width: calc(100% + 4px);') !== false
@@ -1890,6 +1892,9 @@ try {
             && strpos($styles, 'border-bottom-right-radius: 0;') !== false
             && strpos($styles, '.project-navigation-column .project-card.is-active:hover { transform: none; }') !== false
             && strpos($source, 'function syncProjectActiveTabBridge()') !== false
+            && strpos($source, 'function clearProjectActiveTabBridge()') !== false
+            && strpos($source, 'divider.style.setProperty("--project-active-tab-top"') !== false
+            && strpos($source, 'divider.classList.add("has-project-active-tab")') !== false
             && strpos($source, 'function scheduleProjectActiveTabBridgeSync()') !== false
             && strpos($source, 'scheduleProjectActiveTabBridgeSync();') !== false
             && strpos($source, 'el.workspace_project_list.addEventListener("scroll", syncProjectActiveTabBridge, { passive: true });') !== false

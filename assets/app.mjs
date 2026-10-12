@@ -3655,6 +3655,16 @@ function renderWorkspaceActions() {
 
 let projectActiveTabBridgeSyncFrame = 0;
 
+function clearProjectActiveTabBridge() {
+  const bridge = el.project_active_tab_bridge;
+  const divider = el.workspace_splitter_host.querySelector(".workspace-outer-splitter > .ui-splitter-divider");
+  if (bridge) bridge.hidden = true;
+  if (!divider) return;
+  divider.classList.remove("has-project-active-tab");
+  divider.style.removeProperty("--project-active-tab-top");
+  divider.style.removeProperty("--project-active-tab-height");
+}
+
 function scheduleProjectActiveTabBridgeSync() {
   if (projectActiveTabBridgeSyncFrame) return;
   projectActiveTabBridgeSyncFrame = requestAnimationFrame(() => {
@@ -3666,22 +3676,29 @@ function scheduleProjectActiveTabBridgeSync() {
 function syncProjectActiveTabBridge() {
   const bridge = el.project_active_tab_bridge;
   const activeCard = el.workspace_project_list.querySelector(".project-card.is-active");
-  if (!bridge || !activeCard || !window.matchMedia("(min-width: 981px)").matches) {
-    if (bridge) bridge.hidden = true;
+  const divider = el.workspace_splitter_host.querySelector(".workspace-outer-splitter > .ui-splitter-divider");
+  if (!bridge || !activeCard || !divider || !window.matchMedia("(min-width: 981px)").matches) {
+    clearProjectActiveTabBridge();
     return;
   }
   const columnRect = el.project_navigation_column.getBoundingClientRect();
+  const dividerRect = divider.getBoundingClientRect();
   const cardRect = activeCard.getBoundingClientRect();
   const top = Math.max(0, cardRect.top - columnRect.top);
   const bottom = Math.min(columnRect.height, cardRect.bottom - columnRect.top);
-  if (bottom <= top) {
-    bridge.hidden = true;
+  const dividerTop = Math.max(0, cardRect.top - dividerRect.top);
+  const dividerBottom = Math.min(dividerRect.height, cardRect.bottom - dividerRect.top);
+  if (bottom <= top || dividerBottom <= dividerTop) {
+    clearProjectActiveTabBridge();
     return;
   }
   bridge.style.top = `${top}px`;
   bridge.style.height = `${bottom - top}px`;
   bridge.style.width = `${Math.max(0, columnRect.right - cardRect.right + 1)}px`;
   bridge.hidden = false;
+  divider.style.setProperty("--project-active-tab-top", `${dividerTop}px`);
+  divider.style.setProperty("--project-active-tab-height", `${dividerBottom - dividerTop}px`);
+  divider.classList.add("has-project-active-tab");
 }
 
 function renderWorkspace() {
@@ -3690,7 +3707,7 @@ function renderWorkspace() {
   const projects = state.projects.filter((project) => !query || `${project.name} ${project.description || ""} ${project.role || ""}`.toLocaleLowerCase().includes(query));
   el.workspace_project_list.replaceChildren();
   if (!projects.length) {
-    el.project_active_tab_bridge.hidden = true;
+    clearProjectActiveTabBridge();
     const empty = document.createElement("div"); empty.className = "empty-state ui-panel";
     empty.textContent = state.projects.length ? "No projects match your search." : "No projects yet. Create one to start collaborating.";
     el.workspace_project_list.append(empty); return;
