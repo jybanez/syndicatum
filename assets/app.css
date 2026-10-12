@@ -943,10 +943,14 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
 @media (min-width: 981px) {
   .project-navigation-column { position: relative; padding-right: 0; }
   .project-navigation-column .project-filter-row { margin-right: 4px; }
-  .project-navigation-column .project-list { padding-right: 4px; }
+  .project-navigation-column .project-list {
+    margin-right: 4px;
+    scrollbar-gutter: stable;
+  }
   .project-active-tab-bridge {
     position: absolute;
     right: 0;
+    width: 4px;
     z-index: 2;
     display: block;
     pointer-events: none;
@@ -962,11 +966,6 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
     box-sizing: border-box;
     pointer-events: none;
     background: var(--project-active-tab-background);
-  }
-  .project-navigation-column .project-card.is-active {
-    width: calc(100% + 4px);
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
   }
   .project-navigation-column .project-card.is-active:hover { transform: none; }
 }

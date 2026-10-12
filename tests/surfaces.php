@@ -1885,16 +1885,18 @@ try {
             'Only the project rail spacing should be compacted; administration lists retain their established rhythm.');
         $suite->true(strpos($styles, '@media (min-width: 981px) {') !== false
             && strpos($styles, '.project-navigation-column { position: relative; padding-right: 0; }') !== false
-            && strpos($styles, '.project-navigation-column .project-list { padding-right: 4px; }') !== false
+            && strpos($styles, '.project-navigation-column .project-list {') !== false
+            && strpos($styles, 'margin-right: 4px;') !== false
+            && strpos($styles, 'scrollbar-gutter: stable;') !== false
             && strpos($styles, '.project-active-tab-bridge {') !== false
+            && strpos($styles, 'right: 0;') !== false
+            && strpos($styles, 'width: 4px;') !== false
             && strpos($styles, '.workspace-outer-splitter > .ui-splitter-divider.has-project-active-tab::after {') !== false
             && strpos($styles, 'width: calc(50% - 4px);') !== false
             && substr_count($styles, 'background: var(--project-active-tab-background);') >= 3
             && strpos($styles, 'pointer-events: none;') !== false
-            && strpos($styles, '.project-navigation-column .project-card.is-active {') !== false
-            && strpos($styles, 'width: calc(100% + 4px);') !== false
-            && strpos($styles, 'border-top-right-radius: 0;') !== false
-            && strpos($styles, 'border-bottom-right-radius: 0;') !== false
+            && strpos($styles, 'width: calc(100% + 4px);') === false
+            && strpos($source, 'bridge.style.width =') === false
             && strpos($styles, '.project-navigation-column .project-card.is-active:hover { transform: none; }') !== false
             && strpos($source, 'function syncProjectActiveTabBridge()') !== false
             && strpos($source, 'function clearProjectActiveTabBridge()') !== false
@@ -1907,7 +1909,7 @@ try {
             && strpos($source, 'window.matchMedia("(min-width: 981px)").addEventListener("change", scheduleProjectActiveTabBridgeSync);') !== false
             && strpos($source, 'writeLocalPreference("syndicatum.workspace.projectsRatio", ratio);') !== false
             && strpos($index, 'id="project-active-tab-bridge" aria-hidden="true" hidden') !== false,
-            'On desktop, the active project must meet the splitter as a fixed vertical tab while inactive cards remain inset and mobile keeps the existing cards.');
+            'On desktop, project cards must stop before a stable scrollbar lane while the active bridge meets the splitter and mobile keeps the existing cards.');
         $suite->true(strpos($source, 'project.unread_message_count') !== false
             && strpos($source, 'className = "ui-badge project-card-unread"') !== false
             && strpos($source, 'API.projectReadState') !== false

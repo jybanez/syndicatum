@@ -3694,7 +3694,6 @@ function syncProjectActiveTabBridge() {
   }
   bridge.style.top = `${top}px`;
   bridge.style.height = `${bottom - top}px`;
-  bridge.style.width = `${Math.max(0, columnRect.right - cardRect.right + 1)}px`;
   bridge.hidden = false;
   divider.style.setProperty("--project-active-tab-top", `${dividerTop}px`);
   divider.style.setProperty("--project-active-tab-height", `${dividerBottom - dividerTop}px`);
