@@ -676,6 +676,9 @@ try {
             'Proposal rows must open one focused review/details modal instead of a modal-based list.');
         $suite->true(strpos($source, 'state.components.projectViewTabs?.setActive?.(state.projectView, false);') !== false,
             'Programmatic project changes must keep the canonical tabs synchronized without duplicate change events.');
+        $suite->true(strpos($source, 'projectView: "proposals"') !== false
+            && strpos($source, 'showProjectView(projectView);') !== false,
+            'Reviewing an AI proposal must preserve the AI Proposals tab through the confirmed-success project refresh.');
         $suite->true(strpos($source, 'function renderProjectViewTabCounters()') !== false
             && strpos($source, 'className = "ui-badge project-view-tab-count"') !== false
             && strpos($source, 'state.projectView === view') !== false
@@ -1178,8 +1181,7 @@ try {
             && strpos($source, 'enableColumnResize: true') !== false
             && strpos($source, 'mode: "remote"') !== false
             && strpos($source, 'enableSearch: true') !== false
-            && strpos($source, 'enablePagination: true') !== false
-            && strpos($source, 'totalRows: Number(page.total || 0)') !== false
+            && strpos($source, 'enablePagination: false') !== false
             && strpos($source, 'onQueryChange(query)') !== false
             && strpos($filesApi, "'per_page' => isset(\$_GET['per_page'])") !== false
             && strpos($filesApi, "'search' => isset(\$_GET['search'])") !== false
@@ -1201,6 +1203,14 @@ try {
             && strpos($source, '{ icon: "data.upload" }') !== false
             && strpos($source, 'ui-button-borderless') !== false
             && strpos($source, 'className = "ui-button ui-button-sm ui-button-borderless project-file-row-actions"') !== false
+            && strpos($source, 'id: "file-info", label: "File info", icon: helperIconHtml("status.info")') !== false
+            && strpos($source, 'function openProjectFileInfo(file)') !== false
+            && strpos($source, 'if (action === "file-info") openProjectFileInfo(file);') !== false
+            && strpos($source, 'key: "actions", label: "Actions"') !== false
+            && strpos($source, '{ key: "uploader_name", label: "Uploader"') === false
+            && strpos($source, '{ key: "created_at", label: "Created"') === false
+            && strpos($source, '{ key: "updated_at", label: "Modified"') === false
+            && strpos($source, '{ key: "state", label: "Status"') === false
             && strpos($source, 'label: "Copy link"') !== false
             && strpos($source, 'label: "Move to"') !== false
             && strpos($source, 'label: "Download"') !== false
@@ -1228,12 +1238,33 @@ try {
             && strpos($styles, 'height: min(66vh, 660px)') !== false
             && strpos($styles, '.project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none;') !== false,
             'The Project Files modal needs a fixed-height two-column workspace.');
+        $suite->true(strpos($source, 'key: "name", label: "Name", width: "180px", resizable: false') !== false
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 100% !important; table-layout: fixed; }') !== false
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-table th:first-child { width: auto !important; }') !== false,
+            'The Project Files name column must consume the grid space left by the fixed Size and Actions columns.');
         $suite->true(strpos($source, 'mobileMeta.className = "project-file-mobile-meta"') !== false
-            && strpos($styles, '.project-files-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }') !== false
+            && strpos($styles, '.project-files-modal .ui-modal { height: 100dvh; max-height: 100dvh; }') !== false
+            && strpos($source, 'content.dataset.mobileView = handlers.mobileView === "files" ? "files" : "folders"') !== false
+            && strpos($source, 'showFolders.classList.add("project-files-mobile-folder-action")') !== false
+            && strpos($source, 'if (nextFolderId === payload.current_folder?.id)') !== false
+            && strpos($styles, 'grid-template-areas: "notice" "pane"') !== false
+            && strpos($styles, '.project-files-layout[data-mobile-view="folders"] .project-files-list') !== false
+            && strpos($styles, '.project-files-layout[data-mobile-view="files"] .project-files-folders { display: none; }') !== false
+            && strpos($styles, '.project-files-pane-header .project-files-mobile-folder-action { display: none; min-width: 0; overflow: hidden; }') !== false
+            && strpos($styles, '.project-files-pane-header .project-files-mobile-folder-action { display: inline-flex; flex: 1 1 auto; justify-content: flex-start; }') !== false
+            && strpos($styles, '.project-files-grid .ui-grid-toolbar-slot, .project-files-grid .ui-grid-search { width: 100%; min-width: 0; }') !== false
             && strpos($styles, '.project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 0 !important; }') !== false
-            && strpos($styles, '.project-files-current-folder-grid .ui-grid-cell:nth-child(6) { display: none; }') !== false
-            && strpos($styles, '.project-file-mobile-meta { display: block; }') !== false,
-            'Project Files must become a bounded stacked workspace with a compact two-column file list on narrow screens.');
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-cell:nth-child(2) { display: none; }') !== false
+            && strpos($styles, '.project-files-current-folder-grid .ui-grid-cell:last-child { width: 44px !important;') !== false
+            && strpos($styles, '.project-file-mobile-meta { display: block; }') !== false
+            && strpos($styles, '.project-files-grid .ui-grid-toolbar { display: block; padding: 7px; }') !== false,
+            'Project Files must become a full-height one-pane mobile workflow that navigates from folders to files and back without squeezing both columns together.');
+        $suite->true(strpos($source, 'enablePagination: false') !== false
+            && strpos($source, 'per_page: "20"') !== false
+            && strpos($source, 'scroller?.addEventListener("scroll", appendNextPage, { passive: true })') !== false
+            && strpos($source, 'grid?.setRows?.(rows)') !== false
+            && strpos($source, 'Number(page.total_pages || 1)') !== false,
+            'Project Files must hide manual pagination and append fixed 20-file pages when the file list reaches its scroll boundary.');
         $suite->true(strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv { display: flex; flex-direction: column; height: 100%; min-height: 0; }') !== false
             && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid { flex: 1 1 auto; width: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }') !== false
             && strpos($styles, '.ui-file-viewer-modal .ui-file-viewer-csv .ui-grid-table-wrap { min-height: 0; height: 100%; max-height: none; }') !== false,
@@ -1889,6 +1920,27 @@ try {
         $suite->true(strpos($source, '"gemini_discussion_reference", "Gemini discussion URL"') !== false, 'Gemini discussion URL fields are missing.');
         $suite->true(strpos($source, 'https://gemini.google.com/app/...') !== false, 'Gemini needs its canonical discussion URL example.');
         $suite->true(strpos($source, 'The Gemini discussion must have access to the Syndicatum integration') !== false, 'Gemini outbound-only requirements must be visible to administrators.');
+    });
+
+    $suite->test('Agent creation is validated and committed as one atomic request', function () use ($suite, $root) {
+        $source = file_get_contents($root . '/assets/app.mjs');
+        $route = file_get_contents($root . '/api/v1/project-agents.php');
+        $start = strpos($source, 'async function openAddAgentModal()');
+        $end = strpos($source, "\nasync function openEditAgentModal(", $start);
+        $suite->true($start !== false && $end !== false, 'The Add Agent workflow is missing.');
+        $workflow = substr($source, $start, $end - $start);
+        $suite->true(strpos($workflow, 'manageBusyOnSubmit: false') !== false
+            && strpos($workflow, 'validate(values) { return validateAgentForm(values); }') !== false
+            && strpos($workflow, 'activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector"') !== false
+            && strpos($workflow, 'request(API.projectAgentActivation') === false,
+            'Add Agent must validate before busy state and create the profile plus activation binding through one request.');
+        $suite->true(strpos($workflow, 'creationOutcomeUncertain = true') !== false,
+            'An unconfirmed creation result must prevent a blind duplicate submission.');
+        $suite->true(strpos($route, '$ownsTransaction = !$pdo->inTransaction();') !== false
+            && strpos($route, ": 'browser_companion';") !== false
+            && strpos($route, 'if ($ownsTransaction) { $pdo->commit(); }') !== false
+            && strpos($route, 'if ($ownsTransaction && $pdo->inTransaction()) { $pdo->rollBack(); }') !== false,
+            'The project-agent endpoint must atomically commit or roll back profile and activation creation.');
     });
 
     $suite->test('ChatGPT MCP exposes a read-only connection diagnostic', function () use ($suite, $root) {

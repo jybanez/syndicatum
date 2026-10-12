@@ -168,11 +168,17 @@ button, input, textarea { font: inherit; }
 .project-files-pane-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 0 0 auto; min-height: 56px; padding: 9px 12px; border-bottom: 1px solid var(--app-border); }
 .project-files-pane-header h3 { min-width: 0; margin: 0; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .project-files-pane-header .ui-button-borderless { display: inline-flex; align-items: center; gap: 7px; }
+.project-files-pane-header .project-files-mobile-folder-action { display: none; min-width: 0; overflow: hidden; }
+.project-files-mobile-folder-action span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-files-icon-action { width: 36px; min-width: 36px; height: 36px; justify-content: center; padding: 0; }
 .project-files-tree, .project-files-grid { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.project-files-grid { position: relative; }
 .project-files-tree .ui-tree, .project-files-tree .ui-tree-viewport { height: 100% !important; min-height: 0; }
 .project-files-grid .ui-grid { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .project-files-grid .ui-grid-table-wrap { flex: 1 1 auto; min-height: 0; height: 100%; max-height: none; overflow: auto; border: 0; border-radius: 0; }
+.project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 100% !important; table-layout: fixed; }
+.project-files-current-folder-grid .ui-grid-table col:first-child,
+.project-files-current-folder-grid .ui-grid-table th:first-child { width: auto !important; }
 .project-file-name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .project-file-name-action { width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .project-file-name-action:hover .project-file-name-label { color: var(--ui-accent); text-decoration: underline; text-underline-offset: 2px; }
@@ -183,6 +189,8 @@ button, input, textarea { font: inherit; }
 .project-file-mobile-meta { display: none; min-width: 0; overflow: hidden; color: var(--ui-muted); font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .project-files-current-folder-grid .ui-grid-cell:last-child { padding: 2px 6px; text-align: center; }
 .project-file-row-actions { display: inline-grid; width: 34px; min-width: 34px; height: 34px; place-items: center; padding: 0; }
+.project-files-load-more-status { position: absolute; z-index: 2; right: 12px; bottom: 12px; padding: 5px 9px; color: var(--ui-text); border: 1px solid var(--app-border); border-radius: 999px; background: color-mix(in srgb, var(--ui-surface-raised, var(--ui-surface)) 92%, transparent); box-shadow: 0 4px 18px rgba(0, 0, 0, .3); font-size: 11px; pointer-events: none; }
+.project-files-load-more-status[hidden] { display: none; }
 .project-files-load-error { min-height: 240px; display: grid; place-items: center; padding: 24px; color: var(--ui-danger, #ff8f9c); text-align: center; }
 .ui-file-viewer-modal .ui-file-viewer-csv { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .ui-file-viewer-modal .ui-file-viewer-csv .ui-file-viewer-content { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
@@ -856,31 +864,47 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
   .project-agent-fields > .project-workflow-field:nth-child(n+4) { grid-column: auto; }
 }
 @media (max-width: 760px) {
-  .project-files-modal .ui-modal-body { min-height: 0; align-content: stretch; overflow: hidden; padding: 12px; }
-  .project-files-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
-  .project-files-notice { flex: 0 0 auto; }
-  .project-files-folders { flex: 0 0 min(24dvh, 180px); min-height: 140px; }
-  .project-files-list { flex: 1 1 0; min-height: 220px; }
+  .project-files-modal .ui-modal { height: 100dvh; max-height: 100dvh; }
+  .project-files-modal .ui-modal-body { min-height: 0; align-content: stretch; overflow: hidden; padding: 10px; }
+  .project-files-modal .ui-modal-footer:not([hidden]) { padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .project-files-layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "notice" "pane"; height: 100%; min-height: 0; gap: 8px; overflow: hidden; }
+  .project-files-notice { min-width: 0; padding: 8px 10px; font-size: 13px; line-height: 1.35; }
+  .project-files-folders, .project-files-list { grid-area: pane; min-height: 0; height: 100%; }
+  .project-files-layout[data-mobile-view="folders"] .project-files-list,
+  .project-files-layout[data-mobile-view="files"] .project-files-folders { display: none; }
+  .project-files-tree { overflow: auto; overscroll-behavior: contain; }
   .project-files-pane-header { min-height: 48px; padding: 6px 10px; }
+  .project-files-pane-header h3 { font-size: 14px; }
+  .project-files-list .project-files-pane-header h3 { display: none; }
+  .project-files-pane-header .project-files-mobile-folder-action { display: inline-flex; flex: 1 1 auto; justify-content: flex-start; }
+  .project-files-grid .ui-grid-toolbar { flex: 0 0 auto; padding: 8px; border-bottom: 1px solid var(--app-border); }
+  .project-files-grid .ui-grid-tools-left { flex: 1 1 180px; min-width: 0; }
+  .project-files-grid .ui-grid-toolbar-slot, .project-files-grid .ui-grid-search { width: 100%; min-width: 0; }
   .project-files-grid .ui-grid-table-wrap { overflow-x: hidden; }
   .project-files-current-folder-grid .ui-grid-table { width: 100% !important; min-width: 0 !important; }
   .project-files-current-folder-grid .ui-grid-table thead { display: none; }
   .project-files-current-folder-grid .ui-grid-table col:nth-child(2),
-  .project-files-current-folder-grid .ui-grid-table col:nth-child(3),
-  .project-files-current-folder-grid .ui-grid-table col:nth-child(4),
-  .project-files-current-folder-grid .ui-grid-table col:nth-child(5),
-  .project-files-current-folder-grid .ui-grid-table col:nth-child(6),
-  .project-files-current-folder-grid .ui-grid-cell:nth-child(2),
-  .project-files-current-folder-grid .ui-grid-cell:nth-child(3),
-  .project-files-current-folder-grid .ui-grid-cell:nth-child(4),
-  .project-files-current-folder-grid .ui-grid-cell:nth-child(5),
-  .project-files-current-folder-grid .ui-grid-cell:nth-child(6) { display: none; }
+  .project-files-current-folder-grid .ui-grid-cell:nth-child(2) { display: none; }
   .project-files-current-folder-grid .ui-grid-table col:first-child { width: auto !important; }
   .project-files-current-folder-grid .ui-grid-table col:last-child { width: 44px !important; }
   .project-files-current-folder-grid .ui-grid-cell:first-child { width: auto !important; padding: 7px 6px 7px 10px; }
   .project-files-current-folder-grid .ui-grid-cell:last-child { width: 44px !important; padding: 4px 5px; }
   .project-file-name-action { min-height: 40px; }
   .project-file-mobile-meta { display: block; }
+}
+@media (max-width: 420px) {
+  .project-files-modal .ui-modal-header { padding-right: 10px; padding-left: 12px; }
+  .project-files-modal .ui-modal-body { padding: 8px; }
+  .project-files-layout { grid-template-rows: auto minmax(0, 1fr); gap: 7px; }
+  .project-files-notice { padding: 7px 9px; font-size: 12px; }
+  .project-files-pane { border-radius: 8px; }
+  .project-files-pane-header { min-height: 44px; padding: 4px 8px; }
+  .project-files-pane-header .ui-button-borderless { gap: 5px; padding-right: 6px; padding-left: 6px; }
+  .project-files-icon-action { width: 34px; min-width: 34px; height: 34px; }
+  .project-files-grid .ui-grid-toolbar { display: block; padding: 7px; }
+  .project-files-grid .ui-grid-tools-left { width: 100%; flex-wrap: nowrap; }
+  .project-files-current-folder-grid .ui-grid-cell:first-child { padding-left: 8px; }
+  .project-files-current-folder-grid .ui-grid-cell:last-child { padding-right: 3px; padding-left: 3px; }
 }
 .connection-actions { display: flex; align-items: center; gap: 8px; }
 .connection-label { color: var(--app-muted); font-size: 12px; }
