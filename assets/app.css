@@ -967,6 +967,10 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
     pointer-events: none;
     background: var(--project-active-tab-background);
   }
+  .project-navigation-column .project-card.is-active {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
   .project-navigation-column .project-card.is-active:hover { transform: none; }
 }
 
