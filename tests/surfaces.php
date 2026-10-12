@@ -1004,12 +1004,16 @@ try {
             && strpos($app, 'async function uploadPastedMessageAttachments(projectId, files, { signal } = {})') !== false
             && strpos($app, 'paste: (files, { signal }) => uploadPastedMessageAttachments(projectId, files, { signal })') !== false
             && strpos($app, 'pastedProjectFileValidationError(file, maximumBytes)') !== false
+            && strpos($app, 'function preparePastedProjectFile(file, usedNames, timestamp = new Date())') !== false
+            && strpos($app, 'const isGenericScreenshot = /^image\\.png$/i.test(originalName)') !== false
+            && strpos($app, 'const prepared = selected.map((file) => preparePastedProjectFile(file, usedNames))') !== false
             && strpos($app, 'for (const file of valid)') !== false
             && strpos($app, 'uploadProjectFile(projectId, context.folder, known, file, { signal })') !== false,
-            'Pasted composer files must validate first and upload sequentially into the canonical project attachments destination.');
+            'Pasted composer files must prepare screenshot names, validate, and upload sequentially into the canonical project attachments destination.');
         $suite->true(strpos($guide, "paste them into the message field") !== false
-            && strpos($guide, "folder is created only when the first valid upload succeeds") !== false,
-            'The User Guide must explain pasted-file storage and lazy attachments-folder creation.');
+            && strpos($guide, "folder is created only when the first valid upload succeeds") !== false
+            && strpos($guide, 'Generic pasted PNG screenshots named image.png receive a sortable screenshot timestamp name') !== false,
+            'The User Guide must explain pasted-file naming, storage, and lazy attachments-folder creation.');
         $suite->true(strpos($app, 'onOpen(item) { if (item?.url) openProjectFilePreview(item); }') === false,
             'Composer attachment thumbnails must rely on the queue media strip viewer instead of opening a duplicate application viewer.');
         $suite->true(strpos($app, 'getFileIconName(file.name, file.mime_type)') !== false

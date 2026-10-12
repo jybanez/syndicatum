@@ -8673,6 +8673,36 @@ function createMessageAttachmentPicker(projectId) {
 const MESSAGE_ATTACHMENTS_FOLDER_ID = "attachments";
 const MESSAGE_ATTACHMENTS_FOLDER_NAME = "attachments";
 
+function pastedScreenshotTimestamp(date = new Date()) {
+  const part = (value, length = 2) => String(value).padStart(length, "0");
+  return `${date.getFullYear()}${part(date.getMonth() + 1)}${part(date.getDate())}`
+    + `-${part(date.getHours())}${part(date.getMinutes())}${part(date.getSeconds())}`
+    + `-${part(date.getMilliseconds(), 3)}`;
+}
+
+function preparePastedProjectFile(file, usedNames, timestamp = new Date()) {
+  const originalName = String(file?.name || "").trim();
+  const isGenericScreenshot = /^image\.png$/i.test(originalName)
+    && String(file?.type || "").toLocaleLowerCase() === "image/png";
+  if (!isGenericScreenshot) {
+    if (originalName) usedNames.add(projectFileNameKey(originalName));
+    return file;
+  }
+
+  const base = `screenshot-${pastedScreenshotTimestamp(timestamp)}`;
+  let candidate = `${base}.png`;
+  let suffix = 2;
+  while (usedNames.has(projectFileNameKey(candidate))) {
+    candidate = `${base}-${suffix}.png`;
+    suffix += 1;
+  }
+  usedNames.add(projectFileNameKey(candidate));
+  return new File([file], candidate, {
+    type: file.type || "image/png",
+    lastModified: Number(file.lastModified || Date.now()),
+  });
+}
+
 function pastedProjectFileValidationError(file, maximumBytes) {
   const nameError = validProjectFileName(file?.name);
   if (nameError) return nameError;
@@ -8705,6 +8735,8 @@ async function uploadPastedMessageAttachments(projectId, files, { signal } = {})
   const selected = Array.from(files || []);
   if (!selected.length) return [];
   const context = await pastedMessageAttachmentContext(projectId, signal);
+  const usedNames = new Set(context.files.map((file) => projectFileNameKey(file?.name)));
+  const prepared = selected.map((file) => preparePastedProjectFile(file, usedNames));
   const maximumBytes = Number(context.storage?.max_upload_bytes || 25 * 1024 * 1024);
   const availableDraftSlots = Math.max(0, 20 - state.draft.attachments.length);
   if (!availableDraftSlots) throw new Error("A message can include no more than 20 project files.");
@@ -8712,7 +8744,7 @@ async function uploadPastedMessageAttachments(projectId, files, { signal } = {})
     Math.max(1, Number(context.storage?.max_files_per_action || 10)));
   const valid = [];
   const rejected = [];
-  for (const file of selected) {
+  for (const file of prepared) {
     const error = pastedProjectFileValidationError(file, maximumBytes);
     if (error) rejected.push(`${file?.name || "File"}: ${error}`);
     else if (valid.length >= maximumFiles) rejected.push(`${file.name}: choose no more than ${maximumFiles} files at a time.`);
