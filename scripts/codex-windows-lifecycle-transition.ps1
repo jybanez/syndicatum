@@ -188,9 +188,15 @@ function Read-ManagedMetadata {
         throw 'Managed marketplace metadata has an unexpected source.'
     }
     $sparse = @($metadata.sparse_paths)
-    if ($sparse.Count -ne 2 -or $sparse[0] -ne '.agents/plugins' -or $sparse[1] -ne 'plugins/codex') {
+    $isFullCheckout = $sparse.Count -eq 0
+    $isCanonicalSparseCheckout = $sparse.Count -eq 2 -and
+        $sparse[0] -eq '.agents/plugins' -and $sparse[1] -eq 'plugins/codex'
+    if (-not $isFullCheckout -and -not $isCanonicalSparseCheckout) {
         throw 'Managed marketplace metadata has an unexpected sparse-path set.'
     }
+    $metadata | Add-Member -NotePropertyName validated_checkout_mode -NotePropertyValue $(
+        if ($isFullCheckout) { 'full' } else { 'canonical_sparse' }
+    ) -Force
     return $metadata
 }
 
@@ -219,6 +225,7 @@ function Assert-MarketplaceState([bool] $RequireTarget) {
     [pscustomobject]@{
         head = $head
         ref = $metadata.ref_name
+        checkout_mode = $metadata.validated_checkout_mode
         managed_metadata_only = ($status.Count -eq 1)
     }
 }
