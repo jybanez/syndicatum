@@ -1,4 +1,4 @@
-import { uiLoader } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.298";
+import { uiLoader } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.300";
 
 const steps = [
   { id: "ownership", title: "Ownership", subtitle: "Prove control" },

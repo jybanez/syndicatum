@@ -59,17 +59,18 @@ export const USER_GUIDE_SECTIONS = [
       {
         id: "message-attachments",
         title: "Attach project files to a message",
-        summary: "Choose existing project files or upload into the current folder while composing.",
-        keywords: ["message", "attachment", "file picker", "upload", "project files"],
+        summary: "Choose existing project files, upload through the picker, or paste files into the composer.",
+        keywords: ["message", "attachment", "file picker", "upload", "paste", "clipboard", "project files"],
         blocks: [
           { type: "steps", items: [
             "Open New message or Reply, then choose the paperclip Attach files action below the message field, beside the delivery and keyboard instructions.",
+            "To attach clipboard files instead, paste them into the message field. Syndicatum validates the files first, uploads valid files sequentially into the project's visible attachments folder, and adds each successful Project File to the message draft. The folder is created only when the first valid upload succeeds.",
             "Use the breadcrumbs to move through project folders. Folders appear before files with distinct icons. Selecting a file highlights its full row; select it again to remove it from the picker selection.",
             "Use the borderless Reload and Upload icons in the picker header when you need to refresh the current folder or add a new file. Uploads go to the folder shown in the breadcrumbs; if it already contains the same filename, confirm replacement before any file bytes are sent. A success toast confirms a completed upload without changing the picker layout.",
             "Choose Attach selected files. Review the selected-file list below the addressing controls and remove anything you do not want to send.",
             "Send the message. Syndicatum verifies every selected file still belongs to the project and creates the message and attachment links together. A paperclip beside the timeline timestamp identifies messages with attachments. Available images and videos appear first in a media strip and open in a shared gallery viewer; all other files follow as compact file cards.",
           ] },
-          { type: "note", text: "Press Escape once to clear all selected files without closing the picker; press Escape again when nothing is selected to close it. Cancel and the close button always close directly. On mobile, short folders do not show a scrollbar; long folders scroll inside the modal while its header and actions remain available. Attachments are references to canonical Project Files, not private copies. Uploading from the picker stores the file in the current project folder even if you later cancel the message. Renaming, moving, or replacing a file keeps its permanent URL and existing message references. Deleting the canonical file makes it unavailable from earlier messages. A message can attach up to 20 files." },
+          { type: "note", text: "Press Escape once to clear all selected files without closing the picker; press Escape again when nothing is selected to close it. Cancel and the close button always close directly. On mobile, short folders do not show a scrollbar; long folders scroll inside the modal while its header and actions remain available. Attachments are references to canonical Project Files, not private copies. Uploading from the picker stores the file in the current project folder; pasting stores valid files in the project's attachments folder. Uploaded files remain available to project participants even if you later cancel the message. Renaming, moving, or replacing a file keeps its permanent URL and existing message references. Deleting the canonical file makes it unavailable from earlier messages. A message can attach up to 20 files." },
         ],
       },
       {

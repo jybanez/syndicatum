@@ -7,6 +7,9 @@ require_once __DIR__ . '/SettingsService.php';
 /** Canonical project-file metadata and mutation service. Never exposes provider keys or local paths. */
 final class ProjectFileService
 {
+    const MESSAGE_ATTACHMENTS_FOLDER_ID = 'attachments';
+    const MESSAGE_ATTACHMENTS_FOLDER_NAME = 'attachments';
+
     private $pdo;
     private $storage;
     private $settings;
@@ -153,7 +156,9 @@ final class ProjectFileService
                     $this->storage->discard($staged['staging_key']);
                     return $replay;
                 }
-                $folder = $this->resolveFolderForWrite($access, $folderPublicId);
+                $folder = $folderPublicId === self::MESSAGE_ATTACHMENTS_FOLDER_ID
+                    ? $this->resolveMessageAttachmentsFolderForWrite($access)
+                    : $this->resolveFolderForWrite($access, $folderPublicId);
                 $duplicate = $this->pdo->prepare(
                     "SELECT id FROM project_files WHERE project_id = ? AND folder_id = ? AND normalized_name = ? AND deleted_at IS NULL AND state = 'available' LIMIT 1"
                 );
@@ -416,6 +421,42 @@ final class ProjectFileService
         $folder = $this->folderByPublicId($projectId, $publicId, true);
         if (!$folder) { throw new RuntimeException('FILE_FOLDER_NOT_FOUND'); }
         return $folder;
+    }
+
+    /**
+     * Resolve the canonical visible message-attachment folder under the project
+     * root. This runs only after upload staging, name, size, and MIME validation.
+     * Locking the root serializes the first creator across concurrent sessions;
+     * the folder insert remains part of the upload transaction and rolls back if
+     * the file cannot be published or recorded.
+     */
+    private function resolveMessageAttachmentsFolderForWrite(array $access)
+    {
+        $projectId = (int) $access['project_id'];
+        $root = $this->resolveFolderForWrite($access, 'root');
+        $normalized = $this->normalizeName(self::MESSAGE_ATTACHMENTS_FOLDER_NAME);
+        $select = $this->pdo->prepare(
+            'SELECT * FROM project_file_folders
+             WHERE project_id = ? AND parent_folder_id = ? AND normalized_name = ? AND deleted_at IS NULL
+             ORDER BY id LIMIT 1 FOR UPDATE'
+        );
+        $select->execute([$projectId, (int) $root['id'], $normalized]);
+        $folder = $select->fetch();
+        if ($folder) { return $folder; }
+
+        $publicId = Db::uuidV4();
+        $now = Db::now();
+        $insert = $this->pdo->prepare(
+            'INSERT INTO project_file_folders
+             (public_id, project_id, parent_folder_id, name, normalized_name, root_marker, created_by_participant_id, version, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, NULL, ?, 1, ?, ?)'
+        );
+        $insert->execute([$publicId, $projectId, (int) $root['id'], self::MESSAGE_ATTACHMENTS_FOLDER_NAME,
+            $normalized, (int) $access['participant_id'], $now, $now]);
+        $folderId = (int) $this->pdo->lastInsertId();
+        $this->event($access, 'folder.created', null, $folderId,
+            ['name' => self::MESSAGE_ATTACHMENTS_FOLDER_NAME, 'parent_folder_id' => 'root']);
+        return $this->folderByPublicId($projectId, $publicId, true);
     }
 
     private function folderByPublicId($projectId, $publicId, $forUpdate)
