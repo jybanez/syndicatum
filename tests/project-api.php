@@ -1380,6 +1380,27 @@ try {
         )->fetchColumn();
         $suite->same(1, (int) $usage);
     });
+
+    $suite->test('ChatGPT agent creation commits one profile with its browser companion binding', function () use ($suite, $baseUrl, $humanHeaders, $projectOne, $pdo) {
+        $displayName = 'Browser Companion Agent ' . bin2hex(random_bytes(3));
+        $response = projectApiRequest($baseUrl, 'POST', '/api/v1/project-agents.php', $humanHeaders, [
+            'project_id' => $projectOne,
+            'display_name' => $displayName,
+            'role_title' => 'Project consultant',
+            'role_summary' => 'Supports project delivery.',
+            'provider' => 'chatgpt',
+            'activation_enabled' => true,
+            'activation_driver' => 'browser_companion',
+            'discussion_reference' => 'https://chatgpt.com/c/46604e19-202c-4224-bb05-d2ddf5f58c9f',
+        ]);
+        $suite->same(201, $response['status'], $response['raw']);
+        $suite->same('browser_companion', $response['body']['data']['activation']['activation_driver']);
+        $suite->same(true, $response['body']['data']['activation']['enabled']);
+        $statement = $pdo->prepare('SELECT COUNT(*) FROM project_agents WHERE project_id = ? AND display_name = ?');
+        $statement->execute([$projectOne, $displayName]);
+        $suite->same(1, (int) $statement->fetchColumn(), 'One successful submission must create one participant profile.');
+    });
+
     $capturePath = getenv('SYNDICATUM_CONTRACT_CAPTURE');
     if ($capturePath !== false && $capturePath !== '') {
         file_put_contents($capturePath, json_encode($contractSamples, JSON_UNESCAPED_SLASHES));

@@ -1116,8 +1116,13 @@ function projectFilesButton(label, disabled, title, { icon = "", iconOnly = fals
 
 function projectFilesContent(payload, handlers = {}) {
   const actionMenus = [];
+  let destroyed = false;
+  let loadingMore = false;
+  let rows = Array.isArray(payload.files) ? [...payload.files] : [];
+  let page = { ...(payload.pagination || {}) };
   const content = document.createElement("div");
   content.className = "project-files-layout";
+  content.dataset.mobileView = handlers.mobileView === "files" ? "files" : "folders";
   const notice = document.createElement("p");
   notice.className = "project-files-notice";
   notice.setAttribute("role", "status");
@@ -1146,11 +1151,17 @@ function projectFilesContent(payload, handlers = {}) {
   fileHeader.className = "project-files-pane-header";
   const fileTitle = document.createElement("h3");
   fileTitle.textContent = payload.current_folder?.name || "Files";
+  const showFolders = projectFilesButton(payload.current_folder?.name || "Files", false, "Show folders", {
+    icon: "navigation.arrow-left",
+  });
+  showFolders.classList.add("project-files-mobile-folder-action");
+  showFolders.setAttribute("aria-label", `Show folders. Current folder: ${payload.current_folder?.name || "Files"}`);
+  showFolders.addEventListener("click", () => handlers.onShowFolders?.());
   const upload = projectFilesButton("Upload files", !payload.capabilities?.upload,
     payload.capabilities?.upload ? "Upload files" : (payload.notice || "File uploads are not available yet."),
     { icon: "data.upload" });
   if (payload.capabilities?.upload) upload.addEventListener("click", () => handlers.onUpload?.(payload.current_folder));
-  fileHeader.append(fileTitle, upload);
+  fileHeader.append(showFolders, fileTitle, upload);
   const gridHost = document.createElement("div");
   gridHost.className = "project-files-grid";
   files.append(fileHeader, gridHost);
@@ -1164,33 +1175,28 @@ function projectFilesContent(payload, handlers = {}) {
     virtualHeight: 520,
     onSelect(node) {
       fileTitle.textContent = node.label || "Files";
-      if (node.id && node.id !== payload.current_folder?.id) handlers.onFolderSelect?.(node.id);
+      if (node.id) handlers.onFolderSelect?.(node.id);
     },
   });
   tree.setSelected?.(payload.current_folder?.id || "root");
-  const page = payload.pagination || {};
   const gridSort = ({ size: "size_bytes", uploader: "uploader_name", created: "created_at", updated: "updated_at" })[page.sort] || page.sort || "name";
-  const grid = state.factories.createGrid(gridHost, Array.isArray(payload.files) ? payload.files : [], {
+  const grid = state.factories.createGrid(gridHost, rows, {
     className: "project-files-current-folder-grid",
     chrome: false,
     mode: "remote",
     enableSearch: true,
     enableSort: true,
-    enablePagination: true,
+    enablePagination: false,
     searchPlaceholder: "Search files",
     search: page.search || "",
     sortBy: gridSort,
     sortDir: page.direction || "asc",
-    page: Number(page.page || 1),
-    pageSize: Number(page.per_page || 20),
-    pageSizeOptions: [10, 20, 50, 100],
-    totalRows: Number(page.total || 0),
     enableColumnResize: true,
     minColumnWidth: 90,
     emptyText: payload.notice || "This folder is empty.",
     columns: [
       {
-        key: "name", label: "Name", width: "180px",
+        key: "name", label: "Name", width: "180px", resizable: false,
         renderCell({ row }) {
           const previewable = projectFilePreviewType(row) !== "";
           const cell = document.createElement("button");
@@ -1217,14 +1223,11 @@ function projectFilesContent(payload, handlers = {}) {
         },
       },
       { key: "size_bytes", label: "Size", width: "90px", format: (value) => recoverySize(Number(value || 0)) },
-      { key: "uploader_name", label: "Uploader", width: "150px" },
-      { key: "created_at", label: "Created", width: "160px", format: (value) => value ? formatDate(value) : "" },
-      { key: "updated_at", label: "Modified", width: "160px", format: (value) => value ? formatDate(value) : "" },
-      { key: "state", label: "Status", width: "105px", format: (value) => String(value || "unknown").replaceAll("_", " ") },
       {
-        key: "actions", label: "", width: "48px", sortable: false, resizable: false,
+        key: "actions", label: "Actions", width: "72px", sortable: false, resizable: false,
         renderCell({ row }) {
           const items = [
+            { id: "file-info", label: "File info", icon: helperIconHtml("status.info") },
             ...(payload.capabilities?.copy_link ? [{ id: "copy-link", label: "Copy link", icon: helperIconHtml("actions.copy") }] : []),
             ...(payload.capabilities?.move ? [{ id: "move", label: "Move to", icon: helperIconHtml("navigation.arrow-right") }] : []),
             ...(payload.capabilities?.download ? [{ id: "download", label: "Download", icon: helperIconHtml("actions.download") }] : []),
@@ -1248,12 +1251,59 @@ function projectFilesContent(payload, handlers = {}) {
       },
     ],
     onColumnResize({ columnWidths }) { state.projectFileGridColumnWidths = columnWidths; },
-    onQueryChange(query) { handlers.onQueryChange?.(query); },
+    onQueryChange(query) { handlers.onQueryChange?.({ ...query, page: 1, per_page: 20 }); },
     ...(state.projectFileGridColumnWidths ? { columnWidths: state.projectFileGridColumnWidths } : {}),
   });
+  const loadMoreStatus = document.createElement("div");
+  loadMoreStatus.className = "project-files-load-more-status";
+  loadMoreStatus.setAttribute("role", "status");
+  loadMoreStatus.setAttribute("aria-live", "polite");
+  loadMoreStatus.hidden = true;
+  gridHost.append(loadMoreStatus);
+  const scroller = gridHost.querySelector(".ui-grid-table-wrap");
+  const hasNextPage = () => Number(page.page || 1) < Number(page.total_pages || 1);
+  const setLoadingMore = (loading, message = "Loading more files…") => {
+    loadingMore = loading;
+    loadMoreStatus.textContent = message;
+    loadMoreStatus.hidden = !loading && message === "Loading more files…";
+    scroller?.setAttribute("aria-busy", loading ? "true" : "false");
+  };
+  const appendNextPage = async () => {
+    if (destroyed || loadingMore || !scroller || !hasNextPage() || typeof handlers.onLoadMore !== "function") return;
+    if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 96) return;
+    const nextPage = Number(page.page || 1) + 1;
+    setLoadingMore(true);
+    try {
+      const nextPayload = await handlers.onLoadMore({ ...page, page: nextPage, per_page: 20 });
+      if (destroyed || !nextPayload) return;
+      const known = new Set(rows.map((row) => String(row.id || row.url || row.name || "")));
+      (Array.isArray(nextPayload.files) ? nextPayload.files : []).forEach((row) => {
+        const key = String(row.id || row.url || row.name || "");
+        if (!known.has(key)) {
+          known.add(key);
+          rows.push(row);
+        }
+      });
+      page = { ...page, ...(nextPayload.pagination || {}), page: Number(nextPayload.pagination?.page || nextPage), per_page: 20 };
+      actionMenus.splice(0).forEach((menu) => menu?.destroy?.());
+      grid?.setRows?.(rows);
+    } catch (error) {
+      if (destroyed || error?.name === "AbortError") return;
+      setLoadingMore(false, "Unable to load more files.");
+      handlers.onLoadMoreError?.(error);
+      return;
+    } finally {
+      if (!destroyed && loadingMore) setLoadingMore(false);
+    }
+    window.requestAnimationFrame(() => { void appendNextPage(); });
+  };
+  scroller?.addEventListener("scroll", appendNextPage, { passive: true });
+  window.requestAnimationFrame(() => { void appendNextPage(); });
   return {
     content, tree, grid,
     destroy() {
+      destroyed = true;
+      scroller?.removeEventListener("scroll", appendNextPage);
       actionMenus.forEach((menu) => menu?.destroy?.());
       tree?.destroy?.();
       grid?.destroy?.();
@@ -1653,6 +1703,37 @@ function downloadProjectFile(file) {
   link.remove();
 }
 
+function openProjectFileInfo(file) {
+  const content = projectInfoElement("div", "project-info-card project-info-metadata project-file-info-content");
+  const metadata = projectInfoElement("dl", "project-info-metadata-list");
+  const publicUrl = new URL(file.url, document.baseURI).href;
+  const link = projectInfoElement("a", "project-info-inline-action", publicUrl);
+  link.href = publicUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  projectInfoMetadataRow(metadata, "Name", file.name || "Unnamed file");
+  projectInfoMetadataRow(metadata, "Original filename", file.original_name || file.name || "Unavailable");
+  projectInfoMetadataRow(metadata, "File type", file.mime_type || "Unknown");
+  projectInfoMetadataRow(metadata, "Size", recoverySize(Number(file.size_bytes || 0)));
+  projectInfoMetadataRow(metadata, "Uploaded by", file.uploader_name || file.uploader?.display_name || "Unknown participant");
+  projectInfoMetadataRow(metadata, "Created", projectInfoDate(file.created_at));
+  projectInfoMetadataRow(metadata, "Modified", projectInfoDate(file.updated_at));
+  projectInfoMetadataRow(metadata, "Status", projectInfoLabel(file.state || "unknown"));
+  projectInfoMetadataRow(metadata, "Version", file.version ? String(file.version) : "Unavailable");
+  projectInfoMetadataRow(metadata, "SHA-256", file.sha256 || "Unavailable");
+  projectInfoMetadataRow(metadata, "File ID", file.id || "Unavailable");
+  projectInfoMetadataRow(metadata, "Public URL", link);
+  content.append(metadata);
+  const modal = state.factories.createActionModal({
+    title: "File info",
+    size: "md",
+    className: "project-file-info-modal",
+    content,
+    actions: [{ id: "close", label: "Close", variant: "primary", autoFocus: true }],
+  });
+  modal.open();
+}
+
 function openProjectFilesModal() {
   const projectId = selectedProjectId();
   if (!projectId || state.components.projectFilesModal?.getState?.().open) return;
@@ -1664,6 +1745,7 @@ function openProjectFilesModal() {
   let mounted = null;
   let queryTimer = null;
   let loadVersion = 0;
+  let mobileView = "folders";
   const modal = state.factories.createActionModal({
     title: "Project files",
     size: "lg",
@@ -1687,8 +1769,7 @@ function openProjectFilesModal() {
     cancelBusy: { label: "Cancel", onCancel: () => modal.close({ reason: "cancel-loading" }) },
   });
 
-  const loadFolder = (folderId = "root", query = {}) => {
-    const version = ++loadVersion;
+  const requestFolder = (folderId = "root", query = {}) => {
     const requestedSort = String(query.sort || query.sortBy || "name");
     const sort = ({ size_bytes: "size", uploader_name: "uploader", created_at: "created", updated_at: "updated" })[requestedSort]
       || (["name", "type", "size", "uploader", "created", "updated", "state"].includes(requestedSort) ? requestedSort : "name");
@@ -1697,14 +1778,17 @@ function openProjectFilesModal() {
       project_id: projectId,
       folder_id: folderId,
       page: String(query.page || 1),
-      per_page: String(query.per_page || query.pageSize || 20),
+      per_page: "20",
       search: String(query.search || ""),
       sort,
       direction: ["asc", "desc"].includes(requestedDirection) ? requestedDirection : "asc",
     });
-    return request(`${API.projectFiles}?${parameters}`, {
-    signal: controller.signal, requireJson: true,
-  }).then((response) => {
+    return request(`${API.projectFiles}?${parameters}`, { signal: controller.signal, requireJson: true });
+  };
+
+  const loadFolder = (folderId = "root", query = {}) => {
+    const version = ++loadVersion;
+    return requestFolder(folderId, query).then((response) => {
     if (version !== loadVersion) return;
     if (!modal.getState().open) return;
     if (generation !== state.generation || projectId !== selectedProjectId()) {
@@ -1730,12 +1814,26 @@ function openProjectFilesModal() {
       }, query.search !== payload.pagination?.search ? 250 : 0);
     };
     mounted = projectFilesContent(payload, {
-      onFolderSelect: (nextFolderId) => { modal.setBusy(true, { message: "Loading folder…" }); void loadFolder(nextFolderId); },
+      mobileView,
+      onShowFolders() {
+        mobileView = "folders";
+        if (mounted?.content) mounted.content.dataset.mobileView = mobileView;
+      },
+      onFolderSelect(nextFolderId) {
+        mobileView = "files";
+        if (nextFolderId === payload.current_folder?.id) {
+          if (mounted?.content) mounted.content.dataset.mobileView = mobileView;
+          return;
+        }
+        modal.setBusy(true, { message: "Loading folder…" });
+        void loadFolder(nextFolderId);
+      },
       onCreateFolder: (folder) => openCreateProjectFolder(projectId, folder, () => { modal.setBusy(true, { message: "Refreshing folders…" }); void loadFolder(folder?.id || "root"); }),
       onUpload: (folder) => openProjectFileUploader(projectId, folder, payload.files, payload.storage?.max_upload_bytes,
         payload.storage?.max_files_per_action,
         () => { modal.setBusy(true, { message: "Refreshing files…" }); void loadFolder(folder?.id || "root"); }),
       onFileAction(action, file) {
+        if (action === "file-info") openProjectFileInfo(file);
         if (action === "copy-link") void copyProjectFileLink(file);
         if (action === "move") openMoveProjectFile(projectId, file, payload.current_folder, payload.root, refreshCurrentFolder);
         if (action === "download") downloadProjectFile(file);
@@ -1744,6 +1842,14 @@ function openProjectFilesModal() {
       },
       onFileOpen: openProjectFilePreview,
       onQueryChange: scheduleQuery,
+      async onLoadMore(query) {
+        const response = await requestFolder(payload.current_folder?.id || "root", query);
+        if (!modal.getState().open || generation !== state.generation || projectId !== selectedProjectId()) return null;
+        return unwrap(response) || {};
+      },
+      onLoadMoreError(error) {
+        state.components.toast.error(`Unable to load more files. ${error.message || "Try again."}`);
+      },
     });
     modal.setContent(mounted.content);
     modal.setBusy(false);
@@ -4330,7 +4436,7 @@ function openProjectProposalDetails(proposal) {
       await modal.close({ reason: decision });
       state.components.toast.success(decision === "approve" ? "Proposal approved and applied." : "Proposal rejected.");
       if (decision === "approve" && selectedProjectId() === id(proposal.project_id)) {
-        await switchProject(proposal.project_id, { initial: true, historyMode: "replace" });
+        await switchProject(proposal.project_id, { initial: true, historyMode: "replace", projectView: "proposals" });
       } else {
         await loadProjectChangeProposals({ force: true });
       }
@@ -6136,6 +6242,20 @@ function requireBrowserDiscussionReference(values, reference) {
   throw new Error(`A ${values.provider === "gemini" ? "Gemini" : "ChatGPT"} discussion URL is required.`);
 }
 
+function validateAgentForm(values) {
+  const errors = {};
+  const provider = String(values.provider || "").trim().toLowerCase();
+  const referenceField = provider === "chatgpt" ? "chatgpt_discussion_reference"
+    : (provider === "gemini" ? "gemini_discussion_reference" : "discussion_reference");
+  const reference = String(values[referenceField] || "").trim();
+  if (isBrowserCompanionProvider(provider) && !reference) {
+    errors[referenceField] = `${provider === "gemini" ? "Gemini" : "ChatGPT"} discussion URL — required.`;
+  } else if (values.activation_enabled && !reference) {
+    errors[referenceField] = "Provider discussion reference — required when proactive activation is enabled.";
+  }
+  return errors;
+}
+
 function supervisingParticipantOptions(agent = null) {
   const excludedId = id(agent?.id);
   const options = [{ value: "", label: "No supervisor" }];
@@ -6152,6 +6272,12 @@ function supervisingParticipantOptions(agent = null) {
 async function openAddAgentModal() {
   let providers = [];
   let provider = null;
+  let creationOutcomeUncertain = false;
+  const validationLabels = {
+    display_name: "Agent display name", role_title: "Role title", role_summary: "Role summary",
+    provider: "Provider", discussion_reference: "Codex discussion deeplink",
+    chatgpt_discussion_reference: "ChatGPT discussion URL", gemini_discussion_reference: "Gemini discussion URL",
+  };
   const modal = state.factories.createFormModal({
     title: "Add Agent",
     size: "lg",
@@ -6184,9 +6310,58 @@ async function openAddAgentModal() {
     [modalTextField("working_directory", provider.working_directory_label, { placeholder: "C:\\path\\to\\project", help: provider.working_directory_help, visibleWhen: { provider: "codex" } })],
     [{ type: "text", content: "ChatGPT activation uses the Syndicatum browser companion. Responses API and Workspace Agent activation remain disabled.", visibleWhen: { provider: "chatgpt" } }],
     [{ type: "text", content: "Gemini activation uses the Syndicatum browser companion. The Gemini discussion must have access to the Syndicatum integration to handle the notification.", visibleWhen: { provider: "gemini" } }],
-    ], async onSubmit(values, context) {
-    try { normalizeAgentProviderValues(values, providers); const reference = agentDiscussionReference(values); if (values.activation_enabled && !String(reference || "").trim()) throw new Error("An activation reference is required when proactive activation is enabled."); requireBrowserDiscussionReference(values, reference); const avatarUrl = values.avatar instanceof File ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : ""; const body = { ...values, scopes: ["messages:read", "messages:write", "messages:acknowledge", "profile:read", "profile:write", ...(values.plan_progress ? ["plan:progress"] : [])], discussion_reference: reference, avatar_url: avatarUrl || null, project_id: selectedProjectId() }; delete body.avatar; delete body.plan_progress; delete body.chatgpt_discussion_reference; delete body.gemini_discussion_reference; const result = unwrap(await request(API.projectAgents, { method: "POST", headers: csrfHeaders(), body: JSON.stringify(body) })); if (values.activation_enabled || isBrowserCompanionProvider(values.provider)) await request(API.projectAgentActivation, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ project_id: selectedProjectId(), agent_id: result.agent_id, enabled: Boolean(values.activation_enabled), provider: values.provider, activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector", discussion_reference: reference, working_directory: values.working_directory }) }); setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0); state.participants = await fetchVisibleTeamParticipants(selectedProjectId()); rebuildParticipantControls(); return true; }
-    catch (error) { context.setFormError(error.message); return false; }
+    ],
+    manageBusyOnSubmit: false,
+    validate(values) { return validateAgentForm(values); },
+    async onInvalid(result, context) { await showFormValidationSummary(result, context, validationLabels); },
+    async onSubmit(values, context) {
+      if (creationOutcomeUncertain) {
+        context.setFormError("The earlier creation result is unknown. Close this dialog and refresh the team list before trying again.");
+        return false;
+      }
+      context.setBusy(true, { message: "Creating agent…" });
+      let result;
+      try {
+        normalizeAgentProviderValues(values, providers);
+        const reference = agentDiscussionReference(values);
+        const avatarUrl = values.avatar instanceof File
+          ? await uploadAvatar(values.avatar, { kind: "agent", projectId: selectedProjectId() }) : "";
+        const body = {
+          ...values,
+          scopes: ["messages:read", "messages:write", "messages:acknowledge", "profile:read", "profile:write", ...(values.plan_progress ? ["plan:progress"] : [])],
+          discussion_reference: reference,
+          activation_driver: isBrowserCompanionProvider(values.provider) ? "browser_companion" : "connector",
+          avatar_url: avatarUrl || null,
+          project_id: selectedProjectId(),
+        };
+        delete body.avatar;
+        delete body.plan_progress;
+        delete body.chatgpt_discussion_reference;
+        delete body.gemini_discussion_reference;
+        result = unwrap(await request(API.projectAgents, {
+          method: "POST", headers: csrfHeaders(), body: JSON.stringify(body),
+        }));
+      } catch (error) {
+        context.applyApiErrors?.(error.payload);
+        if (!error?.status) {
+          creationOutcomeUncertain = true;
+          context.setFormError("The agent creation result could not be confirmed. Close this dialog and refresh the team list before trying again.");
+        } else {
+          context.setFormError(error.message);
+        }
+        context.setBusy(false);
+        return false;
+      }
+      try {
+        state.participants = await fetchVisibleTeamParticipants(selectedProjectId());
+        rebuildParticipantControls();
+      } catch (error) {
+        state.components.toast.warn(`The agent was created, but the team list could not be refreshed. ${error.message}`, { title: "Agent created" });
+      }
+      context.setBusy(false);
+      state.components.toast.success(`${values.display_name} was added.`);
+      setTimeout(() => showAgentCredentialResult({ ...result, provider: values.provider }), 0);
+      return true;
     }});
     modal.setValues(initialValues);
     modal.setBusy(false);
@@ -8174,7 +8349,7 @@ async function openTaskDetails(taskId) {
   }
 }
 
-async function switchProject(projectId, { initial = false, historyMode = "push" } = {}) {
+async function switchProject(projectId, { initial = false, historyMode = "push", projectView = "timeline" } = {}) {
   const nextId = id(projectId);
   if (!initial && state.surface === "project" && nextId === selectedProjectId()) return;
   state.abortController?.abort();
@@ -8198,7 +8373,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   clearTimeout(state.projectViewCounterTimer);
   state.projectViewCounterTimer = null;
   state.projectViewCounts = { timeline: 0, responsibility: 0, proposals: 0 };
-  state.projectView = "timeline";
+  state.projectView = projectView;
   state.components.responsibilityInbox?.destroy();
   state.components.responsibilityInbox = null;
   if (state.components.responsibilityActionModal?.getState?.().open) {
@@ -8264,7 +8439,7 @@ async function switchProject(projectId, { initial = false, historyMode = "push" 
   writeLocalPreference("syndicatum.workspace.lastProject", state.project.public_id || nextId);
   renderWorkspace();
   renderProjectHeader();
-  showProjectView("timeline");
+  showProjectView(projectView);
   rebuildParticipantControls();
   renderTasks();
   renderComposerControls();

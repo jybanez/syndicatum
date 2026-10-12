@@ -32,24 +32,39 @@ try {
             if (strtolower((string) $activationCandidate['provider']) === 'chatgpt') {
                 $activationService->validateConfigurationInput($activationCandidate);
                 $activationInput = $activationCandidate;
-                $activationInput['activation_driver'] = 'responses_api';
+                $activationInput['activation_driver'] = isset($body['activation_driver'])
+                    ? strtolower(trim((string) $body['activation_driver'])) : 'browser_companion';
+                if (!in_array($activationInput['activation_driver'], ['browser_companion', 'responses_api', 'workspace_agent'], true)) {
+                    throw new InvalidArgumentException('The selected ChatGPT activation method is not supported.');
+                }
+                if (!empty($activationInput['enabled']) && $activationInput['activation_driver'] !== 'browser_companion') {
+                    throw new InvalidArgumentException('Responses API and Workspace Agent activation are disabled. Use the Syndicatum browser companion.');
+                }
                 $activationInput['responses_api_key'] = $body['responses_api_key'] ?? '';
                 $activationInput['responses_model'] = $body['responses_model'] ?? 'gpt-5.6-terra';
             } else {
                 $activationInput = $activationService->validateConfigurationInput($activationCandidate);
             }
         }
-        $result = $service->createAgent($projectId, $user['id'], $body);
-        if (strtolower(trim((string) (isset($body['provider']) ? $body['provider'] : ''))) === 'chatgpt') {
-            unset($result['claim_code'], $result['claim_expires_at']);
-        }
-        if ($activationInput !== null) {
-            $result['activation'] = $activationService->configure(
-                $projectId,
-                $result['agent_id'],
-                $user['id'],
-                $activationInput
-            );
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) { $pdo->beginTransaction(); }
+        try {
+            $result = $service->createAgent($projectId, $user['id'], $body);
+            if (strtolower(trim((string) (isset($body['provider']) ? $body['provider'] : ''))) === 'chatgpt') {
+                unset($result['claim_code'], $result['claim_expires_at']);
+            }
+            if ($activationInput !== null) {
+                $result['activation'] = $activationService->configure(
+                    $projectId,
+                    $result['agent_id'],
+                    $user['id'],
+                    $activationInput
+                );
+            }
+            if ($ownsTransaction) { $pdo->commit(); }
+        } catch (Exception $exception) {
+            if ($ownsTransaction && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $exception;
         }
         Api::json(['data' => $result], 201);
     }
