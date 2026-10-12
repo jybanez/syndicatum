@@ -9,6 +9,7 @@ const publicMcpUrl = new URL("plugins/openai-public/mcp.json", root);
 const pluginUrl = new URL("plugins/codex/.codex-plugin/plugin.json", root);
 const companionUrl = new URL("companion/extension/manifest.json", root);
 const codexLifecycleUrl = new URL("docs/codex-0.2.7-windows-lifecycle-acceptance.md", root);
+const codexLifecycleTransitionUrl = new URL("scripts/codex-windows-lifecycle-transition.ps1", root);
 
 const readJson = async url => JSON.parse(await readFile(url, "utf8"));
 
@@ -181,6 +182,30 @@ test("distribution classifications match the exact source package versions", asy
       assert.equal(channel.production_eligible, false);
     }
   }
+});
+
+test("Codex lifecycle procedure names the reviewed Windows transition and fail-closed fixtures", async () => {
+  const [procedure, transition] = await Promise.all([
+    readFile(codexLifecycleUrl, "utf8"),
+    readFile(codexLifecycleTransitionUrl, "utf8"),
+  ]);
+
+  assert.match(procedure, /\.codex-marketplace-install\.json/);
+  assert.match(procedure, /only\s+permitted untracked marketplace file/);
+  assert.match(procedure, /owner-approved foreign-[\r\n]+project message or task ID/);
+  assert.match(procedure, /codex-windows-lifecycle-transition\.ps1/);
+  assert.match(procedure, /`RejectFixture`/);
+  assert.match(transition, /ValidateSet\('Inspect', 'RejectFixture', 'Apply'\)/);
+  assert.match(transition, /Deterministic candidate-revision mismatch\./);
+  assert.match(transition, /codex plugin marketplace remove syndicatum/);
+  assert.match(transition, /codex plugin marketplace add jybanez\/syndicatum --ref/);
+  assert.match(transition, /codex plugin add codex@syndicatum/);
+  assert.match(transition, /plugin_data_stable = Get-StablePluginDataFingerprint/);
+  assert.match(transition, /Protected plugin data changed during transition/);
+  assert.match(transition, /function Assert-ManagedStateQuiescent/);
+  assert.match(transition, /Get-CimInstance Win32_Process/);
+  assert.match(transition, /\[IO\.FileShare\]::None/);
+  assert.match(transition, /Assert-ManagedStateQuiescent\s+\n\s*if \(\$Mode -eq 'RejectFixture'\)/);
 });
 
 test("non-production channels retain at least one explicit unresolved gate", async () => {

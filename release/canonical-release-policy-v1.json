@@ -1961,6 +1961,13 @@
       "mode": 420
     },
     {
+      "source": "scripts/codex-windows-lifecycle-transition.ps1",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
       "source": "scripts/check-baseline-drift.sh",
       "action": "exclude",
       "path": "",
