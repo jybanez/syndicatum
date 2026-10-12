@@ -1876,6 +1876,10 @@ try {
             'Task cards must use the three-row priority, title, and status/assignee/task-number layout.');
         $suite->true(strpos($styles, '.project-card { width: 100%; height: auto; align-self: start; align-content: start; display: grid; gap: 8px; padding: 11px 12px;') !== false,
             'Project cards must use the compact vertical rhythm without shrinking their text.');
+        $suite->true(strpos($styles, '.project-card { width: 100%; height: auto; align-self: start; align-content: start; display: grid; gap: 8px; padding: 11px 12px; border: 0;') !== false
+            && strpos($styles, '.project-card.is-active { background: var(--project-active-tab-background); }') !== false
+            && strpos($styles, '.workspace-outer-splitter { --project-active-tab-background: var(--ui-splitter-divider-core, var(--ui-border-strong, #344769)); }') !== false,
+            'Project cards must be borderless while the active card uses the canonical Helper splitter color.');
         $suite->true(strpos($styles, '.project-list { gap: 8px; }') !== false
             && strpos($styles, '.admin-list { gap: 10px; }') !== false,
             'Only the project rail spacing should be compacted; administration lists retain their established rhythm.');
@@ -1885,6 +1889,7 @@ try {
             && strpos($styles, '.project-active-tab-bridge {') !== false
             && strpos($styles, '.workspace-outer-splitter > .ui-splitter-divider.has-project-active-tab::after {') !== false
             && strpos($styles, 'width: calc(50% - 4px);') !== false
+            && substr_count($styles, 'background: var(--project-active-tab-background);') >= 3
             && strpos($styles, 'pointer-events: none;') !== false
             && strpos($styles, '.project-navigation-column .project-card.is-active {') !== false
             && strpos($styles, 'width: calc(100% + 4px);') !== false

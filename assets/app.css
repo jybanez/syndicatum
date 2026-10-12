@@ -554,6 +554,7 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
 .workspace-outer-splitter,
 .workspace-inner-splitter,
 .workspace-work-splitter { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.workspace-outer-splitter { --project-active-tab-background: var(--ui-splitter-divider-core, var(--ui-border-strong, #344769)); }
 .workspace-outer-splitter > .ui-splitter-pane,
 .workspace-inner-splitter > .ui-splitter-pane,
 .workspace-work-splitter > .ui-splitter-pane { min-width: 0; min-height: 0; overflow: hidden; }
@@ -683,9 +684,9 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
 .project-list, .admin-list { display: grid; align-content: start; grid-auto-rows: max-content; }
 .project-list { gap: 8px; }
 .admin-list { gap: 10px; }
-.project-card { width: 100%; height: auto; align-self: start; align-content: start; display: grid; gap: 8px; padding: 11px 12px; color: inherit; text-align: left; cursor: pointer; }
-.project-card:hover { border-color: rgba(104, 143, 211, .75); transform: translateY(-1px); }
-.project-card.is-active { border-color: color-mix(in srgb, var(--app-accent) 72%, var(--app-border)); background: color-mix(in srgb, var(--ui-accent) 12%, var(--app-panel)); }
+.project-card { width: 100%; height: auto; align-self: start; align-content: start; display: grid; gap: 8px; padding: 11px 12px; border: 0; color: inherit; text-align: left; cursor: pointer; }
+.project-card:hover { background: color-mix(in srgb, var(--ui-accent) 5%, var(--ui-bg-soft)); transform: translateY(-1px); }
+.project-card.is-active { background: var(--project-active-tab-background); }
 .project-card-top { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .project-card-top strong { display: block; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-style: normal; font-weight: 700; line-height: 1.3; }
 .project-card-unread { flex: 0 0 auto; box-sizing: border-box; min-width: 22px; min-height: 18px; padding: 0 6px; border-color: color-mix(in srgb, var(--app-accent) 72%, var(--app-border)); color: var(--app-text); background: color-mix(in srgb, var(--app-accent) 22%, var(--app-panel)); font-size: 11px; line-height: 1; text-align: center; }
@@ -949,9 +950,7 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
     z-index: 2;
     display: block;
     pointer-events: none;
-    border-top: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
-    border-bottom: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
-    background: color-mix(in srgb, var(--ui-accent) 12%, var(--app-panel));
+    background: var(--project-active-tab-background);
   }
   .workspace-outer-splitter > .ui-splitter-divider.has-project-active-tab::after {
     content: "";
@@ -962,15 +961,12 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
     height: var(--project-active-tab-height);
     box-sizing: border-box;
     pointer-events: none;
-    border-top: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
-    border-bottom: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
-    background: color-mix(in srgb, var(--ui-accent) 12%, var(--app-panel));
+    background: var(--project-active-tab-background);
   }
   .project-navigation-column .project-card.is-active {
     width: calc(100% + 4px);
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-    border-right-color: transparent;
   }
   .project-navigation-column .project-card.is-active:hover { transform: none; }
 }
