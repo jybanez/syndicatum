@@ -81,9 +81,20 @@ Record a sanitized baseline before closing Codex Desktop:
    negative result using an already approved fixture.
 6. Queue/review/history counts and any pre-existing diagnostic qualifications.
 
-An unexpected running Codex process, dirty marketplace checkout, unresolved
-configuration reload, stale health, unknown listener owner, unavailable binding,
-or unmatched inventory is a stop condition.
+An unexpected running Codex process, tracked marketplace change, unexpected
+untracked marketplace file, unresolved configuration reload, stale health,
+unknown listener owner, unavailable binding, or unmatched inventory is a stop
+condition. The Codex-managed `.codex-marketplace-install.json` file is the only
+permitted untracked marketplace file, and only when it parses successfully and
+its Git source, immutable ref, resolved revision, and sparse-path set exactly
+match the checkout. Include it in the external backup and evidence inventory;
+never delete or silently ignore it.
+
+The coordinator must designate the exact non-sensitive, owner-approved foreign-
+project message or task ID used for the negative isolation check. A target must
+confirm only the expected concealed/not-found result and must not record foreign
+content. If no exact fixture is supplied, stop before transition rather than
+inventing one or selecting another protected identity.
 
 ## Transition sequence
 
@@ -92,6 +103,24 @@ or unmatched inventory is a stop condition.
 Fully exit Codex Desktop. Verify no Codex plugin host owns the marketplace or
 plugin-cache files. Install or confirm the marketplace at `codex-v0.2.7`,
 install `codex@syndicatum`, restart Desktop, and open a genuinely new task.
+
+Use `scripts/codex-windows-lifecycle-transition.ps1` as the reviewed closed-
+Desktop transition mechanism. Pass the verified external backup manifest and an
+external report path. `Inspect` is read-only, `RejectFixture` exercises the
+deterministic pre-install rejection without changing bytes, and `Apply` is the
+only mode permitted to call the Codex marketplace/plugin commands. Its exact
+mutation allowlist is the Syndicatum marketplace checkout, the Syndicatum Codex
+plugin-cache subtree, and Codex's marketplace/plugin registry state files. The
+plugin data root is never allowlisted for mutation. The helper fingerprints its
+stable protected profile, credential-container, alias, and connector-
+configuration files; volatile listener locks, health, logs, and delivery state
+remain outside the transition helper and are compared through the separately
+recorded baseline/evidence counts. Before either `RejectFixture` or `Apply`, the
+helper fails closed if Codex Desktop is running, if any process command line
+references the managed marketplace or plugin-cache roots, if process inspection
+cannot complete, or if any file under those roots cannot be opened for exclusive
+read access. It reports these conditions without killing processes or repairing
+state. `Inspect` does not require quiescence and remains read-only.
 
 The new task must report installed manifest 0.2.7, healthy plugin-managed
 background service, listener ownership, fresh heartbeat, expected nonzero
@@ -114,10 +143,12 @@ supported predecessor merely because the rollback succeeds.
 ### C. Failed-update recovery
 
 Exercise failure only through the reviewed transition mechanism and only after
-the verified backup exists. Cause a deterministic pre-install rejection (for
-example, candidate-hash or inventory mismatch) before installed bytes are
-replaced. Confirm the transition stops, the previous installed version remains
-loadable, and no credential, binding, queue, or history state changes.
+the verified backup exists. Run its `RejectFixture` mode for the intended target
+version; it injects a deterministic candidate-revision mismatch before any Codex
+command, verifies the marketplace, plugin cache, protected plugin data, and
+registry fingerprints remain identical, and writes a sanitized external report.
+Confirm the previous installed version remains loadable and no credential,
+binding, queue, or history state changes.
 
 If the mechanism can fail after replacement begins, restore only the allowlisted
 preimages from the verified backup while Codex is closed, then restart once and
