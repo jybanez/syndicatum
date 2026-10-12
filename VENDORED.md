@@ -12,7 +12,7 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `8a80977dbb23ea72c54457c27495fb368fac0bc8` (Helper `0.21.298`)
+- Pinned commit: `14b972d8b4f20618d5f64eb133a6c36f19ec2306` (Helper `0.21.300`)
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
@@ -47,6 +47,8 @@ This first implementation uses the helper library for:
   `ui.json.viewer`, `ui.markdown.viewer`, and `ui.csv.viewer`.
 - canonical project-file selection through `ui.repository.picker`, including the
   chat composer's custom attachment adapter and selected-attachment queue.
+- custom clipboard-file handoff through `ui.chat.composer` while Syndicatum
+  retains project authorization, upload, queue, and message-association ownership.
 
 The current upstream helper line also includes newer primitives that should be preferred during the DB-backed refactor:
 

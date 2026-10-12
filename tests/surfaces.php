@@ -745,8 +745,8 @@ try {
             && strpos($source, 'params.set("message_kind", state.filters.kind)') !== false,
             'Timeline filters must support server-backed participant and system message types.');
         $suite->true(strpos($loader, 'const UI_TABS_REV = "0.21.206";') !== false
-            && strpos($loader, 'const UI_TIMELINE_REV = "0.21.298";') !== false
-            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.298";') !== false,
+            && strpos($loader, 'const UI_TIMELINE_REV = "0.21.299";') !== false
+            && strpos($loader, 'const UI_BUNDLE_REV = "0.21.300";') !== false,
             'The integrated Helper bundle must retain the released attached-tabs revision.');
     });
 
@@ -913,21 +913,22 @@ try {
             'Templates and project creation must use a single-pane Library/Preview mobile layout with a full-height canonical modal.');
     });
 
-    $suite->test('Helper 0.21.298 retains planning contracts and provides canonical Timeline boundary shortcuts', function () use ($suite, $root) {
+    $suite->test('Helper 0.21.300 retains planning contracts and provides canonical Timeline and clipboard adapters', function () use ($suite, $root) {
         $app = file_get_contents($root . '/assets/app.mjs');
         $appCss = file_get_contents($root . '/assets/app.css');
+        $guide = file_get_contents($root . '/assets/user-guide-content.mjs');
         $setup = file_get_contents($root . '/assets/setup.mjs');
         $connector = file_get_contents($root . '/assets/connector-authorize.mjs');
         $bundleCss = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css');
         $bundleJs = file_get_contents($root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js');
         foreach ([$app, $setup, $connector] as $source) {
-            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.298') !== false,
-                'Every Helper entry point must use the canonical 0.21.298 bundle revision.');
+            $suite->true(strpos($source, 'helpers.ui.bundle.min.js?v=0.21.300') !== false,
+                'Every Helper entry point must use the canonical 0.21.300 bundle revision.');
         }
         foreach (['claim.php', 'connector-authorize.php', 'legal-page.php', 'setup.php', 'oauth/authorize.php'] as $surface) {
             $surfaceSource = file_get_contents($root . '/' . $surface);
-            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.298') !== false,
-                $surface . ' must use the matching canonical 0.21.298 stylesheet revision.');
+            $suite->true(strpos($surfaceSource, 'helpers.ui.bundle.min.css?v=0.21.300') !== false,
+                $surface . ' must use the matching canonical 0.21.300 stylesheet revision.');
         }
         $suite->true(strpos($bundleCss, '--ui-datepicker-color-scheme: dark') !== false,
             'The Helper bundle must theme native date and time controls in dark themes.');
@@ -999,6 +1000,16 @@ try {
             'The message composer must place a compact paperclip and visible Attach files label in the helper row below the input.');
         $suite->true(strpos($app, 'status: "uploaded"') === false,
             'Selected project-file attachments must not render a redundant Uploaded status badge.');
+        $suite->true(strpos($app, 'const MESSAGE_ATTACHMENTS_FOLDER_ID = "attachments";') !== false
+            && strpos($app, 'async function uploadPastedMessageAttachments(projectId, files, { signal } = {})') !== false
+            && strpos($app, 'paste: (files, { signal }) => uploadPastedMessageAttachments(projectId, files, { signal })') !== false
+            && strpos($app, 'pastedProjectFileValidationError(file, maximumBytes)') !== false
+            && strpos($app, 'for (const file of valid)') !== false
+            && strpos($app, 'uploadProjectFile(projectId, context.folder, known, file, { signal })') !== false,
+            'Pasted composer files must validate first and upload sequentially into the canonical project attachments destination.');
+        $suite->true(strpos($guide, "paste them into the message field") !== false
+            && strpos($guide, "folder is created only when the first valid upload succeeds") !== false,
+            'The User Guide must explain pasted-file storage and lazy attachments-folder creation.');
         $suite->true(strpos($app, 'onOpen(item) { if (item?.url) openProjectFilePreview(item); }') === false,
             'Composer attachment thumbnails must rely on the queue media strip viewer instead of opening a duplicate application viewer.');
         $suite->true(strpos($app, 'getFileIconName(file.name, file.mime_type)') !== false
@@ -1049,15 +1060,18 @@ try {
             && strpos($bundleJs, 'Upload completed. Select the files to attach.') !== false
             && strpos($bundleJs, 'ui.toast') !== false,
             'Confirmed repository uploads must use the canonical Helper success toast while upload failures retain inline feedback.');
-        $suite->same('49432ca0f2e80b378e53938f1ab0d6cc65bbd38262c8bfa1cf1a3b57b718757e',
+        $suite->true(strpos($bundleJs, 'source:"paste"') !== false
+            && strpos($bundleJs, 'The paste adapter must return canonical file records or no result.') !== false,
+            'The Helper composer must expose the reviewed custom clipboard-file adapter contract.');
+        $suite->same('f6206b5f1ff8ad698517108802e913771223354dd693f5f677f43d77a09f4a6d',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.js'),
-            'The vendored Helper JavaScript must match canonical release 0.21.298 exactly.');
+            'The vendored Helper JavaScript must match canonical release 0.21.300 exactly.');
         $suite->same('b6f33b219fe0e049b665f3ecdc658758c5738e8ea07ef6e0f9e91aebdab26405',
             hash_file('sha256', $root . '/vendor/pbb-helper/dist/helpers.ui.bundle.min.css'),
-            'The vendored Helper stylesheet must match canonical release 0.21.298 exactly.');
-        $suite->same('8bcf20cc6a68d666dba93e0ff6e6838d219a78b8a366dfb158141aac9eda091a',
+            'The vendored Helper stylesheet must match canonical release 0.21.300 exactly.');
+        $suite->same('77a3a0a2a7db80cfb61cff04424dd36e62a8f5d2167c12b7a71adf88c1c41ba9',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.loader.js'),
-            'The vendored Helper loader must match canonical release 0.21.298 exactly.');
+            'The vendored Helper loader must match canonical release 0.21.300 exactly.');
         $suite->same('a7a8668869be48a47202f24b1fd5f20b14a41cc818fa65b89a1c9c41a0a90cf7',
             hash_file('sha256', $root . '/vendor/pbb-helper/js/ui/ui.icons.files.js'),
             'The vendored Helper file icon pack must match canonical release 0.21.229 exactly.');

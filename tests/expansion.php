@@ -373,6 +373,49 @@ try {
             $suite->same([], array_values(array_filter(scandir($root . DIRECTORY_SEPARATOR . '.tmp'), function ($entry) { return $entry !== '.' && $entry !== '..'; })),
                 'Rejected upload left a partial staging object.');
 
+            $attachmentProject = $management->createProject($administrator['id'], ['name' => 'Pasted Attachment Project']);
+            $attachmentParticipant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
+            $attachmentParticipant->execute([$attachmentProject['id'], $administrator['id']]);
+            $attachmentAccess = ['project_id' => $attachmentProject['id'], 'project_name' => $attachmentProject['name'],
+                'project_status' => 'active', 'participant_id' => (int) $attachmentParticipant->fetchColumn(),
+                'participant_status' => 'active'];
+            $attachmentRootBefore = $service->browse($attachmentAccess, 'root');
+            $suite->same([], $attachmentRootBefore['folders']);
+            $suite->throws('FILE_FOLDER_NOT_FOUND', function () use ($service, $attachmentAccess) {
+                $service->createFolder($attachmentAccess, [
+                    'name' => 'Should not exist',
+                    'parent_folder_id' => ProjectFileService::MESSAGE_ATTACHMENTS_FOLDER_ID,
+                ], 'test-pasted-folder-create-0001');
+            });
+            $suite->same([], $service->browse($attachmentAccess, 'root')['folders'],
+                'A non-upload mutation created the attachments folder.');
+            $invalidPaste = fopen('php://temp', 'w+b'); fwrite($invalidPaste, "not an allowed project file\n"); rewind($invalidPaste);
+            $suite->throws('FILE_TYPE_NOT_ALLOWED', function () use ($service, $attachmentAccess, $invalidPaste) {
+                $service->uploadStream($attachmentAccess, $invalidPaste, 'invalid.txt',
+                    ProjectFileService::MESSAGE_ATTACHMENTS_FOLDER_ID, 'test-pasted-invalid-0001');
+            });
+            fclose($invalidPaste);
+            $suite->same([], $service->browse($attachmentAccess, 'root')['folders'],
+                'An invalid pasted file created the attachments folder.');
+
+            $firstPaste = fopen('php://temp', 'w+b'); fwrite($firstPaste, "%PDF-1.4\npasted-one\n"); rewind($firstPaste);
+            $firstPasted = $service->uploadStream($attachmentAccess, $firstPaste, 'pasted-one.pdf',
+                ProjectFileService::MESSAGE_ATTACHMENTS_FOLDER_ID, 'test-pasted-valid-00001');
+            fclose($firstPaste);
+            $attachmentRootAfter = $service->browse($attachmentAccess, 'root');
+            $suite->same(1, count($attachmentRootAfter['folders']));
+            $suite->same(ProjectFileService::MESSAGE_ATTACHMENTS_FOLDER_NAME, $attachmentRootAfter['folders'][0]['name']);
+            $attachmentFolderId = $attachmentRootAfter['folders'][0]['id'];
+            $suite->same($firstPasted['file']['id'], $service->browse($attachmentAccess, $attachmentFolderId)['files'][0]['id']);
+
+            $secondPaste = fopen('php://temp', 'w+b'); fwrite($secondPaste, "%PDF-1.4\npasted-two\n"); rewind($secondPaste);
+            $service->uploadStream($attachmentAccess, $secondPaste, 'pasted-two.pdf',
+                ProjectFileService::MESSAGE_ATTACHMENTS_FOLDER_ID, 'test-pasted-valid-00002');
+            fclose($secondPaste);
+            $suite->same(1, count($service->browse($attachmentAccess, 'root')['folders']),
+                'Sequential pasted uploads created duplicate attachments folders.');
+            $suite->same(2, count($service->browse($attachmentAccess, $attachmentFolderId)['files']));
+
             $otherProject = $management->createProject($administrator['id'], ['name' => 'Other File Project']);
             $otherParticipant = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND user_id = ? AND kind = 'human'");
             $otherParticipant->execute([$otherProject['id'], $administrator['id']]);

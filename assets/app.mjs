@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.298";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.300";
 import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.229";
 import {
   createResponsibilityInbox,
@@ -8593,10 +8593,11 @@ function renderComposerControls() {
     attachmentAdapter: {
       mode: "custom",
       open: ({ signal }) => state.components.messageAttachmentPicker.pick({ signal }),
+      paste: (files, { signal }) => uploadPastedMessageAttachments(projectId, files, { signal }),
     },
     onAttachmentsSelected(records) { void addDraftAttachments(records); },
     onAttachmentError(error) {
-      if (error?.name !== "AbortError") state.components.toast.warn(error?.message || "Unable to choose project files.", { title: "Attachments unavailable" });
+      if (error?.name !== "AbortError") state.components.toast.warn(error?.message || "Unable to attach project files.", { title: "Attachments unavailable" });
     },
     maxLength: Number(state.project?.message_max_length || 24000),
     onSend: sendMessage,
@@ -8667,6 +8668,86 @@ function createMessageAttachmentPicker(projectId) {
       return uploaded.map(messageAttachmentRecord);
     },
   });
+}
+
+const MESSAGE_ATTACHMENTS_FOLDER_ID = "attachments";
+const MESSAGE_ATTACHMENTS_FOLDER_NAME = "attachments";
+
+function pastedProjectFileValidationError(file, maximumBytes) {
+  const nameError = validProjectFileName(file?.name);
+  if (nameError) return nameError;
+  const size = Number(file?.size || 0);
+  if (!Number.isFinite(size) || size < 1) return `${file?.name || "File"} is empty.`;
+  if (size > maximumBytes) return `${file.name} exceeds the configured upload limit.`;
+  return "";
+}
+
+async function pastedMessageAttachmentContext(projectId, signal) {
+  const root = await loadMessageAttachmentFolder(projectId, "root", signal);
+  if (!root.permissions?.canUpload) {
+    throw new Error(root.storage?.ready === false
+      ? "Project File storage is unavailable."
+      : "You do not have permission to upload project files.");
+  }
+  const folder = root.folders.find((candidate) =>
+    String(candidate?.name || "").trim().toLocaleLowerCase() === MESSAGE_ATTACHMENTS_FOLDER_NAME);
+  if (!folder) {
+    return {
+      folder: { id: MESSAGE_ATTACHMENTS_FOLDER_ID, name: MESSAGE_ATTACHMENTS_FOLDER_NAME },
+      files: [], storage: root.storage,
+    };
+  }
+  const listing = await loadMessageAttachmentFolder(projectId, folder.id, signal);
+  return { folder: listing.folder, files: listing.files, storage: listing.storage };
+}
+
+async function uploadPastedMessageAttachments(projectId, files, { signal } = {}) {
+  const selected = Array.from(files || []);
+  if (!selected.length) return [];
+  const context = await pastedMessageAttachmentContext(projectId, signal);
+  const maximumBytes = Number(context.storage?.max_upload_bytes || 25 * 1024 * 1024);
+  const availableDraftSlots = Math.max(0, 20 - state.draft.attachments.length);
+  if (!availableDraftSlots) throw new Error("A message can include no more than 20 project files.");
+  const maximumFiles = Math.min(availableDraftSlots,
+    Math.max(1, Number(context.storage?.max_files_per_action || 10)));
+  const valid = [];
+  const rejected = [];
+  for (const file of selected) {
+    const error = pastedProjectFileValidationError(file, maximumBytes);
+    if (error) rejected.push(`${file?.name || "File"}: ${error}`);
+    else if (valid.length >= maximumFiles) rejected.push(`${file.name}: choose no more than ${maximumFiles} files at a time.`);
+    else valid.push(file);
+  }
+  if (!valid.length) {
+    throw new Error(`No pasted files can be uploaded. ${rejected.join(" ")}`.trim());
+  }
+
+  const known = [...context.files];
+  const uploaded = [];
+  const failed = [...rejected];
+  for (const file of valid) {
+    if (signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+    try {
+      const record = await uploadProjectFile(projectId, context.folder, known, file, { signal });
+      uploaded.push(record);
+      const index = known.findIndex((candidate) => projectFileNameKey(candidate.name) === projectFileNameKey(record.name));
+      if (index === -1) known.push(record); else known[index] = record;
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      failed.push(`${file.name}: ${error?.message || "Upload failed."}`);
+    }
+  }
+  if (!uploaded.length) {
+    throw new Error(`No pasted files were uploaded. ${failed.join(" ")}`.trim());
+  }
+  if (failed.length) {
+    state.components.toast.warn(`${uploaded.length} ${uploaded.length === 1 ? "file was" : "files were"} uploaded. ${failed.join(" ")}`, {
+      title: "Some pasted files were not uploaded",
+    });
+  } else {
+    state.components.toast.success(`${uploaded.length} pasted ${uploaded.length === 1 ? "file" : "files"} uploaded.`);
+  }
+  return uploaded.map(messageAttachmentRecord);
 }
 
 async function addDraftAttachments(records) {
