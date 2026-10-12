@@ -2637,6 +2637,7 @@ function renderMessageAttachments(message) {
       copy.className = "message-attachment-copy";
       const name = document.createElement("strong");
       name.textContent = file.name;
+      name.title = file.name;
       const meta = document.createElement("span");
       meta.textContent = file.available ? recoverySize(file.size_bytes) : "File unavailable";
       copy.append(name, meta);
