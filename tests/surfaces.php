@@ -1039,11 +1039,14 @@ try {
             && strpos($appCss, '.message-attachment-indicator { display: inline-flex;') !== false,
             'Messages with attachments must keep an accessible Helper paperclip before the timeline timestamp across lazy page mounts, expanded, collapsed, and interactive row chrome rebuilds.');
         $suite->true(strpos($appCss, '.message-attachments { display: grid;') !== false
-            && strpos($appCss, '.message-attachment-files { display: flex;') !== false
-            && strpos($appCss, 'flex: 0 1 210px;') !== false
+            && strpos($appCss, '.message-attachment-files { display: grid;') !== false
+            && strpos($appCss, 'grid-template-columns: minmax(0, 1fr);') !== false
+            && strpos($appCss, '.message-attachment { display: flex; width: 100%;') !== false
+            && strpos($appCss, '.message-attachment-copy strong { font-size: 12px; font-weight: 650; white-space: normal; overflow-wrap: anywhere;') !== false
             && strpos($appCss, 'min-height: 36px;') !== false
-            && strpos($app, 'size: 15,') !== false,
-            'Non-media timeline attachments must follow the media strip as compact wrapping cards with a small file icon and accessible target height.');
+            && strpos($app, 'size: 15,') !== false
+            && strpos($app, 'name.title = file.name;') !== false,
+            'Non-media timeline attachments must follow the media strip as full-width stacked rows with readable filename wrapping, a small file icon, and accessible target height.');
         $suite->true(strpos($bundleJs, 'ui-repository-picker-row') !== false
             && strpos($bundleJs, 'aria-pressed') !== false
             && strpos($bundleJs, 'files.folder') !== false
