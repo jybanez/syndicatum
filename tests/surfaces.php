@@ -1897,6 +1897,9 @@ try {
             && strpos($styles, 'pointer-events: none;') !== false
             && strpos($styles, 'width: calc(100% + 4px);') === false
             && strpos($source, 'bridge.style.width =') === false
+            && strpos($styles, '.project-navigation-column .project-card.is-active {') !== false
+            && strpos($styles, 'border-top-right-radius: 0;') !== false
+            && strpos($styles, 'border-bottom-right-radius: 0;') !== false
             && strpos($styles, '.project-navigation-column .project-card.is-active:hover { transform: none; }') !== false
             && strpos($source, 'function syncProjectActiveTabBridge()') !== false
             && strpos($source, 'function clearProjectActiveTabBridge()') !== false
@@ -1909,7 +1912,7 @@ try {
             && strpos($source, 'window.matchMedia("(min-width: 981px)").addEventListener("change", scheduleProjectActiveTabBridgeSync);') !== false
             && strpos($source, 'writeLocalPreference("syndicatum.workspace.projectsRatio", ratio);') !== false
             && strpos($index, 'id="project-active-tab-bridge" aria-hidden="true" hidden') !== false,
-            'On desktop, project cards must stop before a stable scrollbar lane while the active bridge meets the splitter and mobile keeps the existing cards.');
+            'On desktop, project cards must stop before a stable scrollbar lane, the active card must end with a square right edge, the bridge must meet the splitter, and mobile must keep the existing cards.');
         $suite->true(strpos($source, 'project.unread_message_count') !== false
             && strpos($source, 'className = "ui-badge project-card-unread"') !== false
             && strpos($source, 'API.projectReadState') !== false
