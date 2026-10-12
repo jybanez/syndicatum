@@ -953,6 +953,19 @@ button.message-attachment:hover, button.message-attachment:focus-visible { borde
     border-bottom: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
     background: color-mix(in srgb, var(--ui-accent) 12%, var(--app-panel));
   }
+  .workspace-outer-splitter > .ui-splitter-divider.has-project-active-tab::after {
+    content: "";
+    position: absolute;
+    top: var(--project-active-tab-top);
+    left: 0;
+    width: calc(50% - 4px);
+    height: var(--project-active-tab-height);
+    box-sizing: border-box;
+    pointer-events: none;
+    border-top: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
+    border-bottom: 1px solid color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
+    background: color-mix(in srgb, var(--ui-accent) 12%, var(--app-panel));
+  }
   .project-navigation-column .project-card.is-active {
     width: calc(100% + 4px);
     border-top-right-radius: 0;
