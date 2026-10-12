@@ -12,7 +12,7 @@ the outstanding public-release license audit.
 ## Upstream Source
 
 - Repository: `https://github.com/jybanez/helpers.pbb.ph.git`
-- Pinned commit: `ee37f8570ffe4dcfacf2489ca15f0c09aea463a3` (Helper `0.21.229`)
+- Pinned commit: `8a80977dbb23ea72c54457c27495fb368fac0bc8` (Helper `0.21.298`)
 - Repository: `https://github.com/jybanez/realtime.pbb.ph.git`
 - Pinned commit: `845c60bd27040f85ed0757c56f972c02b345bca9`
 
@@ -33,6 +33,7 @@ This first implementation uses the helper library for:
 - shared search-field primitive,
 - helper-managed tabs for the summary browser,
 - helper-managed timeline rendering for the main message feed,
+- Helper-owned top and bottom boundary shortcuts for bounded timelines,
 - helper-managed daily activity chart rendering,
 - helper-managed empty states,
 - helper-managed toast notifications,

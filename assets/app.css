@@ -219,18 +219,10 @@ button, input, textarea { font: inherit; }
 .date-filter { width: 100%; min-width: 0; box-sizing: border-box; }
 .timeline-filter-actions { display: flex; justify-content: flex-end; min-height: 32px; padding-top: 4px; border-top: 1px solid rgba(73, 93, 129, .35); }
 .timeline-notice { margin-top: 10px; padding: 9px 12px; border: 1px solid rgba(224, 169, 77, .4); border-radius: 10px; color: #ffe0a8; background: rgba(100, 67, 18, .3); }
-.timeline-scroll { position: relative; min-height: 0; overflow: hidden; margin: 0 -5px; padding: 8px 5px 4px; box-sizing: border-box; }
+.timeline-scroll { min-height: 0; overflow: hidden; margin: 0 -5px; padding: 8px 5px 4px; box-sizing: border-box; }
 #timeline-host { height: 100%; min-height: 0; }
 #timeline-host .ui-timeline { gap: 12px; }
 #timeline-host .ui-timeline-viewport { box-sizing: border-box; padding-right: 8px; }
-.timeline-scroll-shortcut { position: absolute; left: 50%; z-index: 8; width: 34px; min-width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ui-bg-soft, #101c31) 72%, transparent); color: var(--ui-text, #d7e0f4); opacity: .48; transform: translateX(-50%); box-shadow: 0 3px 12px rgba(0, 0, 0, .24); backdrop-filter: blur(5px); transition: opacity 140ms ease, background 140ms ease, box-shadow 140ms ease; }
-.timeline-scroll-shortcut-top { top: 14px; }
-.timeline-scroll-shortcut-bottom { bottom: 10px; }
-.timeline-scroll-shortcut:hover, .timeline-scroll-shortcut:focus-visible { border: 0; background: color-mix(in srgb, var(--ui-bg-soft, #101c31) 94%, transparent); opacity: 1; box-shadow: 0 4px 16px rgba(0, 0, 0, .38); }
-.timeline-scroll-shortcut:focus-visible { outline: 2px solid var(--ui-accent, #6f9cff); outline-offset: 2px; }
-.timeline-scroll-shortcut[hidden] { display: none; }
-.timeline-scroll-shortcut-icon, .timeline-scroll-shortcut-icon svg { display: block; width: 18px; height: 18px; }
-@media (prefers-reduced-motion: reduce) { .timeline-scroll-shortcut { transition: none; } }
 #timeline-host .ui-timeline-group-label:not(.ui-timeline-floating-date) { margin-bottom: 8px; padding: 8px 11px; border: 1px solid rgba(74, 97, 138, .3); border-radius: 11px; background: rgba(10, 18, 31, .96); }
 #timeline-host .ui-timeline-body { position: relative; background: linear-gradient(180deg, rgba(20, 30, 48, .94), rgba(19, 33, 56, .82)); transition: border-color 140ms ease, box-shadow 140ms ease; }
 #timeline-host .ui-timeline-item.is-addressed .ui-timeline-body { border-color: rgba(230, 175, 83, .56); box-shadow: inset 3px 0 rgba(230, 175, 83, .72); }

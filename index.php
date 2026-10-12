@@ -118,15 +118,7 @@ $appBaseHref = ($appBasePath === '' ? '/' : $appBasePath . '/');
                                 </div>
                             </section>
                             <div class="timeline-notice" id="timeline-notice" hidden></div>
-                            <div class="timeline-scroll" id="timeline-scroll">
-                                <div id="timeline-host"></div>
-                                <button type="button" class="ui-button ui-button-borderless timeline-scroll-shortcut timeline-scroll-shortcut-top" id="timeline-scroll-top" aria-label="Scroll to top of timeline" title="Scroll to top" hidden>
-                                    <span class="timeline-scroll-shortcut-icon" id="timeline-scroll-top-icon" aria-hidden="true"></span>
-                                </button>
-                                <button type="button" class="ui-button ui-button-borderless timeline-scroll-shortcut timeline-scroll-shortcut-bottom" id="timeline-scroll-bottom" aria-label="Scroll to bottom of timeline" title="Scroll to bottom" hidden>
-                                    <span class="timeline-scroll-shortcut-icon" id="timeline-scroll-bottom-icon" aria-hidden="true"></span>
-                                </button>
-                            </div>
+                            <div class="timeline-scroll" id="timeline-scroll"><div id="timeline-host"></div></div>
                             <div class="responsibility-scroll" id="responsibility-host" hidden></div>
                         </section>
 

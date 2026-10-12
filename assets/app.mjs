@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.229";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.298";
 import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.229";
 import {
   createResponsibilityInbox,
@@ -24,8 +24,6 @@ const CLAIM_CODE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7
 const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const COLLAPSE_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-7 3-3 3 3m-6 4 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const EXPAND_ALL_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h16M4 20h16M12 7v10m-3-3 3 3 3-3m-6-4 3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
-const CARET_UP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 14.5 5.5-5 5.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
-const CARET_DOWN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 9.5 5.5 5 5.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const PROJECT_FILES_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v9.75a1.75 1.75 0 0 1-1.75 1.75H5.25a1.75 1.75 0 0 1-1.75-1.75V6.5Zm0 3h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 const APP_BASE_PATH = new URL(document.baseURI).pathname.replace(/\/$/, "");
 const WORKSPACE_MOBILE_QUERY = "(max-width: 980px)";
@@ -185,7 +183,7 @@ const el = Object.fromEntries([
   "timeline-count", "refresh-button", "timeline-collapse-toggle", "timeline-collapse-icon", "primary-filter", "message-kind-filter", "search-mount", "sender-filter", "date-from", "date-to", "clear-filters",
   "filter-popover-trigger", "filter-popover-content", "filter-count", "filter-icon", "refresh-icon",
   "timeline-notice", "timeline-host", "composer-shell", "reply-context", "addressing-row", "address-mode", "message-intent", "addressee-select", "broadcast-warning", "composer-attachments", "composer-host",
-  "project-view-switch", "responsibility-host", "timeline-filter-bar", "timeline-scroll", "timeline-scroll-top", "timeline-scroll-top-icon", "timeline-scroll-bottom", "timeline-scroll-bottom-icon",
+  "project-view-switch", "responsibility-host", "timeline-filter-bar", "timeline-scroll",
   "admin-eyebrow", "admin-title", "admin-list", "admin-refresh-button", "public-policy-links",
 ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)]));
 
@@ -3437,48 +3435,6 @@ function timelineItems(messages) {
   }));
 }
 
-function updateTimelineScrollShortcuts(viewport = el.timeline_host.querySelector(".ui-timeline-viewport")) {
-  const hasScrollableTimeline = Boolean(viewport && viewport.clientHeight > 0 && viewport.scrollHeight > viewport.clientHeight + 1);
-  const maximumScroll = hasScrollableTimeline ? Math.max(0, viewport.scrollHeight - viewport.clientHeight) : 0;
-  el.timeline_scroll_top.hidden = !hasScrollableTimeline || viewport.scrollTop <= 1;
-  el.timeline_scroll_bottom.hidden = !hasScrollableTimeline || viewport.scrollTop >= maximumScroll - 1;
-}
-
-function syncTimelineScrollShortcuts() {
-  const viewport = el.timeline_host.querySelector(".ui-timeline-viewport");
-  const current = state.components.timelineScrollShortcuts;
-  if (current?.viewport === viewport) {
-    requestAnimationFrame(() => {
-      if (state.components.timelineScrollShortcuts?.viewport === viewport) updateTimelineScrollShortcuts(viewport);
-    });
-    return;
-  }
-  current?.viewport?.removeEventListener("scroll", current.update);
-  current?.resizeObserver?.disconnect();
-  state.components.timelineScrollShortcuts = null;
-  if (!viewport) {
-    updateTimelineScrollShortcuts(null);
-    return;
-  }
-  const update = () => {
-    if (state.components.timelineScrollShortcuts?.viewport === viewport) updateTimelineScrollShortcuts(viewport);
-  };
-  viewport.addEventListener("scroll", update, { passive: true });
-  const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
-  resizeObserver?.observe(viewport);
-  if (viewport.firstElementChild) resizeObserver?.observe(viewport.firstElementChild);
-  state.components.timelineScrollShortcuts = { viewport, update, resizeObserver };
-  requestAnimationFrame(update);
-}
-
-function scrollTimelineToBoundary(boundary) {
-  const viewport = el.timeline_host.querySelector(".ui-timeline-viewport");
-  if (!viewport) return;
-  const top = boundary === "bottom" ? Math.max(0, viewport.scrollHeight - viewport.clientHeight) : 0;
-  const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-  viewport.scrollTo({ top, behavior });
-}
-
 function renderTimeline(mode = "replace", changed = state.messages) {
   const items = timelineItems(changed);
   const options = {
@@ -3487,6 +3443,9 @@ function renderTimeline(mode = "replace", changed = state.messages) {
     collapsible: true,
     defaultCollapsed: state.timelineDefaultCollapsed,
     enableVirtualization: true,
+    boundaryShortcuts: true,
+    boundaryStartLabel: "Scroll to top of timeline",
+    boundaryEndLabel: "Scroll to bottom of timeline",
     virtualThreshold: 1,
     virtualOverscan: 600,
     estimateItemHeight(item, { startsGroup }) {
@@ -3539,7 +3498,6 @@ function renderTimeline(mode = "replace", changed = state.messages) {
   else if (mode === "prepend") state.components.timeline.prepend(items);
   else state.components.timeline.update(items, options);
   el.timeline_count.textContent = `${state.messages.length} loaded${state.hasOlder ? " · more available" : ""}`;
-  syncTimelineScrollShortcuts();
 }
 
 function messageQuery({ before = "", after = "", order = "desc" } = {}) {
@@ -8484,7 +8442,6 @@ async function switchProject(projectId, { initial = false, historyMode = "push",
   state.components.timeline?.destroy();
   state.components.timeline = null;
   el.timeline_host.replaceChildren();
-  syncTimelineScrollShortcuts();
   el.status_badge.textContent = "Loading";
   const [payload, participantsPayload, tasksPayload] = await Promise.all([
     request(`${API.context}?${new URLSearchParams({ project_id: nextId })}`, { signal: state.abortController.signal }),
@@ -10164,8 +10121,6 @@ async function bootstrap() {
   el.task_sort_icon.innerHTML = helperIconHtml("actions.sort", 18);
   el.task_refresh_icon.innerHTML = helperIconHtml("actions.refresh", 18);
   el.new_task_icon.innerHTML = helperIconHtml("actions.add", 18);
-  el.timeline_scroll_top_icon.innerHTML = CARET_UP_ICON;
-  el.timeline_scroll_bottom_icon.innerHTML = CARET_DOWN_ICON;
   updateTimelineCollapseButton();
   el.new_message_trigger.addEventListener("click", openMessageComposerModal);
   el.project_status_trigger.addEventListener("click", openProjectStatusModal);
@@ -10234,8 +10189,6 @@ async function bootstrap() {
   });
   el.refresh_button.addEventListener("click", () => void reloadForFilters());
   el.timeline_collapse_toggle.addEventListener("click", () => setAllMessagesCollapsed(!state.timelineDefaultCollapsed));
-  el.timeline_scroll_top.addEventListener("click", () => scrollTimelineToBoundary("top"));
-  el.timeline_scroll_bottom.addEventListener("click", () => scrollTimelineToBoundary("bottom"));
   el.participant_search.addEventListener("input", () => { state.participantSearch = el.participant_search.value.trim(); renderParticipants(); });
   el.new_task_trigger.addEventListener("click", () => openCreateTaskModal());
   state.components.taskStatusFilter = state.factories.createSelect(el.task_status_filter, TASK_STATUS_OPTIONS, {
