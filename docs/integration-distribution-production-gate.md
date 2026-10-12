@@ -154,6 +154,10 @@ following are retained for that exact ref:
 - device revocation, credential replacement, restart, and project isolation;
 - declared server compatibility range and support window.
 
+The guarded multi-machine procedure for the remaining 0.2.7 lifecycle evidence
+is [Codex 0.2.7 Windows lifecycle acceptance](codex-0.2.7-windows-lifecycle-acceptance.md).
+Its presence is not execution authorization or acceptance evidence.
+
 Until a stable ref is designated, documentation may show `--ref main` only as
 the pilot install path and must say so next to the command.
 

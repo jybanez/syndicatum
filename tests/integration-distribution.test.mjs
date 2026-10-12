@@ -8,6 +8,7 @@ const publicPluginUrl = new URL("plugins/openai-public/plugin.json", root);
 const publicMcpUrl = new URL("plugins/openai-public/mcp.json", root);
 const pluginUrl = new URL("plugins/codex/.codex-plugin/plugin.json", root);
 const companionUrl = new URL("companion/extension/manifest.json", root);
+const codexLifecycleUrl = new URL("docs/codex-0.2.7-windows-lifecycle-acceptance.md", root);
 
 const readJson = async url => JSON.parse(await readFile(url, "utf8"));
 
@@ -188,6 +189,24 @@ test("non-production channels retain at least one explicit unresolved gate", asy
     if (channel.production_eligible) continue;
     assert.ok(channel.required_gates.some(gate => gate.status !== "passed"));
   }
+});
+
+test("Codex lifecycle acceptance remains guarded and multi-machine", async () => {
+  const procedure = await readFile(codexLifecycleUrl, "utf8");
+  for (const required of [
+    "Windows 11",
+    "Windows 10 22H2",
+    "codex-v0.2.7",
+    "Rollback and forward recovery",
+    "Failed-update recovery",
+    "Disposable credential replacement and revocation",
+    "Second-device and routing acceptance",
+    "Stop immediately",
+  ]) assert.ok(procedure.includes(required), `Missing lifecycle boundary: ${required}`);
+  assert.match(procedure, /never Syndicatum Developer, HomeServer Codex, S5 Codex/i);
+  assert.match(procedure, /outside the web root/i);
+  assert.match(procedure, /Never retry an uncertain mutation automatically/i);
+  assert.match(procedure, /Production promotion remains a separate owner\s+decision/i);
 });
 
 test("public plugin listing metadata stays within submission limits", async () => {
