@@ -1,4 +1,4 @@
-import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.229";
+import { uiLoader, AI_ICONS } from "../vendor/pbb-helper/dist/helpers.ui.bundle.min.js?v=0.21.298";
 import { FILE_ICONS, getFileIconName } from "../vendor/pbb-helper/js/ui/ui.icons.files.js?v=0.21.229";
 import {
   createResponsibilityInbox,
@@ -3443,6 +3443,9 @@ function renderTimeline(mode = "replace", changed = state.messages) {
     collapsible: true,
     defaultCollapsed: state.timelineDefaultCollapsed,
     enableVirtualization: true,
+    boundaryShortcuts: true,
+    boundaryStartLabel: "Scroll to top of timeline",
+    boundaryEndLabel: "Scroll to bottom of timeline",
     virtualThreshold: 1,
     virtualOverscan: 600,
     estimateItemHeight(item, { startsGroup }) {

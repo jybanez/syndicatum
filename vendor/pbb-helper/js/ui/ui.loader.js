@@ -1,9 +1,9 @@
 const UI_TOKENS_CSS = "../../css/ui/ui.tokens.css";
-const UI_COMPONENTS_CSS = "../../css/ui/ui.components.css";
+const UI_COMPONENTS_CSS = "../../css/ui/ui.components.css?v=0.21.234";
 const INCIDENT_BASE_CSS = "../../css/incident/incident.css";
-const UI_OVERLAY_ROUTING_REV = "0.21.215";
-const UI_AUDIO_REV = "0.21.62";
-const UI_ICONS_REV = "0.21.225";
+const UI_OVERLAY_ROUTING_REV = "0.21.236";
+const UI_AUDIO_REV = "0.21.272";
+const UI_ICONS_REV = "0.21.297";
 const UI_FILE_INPUT_REV = "0.21.108";
 const UI_CHAT_REV = "0.21.120";
 const UI_PASSWORD_REV = "0.21.66";
@@ -12,16 +12,16 @@ const UI_DATE_REV = "0.21.204";
 const UI_NAV_REV = "0.21.4";
 const UI_POPOVER_REV = "0.21.215";
 const UI_SELECT_REV = "0.21.1";
-const UI_MEDIA_REV = "0.21.3";
+const UI_MEDIA_REV = "0.21.275";
 const UI_PDF_REV = "0.21.1";
 const UI_TABS_REV = "0.21.206";
-const UI_SPLITTER_REV = "0.21.207";
-const UI_DEVICE_PRIMER_REV = "0.21.65";
+const UI_SPLITTER_REV = "0.21.274";
+const UI_DEVICE_PRIMER_REV = "0.21.235";
 const UI_GAME_REV = "0.21.112";
 const UI_INSPECTION_REV = "0.21.1";
-const UI_TIMELINE_REV = "0.21.222";
-const UI_BUNDLE_REV = "0.21.229";
-const UI_GAME_BUNDLE_REV = "0.21.209";
+const UI_TIMELINE_REV = "0.21.298";
+const UI_BUNDLE_REV = "0.21.298";
+const UI_GAME_BUNDLE_REV = "0.21.297";
 const UI_INSPECTION_BUNDLE_REV = "0.21.1";
 const UI_BUNDLE_JS = `../../dist/helpers.ui.bundle.min.js?v=${UI_BUNDLE_REV}`;
 const UI_BUNDLE_CSS = `../../dist/helpers.ui.bundle.min.css?v=${UI_BUNDLE_REV}`;
@@ -205,10 +205,16 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     deps: [],
     export: "createFieldErrorAdapter",
   },
+  "ui.color.picker": {
+    js: "./ui.color.picker.js?v=0.21.294",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", "../../css/ui/ui.color.picker.css?v=0.21.294"],
+    deps: ["ui.icons"],
+    export: "createColorPicker",
+  },
   "ui.form.modal": {
-    js: "./ui.form.modal.js?v=0.21.216",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.form.modal.css?v=0.21.200", "../../css/ui/ui.field.error.css?v=0.21.195", "../../css/ui/ui.number.stepper.css", "../../css/ui/ui.select.css", "../../css/ui/ui.tree.select.css", "../../css/ui/ui.password.css", "../../css/ui/ui.calendar.css", "../../css/ui/ui.datepicker.css", "../../css/ui/ui.toggle.css?v=0.21.193"],
-    deps: ["ui.action.modal", "ui.number.stepper", "ui.password"],
+    js: "./ui.form.modal.js?v=0.21.294",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.modal.css", "../../css/ui/ui.form.modal.css?v=0.21.200", "../../css/ui/ui.field.error.css?v=0.21.195", "../../css/ui/ui.number.stepper.css", "../../css/ui/ui.select.css", "../../css/ui/ui.tree.select.css", "../../css/ui/ui.password.css", "../../css/ui/ui.calendar.css", "../../css/ui/ui.datepicker.css", "../../css/ui/ui.toggle.css?v=0.21.193", "../../css/ui/ui.color.picker.css?v=0.21.294"],
+    deps: ["ui.action.modal", "ui.number.stepper", "ui.password", "ui.color.picker"],
     export: "createFormModal",
   },
   "ui.password": {
@@ -242,20 +248,20 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createCombobox",
   },
   "ui.checkbox": {
-    js: "./ui.checkbox.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.checkbox.css"],
+    js: "./ui.checkbox.js?v=0.21.283",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.checkbox.css?v=0.21.284"],
     deps: [],
     export: "createCheckbox",
   },
   "ui.checkbox.group": {
     js: "./ui.checkbox.group.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.checkbox.css", "../../css/ui/ui.checkbox.group.css"],
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.checkbox.css?v=0.21.284", "../../css/ui/ui.checkbox.group.css"],
     deps: ["ui.checkbox"],
     export: "createCheckboxGroup",
   },
   "ui.field.group": {
-    js: "./ui.field.group.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", "../../css/ui/ui.field.group.css", "../../css/ui/ui.checkbox.css", "../../css/ui/ui.checkbox.group.css", "../../css/ui/ui.number.stepper.css", "../../css/ui/ui.combobox.css"],
+    js: "./ui.field.group.js?v=0.21.232",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", "../../css/ui/ui.field.group.css?v=0.21.232", "../../css/ui/ui.checkbox.css?v=0.21.284", "../../css/ui/ui.checkbox.group.css", "../../css/ui/ui.number.stepper.css", "../../css/ui/ui.combobox.css"],
     deps: ["ui.checkbox", "ui.checkbox.group", "ui.combobox", "ui.field.group.presets", "ui.icons", "ui.number.stepper"],
     export: "createFieldGroup",
   },
@@ -363,7 +369,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
   },
   "ui.fieldset": {
     js: `./ui.fieldset.js?v=${UI_PASSWORD_REV}`,
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.fieldset.css", "../../css/ui/ui.select.css", "../../css/ui/ui.password.css", "../../css/ui/ui.field.group.css", "../../css/ui/ui.checkbox.css", "../../css/ui/ui.checkbox.group.css"],
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.fieldset.css", "../../css/ui/ui.select.css", "../../css/ui/ui.password.css", "../../css/ui/ui.field.group.css?v=0.21.232", "../../css/ui/ui.checkbox.css?v=0.21.284", "../../css/ui/ui.checkbox.group.css"],
     deps: ["ui.select", "ui.password", "ui.field.group", "ui.checkbox", "ui.checkbox.group"],
     export: "createFieldset",
   },
@@ -428,7 +434,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createClock",
   },
   "ui.signal.strength": {
-    js: "./ui.signal.strength.js",
+    js: "./ui.signal.strength.js?v=0.21.285",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.signal.strength.css"],
     deps: [],
     export: "createSignalStrength",
@@ -488,9 +494,9 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: null,
   },
   "ui.map.controls": {
-    js: "./ui.map.controls.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.map.controls.css"],
-    deps: [],
+    js: "./ui.map.controls.js?v=0.21.276",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", "../../css/ui/ui.map.controls.css?v=0.21.276"],
+    deps: ["ui.icons"],
     export: "createMapControls",
   },
   "ui.map.legend": {
@@ -500,14 +506,26 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createMapLegend",
   },
   "ui.map.markers": {
-    js: "./ui.map.markers.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", "../../css/ui/ui.map.markers.css"],
+    js: "./ui.map.markers.js?v=0.21.277",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.icons.css", "../../css/ui/ui.map.markers.css?v=0.21.279"],
     deps: ["ui.icons"],
     export: null,
   },
+  "ui.map.location.person": {
+    js: "./ui.map.location.person.js?v=0.21.282",
+    css: [UI_TOKENS_CSS, "../../css/ui/ui.map.location.person.css?v=0.21.278"],
+    deps: [],
+    export: "createMapLocationPerson",
+  },
+  "ui.map.drawing.maplibre": {
+    js: "./ui.map.drawing.maplibre.js?v=0.21.296",
+    css: [],
+    deps: [],
+    export: "createMapLibreDrawingAdapter",
+  },
   "ui.map.drawing": {
-    js: "./ui.map.drawing.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.map.drawing.css"],
+    js: "./ui.map.drawing.js?v=0.21.297",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.map.drawing.css?v=0.21.297"],
     deps: [],
     export: "createMapDrawingTools",
   },
@@ -614,15 +632,15 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createChatThread",
   },
   "ui.chat.composer": {
-    js: "./ui.chat.composer.js?v=0.21.228",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.composer.css?v=0.21.228"],
-    deps: [],
+    js: "./ui.chat.composer.js?v=0.21.271",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.composer.css?v=0.21.271"],
+    deps: ["ui.action.modal", "ui.toggle.button", "ui.audio.audiograph", "ui.audio.player"],
     export: "createChatComposer",
   },
   "ui.chat.upload.queue": {
-    js: "./ui.chat.upload.queue.js",
-    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.upload.queue.css", `../../css/ui/ui.media.strip.css?v=${UI_MEDIA_REV}`, `../../css/ui/ui.media.viewer.css?v=${UI_MEDIA_REV}`],
-    deps: ["ui.media.strip"],
+    js: "./ui.chat.upload.queue.js?v=0.21.271",
+    css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, "../../css/ui/ui.chat.upload.queue.css?v=0.21.271", `../../css/ui/ui.media.strip.css?v=${UI_MEDIA_REV}`, `../../css/ui/ui.media.viewer.css?v=${UI_MEDIA_REV}`],
+    deps: ["ui.media.strip", "ui.audio.player", "ui.progress"],
     export: "createChatUploadQueue",
   },
   "ui.tabs": {
@@ -692,7 +710,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "createScheduler",
   },
   "ui.menu": {
-    js: "./ui.menu.js?v=0.21.205",
+    js: "./ui.menu.js?v=0.21.280",
     css: [UI_TOKENS_CSS, UI_COMPONENTS_CSS, `../../css/ui/ui.nav.css?v=${UI_NAV_REV}`],
     deps: [],
     export: "createMenu",
@@ -764,7 +782,7 @@ export const DEFAULT_COMPONENT_REGISTRY = {
     export: "incidentBase",
   },
   "incident.teams.assignments.editor": {
-    js: "../incident/incident.teams.assignments.editor.js",
+    js: "../incident/incident.teams.assignments.editor.js?v=0.21.273",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -773,12 +791,13 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/ui/ui.icons.css",
       "../../css/incident/incident.teams.assignments.css",
       "../../css/incident/incident.teams.assignments.editor.css",
+      "../../css/incident/incident.chrome.css?v=0.21.273",
     ],
     deps: ["incident.base", "ui.icons"],
     export: "incidentTeamsAssignmentsEditor",
   },
   "incident.teams.assignments.viewer": {
-    js: "../incident/incident.teams.assignments.viewer.js",
+    js: "../incident/incident.teams.assignments.viewer.js?v=0.21.273",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -786,12 +805,13 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/incident/incident.base.css",
       "../../css/incident/incident.teams.assignments.css",
       "../../css/incident/incident.teams.assignments.viewer.css",
+      "../../css/incident/incident.chrome.css?v=0.21.273",
     ],
     deps: ["incident.base"],
     export: "incidentTeamsAssignmentsViewer",
   },
   "incident.teams.assignments": {
-    js: "../incident/incident.teams.assignments.js",
+    js: "../incident/incident.teams.assignments.js?v=0.21.273",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -801,12 +821,13 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/incident/incident.teams.assignments.css",
       "../../css/incident/incident.teams.assignments.editor.css",
       "../../css/incident/incident.teams.assignments.viewer.css",
+      "../../css/incident/incident.chrome.css?v=0.21.273",
     ],
     deps: ["incident.base", "ui.icons", "incident.teams.assignments.editor", "incident.teams.assignments.viewer"],
     export: "incidentTeamsAssignments",
   },
   "incident.types.details.editor": {
-    js: "../incident/incident.types.details.editor.js",
+    js: "../incident/incident.types.details.editor.js?v=0.21.273",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -814,14 +835,15 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/ui/ui.number.stepper.css",
       "../../css/incident/incident.base.css",
       "../../css/incident/incident.types.css",
-      "../../css/ui/ui.field.group.css",
-      "../../css/incident/incident.types.details.editor.css",
+      "../../css/ui/ui.field.group.css?v=0.21.232",
+      "../../css/incident/incident.types.details.editor.css?v=0.21.232",
+      "../../css/incident/incident.chrome.css?v=0.21.273",
     ],
-    deps: ["incident.base", "ui.field.group"],
+    deps: ["incident.base", "ui.field.group", "ui.field.error"],
     export: "incidentTypesDetailsEditor",
   },
   "incident.types.details.viewer": {
-    js: "../incident/incident.types.details.viewer.js?v=0.21.221",
+    js: "../incident/incident.types.details.viewer.js?v=0.21.273",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -829,12 +851,13 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/incident/incident.base.css",
       "../../css/incident/incident.types.css",
       "../../css/incident/incident.types.details.viewer.css?v=0.21.220",
+      "../../css/incident/incident.chrome.css?v=0.21.273",
     ],
     deps: ["incident.base", "ui.field.group", "ui.property.viewer"],
     export: "incidentTypesDetailsViewer",
   },
   "incident.types": {
-    js: "../incident/incident.types.js?v=0.21.221",
+    js: "../incident/incident.types.js?v=0.21.273",
     css: [
       UI_TOKENS_CSS,
       UI_COMPONENTS_CSS,
@@ -842,9 +865,10 @@ export const DEFAULT_COMPONENT_REGISTRY = {
       "../../css/ui/ui.number.stepper.css",
       "../../css/incident/incident.base.css",
       "../../css/incident/incident.types.css",
-      "../../css/ui/ui.field.group.css",
-      "../../css/incident/incident.types.details.editor.css",
+      "../../css/ui/ui.field.group.css?v=0.21.232",
+      "../../css/incident/incident.types.details.editor.css?v=0.21.232",
       "../../css/incident/incident.types.details.viewer.css?v=0.21.220",
+      "../../css/incident/incident.chrome.css?v=0.21.273",
     ],
     deps: ["incident.base", "incident.types.details.editor", "incident.types.details.viewer"],
     export: "incidentTypes",
@@ -871,6 +895,7 @@ export const DEFAULT_COMPONENT_GROUPS = {
     "ui.breadcrumbs",
   ],
   forms: [
+    "ui.color.picker",
     "ui.form.modal",
     "ui.form.modal.login",
     "ui.form.modal.reauth",
