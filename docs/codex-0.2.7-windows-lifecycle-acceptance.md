@@ -86,9 +86,11 @@ untracked marketplace file, unresolved configuration reload, stale health,
 unknown listener owner, unavailable binding, or unmatched inventory is a stop
 condition. The Codex-managed `.codex-marketplace-install.json` file is the only
 permitted untracked marketplace file, and only when it parses successfully and
-its Git source, immutable ref, resolved revision, and sparse-path set exactly
-match the checkout. Include it in the external backup and evidence inventory;
-never delete or silently ignore it.
+its Git source, immutable ref, and resolved revision exactly match the checkout.
+The managed checkout shape must be either a full checkout (`sparse_paths: []`) or
+the canonical sparse checkout (`.agents/plugins`, `plugins/codex`); any other
+sparse-path set is a stop condition. Include the metadata in the external backup
+and evidence inventory; never delete or silently ignore it.
 
 The coordinator must designate the exact non-sensitive, owner-approved foreign-
 project message or task ID used for the negative isolation check. A target must

@@ -202,6 +202,10 @@ test("Codex lifecycle procedure names the reviewed Windows transition and fail-c
   assert.match(transition, /codex plugin add codex@syndicatum/);
   assert.match(transition, /plugin_data_stable = Get-StablePluginDataFingerprint/);
   assert.match(transition, /Protected plugin data changed during transition/);
+  assert.match(transition, /\$isFullCheckout\s*=\s*\$sparse\.Count\s*-eq\s*0/);
+  assert.match(transition, /validated_checkout_mode/);
+  assert.match(procedure, /full checkout \(`sparse_paths: \[\]`\)/);
+  assert.match(procedure, /canonical sparse checkout/);
   assert.match(transition, /function Assert-ManagedStateQuiescent/);
   assert.match(transition, /Get-CimInstance Win32_Process/);
   assert.match(transition, /\[IO\.FileShare\]::None/);
