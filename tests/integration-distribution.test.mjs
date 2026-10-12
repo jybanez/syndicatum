@@ -93,7 +93,30 @@ test("distribution classifications match the exact source package versions", asy
         "Active routed delivery remains open, and a modern new-agent claim can be blocked before contacting Syndicatum when the checkout contains the obsolete pbb-chat-token.local.json format.",
       ],
     },
+    {
+      version: "0.2.7",
+      ref: "codex-v0.2.7",
+      publication_status: "published",
+      promotion_status: "not_promoted",
+      production_supported: false,
+      findings: [
+        "The immutable release at commit 68c586b17628b387f08e42da3f17199f0f8824e7 has retained package checksums and an owner-verified exact-tag installation on Windows 11.",
+        "A newly claimed protected profile reported installed manifest 0.2.7, healthy active routing, and completed a routed request/reply notification round trip; rollback, recovery, revocation, second-device, Windows 10, and support-range acceptance remain open.",
+      ],
+    },
   ]);
+  assert.deepEqual(policy.compatibility.codex_plugin.installed_acceptance, [
+    {
+      version: "0.2.7",
+      channel: "exact-tag-pilot",
+      environment: "Codex Desktop on Windows 11",
+      status: "passed",
+      evidence: ["docs/evidence/codex-0.2.7-windows-installed-acceptance-2026-10-12.md"],
+      production_supported: false,
+      production_blocker: "Rollback, failed-update recovery, revocation, second-device, Windows 10, compatibility-range, and support-window acceptance remain open.",
+    },
+  ]);
+  await readFile(new URL(policy.compatibility.codex_plugin.installed_acceptance[0].evidence[0], root));
   assert.deepEqual(policy.compatibility.supported_operating_systems, []);
   assert.equal(policy.compatibility.support_window, null);
   assert.deepEqual(policy.compatibility.initial_target_operating_systems, ["Windows 10 22H2", "Windows 11"]);
@@ -121,6 +144,15 @@ test("distribution classifications match the exact source package versions", asy
     "companion-chrome-web-store",
     "companion-edge-add-ons",
   ]) assert.ok(ids.has(id), `Missing distribution channel ${id}`);
+
+  const codexChannel = policy.channels.find(channel => channel.id === "codex-repository-marketplace");
+  const provenanceGate = codexChannel.required_gates.find(gate => gate.id === "artifact-provenance");
+  assert.equal(provenanceGate.status, "passed");
+  assert.deepEqual(provenanceGate.evidence, [
+    "docs/evidence/codex-0.2.7-windows-installed-acceptance-2026-10-12.md",
+  ]);
+  assert.equal(codexChannel.production_eligible, false);
+  assert.equal(codexChannel.published_identifier, null);
 
   for (const channel of policy.channels) {
     assert.ok(["development", "pilot", "production"].includes(channel.classification));

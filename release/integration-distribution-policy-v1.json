@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "policy_version": "1.0.0",
-  "assessed_on": "2026-10-10",
+  "assessed_on": "2026-10-12",
   "production_rule": "A channel is production only when production_eligible is true, it has a published identifier, and every required gate is passed with retained acceptance evidence for the exact published artifact.",
   "release_train": {
     "application": "v1.0.0-rc.3",
@@ -36,7 +36,7 @@
       "published_identifier": null,
       "required_gates": [
         {"id": "immutable-stable-ref", "requirement": "immutable reviewed Git ref designated as the stable channel", "status": "open", "evidence": []},
-        {"id": "artifact-provenance", "requirement": "published package provenance and checksum", "status": "open", "evidence": []},
+        {"id": "artifact-provenance", "requirement": "published package provenance and checksum", "status": "passed", "evidence": ["docs/evidence/codex-0.2.7-windows-installed-acceptance-2026-10-12.md"]},
         {"id": "install-and-upgrade", "requirement": "clean install and upgrade acceptance on each supported OS", "status": "open", "evidence": []},
         {"id": "lifecycle-and-device", "requirement": "downgrade, rollback, revocation, and second-device acceptance", "status": "open", "evidence": []},
         {"id": "support-and-compatibility", "requirement": "documented support window and compatibility range", "status": "open", "evidence": []}
@@ -146,6 +146,30 @@
             "Windows 10 and Windows 11 verified exact release and installed bytes, the 38-tool catalog, protected project-scoped identity and reads, listener ownership, recovered nonzero routes, advancing heartbeat, and installed-code reload and fail-closed health behavior.",
             "Active routed delivery remains open, and a modern new-agent claim can be blocked before contacting Syndicatum when the checkout contains the obsolete pbb-chat-token.local.json format."
           ]
+        },
+        {
+          "version": "0.2.7",
+          "ref": "codex-v0.2.7",
+          "publication_status": "published",
+          "promotion_status": "not_promoted",
+          "production_supported": false,
+          "findings": [
+            "The immutable release at commit 68c586b17628b387f08e42da3f17199f0f8824e7 has retained package checksums and an owner-verified exact-tag installation on Windows 11.",
+            "A newly claimed protected profile reported installed manifest 0.2.7, healthy active routing, and completed a routed request/reply notification round trip; rollback, recovery, revocation, second-device, Windows 10, and support-range acceptance remain open."
+          ]
+        }
+      ],
+      "installed_acceptance": [
+        {
+          "version": "0.2.7",
+          "channel": "exact-tag-pilot",
+          "environment": "Codex Desktop on Windows 11",
+          "status": "passed",
+          "evidence": [
+            "docs/evidence/codex-0.2.7-windows-installed-acceptance-2026-10-12.md"
+          ],
+          "production_supported": false,
+          "production_blocker": "Rollback, failed-update recovery, revocation, second-device, Windows 10, compatibility-range, and support-window acceptance remain open."
         }
       ]
     },
