@@ -2,7 +2,6 @@ param(
     [Parameter(Mandatory = $true)][string] $HandoffRoot,
     [Parameter(Mandatory = $true)][string] $MarketplaceRoot,
     [Parameter(Mandatory = $true)][string] $PluginCacheRoot,
-    [Parameter(Mandatory = $true)][string] $PluginRegistryRoot,
     [Parameter(Mandatory = $true)][string] $ProtectedStateRoot,
     [Parameter(Mandatory = $true)][string] $CodexRoot,
     [Parameter(Mandatory = $true)][string] $WebRoot
@@ -69,17 +68,18 @@ function Test-EqualRecord($Left, $Right) {
         (ConvertTo-Json -InputObject $Right -Depth 12 -Compress)
 }
 
+$stage = 'canonicalize_inputs'
 try {
     $base = Get-CanonicalLocalDirectory $HandoffRoot $true
     $backup = Get-CanonicalLocalDirectory (Join-Path $base 'backup-first-transition') $false
     $roots = [ordered]@{
         marketplace = Get-CanonicalLocalDirectory $MarketplaceRoot $true
         plugin_cache = Get-CanonicalLocalDirectory $PluginCacheRoot $true
-        plugin_registry = Get-CanonicalLocalDirectory $PluginRegistryRoot $true
         protected_state = Get-CanonicalLocalDirectory $ProtectedStateRoot $true
     }
     $codex = Get-CanonicalLocalDirectory $CodexRoot $true
     $web = Get-CanonicalLocalDirectory $WebRoot $true
+    $stage = 'validate_boundaries'
     foreach ($protected in @($roots.Values) + @($codex, $web)) {
         if (Test-PathOverlap $backup $protected) { throw 'Backup destination overlaps a protected root.' }
     }
@@ -91,6 +91,7 @@ try {
         roots = [ordered]@{}
         files = [ordered]@{}
     }
+    $stage = 'inventory_source_trees'
     [long] $required = 0
     foreach ($key in $roots.Keys) {
         $rows = @(Get-TreeInventory $roots[$key])
@@ -99,6 +100,7 @@ try {
             if ($row.type -eq 'file') { $required = [long] ([decimal] $required + [decimal] $row.bytes) }
         }
     }
+    $stage = 'inventory_codex_state_files'
     foreach ($name in @('config.toml', '.codex-global-state.json', '.codex-global-state.json.bak')) {
         $source = Join-Path $codex $name
         $item = Get-Item -LiteralPath $source -Force
@@ -112,19 +114,23 @@ try {
         $required = [long] ([decimal] $required + [decimal] $item.Length)
     }
 
+    $stage = 'check_capacity'
     [long] $margin = [Math]::Max(67108864, [Math]::Ceiling($required * 0.2))
     [long] $capacity = [long] ([decimal] $required + [decimal] $margin)
     $destinationVolume = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($backup))
     if ($destinationVolume.AvailableFreeSpace -lt $capacity) { throw 'Insufficient calculated backup capacity.' }
 
+    $stage = 'revalidate_boundaries'
     if ((Get-CanonicalLocalDirectory $backup $false) -ne $backup) { throw 'Destination changed.' }
     foreach ($protected in @($roots.Values) + @($codex, $web)) {
         $resolved = Get-CanonicalLocalDirectory $protected $true
         if (Test-PathOverlap $backup $resolved) { throw 'Backup destination overlaps a protected root.' }
     }
 
+    $stage = 'create_destination'
     New-Item -ItemType Directory -Path $backup -ErrorAction Stop | Out-Null
     $null = Get-CanonicalLocalDirectory $backup $true
+    $stage = 'copy_source_trees'
     foreach ($key in $roots.Keys) {
         $source = $roots[$key]
         $destination = Join-Path $backup $key
@@ -133,6 +139,7 @@ try {
             throw 'Tree copy verification failed.'
         }
     }
+    $stage = 'copy_codex_state_files'
     foreach ($name in $record.files.Keys) {
         $source = Join-Path $codex $name
         $destination = Join-Path $backup $name
@@ -145,6 +152,7 @@ try {
         }
     }
 
+    $stage = 'persist_manifest'
     $manifest = Join-Path $backup 'verified-manifest.json'
     $json = ConvertTo-Json -InputObject $record -Depth 12
     $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
@@ -160,10 +168,12 @@ try {
         throw 'Detached manifest hash mismatch.'
     }
 
+    $stage = 'verify_persisted_manifest'
     $persisted = Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json -AsHashtable
     if ($persisted.schema_version -ne 1 -or -not (Test-EqualRecord $record $persisted)) {
         throw 'Persisted manifest schema/content mismatch.'
     }
+    $stage = 'revalidate_from_manifest'
     foreach ($key in $persisted.roots.Keys) {
         if (-not (Test-EqualRecord $persisted.roots[$key] @(Get-TreeInventory (Join-Path $backup $key))) -or
             -not (Test-EqualRecord $persisted.roots[$key] @(Get-TreeInventory $roots[$key]))) {
@@ -180,8 +190,9 @@ try {
             }
         }
     }
+    $stage = 'complete'
     Write-Output "PASS: verified backup persisted and revalidated. Manifest SHA256=$expectedHash"
 } catch {
-    Write-Error 'STOP: lifecycle backup failed. Retain artifacts locally; no cleanup or replay.'
+    Write-Error "STOP: lifecycle backup failed at sanitized stage '$stage'. Retain artifacts locally; no cleanup or replay."
     exit 1
 }

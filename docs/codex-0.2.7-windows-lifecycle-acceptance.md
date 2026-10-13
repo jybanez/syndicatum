@@ -77,6 +77,12 @@ capacity plus a safety margin. It writes only beneath the new backup subtree,
 persists and hashes the manifest, then revalidates the backup and unchanged
 sources from that persisted manifest. Any failure is a stop condition: retain the
 partial evidence and do not clean up or replay automatically.
+Codex marketplace/plugin registry state is file-based and is captured by the
+reviewed `config.toml`, `.codex-global-state.json`, and
+`.codex-global-state.json.bak` preimages; do not substitute an appserver,
+staging, examples, or other directory as a synthetic registry root. Failure
+output names only a sanitized lifecycle stage so operators can diagnose a stop
+without disclosing local paths or protected content.
 
 ## Read-only baseline on every target
 

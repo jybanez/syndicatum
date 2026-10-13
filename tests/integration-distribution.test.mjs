@@ -219,6 +219,8 @@ test("Codex lifecycle procedure names the reviewed Windows transition and fail-c
   assert.match(backup, /Insufficient calculated backup capacity/);
   assert.match(backup, /Detached manifest hash mismatch/);
   assert.match(backup, /Persisted-manifest tree revalidation failed/);
+  assert.doesNotMatch(backup, /PluginRegistryRoot/);
+  assert.match(backup, /sanitized stage '\$stage'/);
 });
 
 test("non-production channels retain at least one explicit unresolved gate", async () => {

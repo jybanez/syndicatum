@@ -15,7 +15,6 @@ function Invoke-Helper([string] $HandoffRoot, [string] $WebRoot) {
         '-HandoffRoot', $HandoffRoot,
         '-MarketplaceRoot', (Join-Path $fixtureRoot 'marketplace'),
         '-PluginCacheRoot', (Join-Path $fixtureRoot 'cache'),
-        '-PluginRegistryRoot', (Join-Path $fixtureRoot 'registry'),
         '-ProtectedStateRoot', (Join-Path $fixtureRoot 'protected'),
         '-CodexRoot', (Join-Path $fixtureRoot 'codex'),
         '-WebRoot', $WebRoot
@@ -25,14 +24,13 @@ function Invoke-Helper([string] $HandoffRoot, [string] $WebRoot) {
 }
 
 try {
-    foreach ($directory in @('marketplace', 'cache', 'registry', 'protected', 'codex', 'web', 'handoff')) {
+    foreach ($directory in @('marketplace', 'cache', 'protected', 'codex', 'web', 'handoff')) {
         New-Item -ItemType Directory -Path (Join-Path $fixtureRoot $directory) -Force | Out-Null
     }
     New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'marketplace\empty') | Out-Null
     foreach ($pair in @(
         @('marketplace\release.txt', 'marketplace'),
         @('cache\plugin.txt', 'cache'),
-        @('registry\registry.json', 'registry'),
         @('protected\profile.bin', 'protected'),
         @('codex\config.toml', 'config'),
         @('codex\.codex-global-state.json', '{}'),
@@ -64,6 +62,7 @@ try {
     New-Item -ItemType Directory -Path $missingWebHandoff | Out-Null
     $missingWeb = Invoke-Helper $missingWebHandoff (Join-Path $fixtureRoot 'missing-web')
     Assert-True ($missingWeb.exit_code -ne 0) 'Missing webroot was not rejected.'
+    Assert-True ($missingWeb.output -match "sanitized stage 'canonicalize_inputs'") 'Missing-webroot failure did not report its sanitized stage.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $missingWebHandoff 'backup-first-transition'))) 'Missing-webroot rejection wrote backup data.'
 
     Write-Output 'Codex lifecycle backup tests: 3/3 passed.'
