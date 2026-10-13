@@ -16,6 +16,9 @@ try {
         Api::json(['error' => true, 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'Method not allowed.'], 405, ['Allow' => 'GET, POST']);
     }
     $body = Api::body();
+    if (strtolower(trim((string) ($body['action'] ?? ''))) === 'arm') {
+        Api::json(['data' => $intents->arm($device, $body['discussion_reference'] ?? '')]);
+    }
     if (!empty($body['binding_intent_id'])) {
         $action = strtolower(trim((string) ($body['action'] ?? '')));
         $result = $action === 'cancel'
@@ -26,15 +29,18 @@ try {
         if ($result === null) { throw new InvalidArgumentException('action must be continue or cancel.'); }
         Api::json(['data' => $result]);
     }
-    throw new InvalidArgumentException('binding_intent_id and action are required. Start binding from the Syndicatum MCP tool.');
+    throw new InvalidArgumentException('action is required. Arm a ChatGPT tab or handle an existing binding intent.');
 } catch (InvalidArgumentException $exception) {
     Api::json(['error' => true, 'code' => 'VALIDATION_FAILED', 'message' => $exception->getMessage()], 422);
 } catch (RuntimeException $exception) {
     $code = $exception->getMessage();
-    $status = $code === 'AUTHENTICATION_REQUIRED' ? 401 : ($code === 'DISCUSSION_ALREADY_BOUND' ? 409 : 403);
+    $status = $code === 'AUTHENTICATION_REQUIRED' ? 401
+        : (in_array($code, ['DISCUSSION_ALREADY_BOUND', 'DISCUSSION_BINDING_TARGET_MISMATCH'], true) ? 409 : 403);
     $message = $code === 'AUTHENTICATION_REQUIRED' ? 'Connector authentication is required.'
         : ($code === 'DISCUSSION_ALREADY_BOUND' ? 'This discussion is already bound to another agent.'
-        : 'The binding request is invalid, expired, cancelled, or already handled.');
+        : ($code === 'DISCUSSION_BINDING_TARGET_MISMATCH'
+            ? 'This is not the ChatGPT discussion selected for the binding request.'
+            : 'The binding request is invalid, expired, cancelled, or already handled.'));
     Api::json(['error' => true, 'code' => $code, 'message' => $message], $status);
 } catch (Exception $exception) {
     error_log('Connector discussion binding error: ' . $exception->getMessage());

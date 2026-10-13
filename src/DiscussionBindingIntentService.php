@@ -43,12 +43,28 @@ class DiscussionBindingIntentService
         $contextToken = 'syndicatum_context_' . AuthService::randomToken(32);
         $now = Db::now();
         $expires = gmdate('Y-m-d H:i:s', time() + 900);
-        $this->pdo->prepare("INSERT INTO connector_discussion_binding_intents
-            (id, context_token_hash, oauth_access_token_id, created_by_user_id, project_id, requested_agent_id,
-             requested_agent_name, provider, status, created_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'chatgpt', 'pending', ?, ?)")
-            ->execute([$intentId, hash('sha256', $contextToken), $accessTokenId, $userId, (int) $project['id'],
-                $agents ? (int) $agents[0]['agent_id'] : null, $agentName, $now, $expires]);
+        $this->pdo->beginTransaction();
+        try {
+            $targetQuery = $this->pdo->prepare("SELECT * FROM connector_discussion_binding_targets
+                WHERE user_id = ? AND provider = 'chatgpt' AND status = 'active' AND expires_at > ? FOR UPDATE");
+            $targetQuery->execute([$userId, $now]);
+            $target = $targetQuery->fetch(PDO::FETCH_ASSOC);
+            if (!$target) { throw new RuntimeException('COMPANION_BINDING_TARGET_REQUIRED'); }
+            $this->pdo->prepare("INSERT INTO connector_discussion_binding_intents
+                (id, context_token_hash, oauth_access_token_id, created_by_user_id, project_id, requested_agent_id,
+                 requested_agent_name, provider, target_device_id, target_discussion_id, target_discussion_reference,
+                 status, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'chatgpt', ?, ?, ?, 'pending', ?, ?)")
+                ->execute([$intentId, hash('sha256', $contextToken), $accessTokenId, $userId, (int) $project['id'],
+                    $agents ? (int) $agents[0]['agent_id'] : null, $agentName, $target['device_id'],
+                    $target['discussion_id'], $target['discussion_reference'], $now, $expires]);
+            $this->pdo->prepare("UPDATE connector_discussion_binding_targets SET status = 'consumed', consumed_at = ?
+                WHERE id = ? AND status = 'active'")->execute([$now, $target['id']]);
+            $this->pdo->commit();
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
         $this->auth->audit($userId, 'connector.discussion_binding_requested', 'project', (string) $project['id'], [
             'intent_id' => $intentId, 'agent_name' => $agentName, 'agent_will_be_created' => !$agents,
         ]);
@@ -60,8 +76,36 @@ class DiscussionBindingIntentService
             'agent' => ['id' => $agents ? (int) $agents[0]['agent_id'] : null, 'name' => $agentName,
                 'action' => $agents ? 'use_existing' : 'create_on_confirmation'],
             'expires_at' => gmdate('c', strtotime($expires)),
-            'next_step' => 'The Syndicatum Companion will show Continue and Cancel in the active ChatGPT discussion. Retain binding_context_id and use it for subsequent Syndicatum tools in this discussion.',
+            'target' => ['device_id' => $target['device_id'], 'discussion_id' => $target['discussion_id']],
+            'next_step' => 'The explicitly armed Syndicatum Companion will show Continue and Cancel only in the selected ChatGPT discussion. Retain binding_context_id and use it for subsequent Syndicatum tools in this discussion.',
         ];
+    }
+
+    public function arm(array $device, $discussionReference)
+    {
+        $normalized = (new DiscussionProviderRegistry())->normalize('chatgpt', trim((string) $discussionReference));
+        $now = Db::now();
+        $expires = gmdate('Y-m-d H:i:s', time() + 300);
+        $targetId = $this->uuid();
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare("DELETE FROM connector_discussion_binding_targets
+                WHERE user_id = ? AND provider = 'chatgpt'")->execute([(int) $device['user_id']]);
+            $this->pdo->prepare("INSERT INTO connector_discussion_binding_targets
+                (id, device_id, user_id, provider, discussion_id, discussion_reference, status, created_at, expires_at)
+                VALUES (?, ?, ?, 'chatgpt', ?, ?, 'active', ?, ?)")
+                ->execute([$targetId, $device['id'], (int) $device['user_id'],
+                    $this->chatGptDiscussionIdentity($normalized['canonical_reference']),
+                    $normalized['canonical_reference'], $now, $expires]);
+            $this->pdo->commit();
+        } catch (Exception $exception) {
+            if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
+            throw $exception;
+        }
+        $this->auth->audit((int) $device['user_id'], 'connector.discussion_binding_target_armed',
+            'connector_device', (string) $device['id'], ['target_id' => $targetId, 'expires_at' => $expires]);
+        return ['status' => 'armed', 'target_id' => $targetId, 'device_id' => $device['id'],
+            'discussion_id' => $normalized['discussion_id'], 'expires_at' => gmdate('c', strtotime($expires))];
     }
 
     public function prepareInteractiveContext(array $oauthAccess, $projectName, $agentName)
@@ -113,11 +157,12 @@ class DiscussionBindingIntentService
     public function pending(array $device)
     {
         $statement = $this->pdo->prepare("SELECT i.id, i.project_id, p.name AS project_name, i.requested_agent_id,
-                i.requested_agent_name, i.provider, i.created_at, i.expires_at
+                i.requested_agent_name, i.provider, i.target_discussion_reference, i.created_at, i.expires_at
             FROM connector_discussion_binding_intents i JOIN projects p ON p.id = i.project_id
-            WHERE i.created_by_user_id = ? AND i.status = 'pending' AND i.expires_at > ?
+            WHERE i.created_by_user_id = ? AND i.target_device_id = ?
+              AND i.status = 'pending' AND i.expires_at > ?
             ORDER BY i.created_at, i.id LIMIT 20");
-        $statement->execute([(int) $device['user_id'], Db::now()]);
+        $statement->execute([(int) $device['user_id'], $device['id'], Db::now()]);
         return array_map(function ($row) {
             return [
                 'intent_id' => $row['id'], 'provider' => $row['provider'],
@@ -125,6 +170,7 @@ class DiscussionBindingIntentService
                 'agent_id' => $row['requested_agent_id'] === null ? null : (int) $row['requested_agent_id'],
                 'agent_name' => $row['requested_agent_name'],
                 'agent_action' => $row['requested_agent_id'] === null ? 'create' : 'use_existing',
+                'target_discussion_reference' => $row['target_discussion_reference'],
                 'created_at' => gmdate('c', strtotime($row['created_at'])),
                 'expires_at' => gmdate('c', strtotime($row['expires_at'])),
             ];
@@ -135,8 +181,10 @@ class DiscussionBindingIntentService
     {
         $statement = $this->pdo->prepare("UPDATE connector_discussion_binding_intents SET status = 'cancelled',
             resolved_by_device_id = ?, resolved_at = ? WHERE id = ? AND created_by_user_id = ?
+            AND target_device_id = ?
             AND status = 'pending' AND expires_at > ?");
-        $statement->execute([$device['id'], Db::now(), trim((string) $intentId), (int) $device['user_id'], Db::now()]);
+        $statement->execute([$device['id'], Db::now(), trim((string) $intentId), (int) $device['user_id'],
+            $device['id'], Db::now()]);
         if ($statement->rowCount() !== 1) { throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT'); }
         $this->auth->audit((int) $device['user_id'], 'connector.discussion_binding_cancelled', 'binding_intent', (string) $intentId);
         return ['status' => 'cancelled', 'intent_id' => (string) $intentId];
@@ -148,11 +196,15 @@ class DiscussionBindingIntentService
         $this->pdo->beginTransaction();
         try {
             $statement = $this->pdo->prepare("SELECT * FROM connector_discussion_binding_intents
-                WHERE id = ? AND created_by_user_id = ? FOR UPDATE");
-            $statement->execute([trim((string) $intentId), (int) $device['user_id']]);
+                WHERE id = ? AND created_by_user_id = ? AND target_device_id = ? FOR UPDATE");
+            $statement->execute([trim((string) $intentId), (int) $device['user_id'], $device['id']]);
             $intent = $statement->fetch();
             if (!$intent || $intent['status'] !== 'pending' || strtotime($intent['expires_at']) <= time()) {
                 throw new RuntimeException('INVALID_DISCUSSION_BINDING_INTENT');
+            }
+            if (!hash_equals((string) $intent['target_discussion_id'],
+                $this->chatGptDiscussionIdentity($normalized['canonical_reference']))) {
+                throw new RuntimeException('DISCUSSION_BINDING_TARGET_MISMATCH');
             }
             // Resolve the stored IDs only. A pending intent must not outlive the
             // user's management access or the selected project/agent identity.
@@ -210,6 +262,15 @@ class DiscussionBindingIntentService
             if ($this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $exception;
         }
+    }
+
+    private function chatGptDiscussionIdentity($canonicalReference)
+    {
+        $path = (string) (parse_url((string) $canonicalReference, PHP_URL_PATH) ?: '');
+        if (!preg_match('#(?:^|/)c/([A-Za-z0-9_-]+)$#', rtrim($path, '/'), $matches)) {
+            throw new InvalidArgumentException('Enter a valid ChatGPT discussion URL such as https://chatgpt.com/c/...');
+        }
+        return $matches[1];
     }
 
     public function context(array $oauthAccess, $contextToken)

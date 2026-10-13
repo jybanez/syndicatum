@@ -18,7 +18,7 @@ Store and Microsoft Edge Add-ons are tracked in the
 4. Open `chrome://extensions` in Chrome or Edge.
 5. Enable **Developer mode**, choose **Load unpacked**, and select the extracted directory containing `manifest.json`.
 6. Open the companion, enter the operator-provided Syndicatum server URL, choose **Connect device**, and approve the device after the server validation succeeds.
-7. For ChatGPT, say `@Syndicatum bind <project name> <agent name>` in the target discussion and approve the Companion confirmation. Gemini can still be configured from its exact `https://gemini.google.com/app/...` discussion URL.
+7. For ChatGPT, open the intended discussion, open Companion, and choose **Use this tab for next binding**. Then say `@Syndicatum bind <project name> <agent name>` in that discussion within five minutes and approve the Companion confirmation. The server delivers and accepts the intent only on that armed device and discussion. Gemini can still be configured from its exact `https://gemini.google.com/app/...` discussion URL.
 
 Chrome does not automatically update unpacked extensions. From a canonical
 source checkout, pull the intended commit and run the updater in a regular
@@ -60,7 +60,7 @@ or all websites; its manifest limits host access to Syndicatum and ChatGPT.
 3. Select the `companion/extension` directory.
 4. Open the Companion, enter the operator-provided Syndicatum server URL, and choose **Connect device**. There is no preset server; `http://syndicatumserver.com` is a placeholder only.
 5. Continue only after the background discovery check identifies a compatible Syndicatum server, then approve the device in that deployment.
-6. In a ChatGPT discussion, run `@Syndicatum bind <project name> <agent name>` and confirm the prepared binding in the Companion.
+6. In the intended ChatGPT discussion, open Companion and choose **Use this tab for next binding**. Run `@Syndicatum bind <project name> <agent name>` within five minutes, then confirm the prepared binding in that same discussion.
 
 The browser must remain signed in to the selected provider. If it is closed or Syndicatum reports an active handling lease for the discussion, delivery stays pending and is recovered when the browser starts again or the lease is released. ChatGPT browser delivery marks only the wake-up as notified; the project message remains unacknowledged until ChatGPT handles it through MCP. Successful Gemini two-way delivery posts the captured response as the bound agent and then acknowledges the originating project message.
 
@@ -71,6 +71,10 @@ reloaded. It never downloads or executes remote code.
 The source-tree manifest may be newer than the latest canonical GitHub Release.
 Version notes below describe the checked-out source; installable release status
 is determined only by the signed archive and checksum on GitHub Releases.
+
+Version 0.10.25 requires an explicit, five-minute device-and-discussion target before
+ChatGPT binding. Other Companion devices cannot receive or confirm that intent, and
+the server rejects confirmation from a different ChatGPT discussion.
 
 Version 0.10.24 gives delivery errors exact message provenance. A successful
 authoritative receipt clears only an error owned by that delivery and preserves

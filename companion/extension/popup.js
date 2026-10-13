@@ -1,6 +1,6 @@
 import { companionDiagnostics } from "./core.mjs";
 
-const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","error","delivery-review","delivery-review-list","copy-review","copy-review-result","open-clear-queue","clear-queue-dialog","clear-queue-summary","clear-queue-confirmation","clear-queue-error","cancel-clear-queue","confirm-clear-queue","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
+const elements = Object.fromEntries(["connect-view","status-view","base-url","connect","connect-error","status","server","server-health","account-health","realtime-health","bindings-health","delivery-health","authorization","binding-result","binding-target-result","error","arm-binding-target","delivery-review","delivery-review-list","copy-review","copy-review-result","open-clear-queue","clear-queue-dialog","clear-queue-summary","clear-queue-confirmation","clear-queue-error","cancel-clear-queue","confirm-clear-queue","refresh","disconnect","edit-server","server-dialog","new-base-url","server-change-error","cancel-server-change","confirm-server-change","last-server-check","last-sync","last-realtime","last-delivery","extension-version","diagnostic-version","copy-diagnostics","copy-result"].map(id => [id, document.getElementById(id)]));
 const send = message => chrome.runtime.sendMessage(message);
 const extension = { id: chrome.runtime.id, version: chrome.runtime.getManifest().version };
 let latestStatus = null;
@@ -99,6 +99,8 @@ function render(data) {
   elements.authorization.textContent = data.userCode ? `Approve the opened Syndicatum page. Code: ${data.userCode}` : "";
   elements["binding-result"].hidden = !data.lastBindingMessage;
   elements["binding-result"].textContent = data.lastBindingMessage || "";
+  elements["binding-target-result"].hidden = !data.bindingTargetMessage;
+  elements["binding-target-result"].textContent = data.bindingTargetMessage || "";
   elements.error.hidden = !health.error;
   elements.error.textContent = health.error || "";
   renderDeliveryReviews(data.deliveryReviews || []);
@@ -143,6 +145,7 @@ elements.connect.addEventListener("click", async () => {
   }
 });
 elements.refresh.addEventListener("click", () => action({ type: "syndicatum.refresh" }));
+elements["arm-binding-target"].addEventListener("click", () => action({ type: "syndicatum.arm-binding-target" }));
 elements.disconnect.addEventListener("click", () => action({ type: "syndicatum.disconnect" }));
 elements["open-clear-queue"].addEventListener("click", () => {
   const count = Number(latestStatus?.health?.queuedCount || 0);

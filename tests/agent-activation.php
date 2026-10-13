@@ -430,22 +430,46 @@ try {
             (int) $pdo->query('SELECT COUNT(*) FROM connector_discussion_binding_intents')->fetchColumn(),
             'Unauthorized project lookup must not create a binding intent');
 
-        $prepared = $service->prepare($access, 'Activation Project', 'Intent Created Agent');
-        $suite->same('create_on_confirmation', $prepared['agent']['action']);
-        $suite->same('pending', $service->contextHealth($access, $prepared['binding_context_id'])['state']);
-        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Intent Created Agent'")->fetchColumn());
-
         $deviceId = Db::uuidV4();
         $pdo->prepare("INSERT INTO connector_devices
             (id, user_id, display_name, platform, token_prefix, token_hash, created_at, last_seen_at, expires_at)
             VALUES (?, ?, 'Intent Companion', 'test', 'intent', ?, ?, ?, ?)")
             ->execute([$deviceId, $owner['id'], hash('sha256', 'intent-device'), $now, $now, gmdate('Y-m-d H:i:s', time() + 3600)]);
         $device = ['id' => $deviceId, 'user_id' => $owner['id']];
+        $suite->throws(function () use ($service, $access) {
+            $service->prepare($access, 'Activation Project', 'Intent Created Agent');
+        }, 'COMPANION_BINDING_TARGET_REQUIRED');
+        $prepare = function ($projectName, $agentName, $discussionReference) use ($service, $access, $device) {
+            $service->arm($device, $discussionReference);
+            return $service->prepare($access, $projectName, $agentName);
+        };
+
+        $prepared = $prepare('Activation Project', 'Intent Created Agent',
+            'https://chatgpt.com/g/g-original-project/c/intent_created_agent?model=test');
+        $suite->same('create_on_confirmation', $prepared['agent']['action']);
+        $suite->same('pending', $service->contextHealth($access, $prepared['binding_context_id'])['state']);
+        $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Intent Created Agent'")->fetchColumn());
+
         $suite->same(1, count($service->pending($device)));
+        $otherDeviceId = Db::uuidV4();
+        $pdo->prepare("INSERT INTO connector_devices
+            (id, user_id, display_name, platform, token_prefix, token_hash, created_at, last_seen_at, expires_at)
+            VALUES (?, ?, 'Other Companion', 'test', 'other-intent', ?, ?, ?, ?)")
+            ->execute([$otherDeviceId, $owner['id'], hash('sha256', 'other-intent-device'), $now, $now,
+                gmdate('Y-m-d H:i:s', time() + 3600)]);
+        $otherDevice = ['id' => $otherDeviceId, 'user_id' => $owner['id']];
+        $suite->same(0, count($service->pending($otherDevice)), 'Another Companion must not receive the targeted intent');
+        $suite->throws(function () use ($service, $otherDevice, $prepared) {
+            $service->confirm($otherDevice, $prepared['intent_id'], 'https://chatgpt.com/c/intent_created_agent');
+        }, 'INVALID_DISCUSSION_BINDING_INTENT');
+        $suite->throws(function () use ($service, $device, $prepared) {
+            $service->confirm($device, $prepared['intent_id'], 'https://chatgpt.com/c/wrong_discussion');
+        }, 'DISCUSSION_BINDING_TARGET_MISMATCH');
         $pdo->prepare('INSERT INTO system_settings (setting_key, value_json, updated_at) VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE value_json = VALUES(value_json), updated_at = VALUES(updated_at)')
             ->execute(['realtime.enabled', 'true', Db::now()]);
-        $confirmed = $service->confirm($device, $prepared['intent_id'], 'https://chatgpt.com/c/intent_created_agent?model=test');
+        $confirmed = $service->confirm($device, $prepared['intent_id'],
+            'https://chatgpt.com/g/g-renamed-project/c/intent_created_agent?model=test');
         $suite->same('Successful', $confirmed['discussion_binding']);
         $suite->same('Activation Project', $confirmed['project_name']);
         $suite->same('Intent Created Agent', $confirmed['agent_name']);
@@ -477,7 +501,7 @@ try {
             ->execute([$project['id'], $confirmedAgentId]);
         $suite->true($service->context($access, $prepared['binding_context_id']) !== null);
 
-        $cancel = $service->prepare($access, 'Activation Project', 'Cancelled Agent');
+        $cancel = $prepare('Activation Project', 'Cancelled Agent', 'https://chatgpt.com/c/cancelled_intent');
         $service->cancel($device, $cancel['intent_id']);
         $suite->throws(function () use ($service, $device, $cancel) {
             $service->confirm($device, $cancel['intent_id'], 'https://chatgpt.com/c/cancelled_intent');
@@ -486,7 +510,7 @@ try {
         $suite->same(null, $service->context($access, $cancel['binding_context_id']));
         $suite->same('revoked', $service->contextHealth($access, $cancel['binding_context_id'])['state']);
 
-        $revokedAccess = $service->prepare($access, 'Activation Project', 'No Access Agent');
+        $revokedAccess = $prepare('Activation Project', 'No Access Agent', 'https://chatgpt.com/c/revoked_access');
         $pdo->prepare("UPDATE project_members SET status = 'removed' WHERE project_id = ? AND user_id = ?")
             ->execute([$project['id'], $owner['id']]);
         $suite->throws(function () use ($service, $device, $revokedAccess) {
@@ -497,7 +521,7 @@ try {
             ->execute([$project['id'], $owner['id']]);
         $service->cancel($device, $revokedAccess['intent_id']);
 
-        $inactiveProject = $service->prepare($access, 'Activation Project', 'Inactive Project Agent');
+        $inactiveProject = $prepare('Activation Project', 'Inactive Project Agent', 'https://chatgpt.com/c/inactive_project');
         $pdo->prepare("UPDATE projects SET status = 'archived' WHERE id = ?")->execute([$project['id']]);
         $suite->throws(function () use ($service, $device, $inactiveProject) {
             $service->confirm($device, $inactiveProject['intent_id'], 'https://chatgpt.com/c/inactive_project');
@@ -506,7 +530,7 @@ try {
         $pdo->prepare("UPDATE projects SET status = 'active' WHERE id = ?")->execute([$project['id']]);
         $service->cancel($device, $inactiveProject['intent_id']);
 
-        $staleAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $staleAgent = $prepare('Activation Project', 'OAuth Placeholder', 'https://chatgpt.com/c/stale_agent');
         $bindingsBefore = (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn();
         $pdo->prepare("UPDATE project_participants SET status = 'suspended' WHERE project_id = ? AND agent_id = ?")
             ->execute([$project['id'], $placeholder['agent_id']]);
@@ -518,7 +542,7 @@ try {
             ->execute([$project['id'], $placeholder['agent_id']]);
         $service->cancel($device, $staleAgent['intent_id']);
 
-        $inactiveAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $inactiveAgent = $prepare('Activation Project', 'OAuth Placeholder', 'https://chatgpt.com/c/inactive_agent');
         $pdo->prepare("UPDATE project_agents SET status = 'suspended' WHERE project_id = ? AND agent_id = ?")
             ->execute([$project['id'], $placeholder['agent_id']]);
         $suite->throws(function () use ($service, $device, $inactiveAgent) {
@@ -529,7 +553,7 @@ try {
             ->execute([$project['id'], $placeholder['agent_id']]);
         $service->cancel($device, $inactiveAgent['intent_id']);
 
-        $disabledAgent = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $disabledAgent = $prepare('Activation Project', 'OAuth Placeholder', 'https://chatgpt.com/c/disabled_agent');
         $pdo->prepare('UPDATE chat_agents SET is_active = 0 WHERE id = ?')->execute([$placeholder['agent_id']]);
         $suite->throws(function () use ($service, $device, $disabledAgent) {
             $service->confirm($device, $disabledAgent['intent_id'], 'https://chatgpt.com/c/disabled_agent');
@@ -538,7 +562,7 @@ try {
         $pdo->prepare('UPDATE chat_agents SET is_active = 1 WHERE id = ?')->execute([$placeholder['agent_id']]);
         $service->cancel($device, $disabledAgent['intent_id']);
 
-        $expired = $service->prepare($access, 'Activation Project', 'Expired Agent');
+        $expired = $prepare('Activation Project', 'Expired Agent', 'https://chatgpt.com/c/expired_intent');
         $pdo->prepare("UPDATE connector_discussion_binding_intents SET expires_at = DATE_SUB(?, INTERVAL 1 SECOND) WHERE id = ?")
             ->execute([Db::now(), $expired['intent_id']]);
         $suite->throws(function () use ($service, $device, $expired) {
@@ -546,7 +570,7 @@ try {
         }, 'INVALID_DISCUSSION_BINDING_INTENT');
         $suite->same(0, (int) $pdo->query("SELECT COUNT(*) FROM project_agents WHERE display_name = 'Expired Agent'")->fetchColumn());
 
-        $stableIds = $service->prepare($access, 'Activation Project', 'OAuth Placeholder');
+        $stableIds = $prepare('Activation Project', 'OAuth Placeholder', 'https://chatgpt.com/c/stable_ids');
         $suite->same((int) $project['id'], $stableIds['project']['id']);
         $suite->same((int) $placeholder['agent_id'], $stableIds['agent']['id']);
         $pdo->prepare("UPDATE project_agents SET display_name = 'Renamed After Preparation' WHERE project_id = ? AND agent_id = ?")
@@ -559,7 +583,7 @@ try {
         $pdo->prepare("UPDATE project_agents SET display_name = 'OAuth Placeholder' WHERE project_id = ? AND agent_id = ?")
             ->execute([$project['id'], $placeholder['agent_id']]);
 
-        $normalized = $service->prepare($access, 'ACTIVATION   project', 'oAuTh   Placeholder');
+        $normalized = $prepare('ACTIVATION   project', 'oAuTh   Placeholder', 'https://chatgpt.com/c/normalized');
         $suite->same('Activation Project', $normalized['project']['name']);
         $suite->same('OAuth Placeholder', $normalized['agent']['name']);
         $suite->same('use_existing', $normalized['agent']['action']);

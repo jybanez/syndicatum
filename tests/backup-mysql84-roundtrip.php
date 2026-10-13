@@ -224,7 +224,7 @@ try {
     }
     sort($resetTables, SORT_STRING);
     sort($excludedTables, SORT_STRING);
-    mysql84BackupAssert(count($resetTables) === 18 && count($excludedTables) === 3, 'Closed table-policy counts changed unexpectedly.');
+    mysql84BackupAssert(count($resetTables) === 19 && count($excludedTables) === 3, 'Closed table-policy counts changed unexpectedly.');
     foreach ($resetTables as $table) {
         mysql84BackupAssert((int) $target->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() === 0, 'Reset table was revived: ' . $table);
     }

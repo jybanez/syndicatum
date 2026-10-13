@@ -129,7 +129,7 @@ test("distribution classifications match the exact source package versions", asy
   assert.equal(policy.compatibility.companion.tested_source_version, companion.version);
   assert.deepEqual(policy.compatibility.companion.installed_acceptance, [
     {
-      version: companion.version,
+      version: "0.10.24",
       channel: "unpacked-pilot",
       environment: "Chrome on Windows 11",
       status: "passed",

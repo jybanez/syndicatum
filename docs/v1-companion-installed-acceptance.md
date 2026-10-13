@@ -25,6 +25,8 @@ existing production agent identity.
 
 | Case | Action | Required observation |
 | --- | --- | --- |
+| Explicit device and discussion target | On one authorized Companion device, open the intended ChatGPT discussion and choose **Use this tab for next binding**. Then prepare the binding in that discussion within five minutes. | Only the armed device receives the intent, and only the exact armed discussion can show and confirm it. Another authorized device sees no pending confirmation. |
+| Missing or expired target | Ask `prepare_discussion_binding` without arming a tab, and repeat after an armed target has expired. | Preparation fails with actionable guidance to arm the intended tab. No pending confirmation or binding is created. |
 | Unauthorized or unknown project | Ask `prepare_discussion_binding` for a project the account cannot administer, then an unknown name. | Both fail without listing accessible or inaccessible projects, agents, or alternative names. No pending Companion confirmation or agent creation. |
 | Normalized authorized project and existing agent | Use a project and agent name with changed case and repeated whitespace. | Preparation resolves uniquely to canonical names. The Companion confirmation shows the selected server, discussion, canonical project and agent, their IDs, and **Use existing** action before Continue. |
 | Ambiguous normalized name | Request a name that collides in the authorized fixture set. | Preparation fails closed as ambiguous; it selects neither candidate and shows no unauthorized alternatives in the AI discussion. No binding is created. |
