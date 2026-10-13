@@ -19,6 +19,7 @@
     "connector_device_authorizations": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "connector_devices": {"backup_policy": "reset", "reset_strategy": "reauthorize"},
     "connector_discussion_binding_intents": {"backup_policy": "reset", "reset_strategy": "truncate"},
+    "connector_discussion_binding_targets": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "delivery_worker_heartbeats": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "google_oauth_attempts": {"backup_policy": "reset", "reset_strategy": "truncate"},
     "integration_connections": {"backup_policy": "durable"},

@@ -294,11 +294,9 @@ async function checkBindingIntents() {
   const result = await api("/api/v1/connector-discussion-bindings.php");
   const intents = Array.isArray(result?.intents) ? result.intents : [];
   if (!intents.length) return;
-  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  const tab = tabs.find(candidate => {
-    try { return providerForDiscussionUrl(candidate?.url).provider === "chatgpt"; }
-    catch (_error) { return false; }
-  });
+  await save({ bindingTargetMessage: null, bindingTargetExpiresAt: null });
+  const tabs = await chrome.tabs.query({});
+  const [tab] = matchingDiscussionTabs(tabs, intents[0].target_discussion_reference, "chatgpt");
   if (!tab?.id) return;
   try {
     await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: { ...intents[0], server_url: current.baseUrl } });
@@ -307,6 +305,24 @@ async function checkBindingIntents() {
     await injectProviderAdapter(tab.id, "chatgpt");
     await chrome.tabs.sendMessage(tab.id, { type: "syndicatum.binding-intent", intent: { ...intents[0], server_url: current.baseUrl } });
   }
+}
+
+async function armBindingTarget() {
+  const current = await state();
+  if (!current.accessToken) throw new Error("Connect this Companion before preparing a discussion binding.");
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs.find(candidate => {
+    try { return providerForDiscussionUrl(candidate?.url).provider === "chatgpt"; }
+    catch (_error) { return false; }
+  });
+  if (!tab?.url) throw new Error("Open the intended ChatGPT discussion in the active tab first.");
+  const detected = providerForDiscussionUrl(tab.url);
+  const result = await api("/api/v1/connector-discussion-bindings.php", {
+    method: "POST",
+    body: JSON.stringify({ action: "arm", discussion_reference: detected.discussionUrl }),
+  });
+  await save({ bindingTargetMessage: "This ChatGPT tab is ready for the next binding request.",
+    bindingTargetExpiresAt: result.expires_at || null, lastError: null });
 }
 
 async function resolveBindingIntent(request, sender) {
@@ -837,7 +853,8 @@ async function disconnect() {
 async function publicStatus() {
   const current = await state();
   const health = companionHealth(current, { realtimeProjectCount: heartbeatTimers.size });
-  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, reviewCount: health.reviewCount, deliveryReviews: deliveryReviewItems(current.queue, current.bindings), realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastQueueClear: current.lastQueueClear || null, lastBindingMessage: current.lastBindingMessage || null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
+  const targetActive = current.bindingTargetExpiresAt && Date.parse(current.bindingTargetExpiresAt) > Date.now();
+  return { status: current.status || "disconnected", baseUrl: current.baseUrl || null, userCode: current.pending?.userCode || null, bindingCount: health.bindingCount, queuedCount: health.queuedCount, reviewCount: health.reviewCount, deliveryReviews: deliveryReviewItems(current.queue, current.bindings), realtimeProjectCount: health.realtimeProjectCount, health, lastServerCheckAt: current.lastServerCheckAt || null, lastSyncAt: current.lastSyncAt || null, lastRealtimeAt: current.lastRealtimeAt || null, lastDeliveryAt: current.lastDeliveryAt || null, lastDeliveryDiagnostic: current.lastDeliveryDiagnostic || null, lastQueueClear: current.lastQueueClear || null, lastBindingMessage: current.lastBindingMessage || null, bindingTargetMessage: targetActive ? current.bindingTargetMessage : null, pendingServerMigration: current.pendingServerMigration || null, lastServerMigration: current.lastServerMigration || null, lastError: current.lastError || null };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
@@ -849,6 +866,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     : action === "syndicatum.resume-server-migration" ? resumeServerMigration()
     : action === "syndicatum.cancel-server-migration" ? cancelServerMigration()
     : action === "syndicatum.refresh" ? start(true).then(publicStatus)
+    : action === "syndicatum.arm-binding-target" ? armBindingTarget().then(publicStatus)
     : action === "syndicatum.resolve-delivery-review" ? resolveDeliveryReview(request.key, request.resolution)
     : action === "syndicatum.clear-delivery-queue" ? clearDeliveryQueue(request.expectedCount)
     : action === "syndicatum.binding-intent-response" ? resolveBindingIntent(request, sender)

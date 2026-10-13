@@ -7,7 +7,7 @@ const companionUrl = new URL("../", import.meta.url);
 
 test("package permits on-demand adapter injection for pre-existing tabs", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", extensionUrl), "utf8"));
-  assert.equal(manifest.version, "0.10.24");
+  assert.equal(manifest.version, "0.10.25");
   assert.ok(manifest.permissions.includes("scripting"));
   assert.ok(manifest.host_permissions.includes("https://chatgpt.com/*"));
   assert.ok(manifest.host_permissions.includes("https://gemini.google.com/*"));
@@ -50,9 +50,15 @@ test("operator chooses and validates a Syndicatum server before authorization", 
   assert.match(background, /chrome\.permissions\.remove/);
 });
 
-test("MCP binding intents require an in-discussion Continue or Cancel confirmation", async () => {
+test("MCP binding intents require an explicitly armed tab and an in-discussion confirmation", async () => {
+  const html = await readFile(new URL("popup.html", extensionUrl), "utf8");
+  const popup = await readFile(new URL("popup.js", extensionUrl), "utf8");
   const content = await readFile(new URL("content.js", extensionUrl), "utf8");
   const background = await readFile(new URL("background.mjs", extensionUrl), "utf8");
+  assert.match(html, /Use this tab for next binding/);
+  assert.match(popup, /syndicatum\.arm-binding-target/);
+  assert.match(background, /action: "arm"/);
+  assert.match(background, /Open the intended ChatGPT discussion in the active tab first/);
   assert.match(content, /Confirm Syndicatum discussion binding/);
   assert.match(content, /data-action="continue"/);
   assert.match(content, /data-action="cancel"/);

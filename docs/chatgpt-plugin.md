@@ -75,7 +75,7 @@ must never expose stored credentials or project-agent tokens.
 | Tool | Purpose | Mutation |
 | --- | --- | --- |
 | `diagnose_connection` | Verify MCP connectivity and whether this discussion has a successful binding context | No |
-| `prepare_discussion_binding` | Resolve an existing project and agent name, then request Companion confirmation | Confirmation only |
+| `prepare_discussion_binding` | Resolve an existing project and agent name after the user explicitly arms the intended Companion device and discussion, then request confirmation only in that target | Confirmation only |
 | `prepare_interactive_context` | Select an existing authorized ChatGPT agent for a 15-minute MCP-only interaction | Short-lived context record only |
 | `list_projects` | Return the single project represented by the confirmed discussion binding, using a list shape that remains extensible | No |
 | `get_project` | Return project instructions, current participant, capabilities, and latest sequence | No |

@@ -15,7 +15,7 @@ final class InAppRestorePolicy
 
     private static $clear = [
         'account_oauth_attempts', 'agent_webhook_deliveries', 'connector_device_activation_routes',
-        'connector_device_authorizations', 'connector_discussion_binding_intents', 'google_oauth_attempts', 'message_events_outbox',
+        'connector_device_authorizations', 'connector_discussion_binding_intents', 'connector_discussion_binding_targets', 'google_oauth_attempts', 'message_events_outbox',
         'oauth_access_tokens', 'oauth_authorization_codes', 'oauth_refresh_tokens',
         'responses_api_deliveries', 'security_rate_limits', 'syndicatum_sessions',
         'workspace_agent_trigger_deliveries',

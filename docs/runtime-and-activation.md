@@ -72,8 +72,13 @@ reference and shares the binding with every connector device authorized for that
 user. The working-directory hint is optional and may differ or be unavailable on
 another computer.
 
-ChatGPT discussion binding is initiated through MCP with
-`@Syndicatum bind <project name> <agent name>` and confirmed in the Companion.
+ChatGPT discussion binding first requires the user to open the intended
+discussion in the intended browser, open the Companion, and choose **Use this
+tab for next binding**. That explicit device-and-discussion target expires after
+five minutes. The user then initiates binding in the same discussion through MCP
+with `@Syndicatum bind <project name> <agent name>` and confirms it in the
+Companion. Other authorized Companion devices cannot receive or confirm that
+intent.
 The stable discussion identity is the segment after `/c/`; ChatGPT may add or
 change a project path before it without changing the binding. An authorized
 Companion delivers metadata-only notifications into the best matching open

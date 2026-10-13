@@ -36,7 +36,7 @@ try {
             'installation_id' => Db::uuidV4(),
             'installed_at' => gmdate('Y-m-d\TH:i:s\Z'),
         ]);
-    if ($result['post_baseline_migration_rows'] !== 28
+    if ($result['post_baseline_migration_rows'] !== 30
         || !Db::columnExists($pdo, 'projects', 'context_version')
         || !Db::columnExists($pdo, 'projects', 'google_drive_url')
         || !Db::columnExists($pdo, 'project_participants', 'last_read_sequence')
@@ -59,6 +59,10 @@ try {
         || !Db::tableExists($pdo, 'project_file_operations')
         || !Db::tableExists($pdo, 'project_file_events')
         || !Db::tableExists($pdo, 'notification_handling_leases')
+        || !Db::tableExists($pdo, 'connector_discussion_binding_targets')
+        || !Db::columnExists($pdo, 'connector_discussion_binding_intents', 'target_device_id')
+        || !Db::columnExists($pdo, 'connector_discussion_binding_intents', 'target_discussion_id')
+        || !Db::columnExists($pdo, 'connector_discussion_binding_intents', 'target_discussion_reference')
         || (int) $pdo->query("SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics
             WHERE table_schema = DATABASE() AND index_name IN (
                 'idx_messages_project_created',
@@ -68,7 +72,7 @@ try {
         throw new RuntimeException('Fresh baseline installation did not apply the declared migration suffix.');
     }
     $state = (new InstallationState($pdo))->inspect();
-    if (empty($state['ready']) || $state['identity']['schema_head'] !== '202610070001') {
+    if (empty($state['ready']) || $state['identity']['schema_head'] !== '202610130001') {
         throw new RuntimeException('Post-baseline installation identity is not ready.');
     }
     echo "PASS  fresh baseline applies the declared migration suffix\n";
