@@ -114,6 +114,52 @@ final class AgentContentReader
         throw new RuntimeException('PUBLIC_URL_TOO_MANY_REDIRECTS');
     }
 
+    /**
+     * Fetch a user-authorized remote file into a temporary stream for a
+     * canonical Project File upload. The same public-network boundary used by
+     * readPublicUrl applies, while the caller supplies the configured upload
+     * ceiling instead of the much smaller agent-context read ceiling.
+     */
+    public function downloadPublicFile(array $access, $url, $maxBytes)
+    {
+        $this->assertActiveProject($access);
+        $limit = filter_var($maxBytes, FILTER_VALIDATE_INT);
+        if ($limit === false || $limit < 1 || $limit > 1073741824) {
+            throw new InvalidArgumentException('Upload limit must be between 1 and 1073741824 bytes.');
+        }
+        $current = trim((string) $url);
+        for ($attempt = 0; $attempt <= self::MAX_REDIRECTS; $attempt++) {
+            $resolved = $this->resolvePublicHttpsUrl($current);
+            $response = $this->fetchFile($resolved, (int) $limit);
+            $status = (int) $response['status'];
+            if (in_array($status, [301, 302, 303, 307, 308], true)) {
+                fclose($response['stream']);
+                if ($attempt === self::MAX_REDIRECTS) { throw new RuntimeException('PUBLIC_URL_TOO_MANY_REDIRECTS'); }
+                $location = trim((string) ($response['headers']['location'] ?? ''));
+                if ($location === '') { throw new RuntimeException('PUBLIC_URL_INVALID_REDIRECT'); }
+                $current = $this->redirectUrl($resolved['url'], $location);
+                continue;
+            }
+            if ($status < 200 || $status >= 300) {
+                fclose($response['stream']);
+                throw new RuntimeException('FILE_INPUT_FETCH_FAILED');
+            }
+            if (!empty($response['truncated'])) {
+                fclose($response['stream']);
+                throw new RuntimeException('FILE_TOO_LARGE');
+            }
+            rewind($response['stream']);
+            return [
+                'stream' => $response['stream'],
+                'size_bytes' => $response['size_bytes'],
+                'sha256' => $response['sha256'],
+                'mime_type' => $this->contentType((string) ($response['headers']['content-type'] ?? 'application/octet-stream')),
+                'final_url' => $resolved['url'],
+            ];
+        }
+        throw new RuntimeException('PUBLIC_URL_TOO_MANY_REDIRECTS');
+    }
+
     public function resolvePublicHttpsUrl($url)
     {
         $url = trim((string) $url);
@@ -188,6 +234,78 @@ final class AgentContentReader
             throw new RuntimeException($errorNumber === CURLE_OPERATION_TIMEDOUT ? 'PUBLIC_URL_TIMEOUT' : 'PUBLIC_URL_FETCH_FAILED');
         }
         return ['status' => $status, 'headers' => $headers, 'body' => $body, 'truncated' => $overflow];
+    }
+
+    /** Stream a remote upload candidate to a temporary file without retaining it in PHP memory. */
+    private function fetchFile(array $resolved, $maxBytes)
+    {
+        $stream = tmpfile();
+        if (!is_resource($stream)) { throw new RuntimeException('FILE_UPLOAD_READ_FAILED'); }
+        $headers = [];
+        $overflow = false;
+        $size = 0;
+        $hash = hash_init('sha256');
+        if ($this->transport) {
+            try {
+                $response = call_user_func($this->transport, $resolved, $maxBytes);
+                $body = (string) ($response['body'] ?? '');
+                $bytes = substr($body, 0, $maxBytes);
+                if ($bytes !== '' && fwrite($stream, $bytes) !== strlen($bytes)) { throw new RuntimeException('FILE_UPLOAD_READ_FAILED'); }
+                hash_update($hash, $bytes);
+                $size = strlen($bytes);
+                return ['status' => (int) ($response['status'] ?? 0), 'headers' => (array) ($response['headers'] ?? []),
+                    'stream' => $stream, 'truncated' => !empty($response['truncated']) || strlen($body) > $maxBytes,
+                    'size_bytes' => $size, 'sha256' => hash_final($hash)];
+            } catch (Exception $exception) {
+                fclose($stream);
+                throw $exception;
+            }
+        }
+        if (!function_exists('curl_init')) { fclose($stream); throw new RuntimeException('PUBLIC_URL_TRANSPORT_UNAVAILABLE'); }
+        $handle = curl_init($resolved['url']);
+        $address = $resolved['addresses'][0];
+        $resolveAddress = strpos($address, ':') !== false ? '[' . $address . ']' : $address;
+        $options = [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_PROXY => '',
+            CURLOPT_NOPROXY => '*',
+            CURLOPT_RESOLVE => [$resolved['host'] . ':' . $resolved['port'] . ':' . $resolveAddress],
+            CURLOPT_HTTPHEADER => ['Accept: */*', 'Accept-Encoding: identity', 'User-Agent: Syndicatum-Project-File-Importer/1.0'],
+            CURLOPT_HEADERFUNCTION => function ($handle, $line) use (&$headers) {
+                $length = strlen($line);
+                $line = trim($line);
+                if ($line === '' || strpos($line, ':') === false) { return $length; }
+                list($name, $value) = explode(':', $line, 2);
+                $headers[strtolower(trim($name))] = trim($value);
+                return $length;
+            },
+            CURLOPT_WRITEFUNCTION => function ($handle, $chunk) use ($stream, &$overflow, &$size, $maxBytes, $hash) {
+                $remaining = $maxBytes - $size;
+                $bytes = $remaining > 0 ? substr($chunk, 0, $remaining) : '';
+                if ($bytes !== '' && fwrite($stream, $bytes) !== strlen($bytes)) { return 0; }
+                if ($bytes !== '') { hash_update($hash, $bytes); $size += strlen($bytes); }
+                if (strlen($chunk) > $remaining) { $overflow = true; return 0; }
+                return strlen($chunk);
+            },
+        ];
+        if ($this->caBundle !== '') { $options[CURLOPT_CAINFO] = $this->caBundle; }
+        curl_setopt_array($handle, $options);
+        $ok = curl_exec($handle);
+        $errorNumber = curl_errno($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+        curl_close($handle);
+        if ($ok === false && !($overflow && $errorNumber === CURLE_WRITE_ERROR)) {
+            fclose($stream);
+            throw new RuntimeException($errorNumber === CURLE_OPERATION_TIMEDOUT ? 'PUBLIC_URL_TIMEOUT' : 'PUBLIC_URL_FETCH_FAILED');
+        }
+        return ['status' => $status, 'headers' => $headers, 'stream' => $stream, 'truncated' => $overflow,
+            'size_bytes' => $size, 'sha256' => hash_final($hash)];
     }
 
     private function resolveAddresses($host)

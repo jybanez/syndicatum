@@ -165,6 +165,9 @@ is checked against the running server by `tests/project-api.php`.
 | Post retry key | Optional `idempotency_key` or header | `idempotency_key` required by `post_message` tool schema |
 | Correlation ID | Optional on a post | Not exposed by `post_message` |
 | Project File attachments | Up to 20 ordered canonical project-file UUIDs | Same `attachment_file_ids` contract; every file is reauthorized in the bound project |
+| Project File browsing | Folder-scoped listing with search, sort, pagination, permanent URLs, and optimistic versions | Same canonical service through `list_project_files` |
+| Project File upload | Multipart stream into canonical project storage | ChatGPT-authorized `file` input; the server securely fetches the temporary HTTPS URL and streams it through the same validation, quota, and storage service |
+| Project File mutations | Create folder, replace, rename, move, and delete with authorization, idempotency, and optimistic concurrency | Same canonical service and safeguards; replace and delete are advertised as destructive tools |
 | Result | Full canonical JSON message | Compact message projection in MCP `structuredContent.result` |
 | Operation failure | HTTP status and JSON `code` | Auth/scope challenge uses HTTP 401; authorized tool failures return an MCP tool result with `isError: true` |
 
