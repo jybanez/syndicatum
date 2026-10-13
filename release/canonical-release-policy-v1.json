@@ -3242,6 +3242,13 @@
       "mode": 420
     },
     {
+      "source": "migrations/202610130001.php",
+      "action": "ship",
+      "path": "schema/baselines/mysql84/migrations/202610130001.php",
+      "role": "schema_baseline",
+      "mode": 420
+    },
+    {
       "source": "api/v1/project-files.php",
       "action": "ship",
       "path": "app/api/v1/project-files.php",
