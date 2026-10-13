@@ -119,6 +119,37 @@ try {
         $suite->same('{"ok":true}', $result['content']);
     });
 
+    $suite->test('authorized remote files download into bounded temporary streams', function () use ($suite, $pdo, $access) {
+        $resolver = function () { return ['93.184.216.34']; };
+        $payload = "project file\n";
+        $reader = new AgentContentReader($pdo, null, $resolver, function () use ($payload) {
+            return ['status' => 200, 'headers' => ['content-type' => 'text/plain'], 'body' => $payload, 'truncated' => false];
+        });
+        $download = $reader->downloadPublicFile($access, 'https://files.example/authorized', 1024);
+        try {
+            $suite->true(is_resource($download['stream']));
+            $suite->same($payload, stream_get_contents($download['stream']));
+            $suite->same(strlen($payload), $download['size_bytes']);
+            $suite->same(hash('sha256', $payload), $download['sha256']);
+            $suite->same('text/plain', $download['mime_type']);
+        } finally {
+            if (is_resource($download['stream'])) { fclose($download['stream']); }
+        }
+
+        $tooLarge = new AgentContentReader($pdo, null, $resolver, function () {
+            return ['status' => 200, 'headers' => ['content-type' => 'application/octet-stream'], 'body' => '1234', 'truncated' => true];
+        });
+        $suite->throws(function () use ($tooLarge, $access) {
+            $tooLarge->downloadPublicFile($access, 'https://files.example/large', 4);
+        }, 'FILE_TOO_LARGE');
+        $failed = new AgentContentReader($pdo, null, $resolver, function () {
+            return ['status' => 403, 'headers' => [], 'body' => '', 'truncated' => false];
+        });
+        $suite->throws(function () use ($failed, $access) {
+            $failed->downloadPublicFile($access, 'https://files.example/expired', 1024);
+        }, 'FILE_INPUT_FETCH_FAILED');
+    });
+
     exit($suite->finish());
 } finally {
     agentContentRemove($root);

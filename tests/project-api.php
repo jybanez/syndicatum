@@ -380,10 +380,14 @@ try {
         ]);
         $suite->same(200, $response['status'], $response['raw']);
         $tools = [];
+        $descriptors = [];
         foreach ($response['body']['result']['tools'] as $tool) {
             $tools[$tool['name']] = $tool['inputSchema'];
+            $descriptors[$tool['name']] = $tool;
         }
         foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
+            'list_project_files', 'read_project_file', 'read_public_url', 'create_project_folder', 'upload_project_file',
+            'replace_project_file', 'rename_project_file', 'move_project_file', 'delete_project_file',
             'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'confirm_notification_receipt', 'set_notification_handling_state', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
             $suite->true(isset($tools[$name]['properties']['binding_context_id']), 'Missing binding context on ' . $name);
@@ -399,6 +403,16 @@ try {
         $suite->same(['neutral','info','success','warning','error','critical'], $tools['post_message']['properties']['severity']['enum']);
         $suite->same(20, $tools['post_message']['properties']['attachment_file_ids']['maxItems']);
         $suite->same(true, $tools['post_message']['properties']['attachment_file_ids']['uniqueItems']);
+        $suite->same(20, $tools['list_project_files']['properties']['per_page']['default']);
+        $suite->same(100, $tools['list_project_files']['properties']['per_page']['maximum']);
+        $suite->same(['file', 'idempotency_key'], $tools['upload_project_file']['required']);
+        $suite->same(['download_url', 'file_id'], $tools['upload_project_file']['properties']['file']['required']);
+        $suite->true(isset($tools['upload_project_file']['properties']['file']['properties']['mime_type']));
+        $suite->true(isset($tools['upload_project_file']['properties']['file']['properties']['file_name']));
+        $suite->same(['file'], $descriptors['upload_project_file']['_meta']['openai/fileParams']);
+        $suite->same(['file'], $descriptors['replace_project_file']['_meta']['openai/fileParams']);
+        $suite->same(true, $descriptors['replace_project_file']['annotations']['destructiveHint']);
+        $suite->same(true, $descriptors['delete_project_file']['annotations']['destructiveHint']);
         $suite->true(!isset($tools['post_message']['properties']['correlation_id']), 'HTTP-only correlation_id must not be advertised by MCP.');
         $suite->same(['message_id'], $tools['acknowledge_message']['required']);
         $suite->same(['message_id', 'project_sequence'], $tools['confirm_notification_receipt']['required']);
