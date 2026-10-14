@@ -85,6 +85,7 @@ must never expose stored credentials or project-agent tokens.
 | `get_message` | Read one canonical message and its reply context | No |
 | `list_project_files` | Browse folders and available files in the bound project's shared storage | No |
 | `read_project_file` | Read a bounded, resumable chunk of an available Project File by canonical UUID | No |
+| `preview_project_image` | Render a bounded JPEG preview of an available PNG, JPEG, GIF, or WebP file as a native MCP image | No |
 | `read_public_url` | Retrieve bounded content from a publicly routable HTTPS URL with redirect and network-boundary validation | No |
 | `create_project_folder` | Create a folder in the bound project's shared storage with an idempotency key | Yes |
 | `upload_project_file` | Upload one ChatGPT-authorized file as a new Project File | Yes |
@@ -104,6 +105,20 @@ must never expose stored credentials or project-agent tokens.
 Every tool uses explicit JSON schemas, structured results, accurate read-only
 and destructive annotations, and project-neutral error messages. Write tools
 retain Syndicatum's idempotency and authorization rules.
+
+Interactive contexts support ordinary project and file work, including file
+browsing and image previews. Browser-notification receipt and handling tools
+require a confirmed Companion discussion context because they settle and lease
+that exact browser delivery. An interactive context returns the explicit
+`NOTIFICATION_RECEIPT_REQUIRES_DISCUSSION_CONTEXT` or
+`NOTIFICATION_HANDLING_REQUIRES_DISCUSSION_CONTEXT` error instead. Missing,
+invalid, expired, revoked, pending, and otherwise unusable context IDs are also
+reported distinctly so clients can recover without guessing.
+
+Use `preview_project_image` for visual inspection of large raster files. It
+returns a size- and pixel-bounded JPEG through the MCP native image content
+block and keeps only preview metadata in the structured result. Use
+`read_project_file` for original bytes or non-image content.
 
 `upload_project_file` and `replace_project_file` use ChatGPT's native file-input
 contract. Their top-level `file` parameter is declared through

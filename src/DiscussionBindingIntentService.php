@@ -298,7 +298,8 @@ class DiscussionBindingIntentService
         $statement->execute([hash('sha256', $token), (int) ($oauthAccess['principal_user_id'] ?? 0), Db::now()]);
         $row = $statement->fetch();
         if (!$row) { return null; }
-        return ['project_id' => (int) $row['project_id'], 'participant_id' => (int) $row['participant_id'],
+        return ['project_id' => (int) $row['project_id'], 'project_name' => $row['project_name'],
+            'participant_id' => (int) $row['participant_id'], 'participant_status' => $row['participant_status'],
             'role' => 'agent', 'project_status' => $row['project_status'], 'scope' => $oauthAccess['scope'],
             'identity' => ['kind' => 'agent', 'agent' => ['id' => (int) $row['confirmed_agent_id'],
                 'authenticated_agent_id' => (int) $row['confirmed_agent_id'],

@@ -400,6 +400,8 @@ try {
         $suite->same($activationCount, (int) $pdo->query('SELECT COUNT(*) FROM agent_activation_bindings')->fetchColumn());
         $interactiveContext = $service->context($access, $interactive['binding_context_id']);
         $suite->same('interactive', $interactiveContext['binding']['type']);
+        $suite->same('Activation Project', $interactiveContext['project_name']);
+        $suite->same('active', $interactiveContext['participant_status']);
         $suite->same('healthy', $service->contextHealth($access, $interactive['binding_context_id'])['state']);
         $suite->same(null, $interactiveContext['binding']['discussion_reference']);
         $pdo->prepare("UPDATE connector_discussion_binding_intents SET expires_at = DATE_SUB(?, INTERVAL 1 SECOND) WHERE id = ?")

@@ -61,6 +61,31 @@ try {
         }, 'FILE_NOT_FOUND');
     });
 
+    $suite->test('project image previews are bounded native-image payloads', function () use ($suite, $pdo, $storage, $access, $fileId) {
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagepng')) { return; }
+        $image = imagecreatetruecolor(800, 400);
+        $background = imagecolorallocate($image, 26, 73, 110);
+        imagefill($image, 0, 0, $background);
+        ob_start(); imagepng($image); $png = ob_get_clean(); imagedestroy($image);
+        $stream = fopen('php://temp', 'w+b'); fwrite($stream, $png); rewind($stream);
+        $staged = $storage->stageStream($stream, 1048576); fclose($stream);
+        $key = $storage->publish($staged['staging_key'], '3903bbfe-7ef3-4c70-af45-6bb6aa141757');
+        $imageId = '4fa89d65-eab1-45b8-817d-c55238e41946';
+        $pdo->prepare('INSERT INTO project_files VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)')->execute([
+            $imageId, 2, 'diagram.png', 'image/png', strlen($png), hash('sha256', $png), 'local', $key, 'available',
+        ]);
+        $preview = (new AgentContentReader($pdo, $storage))->previewProjectImage($access, $imageId, 320, 320, 80);
+        $suite->same('image/jpeg', $preview['mime_type']);
+        $suite->same(320, $preview['width']);
+        $suite->same(160, $preview['height']);
+        $suite->true($preview['size_bytes'] <= AgentContentReader::PREVIEW_MAX_OUTPUT_BYTES);
+        $suite->true(substr(base64_decode($preview['content_base64']), 0, 2) === "\xff\xd8");
+        $suite->same(true, $preview['untrusted']);
+        $suite->throws(function () use ($pdo, $storage, $access, $fileId) {
+            (new AgentContentReader($pdo, $storage))->previewProjectImage($access, $fileId);
+        }, 'IMAGE_PREVIEW_UNSUPPORTED_TYPE');
+    });
+
     $suite->test('public URL validation accepts HTTPS public addresses only', function () use ($suite, $pdo, $access) {
         $resolver = function ($host) { return $host === 'public.example' ? ['93.184.216.34'] : ['127.0.0.1']; };
         $reader = new AgentContentReader($pdo, null, $resolver, function () { throw new RuntimeException('Transport should not run.'); });
