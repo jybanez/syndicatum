@@ -4,6 +4,8 @@ require_once dirname(__DIR__) . '/src/Db.php';
 require_once dirname(__DIR__) . '/src/ChatRepository.php';
 require_once dirname(__DIR__) . '/src/ProjectManagementService.php';
 require_once dirname(__DIR__) . '/src/McpServiceTokenService.php';
+require_once dirname(__DIR__) . '/src/DiscussionBindingIntentService.php';
+require_once dirname(__DIR__) . '/src/LocalFileStorage.php';
 
 class ProjectApiTestSuite
 {
@@ -87,6 +89,18 @@ function projectApiPort()
     $name = stream_socket_get_name($socket, false);
     fclose($socket);
     return (int) substr(strrchr($name, ':'), 1);
+}
+
+function projectApiRemove($path)
+{
+    if (!file_exists($path) && !is_link($path)) { return; }
+    if (is_dir($path) && !is_link($path)) {
+        foreach (scandir($path) as $entry) {
+            if ($entry !== '.' && $entry !== '..') { projectApiRemove($path . DIRECTORY_SEPARATOR . $entry); }
+        }
+        rmdir($path); return;
+    }
+    unlink($path);
 }
 
 function projectApiServer($root, $port, array $environment)
@@ -214,6 +228,7 @@ putenv('PBB_AGENTCHAT_DB_PASS=');
 putenv('PBB_AGENTCHAT_SECRET=' . $secret);
 $server = null;
 $serverLog = null;
+$storageRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'syndicatum-project-api-files-' . bin2hex(random_bytes(8));
 
 try {
     $pdo = Db::pdo();
@@ -238,6 +253,7 @@ try {
     $environment['PBB_AGENTCHAT_DB_USER'] = 'root';
     $environment['PBB_AGENTCHAT_DB_PASS'] = '';
     $environment['PBB_AGENTCHAT_SECRET'] = $secret;
+    $environment['SYNDICATUM_SETTING_STORAGE_LOCAL_BASE_PATH'] = $storageRoot;
     $serverPort = projectApiPort();
     $environment['SYNDICATUM_SETTING_GENERAL_PUBLIC_ORIGIN'] = 'http://127.0.0.1:' . $serverPort;
     list($server, $baseUrl, $serverLog) = projectApiServer($root, $serverPort, $environment);
@@ -386,7 +402,7 @@ try {
             $descriptors[$tool['name']] = $tool;
         }
         foreach (['list_projects', 'get_project', 'get_bootstrap', 'list_participants', 'list_messages', 'get_message',
-            'list_project_files', 'read_project_file', 'read_public_url', 'create_project_folder', 'upload_project_file',
+            'list_project_files', 'read_project_file', 'preview_project_image', 'read_public_url', 'create_project_folder', 'upload_project_file',
             'replace_project_file', 'rename_project_file', 'move_project_file', 'delete_project_file',
             'list_tasks', 'get_task', 'create_task', 'update_task', 'get_project_plan', 'update_task_deliverable', 'update_milestone_progress', 'update_deliverable_progress', 'post_message', 'confirm_notification_receipt', 'set_notification_handling_state', 'acknowledge_message'] as $name) {
             $suite->true(isset($tools[$name]), 'Missing MCP tool: ' . $name);
@@ -405,6 +421,8 @@ try {
         $suite->same(true, $tools['post_message']['properties']['attachment_file_ids']['uniqueItems']);
         $suite->same(20, $tools['list_project_files']['properties']['per_page']['default']);
         $suite->same(100, $tools['list_project_files']['properties']['per_page']['maximum']);
+        $suite->same(['file_id'], $tools['preview_project_image']['required']);
+        $suite->same(1280, $tools['preview_project_image']['properties']['max_width']['default']);
         $suite->same(['file', 'idempotency_key'], $tools['upload_project_file']['required']);
         $suite->same(['download_url', 'file_id'], $tools['upload_project_file']['properties']['file']['required']);
         $suite->true(isset($tools['upload_project_file']['properties']['file']['properties']['mime_type']));
@@ -1042,7 +1060,7 @@ try {
         $suite->same(true, $revoked['body']['result']['isError']);
     });
 
-    $suite->test('OAuth MCP timeline tools still require a confirmed binding context', function () use ($suite, $baseUrl, $pdo, $projectOne, $agentOne, $ownerId) {
+    $suite->test('OAuth MCP timeline tools still require a confirmed binding context', function () use ($suite, $baseUrl, $pdo, $projectOne, $agentOne, $ownerId, $storageRoot) {
         $clientId = 'contract-oauth-client';
         $token = 'contract_oauth_' . bin2hex(random_bytes(24));
         $pdo->prepare('INSERT INTO oauth_clients (client_id, client_name, redirect_uris_json, created_at, updated_at)
@@ -1054,6 +1072,7 @@ try {
             ->execute([hash('sha256', $token), $clientId, $ownerId, $projectOne, $agentOne['agent_id'],
                 $baseUrl . '/mcp', implode(' ', ChatGptOAuthService::SCOPES), Db::now(),
                 gmdate('Y-m-d H:i:s', time() + 3600)]);
+        $accessTokenId = (int) $pdo->lastInsertId();
         $call = function ($name, array $arguments = []) use ($baseUrl, $token) {
             return projectApiRequest($baseUrl, 'POST', '/mcp.php', ['Authorization: Bearer ' . $token], [
                 'jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call',
@@ -1080,17 +1099,24 @@ try {
             'confirm_notification_receipt' => ['message_id' => 1, 'project_sequence' => 1],
             'acknowledge_message' => ['message_id' => 1],
         ];
-        foreach ([[], ['binding_context_id' => 'not-a-confirmed-context']] as $context) {
-            foreach ($protectedTools as $name => $arguments) {
-                $response = $call($name, array_merge($arguments, $context));
-                $suite->same(200, $response['status'], $name . ': ' . $response['raw']);
-                $suite->same(true, $response['body']['result']['isError'], $name);
-                $suite->same('DISCUSSION_BINDING_REQUIRED',
-                    $response['body']['result']['content'][0]['text'], $name);
-                $suite->same(null, isset($response['body']['result']['structuredContent'])
-                    ? $response['body']['result']['structuredContent'] : null,
-                    $name . ' exposed structured data before binding');
-            }
+        foreach ($protectedTools as $name => $arguments) {
+            $response = $call($name, $arguments);
+            $suite->same(200, $response['status'], $name . ': ' . $response['raw']);
+            $suite->same(true, $response['body']['result']['isError'], $name);
+            $suite->same('DISCUSSION_BINDING_REQUIRED',
+                $response['body']['result']['content'][0]['text'], $name);
+            $suite->same(null, isset($response['body']['result']['structuredContent'])
+                ? $response['body']['result']['structuredContent'] : null,
+                $name . ' exposed structured data before binding');
+        }
+        foreach ($protectedTools as $name => $arguments) {
+            $response = $call($name, array_merge($arguments, ['binding_context_id' => 'not-a-confirmed-context']));
+            $suite->same(200, $response['status'], $name . ': ' . $response['raw']);
+            $suite->same(true, $response['body']['result']['isError'], $name);
+            $suite->same('BINDING_CONTEXT_INVALID', $response['body']['result']['content'][0]['text'], $name);
+            $suite->same(null, isset($response['body']['result']['structuredContent'])
+                ? $response['body']['result']['structuredContent'] : null,
+                $name . ' exposed structured data for an invalid binding');
         }
         $suite->same($projectMessageCount,
             (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn(),
@@ -1098,6 +1124,56 @@ try {
         $suite->same($projectTaskCount,
             (int) $pdo->query('SELECT COUNT(*) FROM project_tasks')->fetchColumn(),
             'Unbound MCP writes must not create tasks');
+        $chatGptAgent = (new ProjectManagementService($pdo))->createAgent($projectOne, $ownerId,
+            ['display_name' => 'Interactive File Browser', 'provider' => 'chatgpt']);
+        $principalAccess = ['principal_user_id' => $ownerId, 'access_token_id' => $accessTokenId,
+            'scope' => ChatGptOAuthService::SCOPES];
+        $interactive = (new DiscussionBindingIntentService($pdo))->prepareInteractiveContext(
+            $principalAccess, 'Project One', 'Interactive File Browser');
+        $context = ['binding_context_id' => $interactive['binding_context_id']];
+        $files = $call('list_project_files', $context);
+        $suite->same(200, $files['status'], $files['raw']);
+        $suite->same(false, $files['body']['result']['isError'], $files['raw']);
+        $suite->same($projectOne, $files['body']['result']['structuredContent']['result']['project_id']);
+        if (function_exists('imagecreatetruecolor') && function_exists('imagepng')) {
+            $image = imagecreatetruecolor(640, 320);
+            $blue = imagecolorallocate($image, 49, 94, 174);
+            imagefill($image, 0, 0, $blue);
+            ob_start(); imagepng($image); $png = ob_get_clean(); imagedestroy($image);
+            $storage = new LocalFileStorage(dirname(__DIR__), $storageRoot);
+            $stream = fopen('php://temp', 'w+b'); fwrite($stream, $png); rewind($stream);
+            $staged = $storage->stageStream($stream, 1048576); fclose($stream);
+            $projectPublicId = $pdo->query('SELECT public_id FROM projects WHERE id = ' . (int) $projectOne)->fetchColumn();
+            $storageKey = $storage->publish($staged['staging_key'], $projectPublicId);
+            $rootFolderId = (int) $pdo->query('SELECT id FROM project_file_folders WHERE project_id = ' . (int) $projectOne . ' AND root_marker = 1')->fetchColumn();
+            $uploader = $pdo->prepare("SELECT id FROM project_participants WHERE project_id = ? AND kind = 'agent' AND agent_id = ?");
+            $uploader->execute([$projectOne, $chatGptAgent['agent_id']]);
+            $uploaderParticipantId = (int) $uploader->fetchColumn();
+            $previewFileId = 'bb24dc67-ce53-4700-9735-f6f6c262c12e';
+            $pdo->prepare('INSERT INTO project_files
+                (public_id, project_id, folder_id, storage_driver, storage_key, original_name, display_name,
+                 normalized_name, mime_type, size_bytes, sha256, uploaded_by_participant_id, state, version, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)')->execute([
+                    $previewFileId, $projectOne, $rootFolderId, 'local', $storageKey, 'large-diagram.png',
+                    'large-diagram.png', 'large-diagram.png', 'image/png', strlen($png), hash('sha256', $png),
+                    $uploaderParticipantId, 'available', Db::now(), Db::now(),
+                ]);
+            $preview = $call('preview_project_image', $context + [
+                'file_id' => $previewFileId, 'max_width' => 320, 'max_height' => 320]);
+            $suite->same(false, $preview['body']['result']['isError'], $preview['raw']);
+            $suite->same('image', $preview['body']['result']['content'][0]['type']);
+            $suite->same('image/jpeg', $preview['body']['result']['content'][0]['mimeType']);
+            $suite->true(strlen($preview['body']['result']['content'][0]['data']) > 0);
+            $suite->same(320, $preview['body']['result']['structuredContent']['result']['width']);
+            $suite->true(!isset($preview['body']['result']['structuredContent']['result']['content_base64']));
+        }
+        $receipt = $call('confirm_notification_receipt', $context + ['message_id' => 1, 'project_sequence' => 1]);
+        $suite->same('NOTIFICATION_RECEIPT_REQUIRES_DISCUSSION_CONTEXT',
+            $receipt['body']['result']['content'][0]['text']);
+        $handling = $call('set_notification_handling_state', $context + [
+            'message_id' => 1, 'project_sequence' => 1, 'state' => 'working']);
+        $suite->same('NOTIFICATION_HANDLING_REQUIRES_DISCUSSION_CONTEXT',
+            $handling['body']['result']['content'][0]['text']);
         $diagnosis = $call('diagnose_connection');
         $suite->same(false, $diagnosis['body']['result']['structuredContent']['result']['checks']['project_access_valid']);
         $suite->same('Required', $diagnosis['body']['result']['structuredContent']['result']['discussion_binding']);
@@ -1427,6 +1503,7 @@ try {
     if ($serverLog && is_file($serverLog)) {
         unlink($serverLog);
     }
+    projectApiRemove($storageRoot);
     if (isset($admin) && $admin instanceof PDO) {
         if (!preg_match('/^syndicatum_project_api_[a-f0-9]{12}$/', $database)) {
             throw new RuntimeException('Refusing to drop unsafe project API test database.');

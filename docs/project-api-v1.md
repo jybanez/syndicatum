@@ -100,7 +100,10 @@ The profile-bound Codex MCP exposes the canonical file service through
 `syndicatum_upload_project_file`, `syndicatum_rename_project_file`,
 `syndicatum_move_project_file`, `syndicatum_download_project_file`, and
 `syndicatum_delete_project_file`. `syndicatum_read_project_file` reads bounded,
-resumable content directly into the agent context. `syndicatum_read_public_url`
+resumable content directly into the agent context. The ChatGPT MCP
+`preview_project_image` tool returns a bounded JPEG as a native image block for
+transport-safe visual review of large raster Project Files.
+`syndicatum_read_public_url`
 is separate from Project Files and retrieves only publicly routable HTTPS
 content with DNS/IP validation and redirect revalidation.
 
