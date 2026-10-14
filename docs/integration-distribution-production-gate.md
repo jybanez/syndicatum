@@ -24,7 +24,7 @@ installed-client acceptance gates below remain open.
 | Integration | Current channel | Classification | Production blocker |
 | --- | --- | --- | --- |
 | ChatGPT hosted MCP | Developer/custom MCP connection | Development | No approved public OpenAI plugin listing; current public-review artifact, domain challenge, scans, reviewer materials, and directory identity are not retained. |
-| Codex connector | Git-backed local marketplace; immutable `codex-v0.2.7` pilot | Pilot | The 0.2.7 release provenance, exact-tag Windows 11 installation, fresh protected-profile claim, healthy connector, and routed request/reply delivery are accepted. Promotion remains blocked on rollback, failed-update recovery, revocation, second-device, Windows 10, compatibility-range, and support-window evidence. |
+| Codex connector | Git-backed local marketplace; `codex-v0.2.8` source candidate | Pilot | The 0.2.7 release provenance, exact-tag Windows 11 installation, fresh protected-profile claim, healthy connector, and routed request/reply delivery are accepted. The 0.2.8 candidate adds atomic state-write serialization, corrupt-binding isolation, and truthful degraded-route health; immutable publication and installed acceptance remain open. Promotion remains blocked on rollback, failed-update recovery, revocation, second-device, Windows 10, compatibility-range, and support-window evidence. |
 | Companion for Chrome | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required and unpacked extensions do not auto-update. No Chrome Web Store identifier or reviewed listing exists. |
 | Companion for Edge | GitHub ZIP or source loaded unpacked | Pilot | Developer mode is required. No Edge Add-ons identifier, Partner Center certification, or store-managed update acceptance exists. |
 | Gemini through Companion | Same unpacked Companion package | Pilot | It inherits the Companion store-distribution blockers. Exact 0.10.24 ChatGPT delivery is accepted; the latest retained Gemini-specific installed correlation evidence remains 0.10.18. |
@@ -53,11 +53,16 @@ install, or inferred compatibility result into publication evidence.
 
 ## Verified repository and service evidence
 
-The following evidence was current on 2026-10-12:
+The following evidence was current on 2026-10-14:
 
 - application release candidate: `v1.0.0-rc.3`;
 - portable OpenAI public-review candidate: `0.1.0`;
-- Codex immutable pilot: `0.2.7` (`codex-v0.2.7`). Its release at commit
+- Codex source candidate: `0.2.8` (`codex-v0.2.8`). Its notification-state
+  reliability changes were reviewed at source head
+  `54c674e3b36f47335194099cf6475ee28846009c`, passed all 11 protected checks,
+  and merged as `1e11bdf8e8f36b5b3a902365d8e61046ad2c8188`. Immutable publication and
+  installed acceptance remain open. The current immutable installed pilot is
+  `0.2.7` (`codex-v0.2.7`); its release at commit
   `68c586b17628b387f08e42da3f17199f0f8824e7` has retained artifact checksums.
   The owner installed the exact tag on Windows 11, and a newly claimed protected
   profile then verified installed manifest 0.2.7, healthy active routing, and a
@@ -200,7 +205,7 @@ The source versions below are test anchors, not production ranges.
 
 | Server/application | Integration package | Provider/client | Current evidence | Production support claim |
 | --- | --- | --- | --- | --- |
-| `v1.0.0-rc.3` | Codex `0.2.7` immutable pilot | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | Exact release provenance plus owner-verified Windows 11 installation, fresh protected-profile claim, healthy routing, and routed request/reply delivery. Windows 10 remains accepted only for 0.2.6, with explicit S5 startup/baseline qualifications. | None until rollback, recovery, revocation, second-device, Windows 10, compatibility-range, and support-window gates pass for a promoted release. |
+| `v1.0.0-rc.3` | Codex `0.2.8` source candidate; `0.2.7` immutable installed pilot | Codex Desktop/CLI on Windows 10 22H2 and Windows 11 | The 0.2.8 source fix passed exact-head review and all protected checks; immutable publication and installation remain open. Exact 0.2.7 release provenance plus owner-verified Windows 11 installation, fresh protected-profile claim, healthy routing, and routed request/reply delivery remain the latest installed evidence. Windows 10 remains accepted only for 0.2.6, with explicit S5 startup/baseline qualifications. | None until exact 0.2.8 publication and installed acceptance plus rollback, recovery, revocation, second-device, Windows 10, compatibility-range, and support-window gates pass for a promoted release. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + ChatGPT web on Windows 11 | Source tests plus exact installed 0.10.24 unpacked-pilot acceptance: verified artifact and rollback backup, in-place update/reload, identity/auth/binding preservation, healthy Realtime, zero queue/review, stale-error retirement without replay, exact receipt, one normal reply, and automatic lease release | None until the exact reviewed Chrome Web Store build passes publication and store-managed lifecycle acceptance. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Chrome + Gemini web | Source compatibility plus installed 0.10.18 exact-turn correlation acceptance | None until reviewed store build passes. |
 | `v1.0.0-rc.3` | Companion `0.10.24` | Microsoft Edge | Source-compatible Chromium package only | None until Edge Add-ons build passes. |

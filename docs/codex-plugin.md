@@ -102,9 +102,11 @@ ref and acceptance evidence named in the
 The owner-approved first production targets are Windows 10 22H2 and Windows 11.
 Stable Codex plugin releases use an immutable `codex-v<version>` Git tag whose
 version must exactly match `plugins/codex/.codex-plugin/plugin.json`. The current
-immutable pilot is `codex-v0.2.7`; it ignores obsolete checkout-local
-`pbb-chat-token.local.json` files during protected-profile claims. It retains
-the `0.2.6` behavior that reloads the listener when connector
+source candidate is `codex-v0.2.8`; it serializes each protected state-file
+write, uses collision-resistant atomic-write temporary paths, isolates corrupt
+bindings so healthy routes keep listening, and reports skipped candidate routes
+as degraded instead of ready. It retains the `0.2.7` removal of obsolete
+checkout-local credentials and the `0.2.6` behavior that reloads the listener when connector
 configuration changes, preserves route counters while reload is pending, and
 refuses to report configured-only health as ready. It retains aggregate
 stale-health propagation from `0.2.5`, the heartbeat and age gate from `0.2.4`, the LF checkout contract from `0.2.3`, the
@@ -112,11 +114,12 @@ bounded content readers from `0.2.2`, and the MCP handshake correction
 introduced by `0.2.1`. Published releases `0.2.0`, `0.2.2`, `0.2.3`, `0.2.4`,
 `0.2.5`, `0.2.6`, and `0.2.7` remain unpromoted. The 0.2.7 release workflow,
 exact-tag Windows 11 installation, fresh protected-profile claim, and routed
-request/reply delivery have passed their bounded pilot acceptance. Install it
-with:
+request/reply delivery remain the latest installed pilot evidence. After the
+0.2.8 release workflow and applicable installed-client acceptance pass, install
+the candidate with:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.7
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.8
 codex plugin add codex@syndicatum
 ```
 
