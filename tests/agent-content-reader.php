@@ -86,6 +86,22 @@ try {
         }, 'IMAGE_PREVIEW_UNSUPPORTED_TYPE');
     });
 
+    $suite->test('project image previews reject unsafe dimensions before GD decode', function () use ($suite, $pdo, $storage, $access) {
+        $ihdr = pack('NNCCCCC', 5000, 3000, 8, 2, 0, 0, 0);
+        $png = "\x89PNG\r\n\x1a\n" . pack('N', strlen($ihdr)) . 'IHDR' . $ihdr
+            . pack('N', crc32('IHDR' . $ihdr)) . pack('N', 0) . 'IEND' . pack('N', crc32('IEND'));
+        $stream = fopen('php://temp', 'w+b'); fwrite($stream, $png); rewind($stream);
+        $staged = $storage->stageStream($stream, 1048576); fclose($stream);
+        $key = $storage->publish($staged['staging_key'], '3903bbfe-7ef3-4c70-af45-6bb6aa141757');
+        $imageId = '4c4094ca-bf04-40b5-ac77-2ab7f210ad67';
+        $pdo->prepare('INSERT INTO project_files VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)')->execute([
+            $imageId, 2, 'oversized.png', 'image/png', strlen($png), hash('sha256', $png), 'local', $key, 'available',
+        ]);
+        $suite->throws(function () use ($pdo, $storage, $access, $imageId) {
+            (new AgentContentReader($pdo, $storage))->previewProjectImage($access, $imageId);
+        }, 'IMAGE_PREVIEW_PIXEL_LIMIT');
+    });
+
     $suite->test('public URL validation accepts HTTPS public addresses only', function () use ($suite, $pdo, $access) {
         $resolver = function ($host) { return $host === 'public.example' ? ['93.184.216.34'] : ['127.0.0.1']; };
         $reader = new AgentContentReader($pdo, null, $resolver, function () { throw new RuntimeException('Transport should not run.'); });

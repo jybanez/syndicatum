@@ -11,7 +11,10 @@ final class AgentContentReader
     const MAX_REDIRECTS = 4;
     const PREVIEW_MAX_SOURCE_BYTES = 26214400;
     const PREVIEW_MAX_PIXELS = 50000000;
+    const PREVIEW_SAFE_MAX_PIXELS = 12000000;
     const PREVIEW_MAX_OUTPUT_BYTES = 524288;
+    const PREVIEW_MEMORY_BYTES_PER_PIXEL = 8;
+    const PREVIEW_MEMORY_RESERVE_BYTES = 16777216;
 
     private $pdo;
     private $storage;
@@ -130,12 +133,11 @@ final class AgentContentReader
         if ($sourceWidth * $sourceHeight > self::PREVIEW_MAX_PIXELS) {
             throw new RuntimeException('IMAGE_PREVIEW_PIXEL_LIMIT');
         }
+        list($width, $height) = $this->previewDimensions($sourceWidth, $sourceHeight, $maxWidth, $maxHeight);
+        $this->assertPreviewDecodeBudget($sourceWidth, $sourceHeight, $width, $height, $actualSize);
         $source = @imagecreatefromstring($bytes);
         if (!$source) { throw new RuntimeException('IMAGE_PREVIEW_INVALID'); }
         try {
-            $scale = min(1, $maxWidth / $sourceWidth, $maxHeight / $sourceHeight);
-            $width = max(1, (int) floor($sourceWidth * $scale));
-            $height = max(1, (int) floor($sourceHeight * $scale));
             $encoded = null;
             $usedQuality = (int) $quality;
             for ($attempt = 0; $attempt < 6; $attempt++) {
@@ -522,6 +524,40 @@ final class AgentContentReader
             throw new InvalidArgumentException($label . ' must be between 64 and 2048 pixels.');
         }
         return (int) $value;
+    }
+
+    private function previewDimensions($sourceWidth, $sourceHeight, $maxWidth, $maxHeight)
+    {
+        $scale = min(1, $maxWidth / $sourceWidth, $maxHeight / $sourceHeight);
+        return [max(1, (int) floor($sourceWidth * $scale)), max(1, (int) floor($sourceHeight * $scale))];
+    }
+
+    /** Fail before GD decode if the projected source and preview allocations are unsafe. */
+    private function assertPreviewDecodeBudget($sourceWidth, $sourceHeight, $previewWidth, $previewHeight, $sourceBytes)
+    {
+        $sourcePixels = $sourceWidth * $sourceHeight;
+        if ($sourcePixels > self::PREVIEW_SAFE_MAX_PIXELS) {
+            throw new RuntimeException('IMAGE_PREVIEW_PIXEL_LIMIT');
+        }
+        $projected = memory_get_usage(true)
+            + (int) $sourceBytes
+            + ($sourcePixels * self::PREVIEW_MEMORY_BYTES_PER_PIXEL)
+            + ($previewWidth * $previewHeight * self::PREVIEW_MEMORY_BYTES_PER_PIXEL)
+            + self::PREVIEW_MEMORY_RESERVE_BYTES;
+        $limit = $this->memoryLimitBytes();
+        if ($limit !== null && $projected > (int) floor($limit * 0.9)) {
+            throw new RuntimeException('IMAGE_PREVIEW_PIXEL_LIMIT');
+        }
+    }
+
+    private function memoryLimitBytes()
+    {
+        $value = trim((string) ini_get('memory_limit'));
+        if ($value === '' || $value === '-1') { return null; }
+        if (!preg_match('/\A(\d+)\s*([kmgt]?)b?\z/i', $value, $matches)) { return null; }
+        $bytes = (int) $matches[1];
+        $powers = ['' => 0, 'k' => 1, 'm' => 2, 'g' => 3, 't' => 4];
+        return (int) ($bytes * pow(1024, $powers[strtolower($matches[2])]));
     }
 
     private function assertActiveProject(array $access)

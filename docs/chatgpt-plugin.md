@@ -117,7 +117,9 @@ reported distinctly so clients can recover without guessing.
 
 Use `preview_project_image` for visual inspection of large raster files. It
 returns a size- and pixel-bounded JPEG through the MCP native image content
-block and keeps only preview metadata in the structured result. Use
+block and keeps only preview metadata in the structured result. Before GD
+decode, a conservative 12 MP ceiling and the active PHP memory limit are both
+applied to projected source and preview allocations. Use
 `read_project_file` for original bytes or non-image content.
 
 `upload_project_file` and `replace_project_file` use ChatGPT's native file-input
