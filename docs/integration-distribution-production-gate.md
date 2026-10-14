@@ -1,6 +1,6 @@
 # Integration distribution production gate
 
-Status: active production-readiness contract. Last assessed 2026-10-12.
+Status: active production-readiness contract. Last assessed 2026-10-14.
 
 Owner direction recorded 2026-10-04: productionize the Codex channel first,
 with Windows 10 22H2 and Windows 11 as the initial target operating systems.
