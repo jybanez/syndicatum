@@ -198,6 +198,8 @@ test("Codex lifecycle procedure names the reviewed Windows transition and fail-c
   assert.match(procedure, /codex-windows-lifecycle-transition\.ps1/);
   assert.match(procedure, /`RejectFixture`/);
   assert.match(transition, /ValidateSet\('Inspect', 'RejectFixture', 'Apply'\)/);
+  assert.match(transition, /ValidateSet\('0\.2\.6', '0\.2\.7', '0\.2\.8'\)/);
+  assert.match(transition, /Ref = 'codex-v0\.2\.8'[\s\S]+Revision = '4e6e981be031e61c4f52fb87e0ead64bf43b90d9'/);
   assert.match(transition, /Deterministic candidate-revision mismatch\./);
   assert.match(transition, /codex plugin marketplace remove syndicatum/);
   assert.match(transition, /codex plugin marketplace add jybanez\/syndicatum --ref/);
