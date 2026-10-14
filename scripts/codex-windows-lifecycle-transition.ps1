@@ -5,7 +5,7 @@ param(
     [string] $Mode,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('0.2.6', '0.2.7')]
+    [ValidateSet('0.2.6', '0.2.7', '0.2.8')]
     [string] $TargetVersion,
 
     [Parameter(Mandatory = $true)]
@@ -27,6 +27,10 @@ $release = @{
     '0.2.7' = @{
         Ref = 'codex-v0.2.7'
         Revision = '68c586b17628b387f08e42da3f17199f0f8824e7'
+    }
+    '0.2.8' = @{
+        Ref = 'codex-v0.2.8'
+        Revision = '4e6e981be031e61c4f52fb87e0ead64bf43b90d9'
     }
 }
 
