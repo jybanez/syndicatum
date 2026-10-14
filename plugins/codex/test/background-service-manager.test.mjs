@@ -149,6 +149,25 @@ test("background status distinguishes an authorized device with no usable discus
   assert.equal(status.listenerReason, "authorized_without_local_routes");
 });
 
+test("background status exposes partial listener loss as degraded", async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-degraded-health-"));
+  const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });
+  await mkdir(manager.files.root, { recursive: true });
+  await writeFile(manager.files.backgroundLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.listenerLock, `${process.pid}\n`, "utf8");
+  await writeFile(manager.files.backgroundHealth, JSON.stringify({ pid: process.pid, state: "degraded", bindings: 1, projects: 1,
+    requestedBindings: 2, initializedBindings: 1, unavailableBindings: 1,
+    unavailableBindingReasons: [{ projectId: "2", agentId: "30", reason: "binding_initialization_failed" }],
+    updatedAt: new Date().toISOString() }), "utf8");
+
+  const status = await manager.status();
+
+  assert.equal(status.readiness, "degraded");
+  assert.equal(status.listenerReason, "listener_routes_degraded");
+  assert.equal(status.health.bindings, 1);
+  assert.equal(status.health.unavailableBindings, 1);
+});
+
 test("background status rejects stale health even when the process owns the listener", async () => {
   const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-stale-health-"));
   const manager = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData } });

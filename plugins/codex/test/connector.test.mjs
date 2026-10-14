@@ -186,6 +186,10 @@ test("one corrupt binding state does not abort healthy listeners", async () => {
       log: { info() {}, error: value => logs.push(value) },
     });
     connector.stopped = true;
+    const initialized = await connector.initialize();
+    assert.equal(initialized.bindings, 1);
+    assert.equal(initialized.projects, 1);
+    assert.deepEqual(initialized.failures, [{ projectId: "2", agentId: "30", reason: "binding_initialization_failed" }]);
     await connector.start();
     assert.equal(connector.processors.get("2").length, 1);
     assert.equal(connector.processors.get("2")[0].config.participantId, "34");

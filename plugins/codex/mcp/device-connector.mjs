@@ -7,16 +7,22 @@ import { SyndicatumClient } from "./syndicatum-client.mjs";
 
 export class DeviceConnector {
   constructor({ config, syndicatum, bindings, log = console, loadProfile = loadAgentProfile, identityClientFactory = options => new SyndicatumClient(options), driverFactory = options => new CodexDriver(options) }) {
-    Object.assign(this, { config, syndicatum, bindings, log, loadProfile, identityClientFactory, driverFactory }); this.stopped = false; this.sockets = new Set(); this.processors = new Map();
+    Object.assign(this, { config, syndicatum, bindings, log, loadProfile, identityClientFactory, driverFactory }); this.stopped = false; this.sockets = new Set(); this.processors = new Map(); this.initialization = null;
   }
-  async start() {
+  initialize() {
+    this.initialization ??= this.initializeBindings();
+    return this.initialization;
+  }
+  async initializeBindings() {
     // Protected credential reads can be comparatively slow on Windows. Build
     // every binding concurrently so one profile cannot hold every project's
     // realtime listener offline during startup.
+    const failures = [];
     const initialized = await Promise.all(this.bindings.map(async binding => {
       try { return await this.initializeBinding(binding); }
       catch (error) {
         this.log.error(`Binding state is unavailable for agent ${binding.agent_id}; skipping only this binding (${safe(error)}).`);
+        failures.push({ projectId: String(binding.project_id), agentId: String(binding.agent_id), reason: "binding_initialization_failed" });
         return null;
       }
     }));
@@ -28,6 +34,10 @@ export class DeviceConnector {
       if (identityClient) recoveryPlans.push({ binding, processor });
       if (processor.canCoalesce() && (state.activeWake()?.messages.length ?? 0) > 1) processor.scheduleCoalescedCheck();
     }
+    return { bindings: initialized.length - failures.length, projects: this.processors.size, failures, recoveryPlans };
+  }
+  async start() {
+    const { recoveryPlans } = await this.initialize();
     const listeners = Promise.all([...this.processors.keys()].map(projectId => this.connectLoop(projectId)));
     await Promise.all(recoveryPlans.map(async ({ binding, processor }) => {
       try {

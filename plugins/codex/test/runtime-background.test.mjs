@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { PluginRuntime, deviceBindingSignature, selectAvailableBindings } from "../mcp/runtime.mjs";
+import { PluginRuntime, aggregateBackgroundState, deviceBindingSignature, deviceInitializationStatus, selectAvailableBindings } from "../mcp/runtime.mjs";
 
 test("device binding validation tolerates missing directory hints and rejects missing discussions", async () => {
   const calls = [];
@@ -70,6 +70,22 @@ test("runtime stop waits for the listener task before releasing ownership", asyn
   finishTask();
   await stopping;
   assert.deepEqual(events, ["connector-stopped", "task-finished", "lock-released"]);
+});
+
+test("partial binding initialization reports degraded active-route health", () => {
+  const status = deviceInitializationStatus("device-test", 2, [], {
+    bindings: 1,
+    projects: 1,
+    failures: [{ projectId: "2", agentId: "30", reason: "binding_initialization_failed" }],
+  });
+  assert.equal(status.state, "degraded");
+  assert.equal(status.bindings, 1);
+  assert.equal(status.projects, 1);
+  assert.equal(status.requestedBindings, 2);
+  assert.equal(status.initializedBindings, 1);
+  assert.equal(status.unavailableBindings, 1);
+  assert.deepEqual(status.unavailableBindingReasons, [{ projectId: "2", agentId: "30", reason: "binding_initialization_failed" }]);
+  assert.equal(aggregateBackgroundState({ supported: true, readiness: "degraded" }), "degraded");
 });
 
 test("MCP runtime leaves listener ownership with a healthy background service", async () => {

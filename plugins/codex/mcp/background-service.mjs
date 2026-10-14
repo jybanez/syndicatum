@@ -35,6 +35,8 @@ async function run() {
 function writeHealth(status) {
   const health = { pid: process.pid, updatedAt: new Date().toISOString(), state: status.state, role: status.role || "background",
     bindings: Number(status.bindings || 0), projects: Number(status.projects || 0), unavailableBindings: Number(status.unavailableBindings || 0),
+    requestedBindings: Number(status.requestedBindings || 0), initializedBindings: Number(status.initializedBindings || 0),
+    unavailableBindingReasons: Array.isArray(status.unavailableBindingReasons) ? status.unavailableBindingReasons.slice(0, 100) : [],
     ...(status.error ? { error: String(status.error).slice(0, 500) } : {}) };
   const operation = healthWriteQueue.then(() => writeHealthFile(health));
   healthWriteQueue = operation.catch(() => {});
@@ -74,7 +76,7 @@ async function healthyExistingOwner(ownerPid) {
   try {
     const health = JSON.parse(await readFile(files.backgroundHealth, "utf8"));
     return Number(health?.pid) === ownerPid && isHealthFresh(health)
-      && ["running", "ready", "authorized_idle"].includes(String(health?.state || ""));
+      && ["running", "ready", "degraded", "authorized_idle"].includes(String(health?.state || ""));
   } catch (_error) {
     return false;
   }
