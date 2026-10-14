@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
   "policy_version": "1.0.0",
-  "assessed_on": "2026-10-12",
+  "assessed_on": "2026-10-14",
   "production_rule": "A channel is production only when production_eligible is true, it has a published identifier, and every required gate is passed with retained acceptance evidence for the exact published artifact.",
   "release_train": {
     "application": "v1.0.0-rc.3",
     "openai_public_plugin": "0.1.0",
-    "codex_plugin": "0.2.7",
+    "codex_plugin": "0.2.8",
     "companion": "0.10.25"
   },
   "channels": [
@@ -76,10 +76,10 @@
   "compatibility": {
     "application_release": "v1.0.0-rc.3",
     "codex_plugin": {
-      "tested_source_version": "0.2.7",
+      "tested_source_version": "0.2.8",
       "production_range": null,
       "initial_stable_ref": "codex-v0.2.0",
-      "current_candidate_ref": "codex-v0.2.7",
+      "current_candidate_ref": "codex-v0.2.8",
       "release_history": [
         {
           "version": "0.2.0",
