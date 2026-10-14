@@ -1,5 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+const stateWriteQueues = new Map();
 
 export class StateStore {
   constructor(file) {
@@ -62,10 +65,22 @@ export class StateStore {
     if (sequence > this.state.lastSequence) { this.state.lastSequence = sequence; await this.save(); }
   }
   async save() {
-    await mkdir(path.dirname(this.file), { recursive: true });
-    const temporary = `${this.file}.${process.pid}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(this.state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-    await rename(temporary, this.file);
+    const contents = `${JSON.stringify(this.state, null, 2)}\n`;
+    const key = path.resolve(this.file);
+    const previous = stateWriteQueues.get(key) ?? Promise.resolve();
+    const operation = previous.catch(() => {}).then(async () => {
+      await mkdir(path.dirname(this.file), { recursive: true });
+      const temporary = `${this.file}.${process.pid}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, contents, { encoding: "utf8", mode: 0o600 });
+        await rename(temporary, this.file);
+      } finally {
+        await rm(temporary, { force: true }).catch(() => {});
+      }
+    });
+    stateWriteQueues.set(key, operation);
+    try { await operation; }
+    finally { if (stateWriteQueues.get(key) === operation) stateWriteQueues.delete(key); }
   }
 }
 

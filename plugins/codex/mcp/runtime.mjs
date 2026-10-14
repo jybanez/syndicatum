@@ -53,7 +53,15 @@ export class PluginRuntime {
     }
     return this.status;
   }
-  async stop() { clearInterval(this.bindingRefreshTimer); this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; if (this.connector) this.connector.stop(); this.connector = null; this.task = null; if (this.lock) await this.lock.release(); this.lock = null; }
+  async stop() {
+    clearInterval(this.bindingRefreshTimer); this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false;
+    const connector = this.connector; const task = this.task;
+    this.connector = null; this.task = null;
+    if (connector) connector.stop();
+    if (task) await task.catch(() => {});
+    if (this.lock) await this.lock.release();
+    this.lock = null;
+  }
   async configure(input) {
     await saveConfig(input, this.env);
     return this.start();
@@ -138,8 +146,9 @@ export class PluginRuntime {
       return this.status;
     }
     this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings: validBindings, log: logger });
-    this.status = { state: "running", mode: "device", deviceId: config.deviceId, bindings: validBindings.length, projects: new Set(validBindings.map(item => String(item.project_id))).size, unavailableBindings: unavailableBindings.length };
-    if (unavailableBindings.length) logger.error(`${unavailableBindings.length} discussion binding(s) were skipped.`);
+    const initialized = await this.connector.initialize();
+    this.status = deviceInitializationStatus(config.deviceId, bindings.length, unavailableBindings, initialized);
+    if (this.status.unavailableBindings) logger.error(`${this.status.unavailableBindings} discussion binding(s) were skipped; connector health is degraded.`);
     this.task = this.connector.start().catch(error => { this.status = { ...this.status, state: "error", error: String(error?.message || error) }; logger.error(this.status.error); });
     this.bindingSignature = deviceBindingSignature(validBindings, unavailableBindings);
     this.bindingRefreshTimer = setInterval(() => void this.refreshDeviceBindings(client, logger), config.bindingRefreshMs);
@@ -209,8 +218,19 @@ export function aggregateBackgroundState(background) {
   if (background.readiness === "authorized_idle") return "authorized_idle";
   if (background.readiness === "startup_error") return "error";
   if (background.readiness === "stale_health") return "stale_health";
+  if (background.readiness === "degraded") return "degraded";
   if (background.readiness === "ready") return "ready";
   return background.running && background.ownsListener && background.readiness == null ? "ready" : "starting";
+}
+
+export function deviceInitializationStatus(deviceId, requestedBindings, unavailableBindings, initialized) {
+  const unavailableBindingReasons = [
+    ...unavailableBindings.map(item => ({ projectId: String(item.projectId), agentId: String(item.agentId), reason: String(item.reason) })),
+    ...initialized.failures,
+  ];
+  return { state: unavailableBindingReasons.length ? "degraded" : "running", mode: "device", deviceId,
+    bindings: initialized.bindings, projects: initialized.projects, requestedBindings,
+    initializedBindings: initialized.bindings, unavailableBindings: unavailableBindingReasons.length, unavailableBindingReasons };
 }
 
 export async function selectAvailableBindings(bindings, accessImpl = access) {
