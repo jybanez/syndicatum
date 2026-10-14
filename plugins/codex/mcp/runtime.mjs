@@ -53,7 +53,15 @@ export class PluginRuntime {
     }
     return this.status;
   }
-  async stop() { clearInterval(this.bindingRefreshTimer); this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; if (this.connector) this.connector.stop(); this.connector = null; this.task = null; if (this.lock) await this.lock.release(); this.lock = null; }
+  async stop() {
+    clearInterval(this.bindingRefreshTimer); this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false;
+    const connector = this.connector; const task = this.task;
+    this.connector = null; this.task = null;
+    if (connector) connector.stop();
+    if (task) await task.catch(() => {});
+    if (this.lock) await this.lock.release();
+    this.lock = null;
+  }
   async configure(input) {
     await saveConfig(input, this.env);
     return this.start();

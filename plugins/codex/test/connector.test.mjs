@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ActivationConnector, isAddressedTo, isSentBy } from "../mcp/connector.mjs";
@@ -147,6 +147,51 @@ test("coalesced wake state and its discussion scope survive connector restart", 
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("concurrent state writes remain one valid JSON document", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-state-write-"));
+  const file = path.join(directory, "state.json");
+  try {
+    const first = new StateStore(file); await first.load();
+    const second = new StateStore(file); await second.load();
+    await Promise.all([
+      first.markPending({ ...message, id: 1701, project_sequence: 1701 }),
+      second.markPending({ ...message, id: 1702, project_sequence: 1702 }),
+    ]);
+    const parsed = JSON.parse(await readFile(file, "utf8"));
+    assert.equal(Array.isArray(parsed.pendingNotifications), true);
+    assert.equal(parsed.pendingNotifications.length, 1);
+    assert.equal(["1701", "1702"].includes(parsed.pendingNotifications[0].id), true);
+    assert.deepEqual((await readdir(directory)).filter(name => name.endsWith(".tmp")), []);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("one corrupt binding state does not abort healthy listeners", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-corrupt-binding-"));
+  const stateFile = path.join(directory, "state.json");
+  const logs = [];
+  try {
+    await writeFile(`${stateFile}.participant-33`, '{"processedMessageIds":[]}trailing', "utf8");
+    const connector = new DeviceConnector({
+      config: { stateFile, syndicatumUrl: "https://syndicatum.wizaya.com" },
+      syndicatum: {},
+      bindings: [
+        { project_id: 2, participant_id: 33, agent_id: 30, conversation_id: "discussion-corrupt", working_directory: null },
+        { project_id: 2, participant_id: 34, agent_id: 31, conversation_id: "discussion-healthy", working_directory: null },
+      ],
+      loadProfile: async profileId => ({ syndicatum_url: "https://syndicatum.wizaya.com", project_id: 2, participant_id: profileId.endsWith(".30") ? 33 : 34, token: "protected" }),
+      identityClientFactory: () => ({ isAcknowledged: async () => false, addressedUnacknowledged: async () => [] }),
+      driverFactory: () => ({ activate: async () => {} }),
+      log: { info() {}, error: value => logs.push(value) },
+    });
+    connector.stopped = true;
+    await connector.start();
+    assert.equal(connector.processors.get("2").length, 1);
+    assert.equal(connector.processors.get("2")[0].config.participantId, "34");
+    assert.match(logs[0], /skipping only this binding/);
+    connector.stop();
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("device startup resumes reconciliation for a persisted coalesced wake", async () => {

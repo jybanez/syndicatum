@@ -55,6 +55,23 @@ test("device binding refresh reloads only when routing changes", async () => {
   assert.equal(reloads, 1);
 });
 
+test("runtime stop waits for the listener task before releasing ownership", async () => {
+  const runtime = new PluginRuntime(process.env, { manageBackground: false });
+  const events = [];
+  let finishTask;
+  runtime.connector = { stop() { events.push("connector-stopped"); } };
+  runtime.task = new Promise(resolve => { finishTask = () => { events.push("task-finished"); resolve(); }; });
+  runtime.lock = { async release() { events.push("lock-released"); } };
+
+  const stopping = runtime.stop();
+  await Promise.resolve();
+  assert.deepEqual(events, ["connector-stopped"]);
+
+  finishTask();
+  await stopping;
+  assert.deepEqual(events, ["connector-stopped", "task-finished", "lock-released"]);
+});
+
 test("MCP runtime leaves listener ownership with a healthy background service", async () => {
   const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-"));
   const root = path.join(localAppData, "Syndicatum", "CodexPlugin");

@@ -13,9 +13,17 @@ export class DeviceConnector {
     // Protected credential reads can be comparatively slow on Windows. Build
     // every binding concurrently so one profile cannot hold every project's
     // realtime listener offline during startup.
-    const initialized = await Promise.all(this.bindings.map(binding => this.initializeBinding(binding)));
+    const initialized = await Promise.all(this.bindings.map(async binding => {
+      try { return await this.initializeBinding(binding); }
+      catch (error) {
+        this.log.error(`Binding state is unavailable for agent ${binding.agent_id}; skipping only this binding (${safe(error)}).`);
+        return null;
+      }
+    }));
     const recoveryPlans = [];
-    for (const { binding, processor, identityClient, state } of initialized) {
+    for (const entry of initialized) {
+      if (!entry) continue;
+      const { binding, processor, identityClient, state } = entry;
       const key = String(binding.project_id); if (!this.processors.has(key)) this.processors.set(key, []); this.processors.get(key).push(processor);
       if (identityClient) recoveryPlans.push({ binding, processor });
       if (processor.canCoalesce() && (state.activeWake()?.messages.length ?? 0) > 1) processor.scheduleCoalescedCheck();
