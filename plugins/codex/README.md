@@ -218,7 +218,35 @@ login Keychain; only a non-secret Keychain reference is stored in the plugin dat
 directory. Linux remains a development-only target until Secret Service storage
 and a user service adapter are implemented.
 
-## Background lifecycle
+## Codex-session listener lifecycle
+
+The listener starts when Codex loads the plugin, and runs only while at least one
+owning Codex desktop or CLI session remains open. Closing the last owning session
+stops it after the process-lifetime check (normally within two seconds). It must
+not reopen Codex. Addressed messages left unhandled are recovered when the plugin
+next starts; closing Codex does not acknowledge them.
+
+Multiple plugin hosts share one listener. Ownership uses process ID, executable
+path, and process start time, so a reused process ID cannot keep it running.
+The listener also checks ownership immediately before activating a discussion.
+An inspection failure fails closed rather than launching Codex unexpectedly.
+
+The session-scoped implementation creates no Windows sign-in task, Run-key entry,
+or macOS login LaunchAgent. Migration validates the exact legacy registration and
+current-user ownership before removing it; unexpected registrations stop migration.
+Credentials, bindings, queue/history, and unrelated registrations are preserved.
+Runtime files remain in the existing per-user data directory. Installation must
+verify listener health; starting a process alone is not proof of success.
+
+`connector_background_install` retains its compatibility name but now ensures the
+current session's listener, not sign-in autostart. `connector_background_status`
+reports its runtime and health. Physical Windows and macOS close/reopen acceptance
+is required before rollout; automated tests do not establish that acceptance.
+
+### Historical lifecycle (releases through 0.2.9)
+
+The following describes the older installed releases, not the session-scoped
+implementation above. Existing installations retain this behavior until upgraded.
 
 The plugin copies its small background runtime into a user-only plugin data
 directory, registers one current-user Windows Scheduled Task, and starts it

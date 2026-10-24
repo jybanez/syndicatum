@@ -27,6 +27,10 @@ export class ActivationConnector {
   }
   enqueue(message, source = "realtime") {
     this.queue = this.queue.then(() => this.handleMessage(message, source)).catch(error => {
+      if (error?.code === "CODEX_SESSION_CLOSED") {
+        this.stop();
+        return { status: "session-closed" };
+      }
       if (error?.code === "CODEX_DISCUSSION_UNAVAILABLE") {
         this.unavailableReason = "discussion_unavailable";
         for (const timer of this.retryTimers.values()) clearTimeout(timer);

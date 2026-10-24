@@ -1,89 +1,73 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFile, cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, readFile, readdir, stat, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ListenerLock } from "./listener-lock.mjs";
 import { pluginPaths } from "./paths.mjs";
 import { isHealthFresh } from "./health-heartbeat.mjs";
+import { readProcessTable, selectCodexOwner, sameOwner, liveCodexOwners } from "./codex-session.mjs";
 
-const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE = "SyndicatumCodexConnector";
 const TASK_NAME = "Syndicatum Codex Connector";
 const LAUNCH_AGENT_LABEL = "ph.pbb.syndicatum.codex-connector";
 
 export class BackgroundServiceManager {
-  constructor({ env = process.env, platform = process.platform, execPath = process.execPath, sourceDirectory = path.dirname(fileURLToPath(import.meta.url)), spawnImpl = spawn } = {}) {
-    Object.assign(this, { env, platform, execPath, sourceDirectory, spawnImpl });
+  constructor({ env = process.env, platform = process.platform, execPath = process.execPath, sourceDirectory = path.dirname(fileURLToPath(import.meta.url)), spawnImpl = spawn, processReader = () => readProcessTable(platform), hostPid = process.pid } = {}) {
+    Object.assign(this, { env, platform, execPath, sourceDirectory, spawnImpl, processReader, hostPid });
     this.files = pluginPaths(env, platform);
     this.serviceEntry = path.join(this.files.backgroundRuntime, "background-service.mjs");
   }
 
   async ensureRunning() {
     if (!["win32", "darwin"].includes(this.platform)) return { supported: false, platform: this.platform, state: "not_available" };
-    const current = await this.status();
-    const desired = await this.desiredRuntime();
-    if (this.matchesRuntime(current, desired) && isHealthyBackground(current)) return { ...current, supported: true, installed: true };
+    const owner = selectCodexOwner(await this.processReader(), this.hostPid);
+    if (!owner) throw new Error("Start Syndicatum from an open Codex session; no owning Codex process was found.");
 
     const startupLock = new ListenerLock(this.files.startupLock);
     for (let attempt = 0; attempt < 300; attempt += 1) {
       const ownership = await startupLock.acquire();
       if (ownership.acquired) {
-        try { return await this.ensureRunningExclusive(); }
+        try { return await this.ensureRunningExclusive(owner); }
         finally { await startupLock.release(); }
       }
-      const concurrent = await this.status();
-      if (this.matchesRuntime(concurrent, desired) && isHealthyBackground(concurrent)) return { ...concurrent, supported: true, installed: true };
       await delay(100);
     }
     throw new Error(`Another Syndicatum plugin host did not finish background startup. See ${this.files.backgroundStartupLog} for details.`);
   }
 
   async desiredRuntime() {
-    return { execPath: this.execPath, serviceEntry: this.serviceEntry, sourceDirectory: this.sourceDirectory, sourceRevision: await runtimeRevision(this.sourceDirectory) };
+    return { execPath: this.execPath, serviceEntry: this.serviceEntry, sourceDirectory: this.sourceDirectory, sourceRevision: await runtimeRevision(this.sourceDirectory), lifecycle: "codex_session", startupMethod: "codex_session" };
   }
 
   matchesRuntime(current, desired) {
-    return current.metadata?.execPath === desired.execPath && current.metadata?.serviceEntry === desired.serviceEntry && current.metadata?.sourceDirectory === desired.sourceDirectory && current.metadata?.sourceRevision === desired.sourceRevision;
+    return current.metadata?.execPath === desired.execPath && current.metadata?.serviceEntry === desired.serviceEntry && current.metadata?.sourceDirectory === desired.sourceDirectory && current.metadata?.sourceRevision === desired.sourceRevision && current.metadata?.lifecycle === "codex_session";
   }
 
-  async ensureRunningExclusive() {
+  async ensureRunningExclusive(owner) {
     const current = await this.status();
     const desired = await this.desiredRuntime();
-    if (this.matchesRuntime(current, desired) && isHealthyBackground(current)) return { ...current, supported: true, installed: true };
-    if (current.running) await this.stop(current.pid);
-    await this.installRuntime(desired);
-    let startupMethod = this.platform === "win32" ? "scheduled_task" : "launch_agent";
-    let startupDiagnostic = null;
-    if (this.platform === "win32") {
-      let running = null;
-      try {
-        await this.registerWindowsLauncher();
-        await this.startWindowsLauncher();
-        running = await this.waitUntilRunning({ attempts: 50 });
-      } catch (error) {
-        startupDiagnostic = sanitizedError(error);
-      }
-      if (!isHealthyBackground(running)) {
-        const task = await this.windowsTaskInfo().catch(error => ({ error: sanitizedError(error) }));
-        startupDiagnostic = startupDiagnostic || task.error || `Scheduled Task did not reach ready state (state=${task.state || "unknown"}, result=${task.lastTaskResult ?? "unknown"}).`;
-        await this.appendStartupDiagnostic("scheduled_task", startupDiagnostic);
-        if (running?.running) await this.stop(running.pid);
-        await this.disableWindowsTask().catch(() => {});
-        await this.registerWindowsRunFallback();
-        await this.startWindowsRunFallback();
-        startupMethod = "run_key";
-      }
-    } else {
-      await this.registerMacLaunchAgent();
+    if (this.matchesRuntime(current, desired) && isHealthyBackground(current)) {
+      const owners = liveCodexOwners(current.metadata.codexOwners, await this.processReader());
+      const codexOwners = owners.some(candidate => sameOwner(candidate, owner)) ? owners : [...owners, owner];
+      if (codexOwners.length > 32) throw new Error("Too many owning Codex sessions; restart Codex before reconnecting.");
+      await this.writeMetadata({ ...current.metadata, codexOwners });
+      return { ...current, metadata: { ...current.metadata, codexOwners }, supported: true, installed: true };
     }
+    if (current.running && current.metadata?.serviceEntry !== this.serviceEntry) throw new Error("Unexpected listener runtime identity; migration stopped.");
+    await this.retireLegacyAutostart();
+    if (current.running) {
+      await this.stop(current.pid);
+      if ((await this.status()).running) throw new Error("Previous listener did not stop; runtime was not replaced.");
+    }
+    const installed = { ...desired, codexOwners: [owner] };
+    await this.installRuntime(installed);
+    await this.startSessionRuntime();
     const running = await this.waitUntilRunning();
     if (!isHealthyBackground(running)) {
       throw new Error(`Syndicatum background startup failed. See ${this.files.backgroundStartupLog} for details.`);
     }
-    const installed = { ...desired, startupMethod, ...(startupDiagnostic ? { startupDiagnostic } : {}) };
-    await writeFile(this.files.backgroundMetadata, `${JSON.stringify(installed, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-    return { ...running, supported: true, installed: true, startupMethod, startupDiagnostic, state: readinessState(running) };
+    return { ...running, supported: true, installed: true, startupMethod: "codex_session", state: readinessState(running) };
   }
 
   async status() {
@@ -105,15 +89,44 @@ export class BackgroundServiceManager {
   }
 
   async restart() {
-    const current = await this.status();
-    if (current.running) await this.stop(current.pid);
-    if (this.platform === "win32" && current.startupMethod === "run_key") await this.startWindowsRunFallback();
-    else if (this.platform === "win32") await this.startWindowsLauncher();
-    else if (this.platform === "darwin") await this.registerMacLaunchAgent();
-    else return { supported: false, platform: this.platform, state: "not_available" };
-    const running = await this.waitUntilRunning();
-    if (!isHealthyBackground(running)) throw new Error(`Syndicatum background restart failed. See ${this.files.backgroundStartupLog} for details.`);
-    return { ...running, supported: true, installed: true, state: readinessState(running) };
+    return this.ensureRunning();
+  }
+
+  async writeMetadata(metadata) {
+    const temporary = `${this.files.backgroundMetadata}.${process.pid}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    await rename(temporary, this.files.backgroundMetadata);
+  }
+
+  async startSessionRuntime() {
+    const child = this.spawnImpl(this.execPath, [this.serviceEntry, "--codex-scoped"], {
+      detached: true, windowsHide: true, stdio: "ignore", env: this.env,
+    });
+    await new Promise((resolve, reject) => { child.once("error", reject); child.once("spawn", resolve); });
+    child.unref();
+  }
+
+  async retireLegacyAutostart() {
+    if (this.platform === "win32") {
+      const expectedArguments = powershellTaskArguments(this.files.backgroundLauncher);
+      const expectedCommand = windowsRunCommand(windowsPowerShellPath(this.env), this.files.backgroundLauncher);
+      const script = [
+        "$ErrorActionPreference='Stop'",
+        `$task=Get-ScheduledTask -TaskName '${TASK_NAME}' -ErrorAction SilentlyContinue`,
+        `if ($task) { if (@($task.Actions).Count -ne 1 -or $task.Actions[0].Execute -ine '${powershellLiteral(windowsPowerShellPath(this.env))}' -or $task.Actions[0].Arguments -cne '${powershellLiteral(expectedArguments)}') { throw 'Unexpected legacy task action; migration stopped.' }; $sid=([Security.Principal.NTAccount]::new($task.Principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value; if ($sid -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value) { throw 'Legacy task belongs to another user.' } }`,
+        `$key='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; $entry=Get-ItemProperty -LiteralPath $key -Name '${RUN_VALUE}' -ErrorAction SilentlyContinue`,
+        `if ($entry -and $entry.${RUN_VALUE} -cne '${powershellLiteral(expectedCommand)}') { throw 'Unexpected legacy Run-key command; migration stopped.' }`,
+        `if ($task) { Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction Stop }`,
+        `if ($entry) { Remove-ItemProperty -LiteralPath $key -Name '${RUN_VALUE}' -ErrorAction Stop }`,
+      ].join("; ");
+      await run(this.spawnImpl, windowsPowerShellPath(this.env), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]);
+    } else if (this.platform === "darwin") {
+      let plist;
+      try { plist = await readFile(this.files.launchAgent, "utf8"); } catch (error) { if (error.code === "ENOENT") return; throw error; }
+      if (!plist.includes(`<string>${LAUNCH_AGENT_LABEL}</string>`) || !plist.includes(`<string>${xml(this.serviceEntry)}</string>`)) throw new Error("Unexpected legacy LaunchAgent; migration stopped.");
+      await run(this.spawnImpl, "/bin/launchctl", ["bootout", `gui/${this.env.UID || process.getuid()}/${LAUNCH_AGENT_LABEL}`], [0, 3, 113]);
+      await import("node:fs/promises").then(({ rm }) => rm(this.files.launchAgent));
+    }
   }
 
   async installRuntime(metadata) {
@@ -121,114 +134,13 @@ export class BackgroundServiceManager {
     const rootInfo = await stat(this.files.root);
     if (!rootInfo.isDirectory()) throw new Error(`Syndicatum plugin data path is not a directory: ${this.files.root}`);
     await cp(this.sourceDirectory, this.files.backgroundRuntime, { recursive: true, force: true });
-    if (this.platform === "win32") {
-      const script = [
-      "$ErrorActionPreference = 'Stop'",
-      `$startupLog = '${powershellLiteral(this.files.backgroundStartupLog)}'`,
-      "$stage = 'launcher_start'",
-      "function Write-StartupFailure([string]$message, [int]$exitCode = 1) {",
-      "  try {",
-      "    $safe = ($message -replace '[\\r\\n]+', ' ').Trim()",
-      "    if ($safe.Length -gt 1000) { $safe = $safe.Substring(0, 1000) }",
-      "    $record = [ordered]@{ timestamp = [DateTime]::UtcNow.ToString('o'); level = 'ERROR'; stage = $stage; exit_code = $exitCode; message = $safe } | ConvertTo-Json -Compress",
-      "    [IO.File]::AppendAllText($startupLog, $record + [Environment]::NewLine)",
-      "  } catch {}",
-      "}",
-      "try {",
-      "  $stage = 'credential_read'",
-      `  $stored = [IO.File]::ReadAllText('${powershellLiteral(this.files.credential)}').Trim()`,
-      "if ($stored.StartsWith('plain:')) {",
-      "  $env:SYNDICATUM_AGENT_TOKEN = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($stored.Substring(6)))",
-      "} else {",
-      "  $stage = 'credential_dpapi'",
-      "  Add-Type -AssemblyName System.Security",
-      "  $encoded = if ($stored.StartsWith('dpapi:')) { $stored.Substring(6) } else { $stored }",
-      "  $protected = [Convert]::FromBase64String($encoded)",
-      "  $bytes = [Security.Cryptography.ProtectedData]::Unprotect($protected, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)",
-      "  $env:SYNDICATUM_AGENT_TOKEN = [Text.Encoding]::UTF8.GetString($bytes)",
-      "}",
-      "  $stage = 'runtime_start'",
-      `  & '${powershellLiteral(metadata.execPath)}' '${powershellLiteral(metadata.serviceEntry)}'`,
-      "  $runtimeExit = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }",
-      "  if ($runtimeExit -ne 0) { Write-StartupFailure \"Background runtime exited with code $runtimeExit.\" $runtimeExit }",
-      "  exit $runtimeExit",
-      "} catch {",
-      "  $code = if ($_.Exception.HResult) { [int]$_.Exception.HResult } else { 1 }",
-      "  Write-StartupFailure (\"{0}: {1}\" -f $_.Exception.GetType().FullName, $_.Exception.Message) $code",
-      "  exit 1",
-      "}",
-      "",
-      ].join("\r\n");
-      await writeFile(this.files.backgroundLauncher, script, { encoding: "utf8", mode: 0o600 });
-    }
-    await writeFile(this.files.backgroundMetadata, `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  }
-
-  async registerWindowsLauncher() {
-    const actionArgs = powershellTaskArguments(this.files.backgroundLauncher);
-    const powershellPath = windowsPowerShellPath(this.env);
-    const script = [
-      `Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue`,
-      "$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name",
-      `$action = New-ScheduledTaskAction -Execute '${powershellLiteral(powershellPath)}' -Argument '${powershellLiteral(actionArgs)}'`,
-      "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user",
-      "$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited",
-      "$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
-      `Register-ScheduledTask -TaskName '${TASK_NAME}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null`,
-    ].join("; ");
-    await run(this.spawnImpl, powershellPath, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]);
-    await run(this.spawnImpl, "reg.exe", ["DELETE", RUN_KEY, "/v", RUN_VALUE, "/f"], [0, 1]);
-  }
-
-  async startWindowsLauncher() {
-    await run(this.spawnImpl, windowsPowerShellPath(this.env), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `Start-ScheduledTask -TaskName '${TASK_NAME}'`]);
-  }
-
-  async windowsTaskInfo() {
-    const script = `$task = Get-ScheduledTask -TaskName '${TASK_NAME}' -ErrorAction Stop; $info = Get-ScheduledTaskInfo -TaskName '${TASK_NAME}' -ErrorAction Stop; [pscustomobject]@{ state = [string]$task.State; lastTaskResult = [int64]$info.LastTaskResult } | ConvertTo-Json -Compress`;
-    const result = await run(this.spawnImpl, windowsPowerShellPath(this.env), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]);
-    return JSON.parse(result.stdout.trim() || "{}");
-  }
-
-  async disableWindowsTask() {
-    await run(this.spawnImpl, windowsPowerShellPath(this.env), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `Disable-ScheduledTask -TaskName '${TASK_NAME}' -ErrorAction SilentlyContinue | Out-Null`]);
-  }
-
-  async registerWindowsRunFallback() {
-    const command = windowsRunCommand(windowsPowerShellPath(this.env), this.files.backgroundLauncher);
-    await run(this.spawnImpl, "reg.exe", ["ADD", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", command, "/f"]);
-  }
-
-  async startWindowsRunFallback() {
-    const powershellPath = windowsPowerShellPath(this.env);
-    const script = `Start-Process -FilePath '${powershellLiteral(powershellPath)}' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File','${powershellLiteral(this.files.backgroundLauncher)}') -WindowStyle Hidden`;
-    await run(this.spawnImpl, powershellPath, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]);
+    await this.writeMetadata(metadata);
   }
 
   async appendStartupDiagnostic(stage, message, exitCode = null) {
     await mkdir(this.files.root, { recursive: true });
     const record = { timestamp: new Date().toISOString(), level: "ERROR", stage, ...(exitCode === null ? {} : { exit_code: exitCode }), message: sanitizedError(message) };
     await appendFile(this.files.backgroundStartupLog, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
-  }
-
-  async registerMacLaunchAgent() {
-    await mkdir(path.dirname(this.files.launchAgent), { recursive: true });
-    const plist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>${LAUNCH_AGENT_LABEL}</string>
-  <key>ProgramArguments</key><array><string>${xml(this.execPath)}</string><string>${xml(this.serviceEntry)}</string></array>
-  <key>WorkingDirectory</key><string>${xml(this.files.root)}</string>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>ProcessType</key><string>Background</string>
-</dict></plist>
-`;
-    await writeFile(this.files.launchAgent, plist, { encoding: "utf8", mode: 0o600 });
-    const domain = `gui/${typeof process.getuid === "function" ? process.getuid() : this.env.UID}`;
-    await run(this.spawnImpl, "/bin/launchctl", ["bootout", domain, this.files.launchAgent], [0, 3, 5, 113]);
-    await run(this.spawnImpl, "/bin/launchctl", ["bootstrap", domain, this.files.launchAgent]);
-    await run(this.spawnImpl, "/bin/launchctl", ["kickstart", "-k", `${domain}/${LAUNCH_AGENT_LABEL}`]);
   }
 
   async stop(pid = null) {
