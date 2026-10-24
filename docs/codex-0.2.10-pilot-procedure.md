@@ -31,9 +31,13 @@ S5, S6, macOS and fleet rollout remain on hold.
    exact task XML and current-user SID at execution time; any drift means STOP.
 4. Preserve the differently named HKCU Run value exactly. Its ownership is unproven.
    Never normalize or remove it, execute its launcher, or assume it is harmless.
-5. Prove in a disposable fixture whether preserving this Run entry can coexist
-   with candidate startup without activating a competing old listener. If not,
-   STOP: design approval does not authorize disabling it or ignoring the conflict.
+5. Mandatory pre-install gate: if the unverified spaced-name Run entry is present,
+   STOP before backup execution, task removal, listener stop or installation.
+   The candidate checks only the canonical no-spaces value name; it may ignore
+   this different value. Do not rely on candidate migration to reject it.
+   Preserving-and-ignoring an active sign-in launcher is NOT successful migration.
+   Only independent ownership evidence plus explicit approval for exact removal
+   can change this gate; that would require a superseding reviewed procedure.
 6. Select and review an exact artifact-only plugin installation mechanism. The
    provenance ZIP is not itself an installer. Do not copy it over a running cache,
    edit Codex installation records ad hoc, or invoke unreviewed old wrappers.
@@ -41,8 +45,11 @@ S5, S6, macOS and fleet rollout remain on hold.
    neither original artifact changes; no default state replaces it; no queue,
    acknowledgement, startup recovery or retry occurs for those failed routes;
    healthy routes remain available and aggregate health is explicitly degraded.
-   This is isolation, NOT recovery of either route's local history. Acceptance of
-   a degraded baseline requires a separate explicit review decision.
+   This is isolation, NOT recovery of either route's local history. Assessor
+   message 11434 accepts this proposed baseline subject to external verified
+   preservation, unchanged source hashes and post-start skipped-route evidence.
+   Both routes remain unavailable/not recovered, and their server-side unhandled
+   activity must remain unacknowledged. This is not physical execution authority.
 
 ## Proposed single-attempt phases (not authorized to run)
 
@@ -74,7 +81,9 @@ the procedure; do not auto-retry, delete evidence or automatically roll back.
    after exact source/target preimages and process/lock quiescence are revalidated.
 6. Owner opens Codex normally. Verify manifest/version/runtime bytes, one shared
    session-owned listener, advancing fresh health, exact locks/owner identities,
-   no new sign-in autostart, owned-task absence and unverified Run value unchanged.
+   no new sign-in autostart and owned-task absence. The unverified Run entry must
+   not have been present at the approved attempt boundary; if it is observed,
+   STOP, retain evidence and do not claim migrated lifecycle acceptance.
    Verify both malformed artifacts remain identical and their routes are isolated.
 7. Exercise the approved physical matrix: two owning sessions share one listener;
    close one and listener stays; close last and listener stops without reopening
