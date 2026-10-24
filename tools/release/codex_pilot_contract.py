@@ -10,6 +10,8 @@ import io
 import json
 import stat
 import re
+import os
+from pathlib import Path
 from functools import wraps
 from pathlib import PurePosixPath
 import zipfile
@@ -109,6 +111,8 @@ def validate_entries(archive_bytes, manifest):
         require(sum(e.file_size for e in entries) < 10_000_000, "oversized archive")
         for entry in entries:
             require(not entry.flag_bits & 1, "encrypted archive entry")
+            require(entry.compress_type == zipfile.ZIP_STORED, "noncanonical compression")
+            require(entry.create_system == 3 and entry.external_attr == (0o100644 << 16), "noncanonical external attributes")
             require(stat.S_IFMT(entry.external_attr >> 16) == stat.S_IFREG, "non-regular archive entry")
             item = expected[entry.filename]
             require(entry.file_size == item["size"], "entry size mismatch")
@@ -166,6 +170,47 @@ def validate_preserved_corruption(expected_bytes, reviewed_digest, observed):
 
 def require_fresh_attempt(existing_marker):
     require(existing_marker is None, "attempt already exists; preserve evidence, no replay")
+
+
+def create_attempt_marker(destination, forbidden_roots, plan_digest, attempt_id):
+    """Atomically reserve a new private external attempt directory; never resume.
+
+    Production adapter must additionally verify fixed-volume identity, ACLs,
+    available capacity and independently reviewed plan before calling this.
+    This function alone is NOT live execution authority.
+    """
+    target = Path(destination)
+    require(target.is_absolute() and target.parent.is_dir(), "attempt location")
+    require(re.fullmatch(r"[0-9a-f]{64}", plan_digest or ""), "attempt plan digest")
+    require(re.fullmatch(r"[a-zA-Z0-9-]{16,80}", attempt_id or ""), "attempt identity")
+    # Resolve the existing parent before creating anything; reject containment
+    # in either direction, not just string-prefix similarity.
+    resolved = target.parent.resolve(strict=True) / target.name
+    require(resolved != resolved.parent, "attempt root forbidden")
+    for root in forbidden_roots:
+        boundary = Path(root).resolve(strict=True)
+        require(resolved != boundary and boundary not in resolved.parents and resolved not in boundary.parents, "attempt overlaps protected root")
+    try:
+        resolved.mkdir(mode=0o700, exist_ok=False)
+    except FileExistsError:
+        raise Stop("attempt already exists; preserve evidence, no replay") from None
+    # Once mkdir succeeds, any later failure leaves the directory as a hard
+    # replay barrier. Never remove it in a finally handler.
+    record = json.dumps({"attempt_id": attempt_id, "reviewed_plan_sha256": plan_digest,
+                         "state": "reserved-not-authorized"}, sort_keys=True).encode()
+    marker = resolved / "attempt.json"
+    descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(record)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if os.name != "nt":
+        descriptor = os.open(resolved, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    return marker
 
 
 def validate_quiescence(evidence):

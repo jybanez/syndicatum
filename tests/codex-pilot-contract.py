@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import tempfile
 import zipfile
+import struct
 import importlib.util
 from pathlib import Path
 import unittest
@@ -61,6 +62,49 @@ class PilotContractTest(unittest.TestCase):
                       lambda r: r[0].update(path="extra/name"), lambda r: r[0].update(size=True)):
             with self.assertRaises(pilot.Stop):
                 pilot.validate_entries(*self.fixture(alter=alter))
+
+    def test_encryption_compression_and_malformed_metadata(self):
+        good, manifest = self.fixture()
+        encrypted = bytearray(good)
+        for signature, offset in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):
+            position = encrypted.find(signature)
+            struct.pack_into("<H", encrypted, position + offset, 1)
+        with self.assertRaises(pilot.Stop):
+            pilot.validate_entries(bytes(encrypted), manifest)
+        compressed = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(good)) as source, zipfile.ZipFile(compressed, "w", compression=zipfile.ZIP_DEFLATED) as target:
+            for item in source.infolist():
+                content = source.read(item.filename)
+                item = copy.copy(item)
+                item.compress_type = zipfile.ZIP_DEFLATED
+                target.writestr(item, content)
+        with self.assertRaises(pilot.Stop):
+            pilot.validate_entries(compressed.getvalue(), manifest)
+        for bad in (good[:-30], b"not ZIP", good[:40]):
+            with self.assertRaises(pilot.Stop):
+                pilot.validate_entries(bad, manifest)
+        wrong_crc = bytearray(good)
+        central = wrong_crc.find(b"PK\x01\x02")
+        struct.pack_into("<I", wrong_crc, central + 16, 0)
+        with self.assertRaises(pilot.Stop):
+            pilot.validate_entries(bytes(wrong_crc), manifest)
+
+    def test_atomic_attempt_marker_is_hard_replay_barrier(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            installed = parent / "installed"
+            installed.mkdir()
+            marker = pilot.create_attempt_marker(parent / "attempt", [installed], "a" * 64, "fixture-attempt-0001")
+            self.assertTrue(marker.is_file())
+            with self.assertRaises(pilot.Stop):
+                pilot.create_attempt_marker(parent / "attempt", [installed], "a" * 64, "fixture-attempt-0001")
+            with self.assertRaises(pilot.Stop):
+                pilot.create_attempt_marker(installed / "attempt", [installed], "a" * 64, "fixture-attempt-0002")
+            self.assertFalse((installed / "attempt").exists())
+            # An incomplete reservation also forbids retry.
+            (parent / "failed-attempt").mkdir()
+            with self.assertRaises(pilot.Stop):
+                pilot.create_attempt_marker(parent / "failed-attempt", [installed], "a" * 64, "fixture-attempt-0003")
 
     def registration(self):
         return dict(hive="HKCU", key="fixture/Run", view=64, name="fixture spaced name",
