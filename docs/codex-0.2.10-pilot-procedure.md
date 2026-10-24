@@ -29,15 +29,26 @@ S5, S6, macOS and fleet rollout remain on hold.
    creation time, parent and both lock owners immediately before any approved stop.
 3. The Scheduled Task has source/action/trigger/SID ownership evidence. Revalidate
    exact task XML and current-user SID at execution time; any drift means STOP.
-4. Preserve the differently named HKCU Run value exactly. Its ownership is unproven.
-   Never normalize or remove it, execute its launcher, or assume it is harmless.
-5. Mandatory pre-install gate: if the unverified spaced-name Run entry is present,
-   STOP before backup execution, task removal, listener stop or installation.
+4. Owner approval 11449 selects option B in request 11448: prepare a separately
+   reviewed procedure to remove only the exact privately inventoried spaced-name
+   HKCU Run value after external preimage/metadata backup and fresh revalidation.
+   This is NOT immediate execution authority or proof of canonical registration
+   origin. The referenced launcher has deterministic historical producer provenance:
+   1962 bytes, SHA-256
+   `d44496492eb5b4f10586b0b299b83db2a9e1f87e34986c96e12c4bcfe9e94737`.
+   Never execute, normalize, modify or delete that launcher file.
+5. The final mechanism must bind the private exact registry hive/key/view, value
+   name, value kind, raw unexpanded command, and target identity to retained
+   inventory. Verify launcher size/hash before the approved action. Any drift,
+   missing preimage, ambiguous registry view or additional unexpected registration
+   means STOP. Do not discover removal targets using name similarity or wildcards.
+   Backup must retain the exact value and metadata privately with verified hashes;
+   revalidate immediately before removing that one value. Verify its absence and
+   all other Run entries unchanged afterward. Do not delete the key or launcher.
+   No automatic retry or rollback follows an uncertain deletion outcome.
    The candidate checks only the canonical no-spaces value name; it may ignore
-   this different value. Do not rely on candidate migration to reject it.
-   Preserving-and-ignoring an active sign-in launcher is NOT successful migration.
-   Only independent ownership evidence plus explicit approval for exact removal
-   can change this gate; that would require a superseding reviewed procedure.
+   this different value. The reviewed mechanism, not candidate startup, must enforce
+   this gate. Preserving-and-ignoring active sign-in autostart is not success.
 6. Select and review an exact artifact-only plugin installation mechanism. The
    provenance ZIP is not itself an installer. Do not copy it over a running cache,
    edit Codex installation records ad hoc, or invoke unreviewed old wrappers.
@@ -64,7 +75,8 @@ the procedure; do not auto-retry, delete evidence or automatically roll back.
    scheduled startup across the complete critical window, not only stop its PID.
    Exact owned-task removal is the proposed suppression, but must occur only after
    retained registration capture and approved pre-mutation revalidation. It must
-   not touch the unverified Run entry. Concurrent launch/owner ambiguity means STOP.
+   remove the separately owner-approved Run value only at its explicitly reviewed
+   backed-up phase. Concurrent launch/owner ambiguity means STOP.
 3. Obtain the approved quiescence/preservation sequence: a verified consistent
    backup of plugin data, credential references/configuration, profiles/bindings,
    state/history, marketplace/cache and full lifecycle registrations is required
@@ -81,9 +93,9 @@ the procedure; do not auto-retry, delete evidence or automatically roll back.
    after exact source/target preimages and process/lock quiescence are revalidated.
 6. Owner opens Codex normally. Verify manifest/version/runtime bytes, one shared
    session-owned listener, advancing fresh health, exact locks/owner identities,
-   no new sign-in autostart and owned-task absence. The unverified Run entry must
-   not have been present at the approved attempt boundary; if it is observed,
-   STOP, retain evidence and do not claim migrated lifecycle acceptance.
+   no new sign-in autostart, owned-task absence, exact approved Run-value absence
+   and unchanged unrelated Run entries. A remaining/recreated approved entry or
+   other unexpected launcher means STOP; do not claim lifecycle acceptance.
    Verify both malformed artifacts remain identical and their routes are isolated.
 7. Exercise the approved physical matrix: two owning sessions share one listener;
    close one and listener stays; close last and listener stops without reopening
