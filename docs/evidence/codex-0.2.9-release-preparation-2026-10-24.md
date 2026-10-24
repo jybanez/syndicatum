@@ -2,7 +2,9 @@
 
 PR #151 merged as `cf3fdfb538625aa343217a34ff0ae74e0e238b22` after Commercial Assessor approval #11344 and all 11 protected checks passed in workflow `40072628837`. The reviewed head was `fec4dbd7dffbd799daddbf5fdb35607a04d5ee05`.
 
-The change pauses only a route whose destination explicitly rejects enqueue with “no rollout found for thread id.” It retains undelivered state, reports degraded health, and isolates synchronous/asynchronous dispatch failures between routes. Transient failures keep their existing retry behavior. All 96 connector tests pass.
+The change pauses only a route whose destination explicitly rejects enqueue with “no rollout found for thread id.” It retains undelivered state, reports degraded health, and isolates synchronous/asynchronous dispatch failures between routes. Transient failures keep their existing retry behavior.
+
+Test history: one full plugin-suite invocation during 0.2.9 preparation reported 95/96 passing. The failing-case detail was not retained, so its cause remains unexplained. Two subsequent full runs passed 96/96, including one that explicitly checked the test process exit code. The `source-contract` check on source head `4e9364fc8df4368e52a8b3607bd257d0f36219f9` passed in workflow `40081718192`; all 11 checks on that head subsequently completed successfully. These successful runs do not erase or explain the earlier anomalous result. CI must also pass on the superseding documentation-correction head before merge/publication.
 
 Version 0.2.9 packages that merged implementation without changing runtime code. The existing `codex-v0.2.8` tag remains immutable. No production-support claim or installed acceptance follows from this preparation.
 

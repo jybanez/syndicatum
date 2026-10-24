@@ -8,7 +8,7 @@ assessment describe the preceding candidate, not 0.2.9 acceptance. See
 [0.2.9 preparation](evidence/codex-0.2.9-release-preparation-2026-10-24.md)
 and the machine-readable distribution policy for current candidate metadata.
 
-Status: active production-readiness contract. Last assessed 2026-10-14.
+Status: active production-readiness contract. Last assessed 2026-10-24.
 
 Owner direction recorded 2026-10-04: productionize the Codex channel first,
 with Windows 10 22H2 and Windows 11 as the initial target operating systems.
