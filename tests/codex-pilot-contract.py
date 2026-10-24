@@ -27,6 +27,11 @@ backup_spec.loader.exec_module(backup_module)
 
 class PilotContractTest(unittest.TestCase):
     def test_post_start_evidence_requires_degraded_preservation_and_lifecycle(self):
+        def verify(plan, evidence):
+            raw_plan = json.dumps({"attempt_id": "fixture-attempt", "plan": plan}).encode()
+            plan_hash = pilot.digest(raw_plan)
+            raw_evidence = json.dumps({"attempt_id": "fixture-attempt", "plan_sha256": plan_hash, "observed": evidence}).encode()
+            return sequence_module.verify_acceptance(raw_plan, plan_hash, raw_evidence, pilot.digest(raw_evidence))
         plan = dict(candidate_files={"fixture": "hash"}, unrelated_run_values={"other": "hash"},
             malformed_artifacts={"A": "hash-A", "B": "hash-B"}, protected_identity_hashes={"identity": "hash"},
             malformed_route_tokens=["A", "B"], max_health_age_ms=1000, shutdown_bound_ms=2000)
@@ -42,20 +47,30 @@ class PilotContractTest(unittest.TestCase):
                      reopen_events=0, delivery_count=0, message_acknowledged=False, test_message_id="fixture-message"),
                 dict(phase="reopened", owner_tokens=["three"], listener_pids=[102], test_message_id="fixture-message", delivery_count=1)],
             healthy_route_deliveries=1, acknowledged_replays=0)
-        self.assertEqual(sequence_module.verify_acceptance(plan, evidence)["scope"], "device_pilot_only")
+        self.assertEqual(verify(plan, evidence)["scope"], "device_pilot_only")
         for field, value in (("version", "0.2.6"), ("task", "still-present"), ("lifecycle", "autostart"),
                              ("malformed_artifacts", {}), ("installed_files", {}), ("observed_at_ms", 5000),
                              ("healthy_route_deliveries", 0), ("acknowledged_replays", 1)):
             with self.subTest(field=field), self.assertRaises(sequence_module.SequenceStop):
-                sequence_module.verify_acceptance(plan, {**evidence, field: value})
+                verify(plan, {**evidence, field: value})
         bad = copy.deepcopy(evidence)
         bad["unavailable_routes"]["A"]["history_recovered"] = True
         with self.assertRaises(sequence_module.SequenceStop):
-            sequence_module.verify_acceptance(plan, bad)
+            verify(plan, bad)
         bad = copy.deepcopy(evidence)
         bad["owner_phases"][2]["reopen_events"] = 1
         with self.assertRaises(sequence_module.SequenceStop):
-            sequence_module.verify_acceptance(plan, bad)
+            verify(plan, bad)
+        for changed in ({**evidence, "extra": True}, {**evidence, "listener_pid": True}, {**evidence, "locks": {"background": True, "listener": 101}}):
+            with self.assertRaises(sequence_module.SequenceStop):
+                verify(plan, changed)
+        raw_plan = json.dumps({"attempt_id": "fixture-attempt", "plan": plan}).encode()
+        plan_hash = pilot.digest(raw_plan)
+        raw_evidence = json.dumps({"attempt_id": "different-attempt", "plan_sha256": plan_hash, "observed": evidence}).encode()
+        with self.assertRaises(sequence_module.SequenceStop):
+            sequence_module.verify_acceptance(raw_plan, plan_hash, raw_evidence, pilot.digest(raw_evidence))
+        with self.assertRaises(sequence_module.SequenceStop):
+            sequence_module.verify_acceptance(raw_plan + b" ", plan_hash, raw_evidence, pilot.digest(raw_evidence))
 
     def test_backup_keeps_malformed_bytes_and_refuses_replay(self):
         with tempfile.TemporaryDirectory() as temporary:

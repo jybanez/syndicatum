@@ -4,6 +4,8 @@ The adapter interface is exercised only by disposable fixtures. Supplying an
 adapter does not confer execution authority; no command-line entry point exists.
 """
 from dataclasses import dataclass, field
+import hashlib
+import json
 
 
 class SequenceStop(RuntimeError):
@@ -50,8 +52,61 @@ def verify_listener_preimage(expected, actual, parent, locks):
     require_fact(locks == {"background": expected["pid"], "listener": expected["pid"]}, "listener_lock_mismatch")
 
 
-def verify_acceptance(plan, observed):
+def strict_object(value, fields):
+    require_fact(type(value) is dict and set(value) == set(fields), "acceptance_evidence_schema")
+    for key, kind in fields.items():
+        require_fact(type(value[key]) is kind, "acceptance_evidence_type")
+
+
+def unique_pairs(pairs):
+    value = {}
+    for key, item in pairs:
+        require_fact(key not in value, "duplicate_evidence_key")
+        value[key] = item
+    return value
+
+
+def bound_object(raw, expected_hash):
+    require_fact(type(raw) is bytes and len(raw) <= 2_000_000, "evidence_bounds")
+    require_fact(type(expected_hash) is str and len(expected_hash) == 64 and all(c in "0123456789abcdef" for c in expected_hash), "evidence_anchor_format")
+    require_fact(hashlib.sha256(raw).hexdigest() == expected_hash, "evidence_anchor_drift")
+    return json.loads(raw, object_pairs_hook=unique_pairs)
+
+
+def verify_acceptance(plan_bytes, reviewed_plan_digest, evidence_bytes, retained_evidence_digest):
+    """Anchors must be retained independently; never refreshed from live evidence."""
     try:
+        plan_envelope = bound_object(plan_bytes, reviewed_plan_digest)
+        strict_object(plan_envelope, {"attempt_id": str, "plan": dict})
+        envelope = bound_object(evidence_bytes, retained_evidence_digest)
+        strict_object(envelope, {"attempt_id": str, "plan_sha256": str, "observed": dict})
+        require_fact(bool(plan_envelope["attempt_id"]) and envelope["attempt_id"] == plan_envelope["attempt_id"] and envelope["plan_sha256"] == reviewed_plan_digest, "acceptance_attempt_mismatch")
+        plan, observed = plan_envelope["plan"], envelope["observed"]
+        strict_object(plan, {"candidate_files": dict, "unrelated_run_values": dict,
+            "malformed_artifacts": dict, "protected_identity_hashes": dict,
+            "malformed_route_tokens": list, "max_health_age_ms": int, "shutdown_bound_ms": int})
+        strict_object(observed, {"installed_files": dict, "version": str, "lifecycle": str,
+            "task": type(None), "run_values": dict, "malformed_artifacts": dict,
+            "protected_identity_hashes": dict, "unavailable_routes": dict, "health_samples": list,
+            "listener_pid": int, "observed_at_ms": int, "locks": dict, "owner_phases": list,
+            "healthy_route_deliveries": int, "acknowledged_replays": int})
+        require_fact(plan["max_health_age_ms"] > 0 and 0 < plan["shutdown_bound_ms"] <= 2000 and observed["listener_pid"] > 0, "acceptance_plan_bounds")
+        require_fact(len(plan["malformed_route_tokens"]) == 2 and all(type(v) is str and v for v in plan["malformed_route_tokens"]) and len(set(plan["malformed_route_tokens"])) == 2, "acceptance_route_schema")
+        for item in observed["unavailable_routes"].values():
+            strict_object(item, {"reason": str, "delivered": int, "acknowledged": int, "history_recovered": bool})
+        strict_object(observed["locks"], {"background": int, "listener": int})
+        for item in observed["health_samples"]:
+            strict_object(item, {"pid": int, "timestamp_ms": int, "readiness": str, "unavailable_count": int})
+        phases = observed["owner_phases"]
+        require_fact(len(phases) == 4, "owner_phase_count")
+        base = {"phase": str, "owner_tokens": list, "listener_pids": list}
+        strict_object(phases[0], base)
+        strict_object(phases[1], base)
+        strict_object(phases[2], {**base, "stop_observed_ms": int, "last_owner_exit_ms": int,
+            "reopen_events": int, "delivery_count": int, "message_acknowledged": bool, "test_message_id": str})
+        strict_object(phases[3], {**base, "test_message_id": str, "delivery_count": int})
+        for phase in phases:
+            require_fact(all(type(v) is str and v for v in phase["owner_tokens"]) and all(type(v) is int and v > 0 for v in phase["listener_pids"]), "owner_identity_schema")
         return _verify_acceptance(plan, observed)
     except SequenceStop:
         raise
