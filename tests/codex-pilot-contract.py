@@ -20,9 +20,30 @@ sequence_module = importlib.util.module_from_spec(sequence_spec)
 import sys
 sys.modules[sequence_spec.name] = sequence_module
 sequence_spec.loader.exec_module(sequence_module)
+backup_spec = importlib.util.spec_from_file_location("pilot_backup", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_backup.py")
+backup_module = importlib.util.module_from_spec(backup_spec)
+backup_spec.loader.exec_module(backup_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_backup_keeps_malformed_bytes_and_refuses_replay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "fixture-source"
+            source.mkdir()
+            original = b'{"fixture":true} trailing-invalid'
+            (source / "bad-state").write_bytes(original)
+            before = (source / "bad-state").stat().st_mtime_ns
+            records = backup_module.capture(source, root / "backup")
+            self.assertEqual((root / "backup/bad-state").read_bytes(), original)
+            self.assertEqual((source / "bad-state").read_bytes(), original)
+            self.assertEqual(records["bad-state"]["mtime_ns"], before)
+            self.assertEqual(records["bad-state"]["sha256"], pilot.digest(original))
+            self.assertTrue((root / "backup.manifest.json").is_file())
+            with self.assertRaises(FileExistsError):
+                backup_module.capture(source, root / "backup")
+            with self.assertRaises(backup_module.BackupStop):
+                backup_module.capture(source, source / "nested-backup")
     def test_sequence_orders_backups_and_never_replays_after_failure(self):
         class Fixture:
             def __init__(self, fail=None, fail_evidence=False):
