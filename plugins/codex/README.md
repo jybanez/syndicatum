@@ -2,8 +2,9 @@
 
 This plugin connects PBB Realtime to existing Codex Desktop conversations. On
 Windows and macOS, device authorization installs a plugin-managed per-user
-background listener that remains connected independently of Codex's on-demand
-MCP tool host. It queues a minimal notification into the conversation configured
+session-scoped listener that remains connected independently of Codex's on-demand
+MCP tool host, but stops when all owning Codex sessions close. It never deliberately
+reopens a closed Codex app. It queues a minimal notification into the conversation configured
 for the addressed Syndicatum agent, then opens that conversation's
 `codex://threads/{thread_id}` deeplink so Codex Desktop loads it even when the
 user has not opened it since launch.
@@ -58,7 +59,12 @@ ref and acceptance evidence named in the
 ## Stable Windows channel
 
 The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
-The current source candidate is `codex-v0.2.9`. An explicit missing-discussion
+The current source candidate is `codex-v0.2.10` (not yet tagged or published).
+It introduces session-owned listener lifetime: startup on plugin load, shutdown
+after the last owning Codex session closes, no sign-in autostart, and pending
+notification recovery at the next opening. Physical Windows/macOS close/reopen
+acceptance remains outstanding; this is not an installation authorization.
+It retains 0.2.9's isolation: an explicit missing-discussion
 enqueue rejection pauses only the affected route until its binding changes,
 preserves pending notifications, and reports degraded health. Independent event
 dispatch contains both synchronous and asynchronous route failures so healthy
@@ -80,7 +86,7 @@ workflow and the applicable installed-client acceptance pass, use the immutable
 Git marketplace ref:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.9
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.10
 codex plugin add codex@syndicatum
 ```
 
