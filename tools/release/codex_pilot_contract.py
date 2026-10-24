@@ -9,6 +9,8 @@ import hashlib
 import io
 import json
 import stat
+import re
+from functools import wraps
 from pathlib import PurePosixPath
 import zipfile
 
@@ -43,13 +45,49 @@ def object_pairs(pairs):
     return result
 
 
+def bounded(stage):
+    def decorate(fn):
+        @wraps(fn)
+        def checked(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Stop:
+                raise
+            except (ValueError, TypeError, KeyError, AttributeError, zipfile.BadZipFile,
+                    UnicodeError, RuntimeError, NotImplementedError, OverflowError):
+                raise Stop(f"{stage}: malformed input") from None
+        return checked
+    return decorate
+
+
+@bounded("evidence")
+def anchored_json(raw_bytes, reviewed_digest):
+    """Digest must come from separately retained/reviewed attempt-plan evidence.
+
+    No live adapter exists: one must not derive this digest from current registry
+    state or refresh expected and actual together. Raw plan bytes are immutable.
+    """
+    require(isinstance(raw_bytes, bytes) and len(raw_bytes) <= 1_000_000, "evidence bounds")
+    require(isinstance(reviewed_digest, str) and re.fullmatch(r"[0-9a-f]{64}", reviewed_digest), "evidence anchor")
+    require(digest(raw_bytes) == reviewed_digest, "evidence digest drift")
+    result = json.loads(raw_bytes, object_pairs_hook=object_pairs)
+    require(isinstance(result, dict), "evidence object required")
+    return result
+
+
+@bounded("archive")
 def validate_entries(archive_bytes, manifest):
     """Validate in memory, never extract or follow archive paths."""
+    require(isinstance(manifest, dict), "manifest object required")
+    require(isinstance(archive_bytes, bytes) and len(archive_bytes) <= 10_000_000, "archive input bounds")
     files = manifest.get("files")
     require(isinstance(files, list) and len(files) == 48, "manifest count")
     expected = {}
     folded = set()
     for item in files:
+        require(isinstance(item, dict) and set(item) == {"path", "size", "sha256"}, "manifest record schema")
+        require(type(item["size"]) is int and 0 <= item["size"] < 10_000_000, "manifest record size")
+        require(isinstance(item["sha256"], str) and re.fullmatch(r"[0-9a-f]{64}", item["sha256"]), "manifest record hash")
         name = item.get("path", "")
         require(isinstance(name, str) and bool(name), "entry name")
         parts = name.split("/")
@@ -78,10 +116,12 @@ def validate_entries(archive_bytes, manifest):
     return tuple(expected)
 
 
+@bounded("artifact")
 def validate_artifact(archive_bytes, manifest_bytes):
     require(digest(archive_bytes) == ZIP_HASH, "archive identity mismatch")
     require(digest(manifest_bytes) == MANIFEST_HASH, "manifest identity mismatch")
     manifest = json.loads(manifest_bytes, object_pairs_hook=object_pairs)
+    require(isinstance(manifest, dict), "manifest object required")
     require(manifest.get("source_commit") == SOURCE, "source mismatch")
     require(manifest.get("version") == "0.2.10", "version mismatch")
     require(manifest.get("archive") == "syndicatum-codex-plugin-v0.2.10.zip", "archive name mismatch")
@@ -89,8 +129,11 @@ def validate_artifact(archive_bytes, manifest_bytes):
     return validate_entries(archive_bytes, manifest)
 
 
-def validate_run_preimage(expected, actual):
+@bounded("registration")
+def validate_run_preimage(expected_bytes, reviewed_digest, actual):
     """Private exact preimage comparison, never include values in exceptions."""
+    expected = anchored_json(expected_bytes, reviewed_digest)
+    require(isinstance(actual, dict), "registration object required")
     fields = {"hive", "key", "view", "name", "kind", "raw_command", "launcher_hash", "launcher_size"}
     require(set(expected) == fields and set(actual) == fields, "registration schema mismatch")
     require(expected["hive"] == "HKCU" and expected["view"] in (32, 64), "registration boundary")
@@ -106,8 +149,19 @@ def validate_after_removal(before, after, target):
     require({k: v for k, v in before.items() if k != target} == after, "unrelated registration changed")
 
 
-def validate_preserved_corruption(observed):
-    require(observed == CORRUPT_HASHES, "malformed artifact preservation mismatch")
+@bounded("preservation")
+def validate_preserved_corruption(expected_bytes, reviewed_digest, observed):
+    expected = anchored_json(expected_bytes, reviewed_digest)
+    require(isinstance(observed, dict) and len(expected) == 2, "malformed artifact identity count")
+    hashes = {}
+    for identity, metadata in expected.items():
+        require(isinstance(identity, str) and bool(identity), "private artifact identity")
+        require(isinstance(metadata, dict) and set(metadata) == {"sha256", "size", "mtime", "route_token"}, "artifact metadata schema")
+        require(isinstance(metadata["mtime"], str) and bool(metadata["mtime"]), "artifact mtime")
+        require(isinstance(metadata["route_token"], str) and bool(metadata["route_token"]), "artifact route")
+        require(type(metadata["size"]) is int, "artifact size")
+        hashes[metadata["sha256"]] = metadata["size"]
+    require(hashes == CORRUPT_HASHES and expected == observed, "malformed artifact preservation mismatch")
 
 
 def require_fresh_attempt(existing_marker):
