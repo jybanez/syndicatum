@@ -198,7 +198,7 @@ test("Codex lifecycle procedure names the reviewed Windows transition and fail-c
   assert.match(procedure, /codex-windows-lifecycle-transition\.ps1/);
   assert.match(procedure, /`RejectFixture`/);
   assert.match(transition, /ValidateSet\('Inspect', 'RejectFixture', 'Apply'\)/);
-  assert.match(transition, /ValidateSet\('0\.2\.6', '0\.2\.7', '0\.2\.8'\)/);
+  assert.match(transition, /ValidateSet\('0\.2\.6', '0\.2\.7', '0\.2\.8', '0\.2\.9'\)/);
   assert.match(transition, /Ref = 'codex-v0\.2\.8'[\s\S]+Revision = '4e6e981be031e61c4f52fb87e0ead64bf43b90d9'/);
   assert.match(transition, /Deterministic candidate-revision mismatch\./);
   assert.match(transition, /codex plugin marketplace remove syndicatum/);
@@ -231,6 +231,12 @@ test("non-production channels retain at least one explicit unresolved gate", asy
     if (channel.production_eligible) continue;
     assert.ok(channel.required_gates.some(gate => gate.status !== "passed"));
   }
+});
+
+test("0.2.9 upgrade targets the reviewed release source without changing prior immutable targets", async () => {
+  const script = await readFile(codexLifecycleTransitionUrl, "utf8");
+  assert.match(script, /'0\.2\.9'\s*=\s*@\{\s*Ref = 'codex-v0\.2\.9'\s*Revision = '4e9364fc8df4368e52a8b3607bd257d0f36219f9'/);
+  assert.match(script, /'0\.2\.8'\s*=\s*@\{\s*Ref = 'codex-v0\.2\.8'\s*Revision = '4e6e981be031e61c4f52fb87e0ead64bf43b90d9'/);
 });
 
 test("Codex lifecycle acceptance remains guarded and multi-machine", async () => {
