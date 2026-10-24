@@ -58,7 +58,14 @@ ref and acceptance evidence named in the
 ## Stable Windows channel
 
 The first owner-approved stable targets are Windows 10 22H2 and Windows 11.
-The current source candidate is `codex-v0.2.8`; it serializes each protected
+The current source candidate is `codex-v0.2.9`. An explicit missing-discussion
+enqueue rejection pauses only the affected route until its binding changes,
+preserves pending notifications, and reports degraded health. Independent event
+dispatch contains both synchronous and asynchronous route failures so healthy
+routes continue receiving messages. Transient queue errors retain retries.
+Publication and installed delivery acceptance remain outstanding.
+
+It retains the 0.2.8 changes, which serialize each protected
 state-file write behind a per-file lock, uses collision-resistant atomic-write
 temporary paths, isolates a corrupt binding so healthy routes keep listening,
 and reports skipped candidate routes as degraded instead of ready. It retains
@@ -73,7 +80,7 @@ workflow and the applicable installed-client acceptance pass, use the immutable
 Git marketplace ref:
 
 ```text
-codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.8
+codex plugin marketplace add jybanez/syndicatum --ref codex-v0.2.9
 codex plugin add codex@syndicatum
 ```
 
