@@ -1,0 +1,17 @@
+# Windows offline installation runner
+
+`scripts/codex-windows-offline-install.ps1` is the repository-tracked replacement for device-local wrappers. Run only reviewed exported bytes from an independent PowerShell 7 window after Codex exits. Required parameters are the device-specific `HandoffRoot`, `WebRoot` and verified absolute `NodePath`; `CodexRoot` defaults to the current user's `.codex` directory. Protected plugin data always stays under that same user's `.syndicatum/codex-plugin` directory.
+
+The runner targets only the published 0.2.9 release and pins both reviewed LF and CRLF serializations of the backup and corrected transition helpers. It verifies the immutable direct tag revision before any stop operation. The existing transition helper independently verifies the remote tag again before Apply.
+
+Preparation validates an absent external fixed-local-volume handoff with no overlap or reparse ancestors, actual background metadata and Node path, exact startup registration, and exact process executable/runtime command line. An active owner must also match fresh background health and both lock-owner PIDs. The process creation timestamp is rechecked immediately before termination to guard against PID reuse.
+
+For `scheduled_task`, the task must be enabled, use the exact canonical launcher command, and run as the current interactive limited user. Only that task is stopped/restarted. For `run_key`, the existing current-user registration must match the exact launcher command; the runner stops the individually verified owned process and restarts the quoted launcher hidden. It does not enable/disable/register/delete tasks or edit the Run key. It rechecks that the Run-key registration remains unchanged.
+
+After shutdown, runtime-process absence and exclusive lock-file access must be established. The verified backup helper then creates the full external preimage and persisted/detached manifest. Separate child processes perform Inspect, RejectFixture and exactly one Apply, retaining separate logs/reports. Any mismatch stops without cleanup, replay or automatic rollback. An existing attempt directory prevents rerunning the same attempt.
+
+The finally block attempts to restore only a previously running listener and verifies fresh health, exact runtime identity and both lock owners. It preserves the original installation result, stage and error independently of any `restart_error`. Thus an installation failure cannot be hidden by a later restart failure; an installed-but-restart-failed result remains explicitly distinguishable. Read `status.json` and all reports before deciding recovery. Never issue an automatic second Apply.
+
+`tests/codex-offline-install.test.ps1` loads only pure preflight/report functions. It checks exact owned-process matching against unrelated/modified processes, quoted/unquoted Run-key executable handling, separate original/restart failure evidence, absence of registration mutation commands, and Windows handoff overlap/replay boundaries. It never runs installer main or stops a listener.
+
+This runner is preparation until exact-source review/CI and the owner's device-specific handoff are complete. Installed acceptance still requires exact release byte verification, advancing fresh health, preserved identities/bindings/history and live healthy-route delivery while unavailable routes remain isolated. Retain all withdrawn wrappers and earlier failed-attempt artifacts.
