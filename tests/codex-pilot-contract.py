@@ -15,9 +15,69 @@ import unittest
 spec = importlib.util.spec_from_file_location("pilot", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_contract.py")
 pilot = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pilot)
+sequence_spec = importlib.util.spec_from_file_location("pilot_sequence", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_sequence.py")
+sequence_module = importlib.util.module_from_spec(sequence_spec)
+import sys
+sys.modules[sequence_spec.name] = sequence_module
+sequence_spec.loader.exec_module(sequence_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_sequence_orders_backups_and_never_replays_after_failure(self):
+        class Fixture:
+            def __init__(self, fail=None, fail_evidence=False):
+                self.calls = []
+                self.fail = fail
+                self.fail_evidence = fail_evidence
+            def retain_stage(self, stage, state):
+                self.calls.append((stage, state))
+            def retain_failure(self, stage, code):
+                self.failure = (stage, code)
+                if self.fail_evidence:
+                    raise OSError("fixture secondary failure")
+            def __getattr__(self, stage):
+                def action():
+                    self.calls.append((stage, "action"))
+                    if self.fail == stage:
+                        raise sequence_module.SequenceStop("fixture_failure")
+                return action
+        good = Fixture()
+        self.assertEqual(sequence_module.sequence(good).result, "passed")
+        stages = [stage for stage, kind in good.calls if kind == "action"]
+        self.assertLess(stages.index("verify_initial_backup"), stages.index("suppress_exact_owned_task"))
+        self.assertLess(stages.index("verify_suppression_and_unrelated_entries"), stages.index("stop_exact_owned_process"))
+        self.assertLess(stages.index("verify_quiescent_backup_and_corrupt_artifacts"), stages.index("install_exact_staged_artifact"))
+        for failed_stage in stages:
+            fixture = Fixture(failed_stage, fail_evidence=True)
+            result = sequence_module.sequence(fixture)
+            actual = [stage for stage, kind in fixture.calls if kind == "action"]
+            self.assertEqual(actual, stages[:stages.index(failed_stage) + 1])
+            self.assertEqual(result.stage, failed_stage)
+            self.assertEqual(result.failure_code, "fixture_failure")
+            self.assertEqual(result.secondary_errors, ["failure_evidence_write_failed"])
+            self.assertFalse(any("rollback" in stage or "restart" in stage for stage in actual))
+
+    def test_process_identity_and_locks_independently_bound(self):
+        identity = dict(pid=101, started="start", executable="fixture-node", entry="fixture-runtime", parent_pid=100, parent_started="parent-start")
+        parent = dict(pid=100, started="parent-start")
+        locks = dict(background=101, listener=101)
+        sequence_module.verify_listener_preimage(identity, dict(identity), parent, locks)
+        for key in identity:
+            with self.subTest(key=key), self.assertRaises(sequence_module.SequenceStop):
+                sequence_module.verify_listener_preimage(identity, {**identity, key: "drift"}, parent, locks)
+        with self.assertRaises(sequence_module.SequenceStop):
+            sequence_module.verify_listener_preimage(identity, identity, parent, {**locks, "listener": 99})
+
+    def test_independent_quiescence_snapshots_fail_closed(self):
+        plan = dict(run_identity="private-run-token", unrelated_run_values={"other": "digest"}, listener_executables=["fixture-node"], listener_identity={"pid": 101})
+        locks = dict(background=None, listener=None)
+        sequence_module.verify_quiescent_facts(plan, None, {"other": "digest"}, [], locks, [])
+        for facts in (({}, {"other": "digest"}, [], locks, []),
+                      (None, {}, [], locks, []),
+                      (None, {"other": "digest"}, [], dict(background=101, listener=None), []),
+                      (None, {"other": "digest"}, [], locks, ["unexpected"])):
+            with self.assertRaises(sequence_module.SequenceStop):
+                sequence_module.verify_quiescent_facts(plan, *facts)
     def test_exact_accepted_source_build_passes(self):
         root = Path(__file__).resolve().parents[1]
         archive = subprocess.run(["git", "archive", pilot.SOURCE], cwd=root, check=True, capture_output=True).stdout
