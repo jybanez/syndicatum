@@ -145,7 +145,12 @@ export class PluginRuntime {
       if (unavailableBindings.length) logger.error(`${unavailableBindings.length} discussion binding(s) are unavailable.`);
       return this.status;
     }
-    this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings: validBindings, log: logger });
+    this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings: validBindings, log: logger,
+      onUnavailable: failure => {
+        const reasons = this.status.unavailableBindingReasons ?? [];
+        if (!reasons.some(item => item.projectId === failure.projectId && item.agentId === failure.agentId)) reasons.push(failure);
+        this.status = { ...this.status, state: "degraded", unavailableBindings: reasons.length, unavailableBindingReasons: reasons };
+      } });
     const initialized = await this.connector.initialize();
     this.status = deviceInitializationStatus(config.deviceId, bindings.length, unavailableBindings, initialized);
     if (this.status.unavailableBindings) logger.error(`${this.status.unavailableBindings} discussion binding(s) were skipped; connector health is degraded.`);

@@ -10,6 +10,59 @@ import { DeviceConnector } from "../mcp/device-connector.mjs";
 
 const message = { id: 1559, project_id: 1, project_sequence: 1559, sender: { id: 9, display_name: "PBB Realtime" }, addressees: [{ participant_id: 8, reason: "direct" }] };
 
+test("missing discussion pauses only its route and preserves undelivered state", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-missing-discussion-"));
+  const failures = [], delivered = [];
+  const connector = new DeviceConnector({
+    config: { stateFile: path.join(directory, "state.json"), syndicatumUrl: "https://syndicatum.wizaya.com" },
+    syndicatum: {},
+    bindings: [8, 10].map(id => ({ project_id: 1, participant_id: id, agent_id: id, conversation_id: `discussion-${id}` })),
+    loadProfile: async () => { throw new Error("unclaimed"); },
+    driverFactory: config => ({ activate: async item => {
+      if (config.agentId === "8") { const error = new Error("missing"); error.code = "CODEX_DISCUSSION_UNAVAILABLE"; throw error; }
+      delivered.push(item.id);
+    } }),
+    onUnavailable: failure => failures.push(failure), log: { info() {}, error() {} },
+  });
+  try {
+    await connector.initialize();
+    const [broken, healthy] = connector.processors.get("1");
+    const broadcast = { ...message, addressees: [{ participant_id: 8 }, { participant_id: 10 }] };
+    assert.equal((await broken.enqueue(broadcast)).status, "unavailable");
+    assert.equal((await healthy.enqueue(broadcast)).status, "notified");
+    assert.equal((await broken.enqueue({ ...broadcast, id: 1560 })).status, "unavailable");
+    assert.equal(broken.retryTimers.size, 0);
+    assert.deepEqual(failures, [{ projectId: "1", agentId: "8", reason: "discussion_unavailable" }]);
+    assert.equal(broken.state.pending()[0].id, String(message.id));
+    assert.equal(broken.state.has(message.id), false);
+    assert.deepEqual(delivered, [message.id]);
+    assert.equal(JSON.parse(await readFile(broken.state.file, "utf8")).pendingNotifications[0].id, String(message.id));
+  } finally { connector.stop(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test("synchronous and asynchronous dispatch failures cannot prevent another route receiving an event", async () => {
+  const errors = [], deliveries = [];
+  const connector = new DeviceConnector({ config: {}, syndicatum: {}, bindings: [], log: { error: error => errors.push(error) } });
+  connector.processors.set("1", [
+    { config: { agentId: "sync" }, enqueue() { throw new Error("broken state"); } },
+    { config: { agentId: "async" }, enqueue: async () => { throw new Error("delivery failed"); } },
+    { config: { agentId: "healthy" }, enqueue: async item => deliveries.push(item.id) },
+  ]);
+  connector.dispatch("1", message);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(deliveries, [message.id]);
+  assert.equal(errors.length, 2);
+});
+
+test("driver distinguishes a missing local discussion from transient queue failures", async () => {
+  const driver = new CodexDriver({ codexPath: process.execPath, codexThreadId: "missing" }, async () => {
+    throw new Error("thread/queue/add failed: no rollout found for thread id missing");
+  });
+  await assert.rejects(driver.activate(message), { code: "CODEX_DISCUSSION_UNAVAILABLE" });
+  const transient = new CodexDriver({ codexPath: process.execPath }, async () => { throw new Error("thread is busy"); });
+  await assert.rejects(transient.activate(message), /thread is busy/);
+});
+
 test("address matching uses participant identities", () => {
   assert.equal(isAddressedTo(message, 8), true);
   assert.equal(isAddressedTo(message, 7), false);

@@ -6,8 +6,8 @@ import { agentProfileId, loadAgentProfile } from "./agent-profile-store.mjs";
 import { SyndicatumClient } from "./syndicatum-client.mjs";
 
 export class DeviceConnector {
-  constructor({ config, syndicatum, bindings, log = console, loadProfile = loadAgentProfile, identityClientFactory = options => new SyndicatumClient(options), driverFactory = options => new CodexDriver(options) }) {
-    Object.assign(this, { config, syndicatum, bindings, log, loadProfile, identityClientFactory, driverFactory }); this.stopped = false; this.sockets = new Set(); this.processors = new Map(); this.initialization = null;
+  constructor({ config, syndicatum, bindings, log = console, loadProfile = loadAgentProfile, identityClientFactory = options => new SyndicatumClient(options), driverFactory = options => new CodexDriver(options), onUnavailable = () => {} }) {
+    Object.assign(this, { config, syndicatum, bindings, log, loadProfile, identityClientFactory, driverFactory, onUnavailable }); this.stopped = false; this.sockets = new Set(); this.processors = new Map(); this.initialization = null;
   }
   initialize() {
     this.initialization ??= this.initializeBindings();
@@ -61,7 +61,8 @@ export class DeviceConnector {
       this.log.info(`Wake coalescing and startup recovery are unavailable for agent ${binding.agent_id}; its local claimed profile could not be used (${safe(error)}).`);
     }
     const childConfig = { ...this.config, projectId: String(binding.project_id), participantId: String(binding.participant_id), agentId: String(binding.agent_id), profileId, codexThreadId: binding.conversation_id, workingDirectory: binding.working_directory, coalescingEnabled: Boolean(identityClient) };
-    const processor = new ActivationConnector({ config: childConfig, syndicatum: identityClient ?? { isAcknowledged: async () => false }, driver: this.driverFactory(childConfig), state, log: this.log });
+    const processor = new ActivationConnector({ config: childConfig, syndicatum: identityClient ?? { isAcknowledged: async () => false }, driver: this.driverFactory(childConfig), state, log: this.log,
+      onUnavailable: reason => this.onUnavailable({ projectId: String(binding.project_id), agentId: String(binding.agent_id), reason }) });
     return { binding, processor, identityClient, state };
   }
   stop() { this.stopped = true; for (const socket of this.sockets) socket.close(1000, "Syndicatum plugin stopping"); for (const list of this.processors.values()) for (const processor of list) processor.stop(); }
@@ -95,11 +96,18 @@ export class DeviceConnector {
           }
           return;
         }
-        if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) for (const processor of this.processors.get(String(projectId)) ?? []) processor.enqueue(envelope.payload.message);
+        if (envelope?.phase === "event" && envelope.type === "syndicatum.message.created" && envelope.payload?.message) this.dispatch(projectId, envelope.payload.message);
       });
       socket.addEventListener("error", () => fail(new Error("PBB Realtime WebSocket error.")));
       socket.addEventListener("close", event => { this.sockets.delete(socket); if (!settled) { settled = true; this.stopped || event.code === 1000 ? resolve() : reject(new Error(`PBB Realtime closed with code ${event.code}.`)); } });
     });
+  }
+  dispatch(projectId, message) {
+    for (const processor of this.processors.get(String(projectId)) ?? []) {
+      // Contain both synchronous dispatch errors and rejected delivery promises.
+      void Promise.resolve().then(() => processor.enqueue(message)).catch(error =>
+        this.log.error(`Delivery failed for agent ${processor.config.agentId}: ${safe(error)}`));
+    }
   }
 }
 function safe(error) { return String(error?.message || error).replace(/[\r\n\t]+/g, " ").slice(0, 500); }

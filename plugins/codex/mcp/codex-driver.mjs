@@ -11,10 +11,20 @@ export class CodexDriver {
   }
   async activate(message) {
     const executable = await resolveCodexPath(this.config);
-    const result = await this.commandRunner(executable, ["queue", "--thread", String(this.config.codexThreadId), "--message", formatActivationPrompt(message, this.config)], {
+    let result;
+    try { result = await this.commandRunner(executable, ["queue", "--thread", String(this.config.codexThreadId), "--message", formatActivationPrompt(message, this.config)], {
       cwd: this.config.workingDirectory || undefined,
       timeoutMs: 60000,
-    });
+    }); } catch (error) {
+      // This is a rejected enqueue, not an uncertain delivery. Keep the
+      // notification pending and quarantine only this route until it changes.
+      if (/no rollout found for thread id/i.test(String(error?.message || error))) {
+        const unavailable = new Error("The linked Codex discussion is unavailable on this device.");
+        unavailable.code = "CODEX_DISCUSSION_UNAVAILABLE";
+        throw unavailable;
+      }
+      throw error;
+    }
     if (!/queued message/i.test(result.stdout)) throw new Error(`Codex did not confirm queued delivery: ${result.stdout || result.stderr || "no output"}`);
     try {
       await this.threadLoader(this.config.codexThreadId);
