@@ -26,6 +26,37 @@ backup_spec.loader.exec_module(backup_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_post_start_evidence_requires_degraded_preservation_and_lifecycle(self):
+        plan = dict(candidate_files={"fixture": "hash"}, unrelated_run_values={"other": "hash"},
+            malformed_artifacts={"A": "hash-A", "B": "hash-B"}, protected_identity_hashes={"identity": "hash"},
+            malformed_route_tokens=["A", "B"], max_health_age_ms=1000, shutdown_bound_ms=2000)
+        evidence = dict(installed_files=plan["candidate_files"], version="0.2.10", lifecycle="codex_session",
+            task=None, run_values=plan["unrelated_run_values"], malformed_artifacts=plan["malformed_artifacts"],
+            protected_identity_hashes=plan["protected_identity_hashes"],
+            unavailable_routes={key: dict(reason="binding_initialization_failed", delivered=0, acknowledged=0, history_recovered=False) for key in ("A", "B")},
+            health_samples=[dict(pid=101, timestamp_ms=t, readiness="degraded", unavailable_count=2) for t in (1000, 1500)],
+            listener_pid=101, observed_at_ms=1600, locks=dict(background=101, listener=101),
+            owner_phases=[dict(phase="two_open", owner_tokens=["one", "two"], listener_pids=[101]),
+                dict(phase="one_open", owner_tokens=["two"], listener_pids=[101]),
+                dict(phase="last_closed", owner_tokens=[], listener_pids=[], stop_observed_ms=3000, last_owner_exit_ms=2000,
+                     reopen_events=0, delivery_count=0, message_acknowledged=False, test_message_id="fixture-message"),
+                dict(phase="reopened", owner_tokens=["three"], listener_pids=[102], test_message_id="fixture-message", delivery_count=1)],
+            healthy_route_deliveries=1, acknowledged_replays=0)
+        self.assertEqual(sequence_module.verify_acceptance(plan, evidence)["scope"], "device_pilot_only")
+        for field, value in (("version", "0.2.6"), ("task", "still-present"), ("lifecycle", "autostart"),
+                             ("malformed_artifacts", {}), ("installed_files", {}), ("observed_at_ms", 5000),
+                             ("healthy_route_deliveries", 0), ("acknowledged_replays", 1)):
+            with self.subTest(field=field), self.assertRaises(sequence_module.SequenceStop):
+                sequence_module.verify_acceptance(plan, {**evidence, field: value})
+        bad = copy.deepcopy(evidence)
+        bad["unavailable_routes"]["A"]["history_recovered"] = True
+        with self.assertRaises(sequence_module.SequenceStop):
+            sequence_module.verify_acceptance(plan, bad)
+        bad = copy.deepcopy(evidence)
+        bad["owner_phases"][2]["reopen_events"] = 1
+        with self.assertRaises(sequence_module.SequenceStop):
+            sequence_module.verify_acceptance(plan, bad)
+
     def test_backup_keeps_malformed_bytes_and_refuses_replay(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

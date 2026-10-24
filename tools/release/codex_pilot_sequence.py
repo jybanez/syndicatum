@@ -50,6 +50,54 @@ def verify_listener_preimage(expected, actual, parent, locks):
     require_fact(locks == {"background": expected["pid"], "listener": expected["pid"]}, "listener_lock_mismatch")
 
 
+def verify_acceptance(plan, observed):
+    try:
+        return _verify_acceptance(plan, observed)
+    except SequenceStop:
+        raise
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise SequenceStop("acceptance_evidence_schema") from None
+
+
+def _verify_acceptance(plan, observed):
+    """Compare independently collected post-start evidence to reviewed preimages.
+
+    This verifier does not gather observations or generate test messages. The
+    native collection/physical operator harness remains a separate review gate.
+    """
+    require_fact(observed["installed_files"] == plan["candidate_files"], "installed_bytes_mismatch")
+    require_fact(observed["version"] == "0.2.10", "installed_version_mismatch")
+    require_fact(observed["lifecycle"] == "codex_session", "wrong_lifecycle")
+    require_fact(observed["task"] is None and observed["run_values"] == plan["unrelated_run_values"], "autostart_or_registration_drift")
+    require_fact(observed["malformed_artifacts"] == plan["malformed_artifacts"], "malformed_state_changed")
+    require_fact(observed["protected_identity_hashes"] == plan["protected_identity_hashes"], "protected_identity_changed")
+    unavailable = observed["unavailable_routes"]
+    require_fact(set(unavailable) == set(plan["malformed_route_tokens"]), "degraded_route_identity_mismatch")
+    require_fact(all(value == {"reason": "binding_initialization_failed", "delivered": 0,
+                              "acknowledged": 0, "history_recovered": False}
+                     for value in unavailable.values()), "degraded_route_advanced")
+    health = observed["health_samples"]
+    require_fact(len(health) == 2, "health_sample_count")
+    first, second = health
+    require_fact(first["pid"] == second["pid"] == observed["listener_pid"], "health_process_mismatch")
+    require_fact(first["timestamp_ms"] < second["timestamp_ms"] <= observed["observed_at_ms"], "health_not_advancing")
+    require_fact(0 <= observed["observed_at_ms"] - second["timestamp_ms"] <= plan["max_health_age_ms"], "health_stale")
+    require_fact(all(item["readiness"] == "degraded" and item["unavailable_count"] == 2 for item in health), "degraded_health_not_explicit")
+    require_fact(observed["locks"] == {"background": observed["listener_pid"], "listener": observed["listener_pid"]}, "acceptance_lock_mismatch")
+    phases = observed["owner_phases"]
+    require_fact([item["phase"] for item in phases] == ["two_open", "one_open", "last_closed", "reopened"], "owner_phase_sequence")
+    two, one, closed, reopened = phases
+    require_fact(len(set(two["owner_tokens"])) == 2 and two["listener_pids"] == [observed["listener_pid"]], "shared_listener_failed")
+    require_fact(len(one["owner_tokens"]) == 1 and set(one["owner_tokens"]) < set(two["owner_tokens"]) and one["listener_pids"] == two["listener_pids"], "one_owner_shutdown_failed")
+    require_fact(not closed["owner_tokens"] and not closed["listener_pids"], "last_owner_did_not_stop")
+    require_fact(0 <= closed["stop_observed_ms"] - closed["last_owner_exit_ms"] <= plan["shutdown_bound_ms"], "shutdown_bound_exceeded")
+    require_fact(closed["reopen_events"] == 0 and closed["delivery_count"] == 0 and closed["message_acknowledged"] is False, "closed_session_activated")
+    require_fact(closed["test_message_id"] == reopened["test_message_id"] and bool(closed["test_message_id"]), "recovery_message_mismatch")
+    require_fact(len(reopened["owner_tokens"]) >= 1 and len(reopened["listener_pids"]) == 1 and reopened["delivery_count"] == 1, "pending_recovery_not_once")
+    require_fact(observed["healthy_route_deliveries"] == 1 and observed["acknowledged_replays"] == 0, "healthy_route_or_replay_failure")
+    return {"scope": "device_pilot_only", "routing": "degraded_two_routes_not_recovered"}
+
+
 def sequence(adapter):
     """No retries, rollback, cleanup or restart on any failure.
 
