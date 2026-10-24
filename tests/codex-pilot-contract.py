@@ -23,9 +23,51 @@ sequence_spec.loader.exec_module(sequence_module)
 backup_spec = importlib.util.spec_from_file_location("pilot_backup", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_backup.py")
 backup_module = importlib.util.module_from_spec(backup_spec)
 backup_spec.loader.exec_module(backup_module)
+journal_spec = importlib.util.spec_from_file_location("pilot_journal", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_journal.py")
+journal_module = importlib.util.module_from_spec(journal_spec)
+journal_spec.loader.exec_module(journal_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_evidence_journal_rejects_stale_mixed_and_reused_collectors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            journal = journal_module.Journal(temporary, "fixture-attempt", "a" * 64)
+            item = dict(pid=101, timestamp_ms=100, readiness="degraded", unavailable_count=2)
+            record = journal.append("health", journal_module.PRODUCERS["health"], item, 100)
+            self.assertEqual(len(journal_module.verify_record(record, "fixture-attempt", "a" * 64, "0" * 64, 0, 101, 10)), 64)
+            for args in (("other-attempt", "a" * 64, 101), ("fixture-attempt", "b" * 64, 101), ("fixture-attempt", "a" * 64, 1000)):
+                with self.assertRaises(journal_module.EvidenceStop):
+                    journal_module.verify_record(record, args[0], args[1], "0" * 64, 0, args[2], 10)
+            callback = lambda: item
+            with self.assertRaisesRegex(journal_module.EvidenceStop, "collector_reuse"):
+                journal_module.collect_independent(journal, {k: callback for k in journal_module.PRODUCERS}, 100)
+            with self.assertRaises(FileExistsError):
+                journal_module.Journal(temporary, "fixture-attempt", "a" * 64)
+            self.assertEqual(len(list((Path(temporary) / "journal").iterdir())), 1)
+
+    def test_collector_and_journal_failures_are_distinct(self):
+        values = {
+            "installed_files": {"fixture": dict(sha256="a" * 64, size=1, mtime_ns=1)},
+            "registrations": dict(task_present=False, task_xml_sha256="", run_values={}),
+            "processes": [],
+            "locks": {k: dict(present=False, owner_pid=0, sha256="") for k in ("background", "listener")},
+            "health": dict(pid=101, timestamp_ms=100, readiness="degraded", unavailable_count=2),
+            "routes": {"A": dict(reason="binding_initialization_failed", delivered=0, acknowledged=0, history_recovered=False)},
+        }
+        collectors = {k: (lambda value=value: value) for k, value in values.items()}
+        class BrokenJournal:
+            def append(self, *args):
+                raise OSError("private failure detail must not escape")
+        with self.assertRaisesRegex(journal_module.EvidenceStop, "journal_write_failed_installed_files"):
+            journal_module.collect_independent(BrokenJournal(), collectors, 100)
+        def failed():
+            raise OSError("private collector detail must not escape")
+        with self.assertRaisesRegex(journal_module.EvidenceStop, "collector_failed_installed_files"):
+            journal_module.collect_independent(BrokenJournal(), {**collectors, "installed_files": failed}, 100)
+        with tempfile.TemporaryDirectory() as temporary:
+            journal = journal_module.Journal(temporary, "fixture-attempt", "a" * 64)
+            journal_module.collect_independent(journal, collectors, 100)
+            self.assertEqual(journal.sequence, 6)
     def test_post_start_evidence_requires_degraded_preservation_and_lifecycle(self):
         def verify(plan, evidence):
             raw_plan = json.dumps({"attempt_id": "fixture-attempt", "plan": plan}).encode()
