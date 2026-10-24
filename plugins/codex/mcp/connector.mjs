@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 
 export class ActivationConnector {
-  constructor({ config, syndicatum, driver, state, log = console }) {
-    Object.assign(this, { config, syndicatum, driver, state, log });
+  constructor({ config, syndicatum, driver, state, log = console, onUnavailable = () => {} }) {
+    Object.assign(this, { config, syndicatum, driver, state, log, onUnavailable });
+    this.unavailableReason = null;
     this.queue = Promise.resolve(); this.stopped = false; this.socket = null;
     this.retryAttempts = new Map(); this.retryTimers = new Map(); this.coalescingTimer = null; this.coalescingAttempt = 0;
   }
@@ -26,11 +27,21 @@ export class ActivationConnector {
   }
   enqueue(message, source = "realtime") {
     this.queue = this.queue.then(() => this.handleMessage(message, source)).catch(error => {
+      if (error?.code === "CODEX_DISCUSSION_UNAVAILABLE") {
+        this.unavailableReason = "discussion_unavailable";
+        for (const timer of this.retryTimers.values()) clearTimeout(timer);
+        this.retryTimers.clear();
+        clearTimeout(this.coalescingTimer); this.coalescingTimer = null;
+        this.log.error(`Agent ${this.config.agentId}: linked discussion is unavailable on this device; this route is paused until its binding changes. Notifications remain unacknowledged.`);
+        this.onUnavailable(this.unavailableReason);
+        return { status: "unavailable", reason: this.unavailableReason };
+      }
       this.log.error(`Message processing failed: ${safe(error)}`); this.scheduleRetry(message, error); return { status: "retry-scheduled" };
     });
     return this.queue;
   }
   async recoverAddressed(source = "recovery", { waitForQueue = true } = {}) {
+    if (this.unavailableReason) return { status: "unavailable", count: 0 };
     if (typeof this.syndicatum.addressedUnacknowledged !== "function") return { status: "unavailable", count: 0 };
     const messages = [...await this.syndicatum.addressedUnacknowledged()].reverse();
     for (const message of messages) this.enqueue(message, source);
@@ -38,6 +49,7 @@ export class ActivationConnector {
     return { status: "recovered", count: messages.length };
   }
   async handleMessage(message, source) {
+    if (this.unavailableReason) return { status: "unavailable", reason: this.unavailableReason };
     if (!isAddressedTo(message, this.config.participantId)) { await this.state.observeSequence(message); return { status: "ignored", reason: "not-addressed" }; }
     if (isSentBy(message, this.config.participantId)) return { status: "ignored", reason: "self-authored" };
     if (this.state.has(message.id)) return { status: "ignored", reason: "duplicate" };
