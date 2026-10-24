@@ -31,7 +31,11 @@ export class CodexDriver {
       throw error;
     }
     if (!/queued message/i.test(result.stdout)) throw new Error(`Codex did not confirm queued delivery: ${result.stdout || result.stderr || "no output"}`);
-    if (this.config.activationAllowed && !await this.config.activationAllowed()) return { ...result, threadLoadStarted: false, threadLoadWarning: "Codex closed after enqueue; the discussion was not reopened." };
+    if (this.config.activationAllowed && !await this.config.activationAllowed()) {
+      const closed = new Error("Codex closed during enqueue; notification remains pending and the discussion was not reopened.");
+      closed.code = "CODEX_SESSION_CLOSED";
+      throw closed;
+    }
     try {
       await this.threadLoader(this.config.codexThreadId);
       return { ...result, threadLoadStarted: true };

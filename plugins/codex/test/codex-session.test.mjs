@@ -62,8 +62,7 @@ test("notification delivery cannot reopen a closed Codex session", async () => {
   await assert.rejects(driver.activate({ id: 1 }), { code: "CODEX_SESSION_CLOSED" });
   assert.equal(queued, 0);
   open = true;
-  const result = await driver.activate({ id: 1 });
+  await assert.rejects(driver.activate({ id: 1 }), { code: "CODEX_SESSION_CLOSED" });
   assert.equal(queued, 1);
   assert.equal(loaded, 0);
-  assert.equal(result.threadLoadStarted, false);
 });
