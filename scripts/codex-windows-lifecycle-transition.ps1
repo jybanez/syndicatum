@@ -34,7 +34,7 @@ $release = @{
     }
     '0.2.9' = @{
         Ref = 'codex-v0.2.9'
-        Revision = '4e9364fc8df4368e52a8b3607bd257d0f36219f9'
+        Revision = '4c2d2b64154bb8e111778dbc9defcfce1eff8371'
     }
 }
 

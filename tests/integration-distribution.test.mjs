@@ -235,7 +235,7 @@ test("non-production channels retain at least one explicit unresolved gate", asy
 
 test("0.2.9 upgrade targets the reviewed release source without changing prior immutable targets", async () => {
   const script = await readFile(codexLifecycleTransitionUrl, "utf8");
-  assert.match(script, /'0\.2\.9'\s*=\s*@\{\s*Ref = 'codex-v0\.2\.9'\s*Revision = '4e9364fc8df4368e52a8b3607bd257d0f36219f9'/);
+  assert.match(script, /'0\.2\.9'\s*=\s*@\{\s*Ref = 'codex-v0\.2\.9'\s*Revision = '4c2d2b64154bb8e111778dbc9defcfce1eff8371'/);
   assert.match(script, /'0\.2\.8'\s*=\s*@\{\s*Ref = 'codex-v0\.2\.8'\s*Revision = '4e6e981be031e61c4f52fb87e0ead64bf43b90d9'/);
 });
 
