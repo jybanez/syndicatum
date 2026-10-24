@@ -238,15 +238,30 @@ function Assert-MarketplaceState([bool] $RequireTarget) {
     }
 }
 
+function Assert-RemoteTagRevision([string[]] $RemoteLines, [string] $Tag, [string] $ExpectedRevision) {
+    $directRef = "refs/tags/$Tag"
+    $peeledRef = "$directRef^{}"
+    $direct = @()
+    $peeled = @()
+    foreach ($line in $RemoteLines) {
+        if ($line -notmatch '^([0-9a-fA-F]{40})\s+(\S+)$') { throw 'Malformed remote tag response.' }
+        $hash = $Matches[1].ToLowerInvariant()
+        $ref = $Matches[2]
+        if ($ref -ceq $directRef) { $direct += $hash }
+        elseif ($ref -ceq $peeledRef) { $peeled += $hash }
+        else { throw 'Unexpected remote tag reference.' }
+    }
+    if ($direct.Count -ne 1 -or $peeled.Count -gt 1) { throw 'Missing or ambiguous remote tag reference.' }
+    # Annotated tags identify a tag object directly and a commit when peeled.
+    # Lightweight tags already identify the commit and have no peeled row.
+    $revision = if ($peeled.Count -eq 1) { $peeled[0] } else { $direct[0] }
+    if ($revision -cne $ExpectedRevision) { throw 'Remote candidate tag revision mismatch.' }
+}
+
 function Assert-RemoteCandidate {
-    $peeled = @(& git ls-remote 'https://github.com/jybanez/syndicatum.git' "refs/tags/$($expected.Ref)^{}")
-    if ($LASTEXITCODE -ne 0 -or $peeled.Count -ne 1) {
-        throw "Unable to resolve immutable tag $($expected.Ref)."
-    }
-    $revision = ($peeled[0] -split '\s+')[0]
-    if ($revision -ne $expected.Revision) {
-        throw "Candidate revision mismatch for $($expected.Ref)."
-    }
+    $remote = @(& git ls-remote 'https://github.com/jybanez/syndicatum.git' "refs/tags/$($expected.Ref)" "refs/tags/$($expected.Ref)^{}")
+    if ($LASTEXITCODE -ne 0) { throw "Unable to resolve immutable tag $($expected.Ref)." }
+    Assert-RemoteTagRevision $remote $expected.Ref $expected.Revision
 }
 
 function Write-Report([hashtable] $Report) {
