@@ -10,6 +10,11 @@ export class CodexDriver {
     this.threadLoader = threadLoader;
   }
   async activate(message) {
+    if (this.config.activationAllowed && !await this.config.activationAllowed()) {
+      const closed = new Error("The owning Codex sessions are closed; notification remains pending until the next launch.");
+      closed.code = "CODEX_SESSION_CLOSED";
+      throw closed;
+    }
     const executable = await resolveCodexPath(this.config);
     let result;
     try { result = await this.commandRunner(executable, ["queue", "--thread", String(this.config.codexThreadId), "--message", formatActivationPrompt(message, this.config)], {
@@ -26,6 +31,11 @@ export class CodexDriver {
       throw error;
     }
     if (!/queued message/i.test(result.stdout)) throw new Error(`Codex did not confirm queued delivery: ${result.stdout || result.stderr || "no output"}`);
+    if (this.config.activationAllowed && !await this.config.activationAllowed()) {
+      const closed = new Error("Codex closed during enqueue; notification remains pending and the discussion was not reopened.");
+      closed.code = "CODEX_SESSION_CLOSED";
+      throw closed;
+    }
     try {
       await this.threadLoader(this.config.codexThreadId);
       return { ...result, threadLoadStarted: true };

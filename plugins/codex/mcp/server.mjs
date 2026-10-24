@@ -320,7 +320,7 @@ const tools = [
   },
   {
     name: "connector_background_install",
-    description: "Install or update the per-user plugin-managed background connector and start it now.",
+    description: "Install or update the per-user connector for the current Codex session. Stops when all owning Codex sessions close; does not enable sign-in autostart.",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },

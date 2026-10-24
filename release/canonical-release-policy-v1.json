@@ -1625,6 +1625,13 @@
       "mode": 420
     },
     {
+      "source": "plugins/codex/mcp/codex-session.mjs",
+      "action": "ship",
+      "path": "plugins/codex/mcp/codex-session.mjs",
+      "role": "plugin",
+      "mode": 420
+    },
+    {
       "source": "plugins/codex/mcp/config.mjs",
       "action": "ship",
       "path": "plugins/codex/mcp/config.mjs",
@@ -1773,6 +1780,13 @@
     },
     {
       "source": "plugins/codex/test/health-heartbeat.test.mjs",
+      "action": "exclude",
+      "path": "",
+      "role": "",
+      "mode": 0
+    },
+    {
+      "source": "plugins/codex/test/codex-session.test.mjs",
       "action": "exclude",
       "path": "",
       "role": "",

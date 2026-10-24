@@ -3,8 +3,12 @@ import { pluginPaths } from "./paths.mjs";
 import { PluginRuntime } from "./runtime.mjs";
 import { isHealthFresh, startHealthHeartbeat } from "./health-heartbeat.mjs";
 import { appendFile, readFile, rename, writeFile } from "node:fs/promises";
+import { sessionIsOpen, watchCodexSession } from "./codex-session.mjs";
 
 const files = pluginPaths();
+if (!process.argv.includes("--codex-scoped") || !await sessionIsOpen(files.backgroundMetadata).catch(() => false)) {
+  process.exit(0);
+}
 const serviceLock = new ListenerLock(files.backgroundLock);
 const ownership = await serviceLock.acquire();
 if (!ownership.acquired) {
@@ -15,11 +19,12 @@ if (!ownership.acquired) {
   process.exit(healthy ? 0 : 75);
 }
 
-const runtime = new PluginRuntime(process.env, { manageBackground: false });
+const runtime = new PluginRuntime(process.env, { manageBackground: false, activationAllowed: () => sessionIsOpen(files.backgroundMetadata).catch(() => false) });
 let stopping = false;
 let retryTimer = null;
 let healthHeartbeat = null;
 let healthWriteQueue = Promise.resolve();
+let sessionWatch = null;
 const keepAlive = setInterval(() => {}, 60_000);
 
 async function run() {
@@ -53,17 +58,32 @@ async function writeHealthFile(health) {
 async function stop() {
   if (stopping) return;
   stopping = true;
+  sessionWatch?.stop();
   clearTimeout(retryTimer);
   clearInterval(keepAlive);
-  await healthHeartbeat?.stop();
-  await runtime.stop();
-  await serviceLock.release();
-  process.exit(0);
+  try {
+    await healthHeartbeat?.stop();
+    await runtime.stop();
+  } finally {
+    await serviceLock.release().catch(() => {});
+    process.exit(0);
+  }
 }
 
 process.once("SIGINT", () => void stop());
 process.once("SIGTERM", () => void stop());
 process.once("SIGHUP", () => void stop());
+sessionWatch = watchCodexSession({
+  isOpen: () => sessionIsOpen(files.backgroundMetadata),
+  onClosed: async () => {
+    const startupLock = new ListenerLock(files.startupLock);
+    if (!(await startupLock.acquire()).acquired) return false;
+    try {
+      if (await sessionIsOpen(files.backgroundMetadata).catch(() => false)) return false;
+      await stop();
+    } finally { await startupLock.release(); }
+  },
+});
 await run();
 healthHeartbeat = startHealthHeartbeat({
   snapshot: () => runtime.status,

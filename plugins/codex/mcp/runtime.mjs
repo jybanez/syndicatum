@@ -15,7 +15,7 @@ import { loadPairingState, savePairingState } from "./pairing-state.mjs";
 import { migrateSyndicatumServer } from "./server-migration.mjs";
 
 export class PluginRuntime {
-  constructor(env = process.env, { manageBackground = true, background = null } = {}) { this.env = env; this.manageBackground = manageBackground; this.background = background ?? new BackgroundServiceManager({ env }); this.connector = null; this.task = null; this.lock = null; this.pairing = null; this.pairingTask = null; this.configWatcher = null; this.reloadTimer = null; this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; this.status = { state: "starting" }; }
+  constructor(env = process.env, { manageBackground = true, background = null, activationAllowed = null } = {}) { this.env = env; this.manageBackground = manageBackground; this.activationAllowed = activationAllowed; this.background = background ?? new BackgroundServiceManager({ env }); this.connector = null; this.task = null; this.lock = null; this.pairing = null; this.pairingTask = null; this.configWatcher = null; this.reloadTimer = null; this.bindingRefreshTimer = null; this.bindingSignature = null; this.bindingRefreshBusy = false; this.status = { state: "starting" }; }
   async start() {
     await this.ensureConfigWatcher();
     await this.stop();
@@ -37,7 +37,7 @@ export class PluginRuntime {
       }
       if (local.mode === "device") return await this.startDevice(local);
       const client = new SyndicatumClient(local);
-      const config = await resolveActivationConfig(local, client);
+      const config = { ...await resolveActivationConfig(local, client), activationAllowed: this.activationAllowed };
       const codexPath = await resolveCodexPath(config, this.env);
       const probe = await runCommand(codexPath, ["queue", "--help"], { timeoutMs: 15000 });
       if (!/Queue a message for an existing session/i.test(probe.stdout)) throw new Error("This Codex release does not provide the required queue command.");
@@ -145,7 +145,7 @@ export class PluginRuntime {
       if (unavailableBindings.length) logger.error(`${unavailableBindings.length} discussion binding(s) are unavailable.`);
       return this.status;
     }
-    this.connector = new DeviceConnector({ config: { ...config, codexPath }, syndicatum: client, bindings: validBindings, log: logger,
+    this.connector = new DeviceConnector({ config: { ...config, codexPath, activationAllowed: this.activationAllowed }, syndicatum: client, bindings: validBindings, log: logger,
       onUnavailable: failure => {
         const reasons = this.status.unavailableBindingReasons ?? [];
         if (!reasons.some(item => item.projectId === failure.projectId && item.agentId === failure.agentId)) reasons.push(failure);

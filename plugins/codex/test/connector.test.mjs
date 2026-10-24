@@ -10,6 +10,34 @@ import { DeviceConnector } from "../mcp/device-connector.mjs";
 
 const message = { id: 1559, project_id: 1, project_sequence: 1559, sender: { id: 9, display_name: "PBB Realtime" }, addressees: [{ participant_id: 8, reason: "direct" }] };
 
+for (const coalescingEnabled of [false, true]) test(`close during enqueue preserves durable pending state (coalescing=${coalescingEnabled})`, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-close-race-"));
+  const file = path.join(directory, "state.json");
+  const state = new StateStore(file);
+  let open = true, loaded = 0, queued = 0;
+  const driver = new CodexDriver({ codexPath: process.execPath, codexThreadId: "thread", activationAllowed: async () => open }, async () => {
+    queued += 1; open = false; return { stdout: "queued message", stderr: "" };
+  }, async () => { loaded += 1; });
+  const connector = new ActivationConnector({ config: { participantId: 8, codexThreadId: "thread", coalescingEnabled },
+    syndicatum: { isAcknowledged: async () => false, addressedUnacknowledged: async () => [message] },
+    state, driver, log: { info() {}, error() {} } });
+  try {
+    await state.load();
+    assert.equal((await connector.enqueue(message)).status, "session-closed");
+    assert.equal(connector.stopped, true);
+    assert.equal(queued, 1);
+    assert.equal(loaded, 0);
+    assert.equal(state.has(message.id), false);
+    assert.equal(state.activeWake(), null);
+    assert.equal(connector.retryTimers.size, 0);
+    const recovered = new StateStore(file);
+    await recovered.load();
+    assert.equal(recovered.has(message.id), false);
+    assert.equal(recovered.pending()[0].id, String(message.id));
+    assert.equal(recovered.activeWake(), null);
+  } finally { connector.stop(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test("missing discussion pauses only its route and preserves undelivered state", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-missing-discussion-"));
   const failures = [], delivered = [];
