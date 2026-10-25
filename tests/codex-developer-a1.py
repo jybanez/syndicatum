@@ -25,7 +25,7 @@ class Cases(unittest.TestCase):
   for raw in BAD:
    with self.subTest(raw=raw[:80]),self.assertRaises(ValueError):probe.parse_frame(raw)
  def test_stop_preserves_primary_no_successor_or_replay(self):
-  for fault in ('nonzero','timeout','trailing','bad_nonce','none'):
+  for fault in ('nonzero','timeout','trailing','bad_nonce','missing','wrong_python','wrong_node','wrong_ps','none'):
    with self.subTest(fault=fault),tempfile.TemporaryDirectory() as tmp:
     calls=[];auth=[];source={n:(ROOT/('docs' if n.endswith('-admission.md') else 'tools/release')/n).read_bytes() for n in runner.REQUIRED_SOURCES}
     exe=Path(sys.executable);pin=runner.sha(exe.read_bytes())
@@ -37,12 +37,25 @@ class Cases(unittest.TestCase):
       i=len(calls);calls.append(args)
       if i==0 and fault in ('nonzero','timeout'):raise RuntimeError('ORIGINAL_'+fault)
       raw=b'codex-cli 0.164.0-alpha.11.1\n' if i==0 else (b'{"marketplaces":[{"name":"syndicatum","root":"inert","marketplaceSource":"inert"}]}' if i==1 else b'{"installed":[],"available":[]}' if i==2 else json.dumps({'nonce':json.loads(stdin)['nonce'] if fault!='bad_nonce' else 'b'*48}).encode())
-      if i==3 and fault=='trailing':raw+=b'x'
+      if i>=3:
+       nonce=json.loads(stdin)['nonce'];out={'nonce':nonce}
+       if i==3:out['modules']={n:str((Path(cwd)/(n+'.py')).resolve()) for n in ('codex_developer_host_assembly','codex_developer_install_collector','codex_developer_process_ipc')}
+       elif i==4:
+        declared=source['codex_developer_codex_entry.mjs'].decode().split('Object.freeze([',1)[1].split(']);',1)[0]
+        out.update(source_files=runner.re.findall(r"'([^']+)'",declared),entry_url=(Path(cwd)/'codex_developer_codex_entry.mjs').resolve().as_uri())
+       else:out.update(module=str((Path(cwd)/'codex-developer-fixed-storage.psm1').resolve()),protocol_origin=str((Path(cwd)/'codex-developer-fixed-session-protocol.ps1').resolve()))
+       if fault=='bad_nonce':out['nonce']='b'*48
+       if fault=='missing':out={'nonce':nonce}
+       if fault=='wrong_python' and i==3:out['modules']['codex_developer_host_assembly']='outside.py'
+       if fault=='wrong_node' and i==4:out['entry_url']='file:///outside.mjs'
+       if fault=='wrong_ps' and i==5:out['module']='outside.psm1'
+       raw=json.dumps(out).encode()
+       if i==3 and fault=='trailing':raw+=b'x' 
       return {'identity':{'pid':123},'stdout':raw,'stderr':b'','exit':0}
     if fault=='none':self.assertEqual(runner.run(p,source,lambda *v:auth.append(v),Host())['status'],'observations_only_not_install_admission');self.assertEqual(len(calls),6)
     else:
      with self.assertRaises(Exception) as stopped:runner.run(p,source,lambda *v:auth.append(v),Host())
-     self.assertEqual(len(calls),1 if fault in ('nonzero','timeout') else 4)
+     self.assertEqual(len(calls),1 if fault in ('nonzero','timeout') else 5 if fault=='wrong_node' else 6 if fault=='wrong_ps' else 4)
      if fault in ('nonzero','timeout'):self.assertEqual(str(stopped.exception),'ORIGINAL_'+fault)
     count=len(calls)
     with self.assertRaises(FileExistsError):runner.run(p,source,lambda *v:auth.append(v),Host())

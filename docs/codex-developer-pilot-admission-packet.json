@@ -398,13 +398,13 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_module_probe.mjs",
-        "git_blob_bytes_sha256": "e2347caf45ee549490093a7ab2bc0599560452061f6a131dc8df8f74476a56af",
-        "size": 970
+        "git_blob_bytes_sha256": "33958879da730052eba1318a4d9dab11b58ac0d34cd9d03d933f7181a46ccfce",
+        "size": 1046
       },
       {
         "repository_path": "tools/release/codex-developer-a1-module-probe.ps1",
-        "git_blob_bytes_sha256": "1872e9b944754a353007cb1afc71194f2eb655cec90d5a7b847b8cf6f7f2f431",
-        "size": 998
+        "git_blob_bytes_sha256": "3f0b0b7f167595206354f70992f36b54747a0de157e2633382805824ba550889",
+        "size": 1085
       }
     ],
     "complete_sources_and_scope": [
@@ -500,28 +500,28 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_module_probe.mjs",
-        "git_blob_bytes_sha256": "e2347caf45ee549490093a7ab2bc0599560452061f6a131dc8df8f74476a56af",
-        "size": 970
+        "git_blob_bytes_sha256": "33958879da730052eba1318a4d9dab11b58ac0d34cd9d03d933f7181a46ccfce",
+        "size": 1046
       },
       {
         "repository_path": "tools/release/codex-developer-a1-module-probe.ps1",
-        "git_blob_bytes_sha256": "1872e9b944754a353007cb1afc71194f2eb655cec90d5a7b847b8cf6f7f2f431",
-        "size": 998
+        "git_blob_bytes_sha256": "3f0b0b7f167595206354f70992f36b54747a0de157e2633382805824ba550889",
+        "size": 1085
       },
       {
         "repository_path": "tools/release/codex_developer_a1_runner.py",
-        "git_blob_bytes_sha256": "4267fad1272a86e2f3f134906814f7176751b91c9cc793caa1a7ad9ae4dd6968",
-        "size": 10769
+        "git_blob_bytes_sha256": "54874340095c02d4afa524417b7f78c3f652aeb29ae74d517040f48a84509017",
+        "size": 12038
       },
       {
         "repository_path": "docs/codex-developer-a1-admission.md",
-        "git_blob_bytes_sha256": "956fc01c736fc54ba0c6f140ef47dcfa45684f5c47c6371c3bf472f25a9b959c",
-        "size": 8592
+        "git_blob_bytes_sha256": "427a67f9a99fe14ef4dbcbbbdd51e4c2bf203a6aedb7e8dc0654f1c5127eae2d",
+        "size": 9699
       }
     ],
     "capture_identity": "developer-a1-c0fa748e7bd046d0bcaa9a2c8d402a31",
     "runner": "tools/release/codex_developer_a1_runner.py::run",
-    "scope_document_sha256": "956fc01c736fc54ba0c6f140ef47dcfa45684f5c47c6371c3bf472f25a9b959c",
+    "scope_document_sha256": "427a67f9a99fe14ef4dbcbbbdd51e4c2bf203a6aedb7e8dc0654f1c5127eae2d",
     "checkout_policy": "Materialize verified reviewed Git-blob bytes into fresh private capture; never execute autocrlf checkout bytes",
     "limits": {
       "capture_files": 32,
@@ -533,6 +533,7 @@
       "stderr_bytes": 65536,
       "stdin_bytes": 61
     },
-    "scope_limits": "No worker/assembly launch, storage setup, install, activation, root walk or complete runtime closure proof. Actual production metadata callback and writer-quiescence provenance remain pending."
+    "scope_limits": "No worker/assembly launch, storage setup, install, activation, root walk or complete runtime closure proof. Actual production metadata callback and writer-quiescence provenance remain pending.",
+    "child_evidence_limits": "Owned Popen PID only; requested executable and parent monotonic sample are not OS image/creation-time proof. Both verification flags false. No reattachment."
   }
 }

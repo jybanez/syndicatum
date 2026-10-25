@@ -42,7 +42,7 @@ class NativeHost:
         child=subprocess.Popen([executable,*args],executable=executable,cwd=cwd,
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
             shell=False,close_fds=True,creationflags=subprocess.CREATE_NO_WINDOW)
-        identity={'pid':child.pid,'executable':executable,'started_monotonic_ns':time.monotonic_ns()}
+        identity={'pid':child.pid,'requested_executable':executable,'parent_observed_after_spawn_monotonic_ns':time.monotonic_ns(),'os_image_verified':False,'os_creation_time_verified':False}
         self.children.append(identity)
         data={'out':bytearray(),'err':bytearray()};errors=[]
         def drain(stream,key,bound):
@@ -129,7 +129,18 @@ def run(packet,source_bytes,authorize,host=None):
                     targets=[x for x in value['marketplaces'] if x.get('name')=='syndicatum']
                     require(len(targets)==1 and type(targets[0].get('root')) is str and targets[0].get('marketplaceSource') is not None,'target_mapping_absent_or_ambiguous')
                 if i==2:require(type(value.get('installed')) is list and type(value.get('available')) is list,'plugin_schema')
-                if i>=3:require(value.get('nonce')==nonce,'probe_nonce')
+                if i>=3:
+                    require(value.get('nonce')==nonce,'probe_nonce')
+                    if i==3:
+                        names=('codex_developer_host_assembly','codex_developer_install_collector','codex_developer_process_ipc')
+                        expected={n:str((capture/(n+'.py')).resolve()) for n in names}
+                        require(set(value)=={'nonce','modules'} and value['modules']==expected,'python_module_origins')
+                    elif i==4:
+                        declared=source_bytes['codex_developer_codex_entry.mjs'].decode().split('Object.freeze([',1)[1].split(']);',1)[0]
+                        expected=re.findall(r"'([^']+)'",declared)
+                        require(set(value)=={'nonce','source_files','entry_url'} and value['source_files']==expected and value['entry_url']==(capture/'codex_developer_codex_entry.mjs').resolve().as_uri(),'node_module_origin_or_sources')
+                    else:
+                        require(set(value)=={'nonce','module','protocol_origin'} and value['module']==str((capture/'codex-developer-fixed-storage.psm1').resolve()) and value['protocol_origin']==str((capture/'codex-developer-fixed-session-protocol.ps1').resolve()),'powershell_module_origins')
         return {'packet_sha256':binding,'capture_identity':CAPTURE_ID,'records':records,'status':'observations_only_not_install_admission'}
     except Exception as primary:
         if capture is not None:

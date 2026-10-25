@@ -14,4 +14,4 @@ $nonce=ConvertFrom-A1Frame $bytes.ToArray()
 if($nonce -cne $A1Nonce){throw 'nonce_context'}
 Import-Module (Join-Path $PSScriptRoot 'codex-developer-fixed-storage.psm1') -Force
 . (Join-Path $PSScriptRoot 'codex-developer-fixed-session-protocol.ps1')
-@{nonce=$nonce;module=(Get-Module 'codex-developer-fixed-storage').Path} | ConvertTo-Json -Compress
+@{nonce=$nonce;module=(Get-Module 'codex-developer-fixed-storage').Path;protocol_origin=(Join-Path $PSScriptRoot 'codex-developer-fixed-session-protocol.ps1')} | ConvertTo-Json -Compress

@@ -132,3 +132,22 @@ identity. STOP on version/JSON/schema/nonce/mapping errors; no retry, rollback,
 cleanup, kill or successor command. Stable postimage is not asserted on an uncertain
 child. Primary error survives secondary failure-record writes. No inference from
 these observations authorizes persistent worker or installation.
+
+
+## Probe origins and child evidence limits (#11671)
+
+Each output schema is exact. Python must report the three imported __file__ origins
+at their staged reviewed paths; Node must report the staged entry file URL and exact
+reviewed SOURCE_FILES sequence; PowerShell must report the staged storage module
+path and protocol-source path. Nonce-only, missing/extra fields or any differing or
+outside origin STOP before a successor. These are reports from reviewed probe code,
+not independent OS module-loader attestation.
+
+Child evidence is limited: PID comes from the owned Popen result, while
+requested_executable is the launch argument and
+parent_observed_after_spawn_monotonic_ns is a parent observation. Neither is an
+OS-observed image path or process creation time. os_image_verified and
+os_creation_time_verified are explicitly false, including short-lived children.
+The runner does not independently verify the launched image. Prelaunch binary hashes
+and reported module origins do not close that gap. No PID/name-based reattachment,
+kill, retry or replay is permitted; uncertain outcomes remain STOP.
