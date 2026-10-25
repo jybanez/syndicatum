@@ -1,4 +1,4 @@
-# Native B validation proposal — source/design only (#11582)
+# Native B validation proposal â€” source/design only (#11582)
 
 No authorization, runnable packet, native probe or gate change is contained here.
 Developer is the sole eventual connector target. Old #11545/#11546 evidence is
@@ -6,6 +6,10 @@ immutable. PR #160 correction head 706574293809f1c17fed890477c4ded089cb85e8
 passed 33 contract, 10 inert adapter and PowerShell closed-gate/pure-anchor checks;
 protected run 40156975665 was still in progress when this proposal was authored.
 A green result must be retained separately; none is inferred from prior heads.
+
+The feasibility recommendation below supersedes the volume-first recommendation
+and globally single-use service requirement in the initial proposal. Both remain
+comparisons, not new prerequisites.
 
 ## 1. Replace the unsupported durability assumption
 
@@ -145,3 +149,84 @@ production end-to-end readiness remain outside this isolated synthetic scope.
 
 Both native gates remain closed. This proposal deliberately leaves the live
 adapter unexecutable and does not create a fresh cutover packet or private cutoff.
+
+## 5. Compact feasibility recommendation (#11585 — controlling delta)
+
+**Shortest path:** implement/review a file-level fixed-storage journal and a
+single-Developer-host exclusive authority reservation; validate using synthetic
+files only after separately scoped authorization. Do not provision a volume or
+server service. This is a design recommendation, not an operational acceptance.
+
+| Design | Bounded guarantee sought | Remaining limit | Host authority |
+| --- | --- | --- | --- |
+| Pre-established fixed-size record/head containers; write-through file handles plus explicit FlushFileBuffers and readback | Complete acknowledged file writes before the next operation; detect torn/partial/hash-invalid records and fail closed after process crash | No atomic multi-file commit, newly created directory durability or dishonest-device/power-loss guarantee; namespace/storage establishment is a separate prerequisite | Ordinary write access to two exact approved private files; no volume/admin scope |
+| Dedicated-volume barrier experiment | Documented volume flush covering open files on that volume after publication | Still not hardware/power-loss proof; cannot transfer result to production volume | Broad volume access/admin and environment provisioning; disproportionate for this one-host scope |
+
+File design: separately establish one new bounded journal container and one
+physically disjoint head container outside webroot/live connector state. Pin
+volume/file identities, ACLs, lengths and initial hashes in the reviewed storage
+manifest. Open with OPEN_EXISTING, GENERIC_READ/WRITE and deny other writers/delete;
+reject absence, replacement, wrong size or unknown bytes. No per-record creation,
+rename, extension, truncation or directory publication during cutover. Reserve
+fixed slots inside these existing files: length, sequence, plan/authority/attempt,
+previous hash, payload, checksum and completion trailer. Never overwrite an
+occupied or partial slot. Write complete intent slot, flush the file, read/verify;
+then write its independent head slot, flush/read/verify; only then permit the
+bounded action. Postimage is a separate record, not an update to intent. Any
+partial head/record or missing confirmation permanently consumes this attempt;
+no recovery path repeats its mutation. Retain failed bytes and external receipt.
+Capacity exhaustion or uncertain flush stops before the next action. The existing
+per-record/directory journal implementation does NOT yet implement this design.
+
+The proposal uses FILE_FLAG_WRITE_THROUGH plus explicit file FlushFileBuffers;
+it does not require NO_BUFFERING, alignment-sensitive I/O or assume sector atomicity.
+Microsoft documents that write-through requests cache flushing but hardware may
+not support it; successful API/readback is bounded evidence, not proof against
+power loss or hostile storage. The owner must choose whether that documented
+file/device failure model is sufficient. If guaranteed persistence despite device
+cache/power loss or storage rollback is required, this source-only design cannot
+prove it: specify independently durable storage/hardware and a separate validation
+scope. Do not silently replace that requirement with an elevated volume flush.
+Pre-establishment/reopen validates identity and usability only; it cannot prove
+namespace survival over arbitrary power loss. No file has been established here.
+
+### One-host no-replay without a new server service
+
+For cooperating runners on this single host, a permanent authority-ID reservation
+in the same pre-established journal, combined with a deny-share writable handle,
+serializes contenders and consumes authority before first mutation. Bind server,
+project, owner message ID/revision/body hash, plan digest, mechanism head and
+attempt ID in the reservation; flush/read/head-confirm it first. A second process
+cannot acquire the handle concurrently; after a crash it finds any reservation,
+intent or partial record and STOPS, even if no mutation is confirmed. Never create
+a new attempt merely because the old one failed. All entrypoints must use the
+same pinned storage manifest and authority-key namespace; caller-selected alternate
+journal roots are rejected. Missing/replaced/rolled-back storage is a hard stop,
+not permission to initialize a clean journal. Initialization is a separate approved
+step, never part of retry. Exact canonical owner-message revalidation remains
+mandatory before first mutation and at authority boundaries; unavailable, edited,
+revoked or mismatched approval stops. Receipts retain canonical tool provenance.
+
+This contains accidental concurrency, duplicate notification/command replay and
+process-crash restart among cooperating local runners using the pinned journal.
+It does NOT contain a malicious same-user/admin runner bypassing the protocol,
+restoring a bit-identical old storage image, a second independent host, or owner
+revocation racing between final fetch and an irreversible command. Those threats
+also defeat a plain local exclusive attempt directory; the existing canonical
+read API supplies no atomic approval-and-mutation transaction. No evidence says
+these stronger threats are in scope for the single Developer attempt. Therefore
+server-side global reservation is withdrawn as a mandatory prerequisite. If the
+owner requires global consumption/instant revocation, the minimal gap is an atomic
+server compare-and-consume authority token (and defined revocation semantics), not
+a general new service; live side effects still cannot be made atomic with a remote
+revocation. Otherwise recommend explicitly accepting the narrow revalidation
+race/cooperating-host boundary and using the existing capabilities. No server
+change is implemented or requested here.
+
+Next source slice, after review: replace directory barriers with the fixed-file
+model, implement strict canonical-message receipt comparison through a trusted
+transport seam, and add inert two-contender/reserved-ID/crash-at-every-phase/torn
+slot/alternate-root/revocation-change fixtures. Synthetic native tests would cover
+only newly approved file containers/ACL/path/handle semantics, no Task/Run or live
+collector. This is one bounded path; volume provisioning, global service design,
+cloud/other-machine audits and gate opening are unnecessary to that source slice.
