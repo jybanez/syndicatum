@@ -375,7 +375,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "after corrected source review only; no execution authority",
+    "status": "SOURCE_SCOPE_REVIEW_ONLY; probe gates closed, actual metadata acquisition unobserved; owner decision only after scope review",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -388,6 +388,24 @@
       "activation",
       "protected contents",
       "other machines"
+    ],
+    "concrete_scope_document": "docs/codex-developer-a1-admission.md",
+    "probe_sources": [
+      {
+        "repository_path": "tools/release/codex_developer_a1_module_probe.py",
+        "git_blob_bytes_sha256": "1c7b46a5c7b5531242062a7e8cbd3a846ff5bc243eff871736b4cca55baab045",
+        "size": 712
+      },
+      {
+        "repository_path": "tools/release/codex_developer_a1_module_probe.mjs",
+        "git_blob_bytes_sha256": "59fde189f23dbe7266b06b637992288dd6c86cc33870424c7f1cf5d2a6757b71",
+        "size": 634
+      },
+      {
+        "repository_path": "tools/release/codex-developer-a1-module-probe.ps1",
+        "git_blob_bytes_sha256": "df86f3b030d413508e4fece16eca313aeb797c954c7d3a350fe336cf43a524e2",
+        "size": 728
+      }
     ]
   }
 }
