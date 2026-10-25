@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 
@@ -101,3 +102,52 @@ def retain_private_raw(directory, identity, raw_bytes):
         writer.flush()
         os.fsync(writer.fileno())
     return hashlib.sha256(raw_bytes).hexdigest()
+
+
+def map_health(raw):
+    require(type(raw) is dict, "native_health_object")
+    fields = {"pid": int, "updatedAt": str, "state": str, "role": str, "bindings": int,
+              "projects": int, "unavailableBindings": int, "requestedBindings": int,
+              "initializedBindings": int, "unavailableBindingReasons": list}
+    if "error" in raw:
+        fields["error"] = str
+    exact(raw, fields)
+    require(raw["pid"] > 0 and all(raw[key] >= 0 for key in ("bindings", "projects", "unavailableBindings", "requestedBindings", "initializedBindings")), "native_health_bounds")
+    try:
+        moment = datetime.fromisoformat(raw["updatedAt"].replace("Z", "+00:00"))
+        require(moment.tzinfo is not None, "native_health_timezone")
+        milliseconds = int(moment.timestamp() * 1000)
+    except (ValueError, OverflowError):
+        raise MappingStop("native_health_time") from None
+    require(raw["state"] in {"ready", "degraded"} and "error" not in raw, "native_unhealthy_baseline")
+    require(raw["role"] == "background", "native_standby_health")
+    readiness = "degraded" if raw["unavailableBindings"] else "ready"
+    return dict(pid=raw["pid"], timestamp_ms=milliseconds, readiness=readiness,
+                unavailable_count=raw["unavailableBindings"])
+
+
+def map_files(raw, private_key):
+    require(type(raw) is list and bool(raw), "native_file_inventory")
+    result = {}
+    for item in raw:
+        exact(item, {"private_identity": str, "sha256": str, "size": int, "mtime_ns": int})
+        require(item["private_identity"] and re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) and item["size"] >= 0 and item["mtime_ns"] >= 0, "native_file_metadata")
+        identity = token(private_key, "file_identity", item["private_identity"])
+        require(identity not in result, "native_file_duplicate")
+        result[identity] = {key: item[key] for key in ("sha256", "size", "mtime_ns")}
+    return result
+
+
+def map_route_outcomes(raw, private_key):
+    # Raw route observations must come from independently retained authorized
+    # routing evidence; these are not inferred from aggregate health counts.
+    require(type(raw) is list and bool(raw), "native_route_inventory")
+    result = {}
+    for item in raw:
+        exact(item, {"private_route_identity": str, "reason": str, "delivered": int,
+                     "acknowledged": int, "history_recovered": bool})
+        require(item["private_route_identity"] and item["delivered"] >= 0 and item["acknowledged"] >= 0, "native_route_metadata")
+        identity = token(private_key, "route_identity", item["private_route_identity"])
+        require(identity not in result, "native_route_duplicate")
+        result[identity] = {key: item[key] for key in ("reason", "delivered", "acknowledged", "history_recovered")}
+    return result

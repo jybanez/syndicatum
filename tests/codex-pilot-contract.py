@@ -32,6 +32,27 @@ mapping_spec.loader.exec_module(mapping_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_remaining_native_mapping_classes(self):
+        key = b"fixture-only-private-key-32bytes!!"
+        health = dict(pid=101, updatedAt="2026-10-25T00:00:00Z", state="degraded", role="background",
+            bindings=2, projects=1, unavailableBindings=2, requestedBindings=4, initializedBindings=2, unavailableBindingReasons=[])
+        mapped = mapping_module.map_health(health)
+        journal_module.validate_payload("health", mapped)
+        self.assertEqual(mapped["readiness"], "degraded")
+        for value in ({**health, "extra": 1}, {**health, "pid": True}, {**health, "updatedAt": "bad"}, {**health, "state": "error"}):
+            with self.assertRaises(mapping_module.MappingStop):
+                mapping_module.map_health(value)
+        files = [dict(private_identity="private-file", sha256="a" * 64, size=4, mtime_ns=100)]
+        mapped = mapping_module.map_files(files, key)
+        journal_module.validate_payload("installed_files", mapped)
+        self.assertNotIn("private-file", json.dumps(mapped))
+        with self.assertRaises(mapping_module.MappingStop):
+            mapping_module.map_files(files * 2, key)
+        route = dict(private_route_identity="private-route", reason="binding_initialization_failed", delivered=0, acknowledged=0, history_recovered=False)
+        mapped = mapping_module.map_route_outcomes([route], key)
+        journal_module.validate_payload("routes", mapped)
+        with self.assertRaises(mapping_module.MappingStop):
+            mapping_module.map_route_outcomes([{**route, "delivered": True}], key)
     def test_native_mapping_rejects_extra_partial_and_native_type_drift(self):
         key = b"fixture-only-private-key-32bytes!!"
         locks = {k: dict(present=True, raw="101\n", size=4, mtime="fixture-time") for k in ("background", "listener")}
