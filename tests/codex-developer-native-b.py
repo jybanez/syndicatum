@@ -45,6 +45,8 @@ class InertBackend:
                  "locks": self.locks, "static_files": self.plan["static_files"], "clock": self.clock()}
         if self.fault == "clock-jump" and self.snapshots == 1:
             value["clock"]["utc_ms"] += 5000
+        if self.fault == "unclassified-static-file":
+            value["static_files"] = {**value["static_files"], "unknown-static-file": "0" * 64}
         return copy.deepcopy(value)
 
     def invoke(self, operation, plan):
@@ -132,7 +134,7 @@ class NativeBFixtures(unittest.TestCase):
             self.assertEqual(backend.calls, [])
 
     def test_adversarial_native_facts_stop_without_retry_or_later_mutation(self):
-        for fault in ("directory-flush", "clock-jump", "partial-suppression", "unrelated-task", "pid-reuse",
+        for fault in ("directory-flush", "clock-jump", "unclassified-static-file", "partial-suppression", "unrelated-task", "pid-reuse",
                       "other-writer", "live-lock", "path-swap", "bad-raw-hash", "new-route", "malformed-state"):
             with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary:
                 adapter, backend = self.adapter(Path(temporary), fault)
@@ -140,7 +142,7 @@ class NativeBFixtures(unittest.TestCase):
                 self.assertEqual(result["result"], "stopped", result)
                 self.assertLessEqual(backend.calls.count("suppress"), 1)
                 self.assertLessEqual(backend.calls.count("stop"), 1)
-                if fault in {"directory-flush", "clock-jump"}: self.assertNotIn("suppress", backend.calls)
+                if fault in {"directory-flush", "clock-jump", "unclassified-static-file"}: self.assertNotIn("suppress", backend.calls)
                 if fault in {"partial-suppression", "unrelated-task", "pid-reuse"}: self.assertNotIn("stop", backend.calls)
 
     def test_frozen_cutoff_rejects_sequence_and_task_changes(self):
