@@ -28,7 +28,7 @@ class Cases(unittest.TestCase):
   for fault in ('nonzero','timeout','trailing','bad_nonce','missing','wrong_python','wrong_node','wrong_ps','none'):
    with self.subTest(fault=fault),tempfile.TemporaryDirectory() as tmp:
     calls=[];auth=[];source={n:(ROOT/('docs' if n.endswith('-admission.md') else 'tools/release')/n).read_bytes() for n in runner.REQUIRED_SOURCES}
-    exe=Path(sys.executable);pin=runner.sha(exe.read_bytes())
+    exe=Path(tmp)/'inert-executable';exe.write_bytes(b'inert executable fixture; never launched');pin=runner.sha(exe.read_bytes())
     p={'capture_identity':runner.CAPTURE_ID,'scope':'Developer A1 only','native_effects_accepted':True,'executables':{r:{'path':str(exe),'sha256':pin} for r in ('cli','python','node','powershell')},'sources':{n:{'sha256':runner.sha(b),'size':len(b)} for n,b in source.items()},'scope_document_sha256':runner.sha(source['codex-developer-a1-admission.md']),'capture_parent':tmp,'owner_sid':'inert'}
     class Host:
      def create_capture(self,parent,sid):
