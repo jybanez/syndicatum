@@ -47,6 +47,15 @@ class WindowsBackend:
     def __init__(self, module, module_sha256):
         self.module, self.module_sha256, self.counter = Path(module), module_sha256, 0
 
+    @staticmethod
+    def _wait(child):
+        try:
+            return child.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            failure = NativeBStop("native_timeout_uncertain")
+            failure.pid = child.pid
+            raise failure from None
+
     def invoke(self, operation, plan):
         require(NATIVE_B_ENABLED, "source_only_native_gate")
         require(operation in {"admission", "snapshot", "suppress", "stop", "cutoff", "flush"}, "native_operation")
@@ -96,12 +105,14 @@ class WindowsBackend:
             child = subprocess.Popen([str(powershell), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
                                      stdout=out, stderr=err, env=env, cwd=plan["transport_root"], creationflags=0x08000000)
             try:
-                code = child.wait(timeout=30)
-            except subprocess.TimeoutExpired:
+                code = self._wait(child)
+            except NativeBStop:
                 # Do not kill/retry; child may have partially applied the operation.
                 with prefix.with_suffix(".uncertain.json").open("xb") as record:
                     record.write(encode({"pid": child.pid, "operation": operation, "outcome": "timeout_no_retry"}))
-                raise NativeBStop("native_timeout_uncertain") from None
+                failure = NativeBStop("native_timeout_uncertain")
+                failure.pid = child.pid
+                raise failure from None
         require(code == 0, "native_nonzero_uncertain")
         raw = prefix.with_suffix(".stdout.private").read_bytes()
         require(len(raw) <= 67108864, "native_output_bound")
@@ -216,6 +227,10 @@ class DeveloperBAdapter:
         require(TASK not in value["tasks"] and not any(RUN.fullmatch(key) for key in value["runs"]), "legacy_autostart_returned")
 
     @staticmethod
+    def _quiescent_startup(value):
+        require(TASK not in value["tasks"] and not any(RUN.fullmatch(key) for key in value["runs"]), "legacy_autostart_returned")
+
+    @staticmethod
     def _preserved(before, after):
         require_frozen_observations({k: base64.b64decode(v, validate=True) for k, v in before["tasks"].items() if k != TASK},
                                     {k: base64.b64decode(v, validate=True) for k, v in after["tasks"].items() if k != TASK})
@@ -228,7 +243,10 @@ class DeveloperBAdapter:
         self.journal.append(operation, "intent", {"operation": operation})
         self.journal.verify(self.journal.retained_head)
         self.mutations.append(operation)  # Intent is retained before invoking native code.
-        native_result = self.backend.invoke(operation, self.plan)
+        operation_plan = dict(self.plan)
+        if operation == "stop":
+            operation_plan["retained_stop_anchor"] = self.preservation_anchor
+        native_result = self.backend.invoke(operation, operation_plan)
         expected = {"suppress": "exact_startup_suppression", "stop": "exact_owned_listener_stop"}[operation]
         require(type(native_result) is dict and native_result.get("completed") is True and
                 native_result.get("operation") == expected, "native_result_uncertain")
@@ -285,7 +303,10 @@ class DeveloperBAdapter:
             require(before["processes"] == [p["listener"]], "owned_listener_preimage_drift")
             suppressed = self._mutate("suppress", before)
             require(TASK not in suppressed["tasks"] and not any(RUN.fullmatch(key) for key in suppressed["runs"]), "suppression_not_observed")
+            self.preservation_anchor = {key: suppressed[key] for key in ("tasks", "runs", "static_files")}
             revalidated = self._snapshot("before-stop")
+            self._preserved(suppressed, revalidated)
+            self._quiescent_startup(revalidated)
             require([entry for entry in revalidated["processes"] if entry["pid"] == p["listener"]["pid"]] == [p["listener"]], "owned_listener_changed_before_stop")
             stopped = self._mutate("stop", revalidated)
             self._quiescent(stopped)

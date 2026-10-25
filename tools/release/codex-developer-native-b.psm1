@@ -211,8 +211,31 @@ function Remove-BExactStartup([hashtable]$Plan) {
     }
     @{operation='exact_startup_suppression';completed=$true}
 }
+function Assert-BRetainedStopAnchor([hashtable]$Snapshot,[hashtable]$Plan) {
+    $taskAnchor=$Plan.retained_stop_anchor
+    if ($null -eq $taskAnchor) { throw 'STOP: retained stop anchor missing' }
+    foreach ($taskGroup in @('tasks','runs','static_files')) {
+        $taskExpected=$taskAnchor[$taskGroup]; $taskActual=$Snapshot[$taskGroup]
+        if ($null -eq $taskExpected -or $null -eq $taskActual -or
+            (($taskExpected.Keys | Sort-Object -CaseSensitive) -join "`n") -cne
+            (($taskActual.Keys | Sort-Object -CaseSensitive) -join "`n")) { throw 'STOP: retained anchor identity drift' }
+        foreach ($taskKey in $taskExpected.Keys) {
+            if ($taskGroup -eq 'runs') {
+                foreach ($taskField in @('kind','value')) {
+                    if (($taskExpected[$taskKey][$taskField] | ConvertTo-Json -Depth 8 -Compress) -cne
+                        ($taskActual[$taskKey][$taskField] | ConvertTo-Json -Depth 8 -Compress)) { throw 'STOP: retained Run drift' }
+                }
+            } elseif ($taskExpected[$taskKey] -cne $taskActual[$taskKey]) { throw 'STOP: retained Task/static drift' }
+        }
+    }
+    if ($Snapshot.tasks.ContainsKey('\Syndicatum Codex Connector') -or
+        @($Snapshot.runs.Keys | Where-Object { $_ -cmatch '^Registry(?:32|64):SyndicatumCodexConnector$' }).Count) {
+        throw 'STOP: startup returned before stop'
+    }
+}
 function Stop-BExactListener([hashtable]$Plan) {
     $taskSnapshot = Get-BSnapshot $Plan
+    Assert-BRetainedStopAnchor $taskSnapshot $Plan
     $taskActual = @($taskSnapshot.processes | Where-Object pid -eq $Plan.listener.pid)
     if (@($taskActual).Count -ne 1 -or $taskSnapshot.processes.Count -ne 1) { throw 'STOP: owned process missing/ambiguous' }
     foreach ($taskField in @('pid','started','executable','command_line','image_sha256')) {
@@ -228,6 +251,7 @@ function Stop-BExactListener([hashtable]$Plan) {
     try {
         $null = $taskProcess.Handle
         if ($taskProcess.StartTime.ToUniversalTime().ToString('o') -cne $Plan.listener.started) { throw 'STOP: process-handle reuse' }
+        Assert-BRetainedStopAnchor (Get-BSnapshot $Plan) $Plan
         $taskProcess.Kill()
         if (-not $taskProcess.WaitForExit(10000)) { throw 'STOP: stop outcome uncertain' }
     } finally { $taskProcess.Dispose() }

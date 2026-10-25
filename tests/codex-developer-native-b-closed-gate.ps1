@@ -23,3 +23,21 @@ foreach ($taskOperation in @('admission','snapshot','suppress','stop','cutoff','
     if (-not $taskRejected) { throw 'A native operation escaped the closed source gate' }
 }
 'All six native entry operations rejected before collection/action.'
+
+# Invoke only the pure comparison helper in module scope with synthetic maps.
+$taskLoaded=Get-Module 'codex-developer-native-b'
+& $taskLoaded {
+    $anchor=@{tasks=@{'\Other'='fixture'};runs=@{'Registry64:Other'=@{kind='String';value='fixture'}};static_files=@{'background.json'='fixture'}}
+    Assert-BRetainedStopAnchor $anchor @{retained_stop_anchor=$anchor}
+    foreach ($group in @('tasks','runs','static_files')) {
+        $changed=@{tasks=@{'\Other'='fixture'};runs=@{'Registry64:Other'=@{kind='String';value='fixture'}};static_files=@{'background.json'='fixture'}}
+        if ($group -eq 'runs') { $changed.runs['Registry64:Other'].value='changed' }
+        elseif ($group -eq 'tasks') { $changed.tasks['\Other']='changed' }
+        else { $changed.static_files['background.json']='changed' }
+        $rejected=$false
+        try { Assert-BRetainedStopAnchor $changed @{retained_stop_anchor=$anchor} }
+        catch { $rejected=$true }
+        if (-not $rejected) { throw 'Retained native stop anchor adopted drift' }
+    }
+}
+'Pure retained stop anchor rejects Task, Run and static drift.'

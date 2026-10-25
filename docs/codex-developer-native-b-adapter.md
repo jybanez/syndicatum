@@ -94,7 +94,7 @@ established by these synthetic tests.
 
 ## Current validation and limits
 
-Eight inert native-backend tests cover successful preparation/six boundaries,
+Ten inert native-backend tests cover successful preparation/six boundaries,
 old IDs/missing authority, partial suppression, unrelated Task drift, PID reuse,
 another writer, a live lock despite an empty list, path swap, wrong raw digest,
 new route, malformed state, clock jump, missing directory durability, journal
@@ -102,3 +102,18 @@ tamper/wrong external head, boundary drift, bad ordering and attempted resume. T
 contract tests remain separate. PowerShell AST and its closed gate are tested
 without invoking a native collector. No fresh live backup, suppression, process
 stop, install, delivery, replay, activation or other-machine work occurred.
+
+## Review correction #11571
+
+The accepted suppression postimage remains the retained Task/Run/static anchor.
+Before-stop observations must preserve it, including continued startup absence,
+before stop intent is issued. The native stop helper receives that retained
+anchor and checks it against fresh native observations before process handling
+and again immediately before signaling. Later preparation observations remain
+chained to the accepted anchor; no fresh snapshot resets the preservation baseline.
+Regressions inject Task and Run drift at every transition from before-stop through
+cutoff-after, retain available failed evidence and enforce terminal no-replay.
+Operation timeouts now attach the child PID to both the exception and stopped
+result; an inert subprocess timeout fixture verifies no kill, retry or subsequent
+capture. These corrections do not open either gate or resolve the native platform
+and canonical owner-authority blockers above.

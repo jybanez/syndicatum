@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/release"))
 import codex_developer_native_b as native
@@ -41,6 +42,11 @@ class InertBackend:
         self.snapshots += 1
         if self.fault == "pid-reuse" and self.snapshots == 3:
             self.processes[0]["started"] = "reused-pid-start"
+        if self.fault and self.fault.startswith("transition-"):
+            _, group, index = self.fault.split("-")
+            if self.snapshots == int(index):
+                if group == "task": self.tasks["\\Other"] = b64(b"changed")
+                else: self.runs["Registry64:Other"]["value"] = "changed"
         value = {"tasks": self.tasks, "runs": self.runs, "processes": self.processes,
                  "locks": self.locks, "static_files": self.plan["static_files"], "clock": self.clock()}
         if self.fault == "clock-jump" and self.snapshots == 1:
@@ -61,6 +67,10 @@ class InertBackend:
             if self.fault == "unrelated-task": self.tasks["\\Other"] = b64(b'<Interval>PT10M</Interval>')
             return {"operation": "exact_startup_suppression", "completed": True}
         if operation == "stop":
+            if self.fault == "timeout":
+                child = Mock(pid=4321)
+                child.wait.side_effect = native.subprocess.TimeoutExpired("inert", 30)
+                native.WindowsBackend._wait(child)
             self.processes = []
             for item in self.locks.values(): item["live"] = self.fault == "live-lock"
             if self.fault == "other-writer": self.processes = [{**plan["listener"], "pid": 99}]
@@ -144,6 +154,36 @@ class NativeBFixtures(unittest.TestCase):
                 self.assertLessEqual(backend.calls.count("stop"), 1)
                 if fault in {"directory-flush", "clock-jump", "unclassified-static-file"}: self.assertNotIn("suppress", backend.calls)
                 if fault in {"partial-suppression", "unrelated-task", "pid-reuse"}: self.assertNotIn("stop", backend.calls)
+
+    def test_retained_anchor_rejects_each_intervening_task_and_run_transition(self):
+        for group in ("task", "run"):
+            for index in (3, 4, 5, 6, 7):
+                with self.subTest(group=group, index=index), tempfile.TemporaryDirectory() as temporary:
+                    adapter, backend = self.adapter(Path(temporary), f"transition-{group}-{index}")
+                    result = adapter.prepare()
+                    self.assertEqual(result["result"], "stopped", result)
+                    self.assertTrue(adapter.terminal)
+                    if index == 3: self.assertNotIn("stop", backend.calls)
+                    count = len(backend.calls)
+                    self.assertEqual(adapter.prepare()["code"], "attempt_object_reuse")
+                    self.assertEqual(len(backend.calls), count)
+                    self.assertTrue(any(b"changed" in item.read_bytes() or b"Y2hhbmdlZA==" in item.read_bytes()
+                                        for item in adapter.journal.records.iterdir()))
+
+    def test_timeout_retains_pid_without_kill_retry_or_followup_capture(self):
+        child = Mock(pid=4321)
+        child.wait.side_effect = native.subprocess.TimeoutExpired("inert", 30)
+        with self.assertRaises(native.NativeBStop) as caught: native.WindowsBackend._wait(child)
+        self.assertEqual(caught.exception.pid, 4321)
+        child.kill.assert_not_called()
+        child.wait.assert_called_once_with(timeout=30)
+        with tempfile.TemporaryDirectory() as temporary:
+            adapter, backend = self.adapter(Path(temporary), "timeout")
+            result = adapter.prepare()
+            self.assertEqual(result["uncertain_pid"], 4321)
+            self.assertEqual(result["code"], "native_timeout_uncertain")
+            self.assertEqual(backend.calls.count("stop"), 1)
+            self.assertNotIn("snapshot", backend.calls[backend.calls.index("stop") + 1:])
 
     def test_frozen_cutoff_rejects_sequence_and_task_changes(self):
         for kind in ("sequence", "pending", "task"):
