@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "status": "SOURCE_ONLY_DRAFT_NOT_AUTHORITY",
+  "scope": "Developer machine only",
+  "review_head": "Bind externally to the exact reviewed Git commit; do not substitute main or an ancestor CI pass.",
+  "candidate": {
+    "commit": "9141daa08d896f2524be30b96d01ab2a14398757",
+    "version": "0.2.10",
+    "files": 48,
+    "archive_bytes": 375905,
+    "archive_sha256": "331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb"
+  },
+  "entrypoints": {
+    "trusted_codex": "tools/release/codex_developer_codex_entry.mjs::runCodexHost",
+    "python_coordinator": "tools/release/codex_developer_host_assembly.py::main",
+    "python_builder": "tools/release/codex_developer_host_assembly.py::assemble",
+    "storage_worker": "tools/release/codex-developer-fixed-session-worker.ps1",
+    "all_native_gates": "closed_unconditionally",
+    "installer_dispatch": "UNIMPLEMENTED",
+    "activation_dispatch": "UNIMPLEMENTED"
+  },
+  "source_files": [
+    {
+      "name": "codex_developer_codex_entry.mjs",
+      "repository_path": "tools/release/codex_developer_codex_entry.mjs",
+      "git_blob_bytes_sha256": "9d12492b87ee42048a07a4d274c04191c0a5761fe34590bed66c50d5365130d0",
+      "size": 9498
+    },
+    {
+      "name": "codex_developer_agent_host.mjs",
+      "repository_path": "tools/release/codex_developer_agent_host.mjs",
+      "git_blob_bytes_sha256": "aaca900fa2cb84879adeb8fe8385a4f8f9268fe4fb119b8968993b14737aa6ab",
+      "size": 4692
+    },
+    {
+      "name": "codex_developer_host_assembly.py",
+      "repository_path": "tools/release/codex_developer_host_assembly.py",
+      "git_blob_bytes_sha256": "637242f8517f78926c1187a2b8de021c85947a2411e72736fb9fbec0b521bd93",
+      "size": 7550
+    },
+    {
+      "name": "codex_developer_host_handoff.py",
+      "repository_path": "tools/release/codex_developer_host_handoff.py",
+      "git_blob_bytes_sha256": "502bc90f57ead1aca69260beb699bde742229cdaac364987cf7cd0b80568afcf",
+      "size": 6623
+    },
+    {
+      "name": "codex_developer_integrated_preparation.py",
+      "repository_path": "tools/release/codex_developer_integrated_preparation.py",
+      "git_blob_bytes_sha256": "ca8fdab35f1f2d7f8642684ced5e5b75e250c25a516af1535ccbdd3915b38b99",
+      "size": 13464
+    },
+    {
+      "name": "codex_developer_transport.py",
+      "repository_path": "tools/release/codex_developer_transport.py",
+      "git_blob_bytes_sha256": "2792981fe3a7a3a1d3b43b0c335a0bc7331a39ddd4fb96c5a5bc3fbaa1a37862",
+      "size": 10292
+    },
+    {
+      "name": "codex_developer_process_ipc.py",
+      "repository_path": "tools/release/codex_developer_process_ipc.py",
+      "git_blob_bytes_sha256": "d9f39d45ea0bd707d91dc1eee89bbe2a7beace941edad32c8ffe7db982fd5022",
+      "size": 9031
+    },
+    {
+      "name": "codex_developer_fixed_journal.py",
+      "repository_path": "tools/release/codex_developer_fixed_journal.py",
+      "git_blob_bytes_sha256": "537ca19211645de000867d3e2333e397d98782a81977848cef079e4bebaae94e",
+      "size": 23448
+    },
+    {
+      "name": "codex_developer_native_b.py",
+      "repository_path": "tools/release/codex_developer_native_b.py",
+      "git_blob_bytes_sha256": "de60383e28a75701f68991fcb916c2846f381c24feb6e85e04ba8f31b5009376",
+      "size": 24690
+    },
+    {
+      "name": "codex_developer_freshness.py",
+      "repository_path": "tools/release/codex_developer_freshness.py",
+      "git_blob_bytes_sha256": "648e2a6d6ab703bd0937d5702e907a078db57ce00438ce704f9eda97a3394cbe",
+      "size": 10018
+    },
+    {
+      "name": "codex-developer-fixed-session-worker.ps1",
+      "repository_path": "tools/release/codex-developer-fixed-session-worker.ps1",
+      "git_blob_bytes_sha256": "78dabd0ee7412a173ef9f75386eb02baffbb92568e5dd0556e55065afcad586d",
+      "size": 1115
+    },
+    {
+      "name": "codex-developer-fixed-session-protocol.ps1",
+      "repository_path": "tools/release/codex-developer-fixed-session-protocol.ps1",
+      "git_blob_bytes_sha256": "bf47e1fceb70a3979d207b0aa1ad9109c712be4aaa073729ce54bd81a4806a77",
+      "size": 6018
+    },
+    {
+      "name": "codex-developer-fixed-storage.psm1",
+      "repository_path": "tools/release/codex-developer-fixed-storage.psm1",
+      "git_blob_bytes_sha256": "20a9392e4afb0937b54e733ee7ead4fd1a8e732a4971b1a608654ac08d959de5",
+      "size": 13672
+    },
+    {
+      "name": "codex-developer-native-b.psm1",
+      "repository_path": "tools/release/codex-developer-native-b.psm1",
+      "git_blob_bytes_sha256": "8ccade9f0ad4b2ff5747604a243c873f5ecf6f0ed4b70f77db343ed3836d3b60",
+      "size": 21378
+    }
+  ],
+  "source_staging": "Exact Git blob bytes, not an assumed autocrlf checkout. No private staging has occurred.",
+  "runtime_trees": {
+    "codex_host": {
+      "status": "UNCAPTURED",
+      "root": null,
+      "files": null,
+      "acquisition_phase": "A",
+      "maximum_files": 10000,
+      "maximum_directories": 10000,
+      "maximum_bytes": 1073741824,
+      "requirements": "Exact complete no-reparse file inventory and hashes, no unknown files; trusted system APIs remain OS trust, not full-OS attestation."
+    },
+    "python": {
+      "status": "UNCAPTURED",
+      "root": null,
+      "files": null,
+      "acquisition_phase": "A",
+      "maximum_files": 10000,
+      "maximum_directories": 10000,
+      "maximum_bytes": 1073741824,
+      "requirements": "Exact complete no-reparse file inventory and hashes, no unknown files; trusted system APIs remain OS trust, not full-OS attestation."
+    },
+    "powershell": {
+      "status": "UNCAPTURED",
+      "root": null,
+      "files": null,
+      "acquisition_phase": "A",
+      "maximum_files": 10000,
+      "maximum_directories": 10000,
+      "maximum_bytes": 1073741824,
+      "requirements": "Exact complete no-reparse file inventory and hashes, no unknown files; trusted system APIs remain OS trust, not full-OS attestation."
+    }
+  },
+  "private_packet": {
+    "status": "UNCAPTURED_NOT_CREATED",
+    "sha256": null,
+    "acl_sha256": null,
+    "owner": "current SID; protected private ACL current SID/SYSTEM only",
+    "acquisition_phase": "B"
+  },
+  "phases": [
+    {
+      "id": "A",
+      "kind": "read_only_admission",
+      "permission": "fresh Developer-only current evidence and runtime/source verification",
+      "status": "NOT_AUTHORIZED_BY_SOURCE_REVIEW",
+      "required": [
+        "current installed source/version/full inventory",
+        "current CLI/runtime versions and complete runtime hash trees",
+        "Task XML and Run values including excluded unrelated entries",
+        "exact owned listener PID/start/image/command and lock witnesses",
+        "all route state raw bytes and historical malformed-file preservation",
+        "source pins, private path/ACL/identity, available disk, capacity/time estimates"
+      ],
+      "expected": "bounded comparison report; no state/config rewrite or rebaseline",
+      "missing_current_evidence": true
+    },
+    {
+      "id": "B",
+      "kind": "bounded_private_setup",
+      "permission": "new attempt only, external verified backup and three existing-container pairs",
+      "status": "BLOCKED_PENDING_A_AND_EXPLICIT_SETUP_SCOPE",
+      "maximum_new_private_bytes": 201326592,
+      "maximum_backup_bytes": 1073741824,
+      "expected": "new private owner/SYSTEM roots outside webroot/live plugin/config and old evidence; full manifests/ACL/identities pinned; verified backup",
+      "reuse_old_attempt": false
+    },
+    {
+      "id": "C",
+      "kind": "prepare",
+      "permission": "exact Task/Run suppression, exact owned-listener stop and cutoff capture; notification interruption explicit",
+      "status": "BLOCKED_CLOSED_GATES_AND_REVIEW",
+      "expected": "one prepared cutoff, preserved anchors, held exclusive sessions; no install authority",
+      "requirement": "new request/positive owner event bound to exact reviewed mechanism/candidate/manifests/attempt/time/scope; no consumed authority"
+    },
+    {
+      "id": "D",
+      "kind": "install",
+      "permission": "exact CLI marketplace remove/add candidate plus plugin add, six before/after frozen boundaries",
+      "status": "BLOCKED_UNIMPLEMENTED_DISPATCH",
+      "expected": "independent exact installed inventory and revision; no automatic retry/rollback"
+    },
+    {
+      "id": "E",
+      "kind": "activation",
+      "permission": "explicit new lifecycle activation/restart; no forced Codex reopen",
+      "status": "BLOCKED_UNIMPLEMENTED_DISPATCH",
+      "expected": "owner-approved activation only after installed verification"
+    },
+    {
+      "id": "F",
+      "kind": "acceptance",
+      "permission": "observe normal close/open and explicitly authorized routed-delivery check",
+      "status": "NOT_PERFORMED",
+      "expected": "listener follows intended session, exact route delivers once, one failed route does not block another; installed revision/evidence recorded"
+    }
+  ],
+  "capacity": {
+    "writer": {
+      "slots": 512,
+      "width": 65536
+    },
+    "independent_head": {
+      "slots": 512,
+      "width": 65536
+    },
+    "private_receipt": {
+      "slots": 128,
+      "width": 49152
+    },
+    "container_bytes_upper_bound": 146800640,
+    "logical_evidence_bytes_limit": 33554432,
+    "canonical_tool_result_bytes_limit": 32768,
+    "inbound_parent_frame_bytes_limit": 65536,
+    "worker_frame_bytes_limit": 2097152,
+    "maximum_tool_invocations": 128,
+    "performance": "UNCAPTURED; A must measure/estimate total under120s and each native observation under120s. Tool/IPC deadline30s; no increase or retry to fit.",
+    "formula": "Use measured complete raw payloads plus canonical evidence: sum ceil(logical_bytes/((width-1024)*3//4))+commits+intents+reservation+bounded failure margin <=512; head ledger slots >= physical writer heads; receipt invocations incl failure margin <=128. Reject BEFORE setup/preparation if any bound cannot fit."
+  },
+  "uncertainty": "STOP, retain raw evidence/identities/receipt/head history; close at most once, report uncertain close separately; no reconnect/replay/cleanup/forced kill/rollback or evidence reconstruction.",
+  "owner_authority": {
+    "requested_now": false,
+    "form": "One coherent Developer pilot authorization with separately named A/B/C/D/E/F scopes, exact reviewed head/candidate/new attempt and quantitative bounds; not one queue per implementation detail.",
+    "currently_eligible_scope_after_review": "A read-only admission only; no setup/prepare/install/activation until exact evidence/manifests and missing dispatchers are complete and reviewed.",
+    "consumed_authorities": "11545 and all isolated-test approvals are consumed; old roots and #11582 anchors immutable.",
+    "current_fields": "All current host evidence, new request/approval IDs and manifest/ACL/runtime pins remain uncaptured; never fabricate or reuse historical values."
+  }
+}

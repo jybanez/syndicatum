@@ -401,6 +401,8 @@ jobs:
             python tests/codex-developer-transport.py | tee ci-evidence/codex-developer-transport.txt
             python tests/codex-developer-host-ipc.py | tee ci-evidence/codex-developer-host-ipc.txt
             node --test tests/codex-developer-agent-host.test.mjs | tee ci-evidence/codex-developer-agent-host.txt
+            python tests/codex-developer-host-assembly.py | tee ci-evidence/codex-developer-host-assembly.txt
+            node --test tests/codex-developer-codex-entry.test.mjs | tee ci-evidence/codex-developer-codex-entry.txt
             pwsh -NoProfile -File tests/codex-developer-fixed-session-protocol.ps1 | tee ci-evidence/codex-developer-fixed-session-protocol.txt
           node --test tests/integration-distribution.test.mjs | tee ci-evidence/integration-distribution.txt
           pwsh -NoProfile -File tests/codex-remote-tag.test.ps1 | tee ci-evidence/codex-remote-tag.txt

@@ -189,3 +189,82 @@ procedure. This source delivery does not request a new owner queue.
 
 These are explicit blocks on live execution. No native harness, live retrieval, storage setup,
 suppression, stop, install, activation, merge or other-machine action is authorized.
+
+## Actual assembly and bounded pilot packet (#11656)
+
+The concrete packet is `docs/codex-developer-pilot-admission-packet.json`. It is
+SOURCE_ONLY_DRAFT_NOT_AUTHORITY. It contains the candidate pin, exact Git-blob
+SHA-256/length of every mechanism module (14 files), entrypoint names, quantitative
+limits, ordered A-F phases, expected results and uncertainty handling. Source must
+be staged as those exact blob bytes; an autocrlf checkout is not assumed identical.
+The packet intentionally does not hash itself or invent its eventual review head;
+the final exact Git head is bound externally by review/authority and CI.
+
+Concrete call path:
+
+1. In the trusted Codex tool-capable orchestration context,
+   `codex_developer_codex_entry.mjs::runCodexHost({tools,packet})` constructs the
+   actual `createTrustedAgentHost` handler and a `CodexToolSession`. Its production
+   start unconditionally refuses before invoking any tool. The unreachable source
+   verifies the complete source set, complete Python/PowerShell/Codex-host runtime
+   tree inventories (not launcher hashes alone), private packet owner/protected
+   ACL/descriptor hash/ancestor safety and exact packet digest. The concrete exec
+   call uses a pinned Python entry with `-E -s -S -B -u`, no user site/environment
+   or bytecode writes, and one tool session. This is an agent host library; a
+   standalone Node process is not assumed to acquire protected tools magically.
+2. `codex_developer_host_assembly.py::main` independently refuses before packet
+   read or stdio/native IO. Its unreachable entry verifies the private canonical
+   packet/digest, constructs one `AgentStdioLink` and calls the actual `assemble`
+   builder. `assemble` creates one coordinator object graph, three role-specific
+   fixed-session APIs and the real `IntegratedPreparation`/WindowsBackend default.
+   The process/worker/native gates remain closed as additional boundaries.
+3. A canonical request becomes a bounded `tool_challenge` on the coordinator's
+   private stdout. The host pump validates assembly session, passes that challenge
+   to the actual JS handler, and the handler calls the existing exact-profile
+   protected tool. Its private delivery callback sends a `tool_delivery` envelope
+   once to the same execution-tool session's stdin via `write_stdin`. Python
+   checks session/envelope framing; TrustedAgentChannel persists and validates it
+   before CanonicalAuthority supplies receipt/journal/action admission. No public
+   filesystem mailbox, arbitrary plan path or ambient last-message result is used.
+4. The trusted caller layer `TrustedHostState` constructs/owns the receipt and head
+   capabilities and their disjoint pinned manifests. Receipt bytes are persisted
+   in their own pair; caller head/normalized receipts in the separate exclusive
+   ledger. The writer gets its journal callbacks and primary pair. This ownership
+   is within trusted cooperating code in one coordinator process, not isolation
+   from hostile code inside that process. The agent's execution-session capability
+   owns the private parent channel. No global CAS or new service is claimed.
+5. Terminal completion/failure closes all owned ledger capabilities once and
+   poisons the parent session against replay. The actual main can perform only
+   preparation, then closes: it cannot continue into installation, implicitly
+   resume that closed attempt or activate anything. Its output explicitly says
+   installer_dispatch=unimplemented and authorizes_install=false. Source tests
+   exercise `assemble` through protected challenge, canonical parsing, journal,
+   all six inert boundaries and terminal close; JS tests exercise the actual host
+   pump/handler/private-delivery call path with inert execution/tool responses.
+
+The host-module loading and actual writable-stdin execution-session behavior are
+real-runtime admission checks, not demonstrated by inert channels. Neither is a
+reason to invent a new server API. No worker or assembly process was launched to
+fill evidence fields. Complete current runtime trees, current installed provenance,
+raw preimages, available disk, new private packet/ACL and container manifests are
+explicitly UNCAPTURED, with their acquisition phases named in the packet. Runtime
+tree verification is bounded to10,000 files/directories and1GiB per tree; an
+overrun/missing/extra/reparse file stops. Source and private packet pins cannot
+be populated from an untrusted message body.
+
+Proposed setup bounds are three container pairs totaling140MiB, at most192MiB for
+the new private attempt tree and at most1GiB for the independently verified external
+backup. These are draft maxima for review, not permission to allocate them. Phase A
+must measure full payloads and projected execution time, apply the packet's exact
+record/receipt/failure-margin formulas and reject before setup/action if they do
+not fit. Authority freshness/native observation age,30s tool/IPC and120s total host
+deadline remain enforced; no silent deadline extension or fresh baseline is allowed.
+
+Precise next owner scope, only after source/packet review: bounded Developer-only
+**A read-only admission** against the exact reviewed head/candidate and preserved
+history. No request has been posted. B setup/C preparation/D install/E activation
+are separately named possible phases of the same coherent pilot authorization,
+not queues per implementation detail. At this revision D/E dispatch are plainly
+UNIMPLEMENTED, and new evidence/manifests are uncaptured, so mutation authority
+must not be requested or inferred yet. A may return only evidence/admission gaps;
+it cannot open gates or launch the native worker to make a missing field pass.

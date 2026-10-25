@@ -120,13 +120,15 @@ class PinnedWindowsProcess:
         if not success: raise result
         return result
 
-    def _read_frame(self):
+    def _read_frame(self, limit=None):
+        limit = MAX_FRAME if limit is None else limit
+        check(type(limit) is int and 0 < limit <= MAX_FRAME, 'ipc_read_limit')
         raw = bytearray()
         while True:
             char = self.child.stdout.read(1)
             check(char != b"", "ipc_eof_child_outcome_uncertain")
             if char == b"\n": break
-            check(len(raw) < MAX_FRAME, "ipc_frame_bound")
+            check(len(raw) < limit, "ipc_frame_bound")
             raw.extend(char)
         check(bool(raw), "ipc_empty_frame")
         return json.loads(raw.decode("utf-8"), object_pairs_hook=_unique)
