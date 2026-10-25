@@ -13,13 +13,28 @@ def receipt():
             "message_id": 99999, "sender_id": 28, "addressee_id": 36,
             "revision": 1, "body_sha256": "a" * 64, "plan_sha256": "b" * 64,
             "attempt_id": "new-synthetic", "cutoff_id": "new-synthetic-cutoff",
-            "scopes": ["synthetic-first", "synthetic-second"], "revoked": False}
+            "scopes": ["synthetic-first", "synthetic-second"], "revoked": False,
+            "not_before_ms": 1000, "expires_ms": 2000, "mechanism_head": "c" * 40,
+            "candidate_commit": "9141daa08d896f2524be30b96d01ab2a14398757", "notification_interruption": True}
 
 
-def open_model(storage, authority=None, pin=None, head=None):
+def context_plan(pin):
+    value = receipt()
+    plan = {key: value[key] for key in ("mechanism_head", "candidate_commit", "attempt_id", "cutoff_id", "notification_interruption")}
+    plan.update(operations={"synthetic-first": "reviewed-first", "synthetic-second": "reviewed-second"},
+                storage_manifest_sha256=fixed.digest(pin))
+    return fixed.packed(plan)
+
+
+def open_model(storage, authority=None, pin=None, head=None, now=1500, changes=None):
     pin = fixed.packed(storage.manifest) if pin is None else pin
-    return fixed.FixedJournal(storage, pin, fixed.digest(pin), authority or fixed.FakeAuthority(receipt()),
-                              fixed.packed(receipt()), head)
+    plan = context_plan(pin)
+    expected = {**receipt(), "plan_sha256": fixed.digest(plan), **(changes or {})}
+    if authority is None: authority = fixed.FakeAuthority(expected)
+    else: authority.message["plan_sha256"] = expected["plan_sha256"]
+    model = fixed.FixedJournal(storage, pin, fixed.digest(pin), authority,
+                              fixed.packed(expected), head, plan, lambda: now)
+    return model
 
 
 class FixedFixtures(unittest.TestCase):
@@ -28,7 +43,7 @@ class FixedFixtures(unittest.TestCase):
         model = open_model(store)
         retained = model.external_head  # Caller retains this value separately.
         self.assertEqual(fixed.unframe(store.read("records", 0))["kind"], "reservation")
-        result = model.model_action("synthetic-first", retained)
+        result = model.model_action("synthetic-first", retained, "reviewed-first")
         self.assertFalse(result["authorizes_mutation"])
         self.assertEqual(store.events, ["records-write", "records-flush", "heads-write", "heads-flush"] * 2)
 
@@ -38,7 +53,7 @@ class FixedFixtures(unittest.TestCase):
         with self.assertRaisesRegex(fixed.Stop, "contended"):
             open_model(store)
         self.assertTrue(store.held)
-        first.model_action("synthetic-first", first.external_head)
+        first.model_action("synthetic-first", first.external_head, "reviewed-first")
 
     def test_existing_or_partial_storage_never_resumes_or_reinitializes(self):
         for kind in ("records", "heads"):
@@ -69,7 +84,7 @@ class FixedFixtures(unittest.TestCase):
                         model = open_model(store)
                         store.fault = phase
                         with self.assertRaises(fixed.Stop):
-                            model.model_action("synthetic-first", model.external_head)
+                            model.model_action("synthetic-first", model.external_head, "reviewed-first")
                         self.assertTrue(model.closed)
                     before = copy.deepcopy(store.files)
                     store.fault = None
@@ -82,7 +97,7 @@ class FixedFixtures(unittest.TestCase):
         model = open_model(store)
         before = copy.deepcopy(store.files)
         with self.assertRaisesRegex(fixed.Stop, "capacity"):
-            model.model_action("synthetic-first", model.external_head)
+            model.model_action("synthetic-first", model.external_head, "reviewed-first")
         self.assertTrue(model.closed)
         self.assertEqual(store.files, before)
         with self.assertRaisesRegex(fixed.Stop, "slot_capacity"):
@@ -99,7 +114,7 @@ class FixedFixtures(unittest.TestCase):
         model = open_model(store)
         store.files["heads"].append(0)
         with self.assertRaisesRegex(fixed.Stop, "capacity_changed"):
-            model.model_action("synthetic-first", model.external_head)
+            model.model_action("synthetic-first", model.external_head, "reviewed-first")
 
     def test_changed_unavailable_revoked_authority_stops_before_intent(self):
         for key in receipt():
@@ -109,7 +124,7 @@ class FixedFixtures(unittest.TestCase):
             transport.message[key] = "changed"
             before = copy.deepcopy(store.files)
             with self.assertRaises(fixed.Stop):
-                model.model_action("synthetic-first", model.external_head)
+                model.model_action("synthetic-first", model.external_head, "reviewed-first")
             self.assertTrue(model.closed)
             self.assertEqual(store.files, before)
         store = fixed.MemoryStorage()
@@ -131,18 +146,45 @@ class FixedFixtures(unittest.TestCase):
             elif kind == "external":
                 head = "0" * 64
             else:
-                head = model.model_action("synthetic-first", head)["head_sha256"]
+                head = model.model_action("synthetic-first", head, "reviewed-first")["head_sha256"]
             with self.assertRaises(fixed.Stop):
-                model.model_action("synthetic-first", head)
+                model.model_action("synthetic-first", head, "reviewed-first")
             self.assertTrue(model.closed)
             with self.assertRaisesRegex(fixed.Stop, "terminal"):
-                model.model_action("synthetic-second", model.external_head)
+                model.model_action("synthetic-second", model.external_head, "reviewed-second")
+
+    def test_authority_admission_requires_time_release_and_interruption(self):
+        for changes, now in (({}, 999), ({}, 2000), ({"expires_ms": 1000}, 1500),
+                             ({"not_before_ms": True}, 1500), ({"mechanism_head": "d" * 40}, 1500),
+                             ({"candidate_commit": "d" * 40}, 1500),
+                             ({"notification_interruption": None}, 1500)):
+            with self.subTest(changes=changes, now=now), self.assertRaises(fixed.Stop):
+                open_model(fixed.MemoryStorage(), now=now, changes=changes)
+        store = fixed.MemoryStorage()
+        model = open_model(store)
+        with self.assertRaisesRegex(fixed.Stop, "operation_context"):
+            model.model_action("synthetic-first", model.external_head, "caller-chosen")
 
     def test_non_fake_seams_and_existing_external_head_are_rejected(self):
         with self.assertRaisesRegex(fixed.Stop, "fake_seams"):
-            fixed.FixedJournal(object(), b"{}", fixed.digest(b"{}"), object(), b"{}", None)
+            fixed.FixedJournal(object(), b"{}", fixed.digest(b"{}"), object(), b"{}", None, b"{}", lambda: 1500)
         with self.assertRaisesRegex(fixed.Stop, "no_resume"):
             open_model(fixed.MemoryStorage(), head="a" * 64)
+
+    def test_missing_admission_fields_and_expiry_after_reservation_fail_closed(self):
+        pin = fixed.packed(fixed.MemoryStorage().manifest)
+        plan = context_plan(pin)
+        for field in ("expires_ms", "not_before_ms", "mechanism_head", "candidate_commit", "notification_interruption"):
+            expected = {**receipt(), "plan_sha256": fixed.digest(plan)}
+            del expected[field]
+            with self.subTest(field=field), self.assertRaises(fixed.Stop):
+                fixed.FixedJournal(fixed.MemoryStorage(), pin, fixed.digest(pin), fixed.FakeAuthority(expected),
+                                   fixed.packed(expected), None, plan, lambda: 1500)
+        model = open_model(fixed.MemoryStorage())
+        model.now = lambda: 2000
+        with self.assertRaisesRegex(fixed.Stop, "time_window"):
+            model.model_action("synthetic-first", model.external_head, "reviewed-first")
+        self.assertTrue(model.closed)
 
 
 if __name__ == "__main__":

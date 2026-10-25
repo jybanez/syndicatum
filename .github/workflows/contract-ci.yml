@@ -113,6 +113,9 @@ jobs:
       - name: Verify Developer native cutover remains source-only
         shell: pwsh
         run: ./tests/codex-developer-native-b-closed-gate.ps1
+      - name: Verify fixed storage gate and inert Windows API seams
+        shell: pwsh
+        run: ./tests/codex-developer-fixed-storage.ps1
 
   canonical-release-candidate:
     runs-on: ubuntu-24.04

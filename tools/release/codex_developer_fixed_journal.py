@@ -104,7 +104,7 @@ def unframe(raw):
 class FixedJournal:
     """One pinned authority/attempt namespace. Existing bytes are never resumed."""
     def __init__(self, storage, pinned_manifest_raw, pinned_manifest_sha256,
-                 authority, expected_message_raw, externally_retained_head):
+                 authority, expected_message_raw, externally_retained_head, reviewed_plan_raw, now_ms):
         self.storage, self.authority = storage, authority
         self.closed, self.owned = False, False
         self.index, self.previous = 0, "0" * 64
@@ -123,7 +123,8 @@ class FixedJournal:
             self.expected = json.loads(expected_message_raw)
             check(packed(self.expected) == expected_message_raw, "receipt_canonical")
             check(set(self.expected) == {"server", "project_id", "message_id", "sender_id", "addressee_id",
-                  "revision", "body_sha256", "plan_sha256", "attempt_id", "cutoff_id", "scopes", "revoked"}
+                  "revision", "body_sha256", "plan_sha256", "attempt_id", "cutoff_id", "scopes", "revoked",
+                  "not_before_ms", "expires_ms", "mechanism_head", "candidate_commit", "notification_interruption"}
                   and self.expected["server"] == "https://syndicatum.wizaya.com"
                   and self.expected["project_id"] == 2 and self.expected["sender_id"] == 28
                   and self.expected["addressee_id"] == 36 and type(self.expected["message_id"]) is int
@@ -140,6 +141,24 @@ class FixedJournal:
                   and type(self.expected["scopes"]) is list and bool(self.expected["scopes"])
                   and all(type(scope) is str and bool(scope) for scope in self.expected["scopes"])
                   and len(set(self.expected["scopes"])) == len(self.expected["scopes"]), "receipt_schema")
+            self.now = now_ms  # Trusted injected clock; no plan-controlled time.
+            self.reviewed_plan = json.loads(reviewed_plan_raw)
+            check(packed(self.reviewed_plan) == reviewed_plan_raw and
+                  digest(reviewed_plan_raw) == self.expected["plan_sha256"], "reviewed_plan_digest")
+            check(set(self.reviewed_plan) == {"mechanism_head", "candidate_commit", "attempt_id", "cutoff_id",
+                  "notification_interruption", "operations", "storage_manifest_sha256"} and
+                  self.reviewed_plan["storage_manifest_sha256"] == pinned_manifest_sha256, "reviewed_plan_schema")
+            for key in ("mechanism_head", "candidate_commit", "attempt_id", "cutoff_id", "notification_interruption"):
+                check(self.expected[key] == self.reviewed_plan[key], "reviewed_plan_binding")
+            check(type(self.expected["mechanism_head"]) is str and
+                  re.fullmatch(r"[0-9a-f]{40}", self.expected["mechanism_head"]) and
+                  self.expected["candidate_commit"] == "9141daa08d896f2524be30b96d01ab2a14398757" and
+                  self.expected["notification_interruption"] is True, "reviewed_release_or_interruption")
+            operations = self.reviewed_plan["operations"]
+            check(type(operations) is dict and bool(operations) and all(
+                  type(name) is str and bool(name) and type(context) is str and bool(context)
+                  for name, context in operations.items()) and
+                  sorted(operations) == sorted(self.expected["scopes"]), "reviewed_operation_scope")
             # Null means approved empty established storage, not permission to
             # rebuild erased storage. Establishment/identity proof is external.
             check(externally_retained_head is None, "existing_external_head_no_resume")
@@ -168,6 +187,9 @@ class FixedJournal:
     def _authority(self):
         current = self.authority.get(self.expected["message_id"])
         check(packed(current) == packed(self.expected), "canonical_authority_changed")
+        start, end, now = current["not_before_ms"], current["expires_ms"], self.now()
+        check(type(start) is int and type(end) is int and type(now) is int and
+              0 <= start <= now < end, "authority_time_window")
 
     def verify(self, independent_head):
         try:
@@ -189,7 +211,8 @@ class FixedJournal:
             value, reference = unframe(record), unframe(head)
             check(value["sequence"] == index and value["previous"] == previous and
                   value["namespace"] == self.pin["namespace"] and value["authority_id"] == self.expected["message_id"]
-                  and value["attempt_id"] == self.expected["attempt_id"], "record_binding")
+                  and value["attempt_id"] == self.expected["attempt_id"] and
+                  value["plan_sha256"] == self.expected["plan_sha256"], "record_binding")
             previous = digest(record)
             check(reference == {"sequence": index, "record_sha256": previous,
                                 "namespace": self.pin["namespace"]}, "head_binding")
@@ -202,7 +225,7 @@ class FixedJournal:
         check(self.index < self.pin["slots"], "journal_capacity")
         value = {"sequence": self.index, "previous": self.previous, "namespace": self.pin["namespace"],
                  "authority_id": self.expected["message_id"], "attempt_id": self.expected["attempt_id"],
-                 "kind": kind, "data": data}
+                 "plan_sha256": self.expected["plan_sha256"], "kind": kind, "data": data}
         record = frame(value, self.pin["width"])
         head = frame({"sequence": self.index, "record_sha256": digest(record),
                       "namespace": self.pin["namespace"]}, self.pin["width"])
@@ -218,16 +241,17 @@ class FixedJournal:
         self.verify(self.external_head)
         return self.external_head
 
-    def model_action(self, name, independent_head):
+    def model_action(self, name, independent_head, operation_context=None):
         """Records synthetic intent only. No callback, process or mutation API."""
         try:
             self.verify(independent_head)
             self._authority()
             check(name in self.expected["scopes"], "action_scope")
+            check(operation_context == self.reviewed_plan["operations"][name], "reviewed_operation_context")
             for index in range(self.index):
                 prior = unframe(self.storage.read("records", index))
                 check(not (prior["kind"] == "intent" and prior["data"]["operation"] == name), "operation_replay")
-            head = self._append("intent", {"operation": name})
+            head = self._append("intent", {"operation": name, "reviewed_context": operation_context})
             return {"head_sha256": head, "synthetic_intent_only": True, "authorizes_mutation": False}
         except Exception:
             self._stop()

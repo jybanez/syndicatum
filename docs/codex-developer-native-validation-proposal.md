@@ -63,9 +63,10 @@ Trusted transport seam retrieves the canonical owner message through the exact
 protected Developer identity. Strict expected receipt comparison binds server,
 project2, owner28, addressee36, message/revision/body hash, plan digest, new attempt/
 cutoff IDs and explicit scopes. Unavailable/changed/revoked/ambiguous authority
-stops before intent. Future bridge must validate freshness/expiry, notification
-interruption and reviewed mechanism/candidate bindings in the plan as well; the
-current fake seam is not authentication or a real canonical bridge. Retain raw
+stops before intent. The model now explicitly validates expiry/not-before using a trusted injected
+clock, reviewed mechanism/candidate, interruption acknowledgement and exact
+operation context in a digest-bound reviewed plan; the fake seam remains neither
+authentication nor a real canonical bridge. Retain raw
 canonical tool response/provenance privately and its digest separately; never
 accept a plan-provided boolean as owner verification.
 
@@ -89,7 +90,7 @@ by the trusted caller; same-caller fixtures do not establish external authentici
 A new instance refuses all nonempty storage and any non-null retained prior head;
 it is inspection/fail-closed only after interruption, never a resume mechanism.
 
-Nine inert fixture methods cover reservation ordering, two-contender exclusion,
+Eleven inert fixture methods cover reservation ordering, two-contender exclusion,
 occupied/partial storage, failure at every record/head write/flush phase during
 reservation and intent, torn/hash-invalid slots, capacity/oversize, alternate
 root/namespace/file identity/size, every changed receipt field, unavailable
@@ -110,3 +111,46 @@ activation/restart each remain distinct later review/authority boundaries.
 No environment provisioning, volume flush, elevation, native probe, canonical API
 call or executable cutover packet is part of this source slice. Production
 integration, physical durability and real canonical transport remain explicit gaps.
+
+## Closed-gate Windows backend source (#11592)
+
+`tools/release/codex-developer-fixed-storage.psm1` defines the Windows fixed-file
+backend separately from the memory journal. The only exported dispatcher calls
+an unconditional throw before any API initialization or storage access. It is not
+wired to cutover. Internal backend definitions open existing files only with
+FileMode.Open, ReadWrite, FileShare.None and WriteThrough; retain both handles;
+pin handle volume/file identity, single link, canonical final path, fixed length,
+protected ACL owner/grants and exact approved ACL digest. Reparse ancestors,
+UNC/device/alternate-stream paths and live/webroot overlaps reject. No create,
+truncate, resize, rename, volume handle, service or elevation operation exists.
+
+Internal session logic copies the trusted manifest, checks both handles before
+and after bounded fixed-slot writes, requires empty slots, flushes the exact file
+and reads back exact bytes. Any uncertain write/flush/identity/readback failure
+closes the session and denies further operations; bytes are not restored. Native
+handle/ACL/flush definitions are unexecuted source. AST/closed-gate checks and a
+fake API exercise session behavior without calling those definitions. This does
+not establish production durability or native correctness. Session inspection
+alone does not reserve an authority; native journal integration remains absent.
+
+The trusted caller supplies a separately retained reviewed plan and manifest raw
+bytes/digest at admission. It retains the initial reservation head before asking
+for an intent; each result returns the next head, which the caller must retain
+outside the mutable container before the next call. Handoff context must include
+manifest/plan digests, authority/attempt IDs, sequence and head digest; mismatch,
+missing prior handoff or process interruption stops rather than reconstructing
+it from the journal. Current model tests a caller-held digest only; no independent
+physical storage or authenticated persisted handoff is claimed. A future native
+caller must keep both exclusive handles through the whole attempt, never reopen
+per operation. The current gated dispatcher opens/inspects/closes only; it does
+not execute the protocol or commands.
+
+Official managed API basis: [FileStream.Flush(Boolean)](https://learn.microsoft.com/en-us/dotnet/api/system.io.filestream.flush)
+and [FileSystemAclExtensions.GetAccessControl](https://learn.microsoft.com/en-us/dotnet/api/system.io.filesystemaclextensions.getaccesscontrol).
+API documentation supports file-buffer and ACL retrieval semantics, not the
+unexecuted adapter's correctness. Existing hardware/cooperating-host/revocation
+limits remain unchanged. After source review, the minimal native-validation
+proposal is exact hashed backend/harness plus two new synthetic pre-established
+container files and private manifest/results, with size/time limits above. It
+requires separate storage-setup/test approval, excludes all live objects and
+native B paths, and is NOT an executable packet or current authorization.
