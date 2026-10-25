@@ -1,0 +1,22 @@
+{
+  "status": "SOURCE_REVIEW_ONLY_NOT_EXECUTION_AUTHORITY",
+  "accepted_runner_head": "6593116a9d8f94cede63a3004a818acb5f349306",
+  "existing_packet_sha256": "d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a",
+  "wrapper": {
+    "repository_path": "tools/release/codex_developer_a1_tool_host.py",
+    "git_blob_bytes_sha256": "84801f5c3b12da58c275d6903413ae2e8b6328f621fb22d064fa74207d9423dc",
+    "bytes": 10228
+  },
+  "inert_proof": {
+    "canonical_response_bytes": 4949,
+    "chunks": 9,
+    "response_sha256": "6d188ac9de2dc0b1bb03016ff65fd72ba7fc5f2a36a8da8ea0277c232d34721d",
+    "result": "transport_ok",
+    "exit": 0,
+    "native_A1": false
+  },
+  "stopped_authority_ids": [
+    11683,
+    11684
+  ]
+}

@@ -404,6 +404,7 @@ jobs:
             python tests/codex-developer-host-assembly.py | tee ci-evidence/codex-developer-host-assembly.txt
             python tests/codex-developer-lifecycle.py | tee ci-evidence/codex-developer-lifecycle.txt
             python tests/codex-developer-a1.py | tee ci-evidence/codex-developer-a1.txt
+            python tests/codex-developer-a1-tool-host.py | tee ci-evidence/codex-developer-a1-tool-host.txt
             node --test tests/codex-developer-a1.test.mjs | tee ci-evidence/codex-developer-a1-node.txt
             pwsh -NoProfile -File tests/codex-developer-a1-parser.ps1 | tee ci-evidence/codex-developer-a1-parser.txt
             node --test tests/codex-developer-codex-entry.test.mjs | tee ci-evidence/codex-developer-codex-entry.txt
