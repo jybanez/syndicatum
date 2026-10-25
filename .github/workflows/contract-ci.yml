@@ -119,6 +119,9 @@ jobs:
       - name: Verify exact packet hashes after Windows checkout
         shell: pwsh
         run: python tests/codex-developer-fixed-journal.py
+      - name: Prove autocrlf clean checkout preserves admission artifacts
+        shell: pwsh
+        run: python tests/codex-synthetic-clean-checkout.py
 
   canonical-release-candidate:
     runs-on: ubuntu-24.04

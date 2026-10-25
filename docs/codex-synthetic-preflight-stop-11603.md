@@ -21,3 +21,16 @@ this attempt or authority. Committed packet/harness/backend bytes and their old
 review digests remain unchanged. Any future test requires fresh exact-source
 review, CI success and a new explicit owner approval. No cleanup, renamed test
 root, retry or live operation follows from this document.
+
+## Source regression supplement (#11605)
+
+`tests/codex-synthetic-clean-checkout.py` creates disposable source-only Git
+index fixtures with `core.autocrlf=true` and materializes an actual checkout via
+`git checkout-index`; it does not use archive as checkout evidence. It compares
+packet/harness/backend working bytes with their exact Git blobs and the packet's
+source pins. A negative control removes only the packet LF rule and requires
+the CRLF packet mismatch while both scripts remain exact. Both local Windows
+fixtures pass using Git2.45.1.windows.1. The Windows protected CI job repeats them.
+Fixture directories contain public source/index data only and are disposable;
+they are not the approved synthetic test root or historical evidence. No harness
+is invoked. CI outcome belongs to the submitted new exact head, not older runs.
