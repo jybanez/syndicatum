@@ -18,9 +18,10 @@ def build(root, destination):
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     payload = {}
     for name in FILES:
+        # Compare through Git's clean filters: Windows worktrees can use CRLF.
+        # Archive the committed bytes, never the filtered working-tree bytes.
+        subprocess.run(["git", "diff", "--quiet", "HEAD", "--", name], cwd=root, check=True)
         committed = subprocess.check_output(["git", "show", f"{revision}:{name}"], cwd=root)
-        if (root / name).read_bytes() != committed:
-            raise RuntimeError("review inputs differ from committed source")
         payload[name] = committed
     manifest = {
         "schema": 1, "source_revision": revision,
