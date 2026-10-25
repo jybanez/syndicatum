@@ -106,9 +106,12 @@ try {
 # metadata getter is reached. Only the first node has provider PSIsContainer.
 & $module {
     $root=[IO.DirectoryInfo]::new('C:\INERT-ROOT')
+    $volume=[IO.DirectoryInfo]::new('C:\')
     $file=[IO.FileInfo]::new('C:\INERT-ROOT\file.bin')
+    $volume | Add-Member -MemberType NoteProperty -Name Attributes -Value ([IO.FileAttributes]0) -Force
+    $volume | Add-Member -MemberType NoteProperty -Name Parent -Value $null -Force
     $root | Add-Member -MemberType NoteProperty -Name Attributes -Value ([IO.FileAttributes]0) -Force
-    $root | Add-Member -MemberType NoteProperty -Name Parent -Value $null -Force
+    $root | Add-Member -MemberType NoteProperty -Name Parent -Value $volume -Force
     $file | Add-Member -MemberType NoteProperty -Name Attributes -Value ([IO.FileAttributes]0) -Force
     $file | Add-Member -MemberType NoteProperty -Name Directory -Value $root -Force
     $file | Add-Member -MemberType NoteProperty -Name PSIsContainer -Value $false -Force

@@ -11,7 +11,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 if (-not $RunApprovedSyntheticTest) { throw 'SOURCE_ONLY: isolated test requires separate reviewed owner authority.' }
-if ($ApprovalMessageId -le 11618) { throw 'STOP: distinct isolated-test approval required' }
+if ($ApprovalMessageId -le 11630) { throw 'STOP: distinct isolated-test approval required' }
 if ($PSVersionTable.PSVersion.ToString() -cne '7.6.8' -or
     (Get-FileHash -LiteralPath (Join-Path $PSHOME 'pwsh.exe') -Algorithm SHA256).Hash.ToLowerInvariant() -cne
     'b90c0f48ca4b13c9426a7863f3d469baf310ca517721dd0b55551b80ec9fee2a') { throw 'STOP: pinned runtime mismatch' }
@@ -34,11 +34,24 @@ foreach ($entry in @(@($PSCommandPath,$ExpectedHarnessSha256),@($modulePath,$Exp
 $parent=[IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')
 $root=[IO.Path]::GetFullPath($TestRoot)
 if ([IO.Path]::GetDirectoryName($root) -cne $parent -or
-    [IO.Path]::GetFileName($root) -cne 'syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc') { throw 'STOP: synthetic root scope' }
+    [IO.Path]::GetFileName($root) -cne 'syndicatum-fixed-validation-394881fdf8ef477bafb3174d62c159bd') { throw 'STOP: synthetic root scope' }
 $cursor=Get-Item -LiteralPath $parent -Force
+if ($null -eq $cursor) { throw 'STOP: absent test ancestor metadata' }
+$ancestorNames=@{}; $ancestorDepth=0
 while ($null -ne $cursor) {
-    if ($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'STOP: reparse test ancestor' }
-    $cursor=$cursor.Parent
+    if ($cursor -isnot [IO.DirectoryInfo]) { throw 'STOP: non-directory test ancestor' }
+    $ancestorName=$cursor.PSObject.Properties['FullName'].get_Value()
+    $ancestorAttributes=$cursor.PSObject.Properties['Attributes'].get_Value()
+    $ancestorDepth++
+    if ($ancestorName -isnot [string] -or $ancestorAttributes -isnot [IO.FileAttributes] -or
+        $ancestorDepth -gt 128 -or $ancestorNames.ContainsKey($ancestorName)) { throw 'STOP: invalid test ancestor metadata' }
+    $ancestorNames[$ancestorName]=$true
+    if ($ancestorAttributes -band [IO.FileAttributes]::ReparsePoint) { throw 'STOP: reparse test ancestor' }
+    $nextAncestor=$cursor.PSObject.Properties['Parent'].get_Value()
+    if ($null -eq $nextAncestor -and -not $ancestorName.Equals([IO.Path]::GetPathRoot($parent),[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'STOP: unexpected test ancestor termination'
+    }
+    $cursor=$nextAncestor
 }
 if (Test-Path -LiteralPath $root) { throw 'STOP: attempt root exists; no retry/cleanup' }
 $watch=[Diagnostics.Stopwatch]::StartNew()
@@ -57,15 +70,22 @@ $script:observedInventory=@()
 function Assert-TestBounds {
     if ($watch.Elapsed.TotalSeconds -gt 120) { throw 'STOP: synthetic test time limit' }
     $rootItem=Get-Item -LiteralPath $root -Force
-    if ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    if ($rootItem -isnot [IO.DirectoryInfo]) { throw 'STOP: invalid test root type' }
+    $rootAttributes=$rootItem.PSObject.Properties['Attributes'].get_Value()
+    if ($rootAttributes -isnot [IO.FileAttributes]) { throw 'STOP: invalid test root attributes' }
+    if ($rootAttributes -band [IO.FileAttributes]::ReparsePoint) {
         $script:observedInventory=@(@{name='ROOT';directory=$true;reparse=$true;length=-1L})
         throw 'STOP: reparse test root'
     }
     $entries=@(foreach ($item in (Get-ChildItem -LiteralPath $root -Force | Select-Object -First 33)) {
-        $reparse=[bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+        if ($item -isnot [IO.FileSystemInfo]) { throw 'STOP: non-filesystem inventory object' }
+        $itemAttributes=$item.PSObject.Properties['Attributes'].get_Value()
+        if ($itemAttributes -isnot [IO.FileAttributes]) { throw 'STOP: invalid inventory attributes' }
+        $reparse=[bool]($itemAttributes -band [IO.FileAttributes]::ReparsePoint)
         # Never descend into a directory or inspect a reparse target's length.
-        @{name=$item.Name;directory=[bool]$item.PSIsContainer;reparse=$reparse;
-          length=if ($reparse -or $item.PSIsContainer) {-1L} else {$item.Length}}
+        $directory=$item -is [IO.DirectoryInfo]
+        @{name=$item.PSObject.Properties['Name'].get_Value();directory=$directory;reparse=$reparse;
+          length=if ($reparse -or $directory) {-1L} else {$item.PSObject.Properties['Length'].get_Value()}}
     })
     $script:observedInventory=$entries
     & $module {param($Entries) Assert-FixedSyntheticInventory $Entries} $entries
@@ -74,8 +94,11 @@ function Write-TestFile([string]$Name,[byte[]]$Bytes,[switch]$FailureEvidence) {
     if ($FailureEvidence) {
         # One bounded known result only, retaining the rejected inventory.
         # Never walk unknown objects or replace an existing result on failure.
-        if ($Name -cne 'result.json' -or
-            (Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        $failureRoot=Get-Item -LiteralPath $root -Force
+        if ($failureRoot -isnot [IO.DirectoryInfo]) { throw 'STOP: invalid failure root type' }
+        $failureAttributes=$failureRoot.PSObject.Properties['Attributes'].get_Value()
+        if ($Name -cne 'result.json' -or $failureAttributes -isnot [IO.FileAttributes] -or
+            $failureAttributes -band [IO.FileAttributes]::ReparsePoint) {
             throw 'STOP: failure evidence boundary'
         }
     } else { Assert-TestBounds }

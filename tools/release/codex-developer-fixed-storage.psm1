@@ -3,17 +3,44 @@ Set-StrictMode -Version Latest
 function Assert-FixedStorageGate { throw 'SOURCE_ONLY: fixed storage native execution disabled.' }
 
 function Assert-FixedPath([string]$Path,[string]$Root) {
+    if ([string]::IsNullOrWhiteSpace($Path) -or $Path -cnotmatch '^[A-Za-z]:\\' -or
+        $Path.StartsWith('\\') -or $Path.Substring(2).Contains(':')) { throw 'STOP: storage path boundary' }
     $absolute=[IO.Path]::GetFullPath($Path)
-    if ($Path -cne $absolute -or $Path.StartsWith('\\') -or $Path.Substring(2).Contains(':') -or
+    if ($Path -cne $absolute -or
         -not $absolute.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'STOP: storage path boundary' }
+    foreach ($component in $absolute.Substring(3).Split('\')) {
+        if ($component -cne $component.TrimEnd(' ','.') -or $component.IndexOfAny([char[]]'<>"|?*') -ge 0 -or
+            @($component.ToCharArray() | Where-Object { [int]$_ -lt 32 }).Count -or
+            $component -match '^(?i:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?$') {
+            throw 'STOP: device/invalid path component'
+        }
+    }
     foreach ($forbidden in @('C:\wamp64\www',(Join-Path $env:USERPROFILE '.codex'),(Join-Path $env:USERPROFILE '.syndicatum'))) {
-        if ($absolute.StartsWith($forbidden+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'STOP: live storage overlap' }
+        if ($absolute.Equals($forbidden,[StringComparison]::OrdinalIgnoreCase) -or
+            $absolute.StartsWith($forbidden+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'STOP: live storage overlap' }
     }
     $cursor=Get-Item -LiteralPath $absolute -Force -ErrorAction Stop
+    if ($null -eq $cursor) { throw 'STOP: absent path metadata' }
+    $seen=@{}; $depth=0
     while ($null -ne $cursor) {
         if ($cursor -isnot [IO.FileSystemInfo]) { throw 'STOP: non-filesystem path object' }
-        if ($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'STOP: reparse ancestor' }
-        $cursor=if ($cursor -is [IO.DirectoryInfo]) { $cursor.Parent } else { $cursor.Directory }
+        # Explicit get_Value() calls preserve getter exceptions rather than
+        # treating unavailable adapted metadata as a null/false condition.
+        $nodeName=$cursor.PSObject.Properties['FullName'].get_Value()
+        $attributes=$cursor.PSObject.Properties['Attributes'].get_Value()
+        if ($nodeName -isnot [string] -or [string]::IsNullOrEmpty($nodeName) -or
+            $attributes -isnot [IO.FileAttributes]) { throw 'STOP: invalid path metadata' }
+        $depth++
+        if ($depth -gt 128 -or $seen.ContainsKey($nodeName)) { throw 'STOP: cyclic/deep path metadata' }
+        $seen[$nodeName]=$true
+        if ($attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'STOP: reparse ancestor' }
+        $parentKey=if ($cursor -is [IO.DirectoryInfo]) {'Parent'} else {'Directory'}
+        $parent=$cursor.PSObject.Properties[$parentKey].get_Value()
+        if ($null -eq $parent -and ($cursor -isnot [IO.DirectoryInfo] -or
+            -not $nodeName.Equals([IO.Path]::GetPathRoot($absolute),[StringComparison]::OrdinalIgnoreCase))) {
+            throw 'STOP: unexpected path termination'
+        }
+        $cursor=$parent
     }
 }
 function Initialize-FixedHandleApi {
@@ -195,6 +222,8 @@ function Assert-FixedSyntheticInventory([array]$Entries) {
     $allowed=@{'attempt.json'=65536;'records.bin'=8192;'heads.bin'=8192;'manifest.json'=65536;'result.json'=65536}
     $seen=@{}; $total=0L
     foreach ($entry in $Entries) {
+        if ($entry.directory -isnot [bool] -or $entry.reparse -isnot [bool] -or
+            ($entry.length -isnot [long] -and $entry.length -isnot [int])) { throw 'STOP: inventory metadata types' }
         if ($entry.reparse -or $entry.directory) { throw 'STOP: reparse/directory object forbidden' }
         if (-not $allowed.ContainsKey($entry.name) -or $seen.ContainsKey($entry.name)) { throw 'STOP: unknown/duplicate synthetic object' }
         if ($entry.length -lt 0 -or $entry.length -gt $allowed[$entry.name]) { throw 'STOP: synthetic file length' }

@@ -161,3 +161,13 @@ allowed under11628. Source now fixes provider-only parent traversal and pins a
 new setup's normalized handle name explicitly. Only inert actual-helper/constructor
 coverage was added; no native rerun or old manifest update occurred. Both prior
 trees remain untouched. Further source review/CI/owner authority is separate.
+
+## Current draft after bounded completion11630
+
+The authoritative current JSON proposes394881fdf8ef477bafb3174d62c159bd as a
+DISTINCT future identity, not a rename/reuse of either retained failed tree.
+See codex-synthetic-path-completion-11630.md for typed traversal/metadata tests and
+the short execution-path completion review. No new tree or native invocation has
+occurred. New source/packet pins require fresh review, green CI and explicit owner
+approval before a future test; old approvals and evidence remain exhausted and
+immutable. The five-file scope and closed live gates remain unchanged.

@@ -4,6 +4,10 @@ $modulePath=Join-Path $PSScriptRoot '../tools/release/codex-developer-fixed-stor
 $tokens=$null; $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Resolve-Path $modulePath),[ref]$tokens,[ref]$errors)
 if ($errors.Count) { throw 'Fixed storage parse failure' }
+$providerMembers=@($ast.FindAll({param($node)
+    $node -is [Management.Automation.Language.MemberExpressionAst] -and $node.Member.Value -ceq 'PSIsContainer'
+},$true))
+if ($providerMembers.Count) { throw 'Backend relies on provider-only container property' }
 $gate=@($ast.FindAll({param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Assert-FixedStorageGate'
 },$true))
@@ -193,6 +197,10 @@ $harnessPath=Join-Path $PSScriptRoot '../tools/release/codex-fixed-synthetic-val
 $harnessTokens=$null; $harnessErrors=$null
 $harnessAst=[Management.Automation.Language.Parser]::ParseFile((Resolve-Path $harnessPath),[ref]$harnessTokens,[ref]$harnessErrors)
 if ($harnessErrors.Count) { throw 'Synthetic native harness parse failure' }
+$providerMembers=@($harnessAst.FindAll({param($node)
+    $node -is [Management.Automation.Language.MemberExpressionAst] -and $node.Member.Value -ceq 'PSIsContainer'
+},$true))
+if ($providerMembers.Count) { throw 'Harness relies on provider-only container property' }
 $calls=@($harnessAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true) |
     ForEach-Object { $_.GetCommandName() })
 if ($calls -contains 'Invoke-FixedStorage' -or $calls -contains 'Invoke-DeveloperNative' -or

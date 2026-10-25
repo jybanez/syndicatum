@@ -1,9 +1,9 @@
 {
   "status": "SOURCE_REVIEW_ONLY_UNEXECUTED_NOT_AUTHORIZED",
   "harness": "tools/release/codex-fixed-synthetic-validation.ps1",
-  "harness_sha256": "57a5e2ae91387ca33efe96a91009d8a858b15a1f0d2886919673f519ef1b51d4",
+  "harness_sha256": "fd3a939bfbb3a78e5646678808b3d039aa45e88ec332e1ad0e8d8582e872373b",
   "backend": "tools/release/codex-developer-fixed-storage.psm1",
-  "backend_sha256": "84ed263e6e74a116ad31ddf2a2358a695b8d34e5b641b12c2a970398752a644b",
+  "backend_sha256": "20a9392e4afb0937b54e733ee7ead4fd1a8e732a4971b1a608654ac08d959de5",
   "source_eol": "LF pinned by .gitattributes",
   "runtime": {
     "version": "PowerShell 7.6.8",
@@ -13,7 +13,7 @@
     "System.IO.FileSystem.AccessControl.dll": "a87455a818254627457395e85ab4970cc844edf07254456da624a37c99e9a23f"
   },
   "root_parent": "existing current-user TEMP; no reparse ancestors",
-  "root_leaf": "syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc",
+  "root_leaf": "syndicatum-fixed-validation-394881fdf8ef477bafb3174d62c159bd",
   "expected_files": [
     "attempt.json",
     "records.bin",
@@ -44,6 +44,10 @@
   "compiler_scratch": "NONE APPROVED: unknown file/directory/reparse entry stops; observed inventory retained",
   "occupied_rejection": "FixedStorageOccupiedSlot only; both complete container bytes unchanged",
   "historical_attempt": "11628: one native invocation STOP on path traversal; 11616 and11628 evidence retained; both approvals exhausted",
-  "admission_blocker": "Current55a445 test root exists as immutable11628 evidence; earlier1cf42 tree also retained. No next root selected or native retry authorized.",
-  "previous_root_leaf": "syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3"
+  "admission_blocker": "Next distinct identity is DRAFT source only, not created/reviewed/approved. Both prior trees remain immutable failed-attempt evidence.",
+  "previous_root_leaf": "syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc",
+  "retained_root_leaves": [
+    "syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3",
+    "syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc"
+  ]
 }
