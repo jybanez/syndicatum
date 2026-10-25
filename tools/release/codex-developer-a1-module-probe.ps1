@@ -1,10 +1,17 @@
-throw 'SOURCE_ONLY: A1 module/stdin probe disabled'
+param([string]$A1Nonce)
 $ErrorActionPreference='Stop'
+function ConvertFrom-A1Frame([byte[]]$Raw){
+    if($Raw.Length -gt 4096){throw 'frame_bound'}
+    $text=[Text.Encoding]::UTF8.GetString($Raw)
+    if($Raw.Length -ne 61 -or $text -cnotmatch '\A\{"nonce":"[a-f0-9]{48}"\}\n\z'){throw 'frame_contract'}
+    return ($text | ConvertFrom-Json -AsHashtable).nonce
+}
+if($A1Nonce -cnotmatch '\A[a-f0-9]{48}\z'){throw 'launch_context'}
+$inputStream=[Console]::OpenStandardInput()
+$bytes=[Collections.Generic.List[byte]]::new()
+while($true){$c=$inputStream.ReadByte();if($c -lt 0){break};$bytes.Add([byte]$c);if($bytes.Count -gt 4096){throw 'frame_bound'}}
+$nonce=ConvertFrom-A1Frame $bytes.ToArray()
+if($nonce -cne $A1Nonce){throw 'nonce_context'}
 Import-Module (Join-Path $PSScriptRoot 'codex-developer-fixed-storage.psm1') -Force
 . (Join-Path $PSScriptRoot 'codex-developer-fixed-session-protocol.ps1')
-$reader=[Console]::In
-$chars=[Collections.Generic.List[char]]::new()
-while($true){$c=$reader.Read();if($c -lt 0){throw 'frame_eof'};if($c -eq 10){break};$chars.Add([char]$c);if($chars.Count -gt 4095){throw 'frame_bound'}}
-$v=(-join $chars) | ConvertFrom-Json -AsHashtable
-if($v.Count -ne 1 -or -not $v.ContainsKey('nonce') -or $v.nonce -cnotmatch '^[a-f0-9]{48}$'){throw 'nonce_schema'}
-@{nonce=$v.nonce;module=(Get-Module 'codex-developer-fixed-storage').Path} | ConvertTo-Json -Compress
+@{nonce=$nonce;module=(Get-Module 'codex-developer-fixed-storage').Path} | ConvertTo-Json -Compress

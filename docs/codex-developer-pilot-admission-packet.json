@@ -375,7 +375,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "SOURCE_SCOPE_REVIEW_ONLY; probe gates closed, actual metadata acquisition unobserved; owner decision only after scope review",
+    "status": "A1_ONLY_LAUNCH_SOURCE_FOR_REVIEW; NO INVOCATION AUTHORITY; canonical private execution packet digest must bind actual parent/SID/runtime paths before owner decision",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -393,19 +393,146 @@
     "probe_sources": [
       {
         "repository_path": "tools/release/codex_developer_a1_module_probe.py",
-        "git_blob_bytes_sha256": "1c7b46a5c7b5531242062a7e8cbd3a846ff5bc243eff871736b4cca55baab045",
-        "size": 712
+        "git_blob_bytes_sha256": "5804dd689489556d0e6d2fcf6ab361db7e8187c58da1750cc9b3bb37d37cc3ed",
+        "size": 1042
       },
       {
         "repository_path": "tools/release/codex_developer_a1_module_probe.mjs",
-        "git_blob_bytes_sha256": "59fde189f23dbe7266b06b637992288dd6c86cc33870424c7f1cf5d2a6757b71",
-        "size": 634
+        "git_blob_bytes_sha256": "e2347caf45ee549490093a7ab2bc0599560452061f6a131dc8df8f74476a56af",
+        "size": 970
       },
       {
         "repository_path": "tools/release/codex-developer-a1-module-probe.ps1",
-        "git_blob_bytes_sha256": "df86f3b030d413508e4fece16eca313aeb797c954c7d3a350fe336cf43a524e2",
-        "size": 728
+        "git_blob_bytes_sha256": "1872e9b944754a353007cb1afc71194f2eb655cec90d5a7b847b8cf6f7f2f431",
+        "size": 998
       }
-    ]
+    ],
+    "complete_sources_and_scope": [
+      {
+        "repository_path": "tools/release/codex_developer_codex_entry.mjs",
+        "git_blob_bytes_sha256": "e9dd8191dcac6a3daffab7ab7b3b691cd862e042583ec31fd1343fc373f7efcc",
+        "size": 12530
+      },
+      {
+        "repository_path": "tools/release/codex_developer_agent_host.mjs",
+        "git_blob_bytes_sha256": "aaca900fa2cb84879adeb8fe8385a4f8f9268fe4fb119b8968993b14737aa6ab",
+        "size": 4692
+      },
+      {
+        "repository_path": "tools/release/codex_developer_host_assembly.py",
+        "git_blob_bytes_sha256": "ab727d8b8f3b0042d045ffbdcc33350d47ac5563cec6aa8e7edd0857111f10bc",
+        "size": 10464
+      },
+      {
+        "repository_path": "tools/release/codex_developer_host_handoff.py",
+        "git_blob_bytes_sha256": "502bc90f57ead1aca69260beb699bde742229cdaac364987cf7cd0b80568afcf",
+        "size": 6623
+      },
+      {
+        "repository_path": "tools/release/codex_developer_integrated_preparation.py",
+        "git_blob_bytes_sha256": "6d9e121044f720d2551e45b597d49acd421faa9a0546438e27ea89cbc1499aa4",
+        "size": 15589
+      },
+      {
+        "repository_path": "tools/release/codex_developer_transport.py",
+        "git_blob_bytes_sha256": "2792981fe3a7a3a1d3b43b0c335a0bc7331a39ddd4fb96c5a5bc3fbaa1a37862",
+        "size": 10292
+      },
+      {
+        "repository_path": "tools/release/codex_developer_process_ipc.py",
+        "git_blob_bytes_sha256": "590eaec4ed50f601398fe022c3d28b5ce387b3e9665e7759adce44a203a00fdf",
+        "size": 9190
+      },
+      {
+        "repository_path": "tools/release/codex_developer_fixed_journal.py",
+        "git_blob_bytes_sha256": "31b45b97843ee4944fe401addbd06edbec7ce97520176fdd9fa0d1c7a439d708",
+        "size": 23620
+      },
+      {
+        "repository_path": "tools/release/codex_developer_native_b.py",
+        "git_blob_bytes_sha256": "3c2bc2f699b9eeafecd9f025e23b35bb4dee1f3a4af39978252c0801d128e263",
+        "size": 24892
+      },
+      {
+        "repository_path": "tools/release/codex_developer_freshness.py",
+        "git_blob_bytes_sha256": "648e2a6d6ab703bd0937d5702e907a078db57ce00438ce704f9eda97a3394cbe",
+        "size": 10018
+      },
+      {
+        "repository_path": "tools/release/codex-developer-fixed-session-worker.ps1",
+        "git_blob_bytes_sha256": "78dabd0ee7412a173ef9f75386eb02baffbb92568e5dd0556e55065afcad586d",
+        "size": 1115
+      },
+      {
+        "repository_path": "tools/release/codex_developer_lifecycle.py",
+        "git_blob_bytes_sha256": "f265d18f6e55d51343443b10e5acf48a58bd5a734d01913c3304d1ebd3ec90e2",
+        "size": 18889
+      },
+      {
+        "repository_path": "tools/release/codex_pilot_sequence.py",
+        "git_blob_bytes_sha256": "0aa7148a89ca24da1c453f7617bd6b56093f9be66c06d02b547deeec98697dad",
+        "size": 12971
+      },
+      {
+        "repository_path": "tools/release/codex_developer_install_collector.py",
+        "git_blob_bytes_sha256": "5defe425f9073c6042cef1dc720212e203f906bc961855d577c3b0835d0ab9fc",
+        "size": 9520
+      },
+      {
+        "repository_path": "tools/release/codex-developer-fixed-session-protocol.ps1",
+        "git_blob_bytes_sha256": "bf47e1fceb70a3979d207b0aa1ad9109c712be4aaa073729ce54bd81a4806a77",
+        "size": 6018
+      },
+      {
+        "repository_path": "tools/release/codex-developer-fixed-storage.psm1",
+        "git_blob_bytes_sha256": "20a9392e4afb0937b54e733ee7ead4fd1a8e732a4971b1a608654ac08d959de5",
+        "size": 13672
+      },
+      {
+        "repository_path": "tools/release/codex-developer-native-b.psm1",
+        "git_blob_bytes_sha256": "8ccade9f0ad4b2ff5747604a243c873f5ecf6f0ed4b70f77db343ed3836d3b60",
+        "size": 21378
+      },
+      {
+        "repository_path": "tools/release/codex_developer_a1_module_probe.py",
+        "git_blob_bytes_sha256": "5804dd689489556d0e6d2fcf6ab361db7e8187c58da1750cc9b3bb37d37cc3ed",
+        "size": 1042
+      },
+      {
+        "repository_path": "tools/release/codex_developer_a1_module_probe.mjs",
+        "git_blob_bytes_sha256": "e2347caf45ee549490093a7ab2bc0599560452061f6a131dc8df8f74476a56af",
+        "size": 970
+      },
+      {
+        "repository_path": "tools/release/codex-developer-a1-module-probe.ps1",
+        "git_blob_bytes_sha256": "1872e9b944754a353007cb1afc71194f2eb655cec90d5a7b847b8cf6f7f2f431",
+        "size": 998
+      },
+      {
+        "repository_path": "tools/release/codex_developer_a1_runner.py",
+        "git_blob_bytes_sha256": "4267fad1272a86e2f3f134906814f7176751b91c9cc793caa1a7ad9ae4dd6968",
+        "size": 10769
+      },
+      {
+        "repository_path": "docs/codex-developer-a1-admission.md",
+        "git_blob_bytes_sha256": "956fc01c736fc54ba0c6f140ef47dcfa45684f5c47c6371c3bf472f25a9b959c",
+        "size": 8592
+      }
+    ],
+    "capture_identity": "developer-a1-c0fa748e7bd046d0bcaa9a2c8d402a31",
+    "runner": "tools/release/codex_developer_a1_runner.py::run",
+    "scope_document_sha256": "956fc01c736fc54ba0c6f140ef47dcfa45684f5c47c6371c3bf472f25a9b959c",
+    "checkout_policy": "Materialize verified reviewed Git-blob bytes into fresh private capture; never execute autocrlf checkout bytes",
+    "limits": {
+      "capture_files": 32,
+      "capture_bytes": 16777216,
+      "child_count": 6,
+      "seconds_per_child": 30,
+      "cli_stdout_bytes": 1048576,
+      "probe_stdout_bytes": 65536,
+      "stderr_bytes": 65536,
+      "stdin_bytes": 61
+    },
+    "scope_limits": "No worker/assembly launch, storage setup, install, activation, root walk or complete runtime closure proof. Actual production metadata callback and writer-quiescence provenance remain pending."
   }
 }

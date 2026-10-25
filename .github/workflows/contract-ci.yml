@@ -403,6 +403,9 @@ jobs:
             node --test tests/codex-developer-agent-host.test.mjs | tee ci-evidence/codex-developer-agent-host.txt
             python tests/codex-developer-host-assembly.py | tee ci-evidence/codex-developer-host-assembly.txt
             python tests/codex-developer-lifecycle.py | tee ci-evidence/codex-developer-lifecycle.txt
+            python tests/codex-developer-a1.py | tee ci-evidence/codex-developer-a1.txt
+            node --test tests/codex-developer-a1.test.mjs | tee ci-evidence/codex-developer-a1-node.txt
+            pwsh -NoProfile -File tests/codex-developer-a1-parser.ps1 | tee ci-evidence/codex-developer-a1-parser.txt
             node --test tests/codex-developer-codex-entry.test.mjs | tee ci-evidence/codex-developer-codex-entry.txt
             pwsh -NoProfile -File tests/codex-developer-fixed-session-protocol.ps1 | tee ci-evidence/codex-developer-fixed-session-protocol.txt
           node --test tests/integration-distribution.test.mjs | tee ci-evidence/integration-distribution.txt
