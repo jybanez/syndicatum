@@ -50,7 +50,7 @@ class Cases(unittest.TestCase):
        if fault=='wrong_node' and i==4:out['entry_url']='file:///outside.mjs'
        if fault=='wrong_ps' and i==5:out['module']='outside.psm1'
        raw=json.dumps(out).encode()
-       if i==3 and fault=='trailing':raw+=b'x' 
+       if i==3 and fault=='trailing':raw+=b'x'
       return {'identity':{'pid':123},'stdout':raw,'stderr':b'','exit':0}
     if fault=='none':self.assertEqual(runner.run(p,source,lambda *v:auth.append(v),Host())['status'],'observations_only_not_install_admission');self.assertEqual(len(calls),6)
     else:
