@@ -1,5 +1,6 @@
 """Inert framing only. No main/run, proposal, native A1 or capture calls."""
-import importlib.util,io,json,sys,tempfile,time,unittest
+import importlib.util,io,json,sys,tempfile,time,unittest,subprocess
+from unittest.mock import patch
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('tool_host',ROOT/'tools/release/codex_developer_a1_tool_host.py');host=importlib.util.module_from_spec(spec);spec.loader.exec_module(host)
@@ -31,6 +32,24 @@ class Cases(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    path=host.existing_proposal(lambda:tmp)
    self.assertEqual(path.parent,Path(tmp));self.assertFalse(path.exists())
+ def test_stalled_git_retains_original_error_and_no_successor_or_kill(self):
+  original=subprocess.TimeoutExpired('inert-git',10)
+  class Child:
+   pid=543
+   def communicate(self,timeout):
+    self.timeout=timeout;raise original
+   def kill(self):raise AssertionError('kill prohibited')
+  child=Child();reader=host.GitBlobReader()
+  with patch.object(host.subprocess,'Popen',return_value=child) as launch:
+   with self.assertRaises(subprocess.TimeoutExpired) as stopped:reader.read('inert-source')
+   self.assertIs(stopped.exception,original);self.assertEqual(original.host_git_pid,543)
+   self.assertLessEqual(child.timeout,10)
+   with self.assertRaisesRegex(ValueError,'source_reader_terminal'):reader.read('no-successor')
+   self.assertEqual(launch.call_count,1)
+  ticks=iter([0,61]);reader=host.GitBlobReader(clock=lambda:next(ticks))
+  with patch.object(host.subprocess,'Popen') as launch:
+   with self.assertRaisesRegex(ValueError,'source_acquisition_deadline'):reader.read('never-started')
+   launch.assert_not_called()
  def test_stopped_authority_and_duplicate_frame_schema(self):
   raw=b'{"session":"'+SESSION.encode()+b'","sequence":1,"sequence":2}'
   encoded=host.base64.b64encode(raw).decode()

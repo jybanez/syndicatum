@@ -99,6 +99,30 @@ def validate_authority(value,session,sequence,request_id,approval_id,wrapper_sha
     check(e['system_event']['type']=='responsibility.approval_approved','canonical_positive_event')
     d=e['system_event']['data'];check(d['request_message_id']==request_id and d['actor_participant_id']==28 and d['kind']=='approval_approved','owner_request_binding')
 
+class GitBlobReader:
+    """At most23 source reads:10s each and60s aggregate, no replay/kill."""
+    def __init__(self,clock=time.monotonic):
+        self.clock=clock;self.deadline=clock()+60;self.stopped=False;self.calls=0;self.bytes=0
+    def read(self,path):
+        check(not self.stopped,'source_reader_terminal')
+        child=None
+        try:
+            remaining=self.deadline-self.clock()
+            check(remaining>0 and self.calls<23,'source_acquisition_deadline_or_count')
+            self.calls+=1
+            child=subprocess.Popen(['git','show',HEAD+':'+path],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=False,close_fds=True,**({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {}))
+            # communicate(timeout) does NOT kill or reattach a timed-out child.
+            raw,stderr=child.communicate(timeout=min(10,remaining))
+            check(child.returncode==0,'source_acquisition_nonzero')
+            check(len(raw)<=1048576 and len(stderr)<=65536,'source_acquisition_output_bound')
+            self.bytes+=len(raw);check(self.bytes<=16777216 and self.clock()<=self.deadline,'source_acquisition_total_bound')
+            return raw
+        except Exception as primary:
+            self.stopped=True
+            if child is not None:primary.host_git_pid=child.pid
+            # Preserve original TimeoutExpired/IO error; no kill, retry, successor.
+            raise
+
 def main(argv=None):
     parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=('inert','run'),required=True);parser.add_argument('--session',required=True);parser.add_argument('--request-id',type=int);parser.add_argument('--approval-id',type=int);parser.add_argument('--wrapper-sha');args=parser.parse_args(argv)
     check(re.fullmatch('[a-f0-9]{48}',args.session),'host_session')
@@ -112,7 +136,7 @@ def main(argv=None):
             return
         check(args.request_id and args.approval_id and re.fullmatch('[a-f0-9]{64}',args.wrapper_sha or ''),'new_owner_binding_required')
         check(args.request_id!=11683 and args.approval_id!=11684,'stopped_authority_no_replay')
-        def blob(path):return subprocess.check_output(['git','show',HEAD+':'+path])
+        reader=GitBlobReader();blob=reader.read
         raw=existing_proposal().read_bytes();check(len(raw)==3717 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
         packet=json.loads(raw);check(canonical(packet)==raw,'existing_proposal_canonical')
         review=json.loads(blob('docs/codex-developer-pilot-admission-packet.json'))['next_A1_decision_draft'];source={}

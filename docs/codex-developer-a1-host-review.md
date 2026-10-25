@@ -63,3 +63,23 @@ On failure retain the original error and STOP; do not reopen the consumed attemp
 A future successful run may retain the new authority/result in one capture file
 within the original32-file/16MiB bound. Full private paths/raw output stay local.
 Production callback/quiescence/OS image limitations remain unchanged.
+
+
+## Bounded source acquisition (#11693)
+
+Host Git overhead is at most23 shell-free read-only git show children (one accepted
+manifest plus22 source blobs), each10 seconds and60 seconds aggregate. Output is
+checked at1MiB/read, stderr64KiB and16MiB total. A stalled/error read preserves the
+original error and owned Popen PID, marks the reader terminal, and blocks every
+successor; no kill, PID reattachment, automatic retry or diagnostic launch. A timed
+out Git child may remain active; its quiescence is not inferred. No capture exists
+at this preauthorization source-reading stage. The process timeout bounds elapsed
+waiting; output limits are checked after communicate, not claimed as a streaming
+memory firewall against a hostile Git executable.
+
+The fresh owner decision must disclose these host Git reads, one host Python/PTY,
+and up to seven90-second authorization exchanges separately from the unchanged six
+30-second diagnostic children. The original90-second transport bound and all A1
+capture/ordinary CLI effects remain unchanged. The recorded4949-byte inert PTY proof
+was obtained before this source-reader-only edit; framing behavior is unchanged,
+and current-source inert tests include a stalled reader and aggregate deadline.
