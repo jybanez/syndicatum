@@ -13,11 +13,11 @@ def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':')
 def require(value,code):
     if not value:raise ValueError(code)
 
-def check_nonreparse_chain(path,metadata=None):
-    """Direct Windows attributes include tags that Python stat may normalize."""
+def check_nonreparse_chain(path,metadata=None,native_attributes=None):
+    """Check direct Windows attributes as well as lstat for all reparse tags."""
     path=Path(path)
-    get_attributes=None
-    if metadata is None and os.name=='nt':
+    get_attributes=native_attributes
+    if get_attributes is None and metadata is None and os.name=='nt':
         import ctypes as c
         from ctypes import wintypes as w
         get_attributes=c.WinDLL('kernel32',use_last_error=True).GetFileAttributesW

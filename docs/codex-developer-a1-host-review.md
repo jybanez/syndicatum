@@ -91,8 +91,11 @@ rejecting FILE_ATTRIBUTE_REPARSE_POINT for every tag and portable symlink mode,
 with at most64 ancestors. It checks capture parent and runtime paths before writes
 or byte hashing. Inert tests cover a reparse-flagged ordinary-directory mode at
 root/ancestor even when it is not a junction or symlink. The first Python-lstat-only comparison did not reproduce the full Windows flag
-and is not accepted as confirmation; the direct Win32 query was added for that
-coverage gap. Current candidate checks are separate read-only observations. The existing LocalApplicationData
+and is not accepted as confirmation; a direct Win32 query was added as a
+second all-tag guard. That later native read also did NOT reproduce the earlier
+reparse flag. The snapshots are inconsistent; do not assert a proven normalization
+cause or silently resume based on the later result. Existing LocalApplicationData
+candidate checks are separate read-only observations. The existing LocalApplicationData
 known-folder parent passes all ancestor checks; no directory was created there.
 It is a candidate only. New parent/attempt/proposal source binding and review are
 still required before a future single owner decision. Old51a21324 bytes must not

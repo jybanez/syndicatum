@@ -82,6 +82,8 @@ class Cases(unittest.TestCase):
     def metadata(item):return SimpleNamespace(st_file_attributes=0x400 if item==bad_at else 0,st_mode=stat.S_IFDIR)
     with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,metadata)
    with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,lambda item:SimpleNamespace(st_file_attributes=0,st_mode=stat.S_IFLNK))
+   with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,clean,lambda item:0x400)
+   with self.assertRaisesRegex(ValueError,'windows_attributes_unavailable'):runner.check_nonreparse_chain(path,clean,lambda item:0xFFFFFFFF)
  def test_authority_before_any_host_call(self):
   class Host:
    def __getattr__(self,name):raise AssertionError('host touched before authorization')

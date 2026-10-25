@@ -62,6 +62,6 @@
     "old_parent": "rejected:2 non-link flagged ancestors",
     "existing_local_appdata_candidate": "Developer-local read-only full-chain pass; not yet approved or allocated",
     "old_packet_51a21324": "unchanged; do not invoke with changed runner source",
-    "comparison_note": "Initial lstat-only check failed to reproduce full flag; direct Win32 added; do not claim initial comparison passed"
+    "comparison_note": "Earlier PowerShell snapshot flagged2 ancestors; later lstat and direct Win32 did not reproduce it. Inconsistent snapshots: STOP retained, no normalization cause claimed. Candidate independently passes."
   }
 }
