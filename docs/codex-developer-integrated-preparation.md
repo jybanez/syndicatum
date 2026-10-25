@@ -39,8 +39,12 @@ The new path never invokes backend `flush`/directory FlushFileBuffers or the old
 directory journal. DeveloperBAdapter now refuses missing journal/admission
 integration before backend admission. The historical directory class is retained
 only for old component regressions, not selected by any preparation default.
-Both existing native execution gates remain closed. Storage/receipt transports
-are sealed FAKE seams in this source; no native/file/network/tool entry is wired.
+Both existing native execution gates remain closed. The persistent session and
+protected-host wire contracts now compose here; production defaults refuse and
+only inert channels are exercised. No native/file/network/tool entry is enabled.
+See `codex-developer-integrated-procedure.md` for the single complete proposed
+sequence, exact capabilities missing from the current protected tools, and the
+remaining bounded-IPC/host-provenance admission blocks.
 
 ## Binding without a self-referential approval digest
 

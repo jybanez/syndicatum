@@ -1,4 +1,4 @@
-"""SOURCE ONLY: fixed-container journal and sealed fake session/canonical seams.
+"""SOURCE ONLY: fixed journal with inert/closed-default session and host seams.
 
 Integrated preparation consumes this protocol; no native/API/storage setup here.
 """
@@ -102,10 +102,10 @@ class FakeCanonicalTimeline:
 
 
 class CanonicalAuthority:
-    """Canonical approval/request comparison through a sealed fake transport.
+    """Canonical approval/request comparison through a protected-host contract.
 
     Retrieval/authentication is deliberately not inferred from the message body.
-    A real protected-tool transport remains closed/unimplemented here.
+    Production host dispatch remains closed/unimplemented; inert wires are tests.
     """
     @staticmethod
     def material(message):
@@ -116,7 +116,8 @@ class CanonicalAuthority:
         return value
 
     def __init__(self, timeline, request_id, approval_id, trusted_request_sha256, plan_context_sha256):
-        check(type(timeline) is FakeCanonicalTimeline, "source_only_canonical_transport")
+        from codex_developer_transport import ProtectedCanonicalTimeline
+        check(type(timeline) in (FakeCanonicalTimeline, ProtectedCanonicalTimeline), "source_only_canonical_transport")
         self.timeline, self.request_id, self.approval_id = timeline, request_id, approval_id
         self.request_digest, self.context = trusted_request_sha256, plan_context_sha256
         self.latest = None
@@ -201,7 +202,8 @@ class FakeFixedSessionAPI:
 class SessionStorage:
     """Pinned projection plus FULL native-manifest checks at every file operation."""
     def __init__(self, api, full_manifest_raw, full_manifest_sha256):
-        check(type(api) is FakeFixedSessionAPI, "source_only_storage_transport")
+        from codex_developer_transport import WindowsSessionAPI
+        check(type(api) in (FakeFixedSessionAPI, WindowsSessionAPI), "source_only_storage_transport")
         check(digest(full_manifest_raw) == full_manifest_sha256, "full_storage_manifest_anchor")
         self.full = json.loads(full_manifest_raw)
         check(packed(self.full) == full_manifest_raw and set(self.full["files"]) == {"records", "heads"}, "full_manifest_schema")

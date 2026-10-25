@@ -17,7 +17,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
-def setup():
+def setup(handoff_manifest_sha256=None):
     plan = fixture.plan_for(Path("INERT-NOT-A-FILESYSTEM-ROOT"))
     slots, width = 128, 8192
     manifest = {"root": "INERT-FIXED-ROOT", "namespace": "new-integrated-attempt", "slots": slots, "width": width,
@@ -26,6 +26,8 @@ def setup():
                     for name in ("records", "heads")}}
     manifest_raw = fixed.packed(manifest)
     plan["fixed_storage_manifest_sha256"] = fixed.digest(manifest_raw)
+    if handoff_manifest_sha256 is not None:
+        plan["independent_handoff_manifest_sha256"] = handoff_manifest_sha256
     context = integrated.plan_context(plan)
     api = fixed.FakeFixedSessionAPI(manifest)
     projection = fixed.SessionStorage(api, manifest_raw, fixed.digest(manifest_raw)).manifest

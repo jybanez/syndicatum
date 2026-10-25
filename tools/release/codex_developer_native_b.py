@@ -361,6 +361,9 @@ class DeveloperBAdapter:
             self.terminal = True
             code = str(error) if isinstance(error, NativeBStop) and str(error).replace("_", "").isalnum() else "evidence_or_native_failure"
             secondary = []
+            if getattr(error, "close_uncertain", False):
+                self.session_close_uncertain = True
+                secondary.append("failure_session_close_uncertain")
             if self.journal is not None:
                 if self.mutations and code != "native_timeout_uncertain":
                     try: self._snapshot("failure-postimage")

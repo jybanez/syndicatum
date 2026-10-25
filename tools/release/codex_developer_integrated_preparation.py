@@ -1,6 +1,6 @@
 """SOURCE ONLY: fixed-session journal + canonical receipt + preparation binding.
 
-Sealed fake transports only; no native/storage setup/CLI/tool/token entry point.
+Closed transport defaults; inert channels only in tests. No setup/install entry.
 """
 import base64
 import json
@@ -9,6 +9,7 @@ import math
 from codex_developer_fixed_journal import (CanonicalAuthority, FakeFixedSessionAPI, FixedJournal,
     SessionStorage, Stop, check, digest, packed, unframe)
 from codex_developer_native_b import DeveloperBAdapter
+from codex_developer_transport import DurableHead, WindowsSessionAPI
 
 
 SCOPES = {"connector_task_run_suppression", "owned_listener_stop", "private_cutoff_capture"}
@@ -44,6 +45,9 @@ class RetainedHead:
               "namespace": core.pin["namespace"]}, "trusted_handoff_changed")
         return self.value["head"]
 
+    def close_terminal(self):
+        pass  # Inert volatile handoff owns no OS resource.
+
 
 class FixedPreparationJournal:
     """Preparation journal protocol over existing fixed containers; no directories.
@@ -53,12 +57,16 @@ class FixedPreparationJournal:
     terminal and cannot be resumed, rebuilt or replayed.
     """
     def __init__(self, core, handoff, native_context):
-        check(type(core) is FixedJournal and type(handoff) is RetainedHead and handoff.value is None,
+        check(type(core) is FixedJournal and type(handoff) in (RetainedHead, DurableHead) and handoff.value is None,
               "new_fixed_handoff_required")
         self.core, self.handoff, self.context = core, handoff, native_context
         self.spans, self.admitted, self.pending = [], [], None
         self.terminal = False
-        handoff.retain(core, core.external_head, None)
+        try:
+            handoff.retain(core, core.external_head, None)
+        except Exception as error:
+            self._abort(error)
+            raise
 
     @property
     def retained_head(self):
@@ -119,9 +127,8 @@ class FixedPreparationJournal:
             self.spans.append((start, count, payload_sha, logical_id))
             self.verify(self.retained_head)
             return self.retained_head
-        except Exception:
-            self.terminal = True
-            self.core._stop()
+        except Exception as error:
+            self._abort(error)
             raise
 
     def admit(self, operation, head):
@@ -134,21 +141,34 @@ class FixedPreparationJournal:
             self.verify(head)
             self.admitted.append(operation)
             self.pending = None
-        except Exception:
-            self.terminal = True
-            self.core._stop()
+        except Exception as error:
+            self._abort(error)
             raise
+
+    def _abort(self, error):
+        try: self.close_terminal()
+        except Exception:
+            error.close_uncertain = True
+            error.add_note("integrated_close_uncertain; no retry")
 
     def close_terminal(self):
         self.terminal = True
-        self.core._stop()
+        errors = []
+        for close in (self.core._stop, self.handoff.close_terminal):
+            try: close()
+            except Exception as error: errors.append(error)
+        if errors:
+            error = errors[0]
+            error.close_uncertain = True
+            for secondary in errors[1:]: error.add_note("additional_terminal_close_uncertainty: " + type(secondary).__name__)
+            raise error
 
 
 class IntegratedPreparation:
-    """Composes the actual preparation adapter; only fake transports admitted."""
+    """Composes preparation with inert or closed-default session/host contracts."""
     def __init__(self, native_plan_raw, authority, session_api, full_manifest_raw,
                  reviewed_fixed_plan_raw, expected_receipt_raw, now_ms, handoff):
-        check(type(authority) is CanonicalAuthority and type(session_api) is FakeFixedSessionAPI,
+        check(type(authority) is CanonicalAuthority and type(session_api) in (FakeFixedSessionAPI, WindowsSessionAPI),
               "source_only_integrated_transports")
         self.plan = json.loads(native_plan_raw)
         check(packed(self.plan) == native_plan_raw, "integrated_native_plan_canonical")
@@ -158,6 +178,11 @@ class IntegratedPreparation:
         full_sha = digest(full_manifest_raw)
         check(self.plan["fixed_storage_manifest_sha256"] == full_sha, "integrated_full_manifest_binding")
         self.storage = SessionStorage(session_api, full_manifest_raw, full_sha)
+        if type(handoff) is DurableHead:
+            check(self.plan.get("independent_handoff_manifest_sha256") == handoff.manifest_sha256 and
+                  handoff.storage.manifest["namespace"] != self.storage.manifest["namespace"] and
+                  not ({handoff.storage.manifest[k] for k in ("record_id", "head_id")} &
+                       {self.storage.manifest[k] for k in ("record_id", "head_id")}), "independent_handoff_plan_or_overlap")
         self.authority, self.now, self.handoff = authority, now_ms, handoff
         self.fixed_plan_raw, self.receipt_raw = reviewed_fixed_plan_raw, expected_receipt_raw
         fixed_plan = json.loads(reviewed_fixed_plan_raw)
