@@ -35,6 +35,37 @@ freshness_spec.loader.exec_module(freshness_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_quiescent_cutoff_has_no_sequence_or_task_schedule_exception(self):
+        before = {"route-token": b'{"lastSequence":20}', "task-token": b'<Interval>PT5M</Interval>'}
+        freshness_module.require_frozen_observations(before, dict(before))
+        for changed in ({**before, "route-token": b'{"lastSequence":21}'},
+                        {**before, "task-token": b'<Interval>PT10M</Interval>'},
+                        {"route-token": before["route-token"]},
+                        {**before, "route-token": True}):
+            with self.assertRaises(freshness_module.FreshnessStop):
+                freshness_module.require_frozen_observations(before, changed)
+
+    def test_quiescent_preparation_stops_at_every_failed_phase(self):
+        class Inert:
+            def __init__(self, fail=None): self.calls, self.fail = [], fail
+            def retain_intent(self, stage): self.calls.append((stage, "intent"))
+            def retain_confirmed(self, stage): self.calls.append((stage, "confirmed"))
+            def __getattr__(self, stage):
+                def action():
+                    self.calls.append((stage, "action"))
+                    if stage == self.fail: raise RuntimeError("private fixture diagnostic")
+                return action
+        successful = freshness_module.model_quiescent_preparation(Inert())
+        self.assertEqual(successful["result"], "prepared_model_only")
+        self.assertIs(successful["authorizes_install"], False)
+        stages = freshness_module.QUIESCENT_PREPARATION_PHASES
+        for index, phase in enumerate(stages):
+            adapter = Inert(phase)
+            result = freshness_module.model_quiescent_preparation(adapter)
+            self.assertEqual(result["result"], "stopped")
+            self.assertEqual([s for s, kind in adapter.calls if kind == "action"], list(stages[:index+1]))
+            self.assertIs(result["authorizes_install"], False)
+
     def test_developer_freshness_never_authorizes_state_advancement(self):
         before = dict(processedMessageIds=["10"], pendingNotifications=[], activeWake=None, lastSequence=20)
         raw = json.dumps(before).encode()

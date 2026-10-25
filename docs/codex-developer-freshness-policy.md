@@ -65,6 +65,34 @@ comparisons. Preserve current queue/history rather than restore an old snapshot.
 The existing nine changes cannot all be covered by a sequence-only exception.
 No proposal should quietly accept pending/history changes to make the check pass.
 
+## Concrete path recommended for the next review
+
+Recommend path 2 (quiescent cutover), not a broader exception for path 1. This is
+a recommendation for separate authority, not selection by this document. The
+new approval must explicitly name connector Task/Run suppression and stopping
+the exact owned listener; the exhausted install-only approval cannot cover them.
+
+The source fixture model orders authority/reservation, exact static identity and
+ownership checks, pre-suppression evidence, connector-only suppression and
+preservation checks, listener identity revalidation, exact stop, independent
+quiescence, new cutoff capture/copy verification, bounded freshness/static checks,
+and retained prepared result. Any failure stops before later phases. There is no
+native adapter or CLI entry point; no preparation model is run on this machine.
+
+The post-suppression cutoff retains all CURRENT valid canonical route-state
+bytes, backup artifact and unrelated Task XML. It does not restore old queues,
+assert prior advances were legitimate, mask schedule values, or amend 11546.
+During subsequent installation, compare raw bytes and complete identity sets at
+every boundary. Even lastSequence-only change is a STOP after quiescence; no
+semantic normalization is allowed. The same applies to unrelated Task rescheduling.
+Any new writer, changed Task or expired cutoff stops without recapture in place.
+
+The preparation approval and later exact install/activation boundaries must be
+specified together to avoid implying a restart is authorized. A preparation
+result alone authorizes neither installation nor reopening Codex. Record the
+notification interruption and pending-queue preservation explicitly in the new
+approval request; do not claim current routing remains active while stopped.
+
 ## Preservation checks for a new reviewed window
 
 Unrelated Task baseline selection occurs at the explicitly approved new cutoff,
