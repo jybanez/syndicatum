@@ -116,6 +116,9 @@ jobs:
       - name: Verify fixed storage gate and inert Windows API seams
         shell: pwsh
         run: ./tests/codex-developer-fixed-storage.ps1
+      - name: Verify actual Windows callback constructor with all primitives stubbed
+        shell: pwsh
+        run: ./tests/codex-developer-fixed-constructor.ps1
       - name: Verify exact packet hashes after Windows checkout
         shell: pwsh
         run: python tests/codex-developer-fixed-journal.py

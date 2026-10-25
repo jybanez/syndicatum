@@ -132,3 +132,22 @@ reuse/clean/rename it; no replacement root has been selected. The changed backen
 pin describes a new source candidate, not a refreshed11616 approval. A later
 isolated test requires exact-source review/CI and a new explicit owner decision
 on the test-tree identity. No second invocation or native validation is authorized.
+
+## Current draft under #11618 (supersedes earlier candidate identity)
+
+The JSON now proposes distinct leaf
+`syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc` as SOURCE-ONLY draft.
+It does not exist by any action taken here; no new tree has been established or
+old tree renamed/deleted. The old leaf remains separately identified as immutable
+11616 evidence. The harness accepts only the new drafted leaf and a later
+approval-message reference; neither is authorization. Exact-source review, green
+CI and a fresh concrete owner approval must precede any later native invocation.
+
+The actual New-FixedWindowsApi constructor now captures bound scriptblocks for
+every private/native primitive. Its new inert regression replaces ALL11 primitive
+functions before construction, invokes returned Open/Inspect/Read/Write/Flush/Close
+callbacks outside the defining module invocation, checks every expected stub is
+reached and verifies original error IDs propagate (including validation from both
+Open and Inspect). It restores stubs afterward. No native initializer, filesystem
+primitive or harness is invoked by that regression. Existing fake storage contract
+tests remain separate; neither class of test proves native correctness.

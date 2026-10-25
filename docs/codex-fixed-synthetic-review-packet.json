@@ -1,9 +1,9 @@
 {
   "status": "SOURCE_REVIEW_ONLY_UNEXECUTED_NOT_AUTHORIZED",
   "harness": "tools/release/codex-fixed-synthetic-validation.ps1",
-  "harness_sha256": "b9adff56b18d6b528c0548f181312b853d47b2515903afb0f3a5f3bf38255781",
+  "harness_sha256": "eefee5746771cbb6461e9282d96321a8e2db972197c0b83a7672a9252cc226cd",
   "backend": "tools/release/codex-developer-fixed-storage.psm1",
-  "backend_sha256": "ed7c243a5aaab748402a76f996faa3953cc1ce7c24d8bf4946351f75df880b32",
+  "backend_sha256": "6f101867744f047d43d8f6d67c91193c67d171fc54c76e4484e94ffc56909b6e",
   "source_eol": "LF pinned by .gitattributes",
   "runtime": {
     "version": "PowerShell 7.6.8",
@@ -13,7 +13,7 @@
     "System.IO.FileSystem.AccessControl.dll": "a87455a818254627457395e85ab4970cc844edf07254456da624a37c99e9a23f"
   },
   "root_parent": "existing current-user TEMP; no reparse ancestors",
-  "root_leaf": "syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3",
+  "root_leaf": "syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc",
   "expected_files": [
     "attempt.json",
     "records.bin",
@@ -44,5 +44,6 @@
   "compiler_scratch": "NONE APPROVED: unknown file/directory/reparse entry stops; observed inventory retained",
   "occupied_rejection": "FixedStorageOccupiedSlot only; both complete container bytes unchanged",
   "historical_attempt": "11616: one native invocation STOP; evidence retained; authority exhausted",
-  "admission_blocker": "Fixed test root now exists as immutable evidence. No reuse/cleanup/renaming or replacement root under prior approval."
+  "admission_blocker": "New distinct identity is DRAFT source only, unreviewed/unapproved; no new tree created. Prior tree is immutable evidence.",
+  "previous_root_leaf": "syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3"
 }

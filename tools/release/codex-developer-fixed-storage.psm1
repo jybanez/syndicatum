@@ -78,32 +78,41 @@ function New-FixedBoundApi([string]$Root,[hashtable]$Bindings) {
         Read=$ops.Read;Write=$ops.Write;Flush=$ops.Flush;Close=$ops.Close
     }
 }
+function Open-FixedNativeStream($Pin) {
+    [IO.FileStream]::new($Pin.path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,
+        [IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough)
+}
+function Get-FixedNativePath($Handle) { [FixedStorageHandle]::Path($Handle.SafeFileHandle) }
+function Get-FixedNativeIdentity($Handle) { [FixedStorageHandle]::Identity($Handle.SafeFileHandle) }
+function Get-FixedNativeLength($Handle) { $Handle.Length }
+function Read-FixedNativeBytes($Handle,$Offset,$Count) {
+    $null=$Handle.Seek($Offset,[IO.SeekOrigin]::Begin)
+    $bytes=[byte[]]::new($Count); $Handle.ReadExactly($bytes); ,$bytes
+}
+function Write-FixedNativeBytes($Handle,$Offset,$Bytes) {
+    $null=$Handle.Seek($Offset,[IO.SeekOrigin]::Begin)
+    $Handle.Write($Bytes,0,$Bytes.Length)
+}
+function Flush-FixedNativeStream($Handle) { $Handle.Flush($true) }
+function Close-FixedNativeStream($Handle) { $Handle.Dispose() }
 function New-FixedWindowsApi([hashtable]$Manifest) {
     # Internal definitions only. Exported dispatcher gates before reaching here.
     Initialize-FixedHandleApi
-    $aclInspector=${function:Get-FixedAclPin}
+    $primitives=@{
+        Validate=${function:Assert-FixedPath};Open=${function:Open-FixedNativeStream}
+        Path=${function:Get-FixedNativePath};Identity=${function:Get-FixedNativeIdentity}
+        Length=${function:Get-FixedNativeLength};Acl=${function:Get-FixedAclPin}
+        Read=${function:Read-FixedNativeBytes};Write=${function:Write-FixedNativeBytes}
+        Flush=${function:Flush-FixedNativeStream};Close=${function:Close-FixedNativeStream}
+    }
     $bindings=@{
-        Validate=${function:Assert-FixedPath}
-        Open={param($Pin)
-            # Open == OPEN_EXISTING; never OpenOrCreate/Create/Truncate.
-            [IO.FileStream]::new($Pin.path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,
-                [IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough)
-        }
+        Validate=$primitives.Validate;Open=$primitives.Open
         Inspect={param($Handle,$Pin)
-            $final=[FixedStorageHandle]::Path($Handle.SafeFileHandle)
+            $final=& $primitives.Path $Handle
             if ($final -cne ('\\?\'+$Pin.path)) { throw 'STOP: final handle path' }
-            @{identity=[FixedStorageHandle]::Identity($Handle.SafeFileHandle);length=$Handle.Length;acl=(& $aclInspector $Handle)}
+            @{identity=(& $primitives.Identity $Handle);length=(& $primitives.Length $Handle);acl=(& $primitives.Acl $Handle)}
         }.GetNewClosure()
-        Read={param($Handle,$Offset,$Count)
-            $null=$Handle.Seek($Offset,[IO.SeekOrigin]::Begin)
-            $bytes=[byte[]]::new($Count); $Handle.ReadExactly($bytes); ,$bytes
-        }
-        Write={param($Handle,$Offset,$Bytes)
-            $null=$Handle.Seek($Offset,[IO.SeekOrigin]::Begin)
-            $Handle.Write($Bytes,0,$Bytes.Length)
-        }
-        Flush={param($Handle) $Handle.Flush($true)}
-        Close={param($Handle) $Handle.Dispose()}
+        Read=$primitives.Read;Write=$primitives.Write;Flush=$primitives.Flush;Close=$primitives.Close
     }
     New-FixedBoundApi $Manifest.root $bindings
 }

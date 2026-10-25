@@ -11,7 +11,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 if (-not $RunApprovedSyntheticTest) { throw 'SOURCE_ONLY: isolated test requires separate reviewed owner authority.' }
-if ($ApprovalMessageId -le 11594) { throw 'STOP: distinct isolated-test approval required' }
+if ($ApprovalMessageId -le 11618) { throw 'STOP: distinct isolated-test approval required' }
 if ($PSVersionTable.PSVersion.ToString() -cne '7.6.8' -or
     (Get-FileHash -LiteralPath (Join-Path $PSHOME 'pwsh.exe') -Algorithm SHA256).Hash.ToLowerInvariant() -cne
     'b90c0f48ca4b13c9426a7863f3d469baf310ca517721dd0b55551b80ec9fee2a') { throw 'STOP: pinned runtime mismatch' }
@@ -34,7 +34,7 @@ foreach ($entry in @(@($PSCommandPath,$ExpectedHarnessSha256),@($modulePath,$Exp
 $parent=[IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')
 $root=[IO.Path]::GetFullPath($TestRoot)
 if ([IO.Path]::GetDirectoryName($root) -cne $parent -or
-    [IO.Path]::GetFileName($root) -cne 'syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3') { throw 'STOP: synthetic root scope' }
+    [IO.Path]::GetFileName($root) -cne 'syndicatum-fixed-validation-55a445a3f2f54df2b3846ec1ea63f1dc') { throw 'STOP: synthetic root scope' }
 $cursor=Get-Item -LiteralPath $parent -Force
 while ($null -ne $cursor) {
     if ($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'STOP: reparse test ancestor' }
