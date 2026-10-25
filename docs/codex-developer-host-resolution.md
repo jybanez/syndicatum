@@ -31,12 +31,15 @@ their hardcoded identities to validate or mutate this Developer installation.
 - Exact HKCU Run value `SyndicatumCodexConnector` is present and invokes the same
   generated launcher. Both are plugin-specific legacy autostart objects.
 - `Syndicatum Realtime Outbox` is a separate hosted-service task and excluded.
-- 57 non-temporary participant state files: 56 parse as JSON, one fails. Invalid
-  file: 4841 bytes, SHA-256
+- Correction after exact filename classification: 56 canonical
+  `state.json.participant-<digits>` files, all valid JSON, including participant
+  36 for this protected profile. The extra malformed file is a `.bak` artifact,
+  not a canonical state file: 4841 bytes, SHA-256
   `65b652e7c47273b34785c402e2395cfb29e30eccaf5acbe18c26af7faf30e04d`,
   mtime_ns 1791954068081785000. No repair, deletion or replay is proposed.
-  Its route relevance must be established from safe local metadata before
-  claiming complete route health; no remote-machine assumptions apply.
+  `DeviceConnector` constructs the exact numeric participant filename, not a
+  glob, so that backup artifact is not selected as active route state. This does
+  not itself prove route delivery. No remote-machine assumptions apply.
 
 ## Shortest proposed one-machine path (review required before mutation)
 
