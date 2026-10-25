@@ -32,6 +32,32 @@ mapping_spec.loader.exec_module(mapping_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_retained_journal_requires_exact_canonical_bytes(self):
+        import hashlib
+        for changed in ("whitespace", "duplicate", "head-whitespace"):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
+                journal = journal_module.Journal(temporary, "fixture", "a" * 64)
+                journal.append("health", journal_module.PRODUCERS["health"],
+                               dict(pid=1, timestamp_ms=100, readiness="ready", unavailable_count=0), 100)
+                root = Path(temporary)
+                head = root / "journal-heads/000000.json"
+                anchor = hashlib.sha256(head.read_bytes()).hexdigest()
+                target = head if changed == "head-whitespace" else root / "journal/000000.json"
+                raw = target.read_bytes()
+                if changed == "duplicate":
+                    raw = raw[:-1] + b',"sequence":0}'
+                else:
+                    raw += b'\n'
+                target.write_bytes(raw)
+                with self.assertRaisesRegex(journal_module.EvidenceStop, "noncanonical_journal_bytes"):
+                    journal_module.verify_retained_chain(temporary, "fixture", "a" * 64, 0, anchor, 101, 10)
+
+    def test_invalid_journal_anchor_does_not_reserve_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(journal_module.EvidenceStop, "journal_anchor"):
+                journal_module.Journal(temporary, "fixture", "z" * 64)
+            self.assertEqual(list(Path(temporary).iterdir()), [])
+
     def test_marketplace_identity_drift_is_a_separate_gate(self):
         original = dict(pilot.MARKETPLACE_PREIMAGE)
         pilot.validate_marketplace_preimage(original)

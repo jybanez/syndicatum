@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import stat
 
 
 class EvidenceStop(RuntimeError):
@@ -31,6 +33,27 @@ def encode(value):
 def require(condition, code):
     if not condition:
         raise EvidenceStop(code)
+
+
+def regular_path(path, directory=False):
+    """Reject links/reparse points; native ACL and race resistance remain gates."""
+    info = path.lstat()
+    require(not stat.S_ISLNK(info.st_mode) and
+            not getattr(info, "st_file_attributes", 0) & 0x400, "journal_reparse_path")
+    require(stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode), "journal_path_type")
+
+
+def read_canonical(path):
+    regular_path(path)
+    with path.open("rb") as reader:
+        raw = reader.read(4 * 1024 * 1024 + 1)
+    require(len(raw) <= 4 * 1024 * 1024, "journal_record_size")
+    try:
+        value = json.loads(raw)
+        require(encode(value) == raw, "noncanonical_journal_bytes")
+    except (ValueError, UnicodeError):
+        raise EvidenceStop("invalid_journal_json") from None
+    return raw, value
 
 
 def exact(value, fields):
@@ -81,15 +104,17 @@ def validate_payload(kind, data):
 class Journal:
     def __init__(self, root, attempt_id, plan_digest):
         self.root = Path(root)
+        require(type(attempt_id) is str and bool(attempt_id) and
+                type(plan_digest) is str and re.fullmatch(r"[0-9a-f]{64}", plan_digest), "journal_anchor")
         # Root must be pre-reserved by the reviewed attempt mechanism. Never
         # implicitly create a missing root or resume an existing journal.
         require(self.root.is_dir(), "missing_attempt_root")
+        regular_path(self.root, directory=True)
         self.directory = self.root / "journal"
         self.directory.mkdir(mode=0o700, exist_ok=False)
         self.heads = self.root / "journal-heads"
         self.heads.mkdir(mode=0o700, exist_ok=False)
         self.attempt_id, self.plan_digest = attempt_id, plan_digest
-        require(type(attempt_id) is str and bool(attempt_id) and len(plan_digest) == 64, "journal_anchor")
         self.previous = "0" * 64
         self.sequence = 0
 
@@ -151,16 +176,17 @@ def verify_retained_chain(root, attempt_id, plan_digest, final_sequence, retaine
     """Final head digest must be retained independently of this journal tree."""
     require(type(final_sequence) is int and 0 <= final_sequence < 10000, "journal_sequence_bounds")
     root = Path(root)
+    for directory in (root, root / "journal", root / "journal-heads"):
+        regular_path(directory, directory=True)
     names = {f"{i:06d}.json" for i in range(final_sequence + 1)}
     require({p.name for p in (root / "journal").iterdir()} == names and
             {p.name for p in (root / "journal-heads").iterdir()} == names, "partial_or_extra_journal")
     previous = "0" * 64
     for index in range(final_sequence + 1):
-        raw = (root / "journal" / f"{index:06d}.json").read_bytes()
-        record = json.loads(raw)
+        raw, record = read_canonical(root / "journal" / f"{index:06d}.json")
         previous = verify_record(record, attempt_id, plan_digest, previous, index, now_ms, max_age_ms)
-        head_bytes = (root / "journal-heads" / f"{index:06d}.json").read_bytes()
-        head = json.loads(head_bytes)
+        require(hashlib.sha256(raw).hexdigest() == previous, "record_byte_digest")
+        head_bytes, head = read_canonical(root / "journal-heads" / f"{index:06d}.json")
         require(head == dict(attempt_id=attempt_id, plan_sha256=plan_digest, sequence=index, record_sha256=previous), "head_reference_mismatch")
     require(hashlib.sha256(head_bytes).hexdigest() == retained_head_digest, "retained_head_drift")
     return previous
