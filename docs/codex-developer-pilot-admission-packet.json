@@ -375,7 +375,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "A1_ONLY_LAUNCH_SOURCE_FOR_REVIEW; NO INVOCATION AUTHORITY; canonical private execution packet digest must bind actual parent/SID/runtime paths before owner decision",
+    "status": "NEW_IDENTITY_SOURCE_FOR_REVIEW_ONLY; original occupied capture and d31b0341 proposal immutable; no native replay",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -510,18 +510,18 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_runner.py",
-        "git_blob_bytes_sha256": "54874340095c02d4afa524417b7f78c3f652aeb29ae74d517040f48a84509017",
+        "git_blob_bytes_sha256": "b5efb8d30a45161e2700940f63167de7af275bfd5494902d47aa5d09d91f2c6b",
         "size": 12038
       },
       {
         "repository_path": "docs/codex-developer-a1-admission.md",
-        "git_blob_bytes_sha256": "427a67f9a99fe14ef4dbcbbbdd51e4c2bf203a6aedb7e8dc0654f1c5127eae2d",
-        "size": 9699
+        "git_blob_bytes_sha256": "a3898d522328e13261c25d773e6379f9505a85acd6d16f69215a512ac7f11667",
+        "size": 10299
       }
     ],
-    "capture_identity": "developer-a1-c0fa748e7bd046d0bcaa9a2c8d402a31",
+    "capture_identity": "developer-a1-140ab028ea4e4f00821e07a46b8f8260",
     "runner": "tools/release/codex_developer_a1_runner.py::run",
-    "scope_document_sha256": "427a67f9a99fe14ef4dbcbbbdd51e4c2bf203a6aedb7e8dc0654f1c5127eae2d",
+    "scope_document_sha256": "a3898d522328e13261c25d773e6379f9505a85acd6d16f69215a512ac7f11667",
     "checkout_policy": "Materialize verified reviewed Git-blob bytes into fresh private capture; never execute autocrlf checkout bytes",
     "limits": {
       "capture_files": 32,
@@ -534,6 +534,7 @@
       "stdin_bytes": 61
     },
     "scope_limits": "No worker/assembly launch, storage setup, install, activation, root walk or complete runtime closure proof. Actual production metadata callback and writer-quiescence provenance remain pending.",
-    "child_evidence_limits": "Owned Popen PID only; requested executable and parent monotonic sample are not OS image/creation-time proof. Both verification flags false. No reattachment."
+    "child_evidence_limits": "Owned Popen PID only; requested executable and parent monotonic sample are not OS image/creation-time proof. Both verification flags false. No reattachment.",
+    "parent_transport_source": "tools/release/codex_developer_a1_parent.js (separate decision digest, no helper process)"
   }
 }

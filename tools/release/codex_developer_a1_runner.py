@@ -4,7 +4,7 @@ No CLI main, worker, storage, lifecycle, listener or install call is present.
 import base64, hashlib, json, os, re, secrets, subprocess, threading, time
 from pathlib import Path
 
-CAPTURE_ID='developer-a1-c0fa748e7bd046d0bcaa9a2c8d402a31'
+CAPTURE_ID='developer-a1-140ab028ea4e4f00821e07a46b8f8260'
 
 REQUIRED_SOURCES=frozenset(['codex_developer_codex_entry.mjs', 'codex_developer_agent_host.mjs', 'codex_developer_host_assembly.py', 'codex_developer_host_handoff.py', 'codex_developer_integrated_preparation.py', 'codex_developer_transport.py', 'codex_developer_process_ipc.py', 'codex_developer_fixed_journal.py', 'codex_developer_native_b.py', 'codex_developer_freshness.py', 'codex-developer-fixed-session-worker.ps1', 'codex_developer_lifecycle.py', 'codex_pilot_sequence.py', 'codex_developer_install_collector.py', 'codex-developer-fixed-session-protocol.ps1', 'codex-developer-fixed-storage.psm1', 'codex-developer-native-b.psm1', 'codex_developer_a1_module_probe.py', 'codex_developer_a1_module_probe.mjs', 'codex-developer-a1-module-probe.ps1', 'codex_developer_a1_runner.py', 'codex-developer-a1-admission.md'])
 

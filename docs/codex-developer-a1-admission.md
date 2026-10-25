@@ -68,7 +68,7 @@ No bytecode writes (Python -B).
 
 ## Private footprint and output binding
 
-Exact reserved identity: `developer-a1-c0fa748e7bd046d0bcaa9a2c8d402a31` created once only AFTER
+Exact reserved identity: `developer-a1-140ab028ea4e4f00821e07a46b8f8260` created once only AFTER
 owner authority, outside every prior evidence root. Owner/current SID and SYSTEM
 only, protected ACL; refuse occupied destination/reparse/ancestor ambiguity. Maximum
 one directory,32 ordinary capture files,16MiB total; no preallocated journal,
@@ -151,3 +151,14 @@ os_creation_time_verified are explicitly false, including short-lived children.
 The runner does not independently verify the launched image. Prelaunch binary hashes
 and reported module origins do not close that gap. No PID/name-based reattachment,
 kill, retry or replay is permitted; uncertain outcomes remain STOP.
+
+
+## Fresh attempt after partial run11698
+
+The earlier occupied capture and original d31b0341 proposal remain immutable.
+Run11698 completed only --version and stopped at authorization checkpoint3.
+The25 retained files are not reused, cleaned or resumed. This source changes only
+the reserved attempt identity; its separately created proposal must bind the new
+identity, reviewed source hashes and scope digest. All diagnostics/bounds/effects
+and STOP protections remain unchanged. Parent and wrapper transport digests are
+separate owner-decision bindings, not replacements inside the22-file payload.
