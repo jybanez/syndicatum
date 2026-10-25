@@ -110,6 +110,9 @@ jobs:
           php tests/archive-safety.php
           php tests/portable-runtime-dependencies.php
           php tests/portable-backup-project-files.php
+      - name: Verify Developer native cutover remains source-only
+        shell: pwsh
+        run: ./tests/codex-developer-native-b-closed-gate.ps1
 
   canonical-release-candidate:
     runs-on: ubuntu-24.04
@@ -377,6 +380,7 @@ jobs:
           python tests/codex-plugin-package.py | tee ci-evidence/codex-plugin-package.txt
           git fetch --no-tags --depth=1 origin 9141daa08d896f2524be30b96d01ab2a14398757
           python tests/codex-pilot-contract.py | tee ci-evidence/codex-pilot-contract.txt
+          python tests/codex-developer-native-b.py | tee ci-evidence/codex-developer-native-b.txt
           node --test tests/integration-distribution.test.mjs | tee ci-evidence/integration-distribution.txt
           pwsh -NoProfile -File tests/codex-remote-tag.test.ps1 | tee ci-evidence/codex-remote-tag.txt
           node --test plugins/codex/test/profile-timeline.test.mjs plugins/codex/test/syndicatum-client.test.mjs | tee ci-evidence/codex-portable.txt

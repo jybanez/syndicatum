@@ -57,9 +57,10 @@ The pure A consumer is a synthetic model only. It checks an externally supplied
 record digest, plan/attempt/cutoff/prior-head bindings, age, independent identity
 and queue digest consistency and exact Task bytes. It does not provide native
 handle/file capture, prove the evidence collector's authenticity, establish clock
-provenance or flush a Windows journal. The future native evidence adapter and its
-durability/provenance integration remain unavailable; no operational readiness is
-claimed. Synthetic passing results always carry `authorizes_mutation=false`.
+provenance or flush a Windows journal. The [native B source candidate](codex-developer-native-b-adapter.md)
+now supplies separate Windows bindings, but both execution gates remain closed
+and native durability/provenance validation is incomplete; no operational
+readiness is claimed. Synthetic results carry `authorizes_mutation=false`.
 
 ## Exact next decisions
 

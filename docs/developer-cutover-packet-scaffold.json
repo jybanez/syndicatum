@@ -30,6 +30,9 @@
     "append-only-records-and-externally-retained-journal-head"
   ],
   "native_evidence_adapter_available": false,
+  "native_adapter_source_candidate": "tools/release/codex_developer_native_b.py",
+  "native_adapter_execution_gates": "closed",
+  "windows_native_behavior_validated": false,
   "external_observer": null,
   "authorized_test_message_ids": [],
   "observer_and_test_ids_gate": "later-lifecycle-acceptance-only",

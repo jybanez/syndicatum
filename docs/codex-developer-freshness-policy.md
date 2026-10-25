@@ -76,8 +76,10 @@ The source fixture model orders authority/reservation, exact static identity and
 ownership checks, pre-suppression evidence, connector-only suppression and
 preservation checks, listener identity revalidation, exact stop, independent
 quiescence, new cutoff capture/copy verification, bounded freshness/static checks,
-and retained prepared result. Any failure stops before later phases. There is no
-native adapter or CLI entry point; no preparation model is run on this machine.
+and retained prepared result. Any failure stops before later phases. The model
+does not invoke a native adapter. A [separate native B source candidate](codex-developer-native-b-adapter.md)
+now exists with both execution gates closed; no preparation model or native
+collector is run against this machine.
 
 The post-suppression cutoff retains all CURRENT valid canonical route-state
 bytes, backup artifact and unrelated Task XML. It does not restore old queues,
