@@ -32,6 +32,14 @@ mapping_spec.loader.exec_module(mapping_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_marketplace_identity_drift_is_a_separate_gate(self):
+        original = dict(pilot.MARKETPLACE_PREIMAGE)
+        pilot.validate_marketplace_preimage(original)
+        for key in original:
+            with self.subTest(key=key), self.assertRaises(pilot.Stop):
+                pilot.validate_marketplace_preimage({**original, key: "drift"})
+        with self.assertRaises(pilot.Stop):
+            pilot.validate_marketplace_preimage({**original, "enabled": 1})
     def test_remaining_native_mapping_classes(self):
         key = b"fixture-only-private-key-32bytes!!"
         health = dict(pid=101, updatedAt="2026-10-25T00:00:00Z", state="degraded", role="background",

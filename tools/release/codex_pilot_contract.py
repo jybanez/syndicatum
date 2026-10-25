@@ -24,6 +24,19 @@ CORRUPT_HASHES = {
     "b40134f5a1eb03ff2ff989fd5493047247e07d0dadaf830514c68d35d746fa73": 4761,
     "575643b90c0f71591befad5c2e4d0309b4051ecc84e556495e7dc929b26eab78": 24732,
 }
+MARKETPLACE_PREIMAGE = {
+    "name": "syndicatum", "source_type": "git",
+    "source": "https://github.com/jybanez/syndicatum.git",
+    "ref": "codex-v0.2.6", "revision": "c2ed0247fd61dc51bfa8515b1b3882f6a440aa1c",
+    "plugin_key": "codex@syndicatum", "plugin_version": "0.2.6", "enabled": True,
+}
+
+
+def validate_marketplace_preimage(actual):
+    # Pure fixture/design contract only; does not authorize or invoke removal.
+    require(type(actual) is dict and set(actual) == set(MARKETPLACE_PREIMAGE), "marketplace preimage schema")
+    require(all(type(actual[key]) is type(expected) for key, expected in MARKETPLACE_PREIMAGE.items()), "marketplace preimage type")
+    require(actual == MARKETPLACE_PREIMAGE, "marketplace preimage drift")
 
 
 class Stop(RuntimeError):
