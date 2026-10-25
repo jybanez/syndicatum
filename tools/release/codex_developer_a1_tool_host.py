@@ -6,8 +6,8 @@ never loads runner/probes, reads proposal, creates capture or launches a child.
 import argparse,base64,ctypes,hashlib,json,os,queue,re,secrets,subprocess,sys,threading,time,types
 from pathlib import Path
 PROFILE='1f397680dd1cddc0.2.33'
-HEAD='8bc1e5ac51fa8ef0323e0a9432ccf8627ed2cbb5'
-PACKET_SHA='51a21324b2d7e701aff04bac049fa5022fd7cbfed1084902977ccea0d6218845'
+HEAD='03432ed8253964ea828b62157b7d947c7f3bc6e5'
+PACKET_SHA='2d8b188e69e3469594af7883e0650ff3964642905d474dbe129dee0ed549972a'
 CHUNK=768;MAX_RAW=65536;MAX_LINE=1024;DEADLINE=90
 
 def canonical(v):return json.dumps(v,sort_keys=True,separators=(',',':')).encode()
@@ -72,7 +72,7 @@ def existing_proposal(folder_lookup=None):
             check(ctypes.windll.shell32.SHGetFolderPathW(None,5,None,0,buffer)==0,'documents_resolution')
             return buffer.value
     parent=Path(folder_lookup());check(parent.is_absolute() and parent.is_dir(),'documents_parent')
-    return parent/'Syndicatum-A1-proposed-owner-packet-140ab028ea4e4f00821e07a46b8f8260.json'
+    return parent/'Syndicatum-A1-proposed-owner-packet-local-140ab028ea4e4f00821e07a46b8f8260.json'
 
 def echo_control():
     # Best effort console echo suppression. Framing remains safe with echo ON.
@@ -156,7 +156,7 @@ def main(argv=None):
         check(args.request_id and args.approval_id and re.fullmatch('[a-f0-9]{64}',args.wrapper_sha or '') and re.fullmatch('[a-f0-9]{64}',args.parent_sha or ''),'new_owner_binding_required')
         check(args.request_id not in (11683,11697,11704) and args.approval_id not in (11684,11698,11705),'stopped_authority_no_replay')
         reader=GitBlobReader();blob=reader.read
-        raw=existing_proposal().read_bytes();check(len(raw)==3718 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
+        raw=existing_proposal().read_bytes();check(len(raw)==3713 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
         packet=json.loads(raw);check(canonical(packet)==raw,'existing_proposal_canonical')
         review=json.loads(blob('docs/codex-developer-pilot-admission-packet.json'))['next_A1_decision_draft'];source={}
         for row in review['complete_sources_and_scope']:

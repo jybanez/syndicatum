@@ -100,3 +100,32 @@ known-folder parent passes all ancestor checks; no directory was created there.
 It is a candidate only. New parent/attempt/proposal source binding and review are
 still required before a future single owner decision. Old51a21324 bytes must not
 be overwritten, refreshed or replayed; source status remains non-executable.
+
+
+## Coherent replacement parent/proposal (#11707)
+
+Supersedes the earlier source-correction-only status without changing old evidence.
+Payload/source head03432ed8253964ea828b62157b7d947c7f3bc6e5 implements the SAME
+validate_environment for read-only admission and execution. It also verifies current
+token SID and capture-parent OWNER SID (current user/SYSTEM) through bounded native
+security-metadata queries, closing handles/allocations immediately. No helper child,
+protected credential/config read or persistent handle. Inert owner/runtime/occupied
+path tests accompany the all-tag native/stat checks. Seven runner tests pass.
+
+The separately created LOCAL-parent proposal is canonical3713 bytes, SHA256
+2d8b188e69e3469594af7883e0650ff3964642905d474dbe129dee0ed549972a.
+It binds the existing LocalApplicationData directory and the still-unallocated
+leaf140ab028ea4e4f00821e07a46b8f8260. No parent or capture creation occurred.
+Actual Developer-local validate_environment passed all currently possible checks:
+22 source/scope pins, four runtime hashes/paths, full ancestor flags/location,
+current SID/parent owner and absent target. This is local attestation, not independent
+Assessor inspection. The51a21324 and d31b0341 proposals remain byte-identical.
+
+No ad-hoc PowerShell path eligibility preflight is used in the next implementation;
+the exact reviewed Python validate_environment is used before owner request and
+repeated inside execution. Native creation repeats its full ancestor guard before
+the atomic owner/SYSTEM directory ACL. The host/parent compact-marker transport,
+23 Git-read bounds, seven authorization exchanges and six diagnostic effects are
+unchanged. Both transport digests plus this source/payload/proposal and exact local
+parent must be reviewed and included in ONE future owner decision after green CI.
+No native retry/setup/install/activation/merge is authorized by this source.
