@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "status": "source-only-unselected-unapproved-scaffold",
+  "proposed_attempt_id": "developer-host-proposal-11555-v1",
+  "proposed_cutoff_id": "developer-host-cutoff-11555-v1",
+  "attempt_reserved": false,
+  "cutoff_captured": false,
+  "execution_authority_message_id": null,
+  "native_mutation_authorized": false,
+  "selected_policy": null,
+  "reviewed_source_head": "bind-exact-head-after-review",
+  "candidate_commit": "9141daa08d896f2524be30b96d01ab2a14398757",
+  "previous_attempt": {
+    "id": "11545",
+    "result": "STOPPED_BEFORE_MUTATION",
+    "approval_exhausted": true,
+    "evidence_message_id": 11546,
+    "evidence_immutable": true
+  },
+  "boundaries": ["before-remove", "after-remove", "before-add", "after-add", "before-plugin-add", "after-plugin-add"],
+  "maximum_observation_age_ms": 120000,
+  "required_private_evidence": [
+    "new-exact-plan-digest-and-authority",
+    "separately-collected-raw-state-bytes-and-state-identity-set",
+    "separately-collected-raw-task-xml-and-task-identity-set",
+    "native-handle-file-id-and-path-file-id-with-volume-and-metadata",
+    "source-stability-and-private-copy-hashes",
+    "clock-observation-and-clock-discontinuity-check",
+    "independent-binding-identity-and-queue-preservation-record",
+    "append-only-records-and-externally-retained-journal-head"
+  ],
+  "native_evidence_adapter_available": false,
+  "external_observer": null,
+  "authorized_test_message_ids": [],
+  "observer_and_test_ids_gate": "later-lifecycle-acceptance-only",
+  "activation_authorized": false,
+  "live_backup_captured_by_this_scaffold": false
+}

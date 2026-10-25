@@ -35,6 +35,58 @@ freshness_spec.loader.exec_module(freshness_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    @staticmethod
+    def active_boundary_fixture():
+        prior = dict(processedMessageIds=["10"], pendingNotifications=[], activeWake=None, lastSequence=20)
+        later = {**prior, "lastSequence": 21}
+        states = {"opaque-route": json.dumps(prior).encode()}
+        changed = {"opaque-route": json.dumps(later).encode()}
+        queue = {"opaque-route": {k: v for k, v in prior.items() if k != "lastSequence"}}
+        proof = dict(attempt_id="new-source-fixture", cutoff_id="new-cutoff", plan_sha256="a" * 64,
+                     boundary="before-remove", sequence=0,
+                     previous_journal_sha256="b" * 64, observed_ms=100,
+                     binding_before_sha256="c" * 64, binding_after_sha256="c" * 64,
+                     route_set_sha256=freshness_module.digest_value(["opaque-route"]),
+                     queue_before_sha256=freshness_module.digest_value(queue),
+                     queue_after_sha256=freshness_module.digest_value(queue))
+        return states, changed, proof
+
+    def active_boundary_check(self, before, after, proof, tasks_after=None, anchor=None):
+        import hashlib
+        raw = json.dumps(proof, sort_keys=True, separators=(",", ":")).encode()
+        tasks = {"opaque-task": b'<Task><Interval>PT5M</Interval><StartBoundary>fixture-one</StartBoundary></Task>'}
+        return freshness_module.require_active_boundary(
+            before, after, tasks, tasks if tasks_after is None else tasks_after,
+            raw, hashlib.sha256(raw).hexdigest() if anchor is None else anchor,
+            "new-source-fixture", "new-cutoff", "a" * 64, "b" * 64, 200, "before-remove", 0)
+
+    def test_active_sequence_boundary_needs_independently_anchored_identity_and_queue(self):
+        before, after, proof = self.active_boundary_fixture()
+        self.assertIs(self.active_boundary_check(before, after, proof)["authorizes_mutation"], False)
+        with self.assertRaisesRegex(freshness_module.FreshnessStop, "independent_evidence_anchor"):
+            self.active_boundary_check(before, after, proof, anchor="d" * 64)
+        for change in ({"binding_after_sha256": "d" * 64}, {"queue_after_sha256": "d" * 64},
+                       {"plan_sha256": "d" * 64}, {"previous_journal_sha256": "d" * 64},
+                       {"boundary": "after-add"}, {"sequence": False},
+                       {"observed_ms": 201}, {"observed_ms": -120001}):
+            with self.subTest(change=change), self.assertRaises(freshness_module.FreshnessStop):
+                self.active_boundary_check(before, after, {**proof, **change})
+
+    def test_active_boundary_rejects_pending_history_and_wake_despite_sequence_increase(self):
+        before, after, proof = self.active_boundary_fixture()
+        state = json.loads(after["opaque-route"])
+        for change in ({"pendingNotifications": [{"id": "11"}]}, {"processedMessageIds": ["10", "11"]},
+                       {"activeWake": {"anchor_message_id": "11"}}):
+            with self.subTest(change=change), self.assertRaisesRegex(freshness_module.FreshnessStop, "active_queue_or_history_drift"):
+                self.active_boundary_check(before, {"opaque-route": json.dumps({**state, **change}).encode()}, proof)
+
+    def test_active_boundary_does_not_mask_unrelated_task_interval_or_start_boundary(self):
+        before, after, proof = self.active_boundary_fixture()
+        original = b'<Task><Interval>PT5M</Interval><StartBoundary>fixture-one</StartBoundary></Task>'
+        for changed in (original.replace(b'PT5M', b'PT10M'), original.replace(b'fixture-one', b'fixture-two')):
+            with self.assertRaisesRegex(freshness_module.FreshnessStop, "frozen_observation_bytes_drift"):
+                self.active_boundary_check(before, after, proof, {"opaque-task": changed})
+
     def test_quiescent_cutoff_has_no_sequence_or_task_schedule_exception(self):
         before = {"route-token": b'{"lastSequence":20}', "task-token": b'<Interval>PT5M</Interval>'}
         freshness_module.require_frozen_observations(before, dict(before))

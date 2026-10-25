@@ -121,3 +121,70 @@ def model_quiescent_preparation(adapter):
     except Exception:
         # No retry, rollback, cleanup, later phase, or raw private exception text.
         return {"result": "stopped", "stage": current, "authorizes_install": False}
+
+
+def digest_value(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def require_active_boundary(before, after, tasks_before, tasks_after,
+                            evidence_raw, retained_evidence_sha256,
+                            attempt_id, cutoff_id, plan_sha256, previous_journal_sha256,
+                            now_ms, boundary, journal_sequence):
+    """Synthetic consumer of independently anchored evidence; no native producer.
+
+    Passing this function is not authority and does not prove that a caller's
+    claimed binding evidence came from a trusted native collector.
+    """
+    require(type(before) is dict and type(after) is dict and bool(before) and
+            set(before) == set(after), "active_route_identity_drift")
+    require(all(type(key) is str and bool(key) for key in before), "active_route_identity_type")
+    require(type(attempt_id) is str and bool(attempt_id) and type(cutoff_id) is str and bool(cutoff_id),
+            "boundary_context_type")
+    require(boundary in {"before-remove", "after-remove", "before-add", "after-add",
+                         "before-plugin-add", "after-plugin-add"} and
+            type(journal_sequence) is int and journal_sequence >= 0, "boundary_sequence_type")
+    require(type(evidence_raw) is bytes and len(evidence_raw) <= 65536 and
+            hashlib.sha256(evidence_raw).hexdigest() == retained_evidence_sha256,
+            "independent_evidence_anchor")
+    try:
+        evidence = json.loads(evidence_raw)
+    except (ValueError, UnicodeError):
+        raise FreshnessStop("independent_evidence_json") from None
+    require(type(evidence) is dict and set(evidence) == {
+        "attempt_id", "cutoff_id", "plan_sha256", "previous_journal_sha256", "observed_ms", "boundary", "sequence",
+        "binding_before_sha256", "binding_after_sha256", "route_set_sha256",
+        "queue_before_sha256", "queue_after_sha256"}, "independent_evidence_schema")
+    # Exact canonical bytes reject duplicate keys and serialization substitutions.
+    try:
+        canonical = json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    except (ValueError, TypeError):
+        raise FreshnessStop("independent_evidence_canonical") from None
+    require(canonical == evidence_raw, "independent_evidence_canonical")
+    require(evidence["attempt_id"] == attempt_id and evidence["cutoff_id"] == cutoff_id and
+            evidence["plan_sha256"] == plan_sha256 and
+            evidence["previous_journal_sha256"] == previous_journal_sha256 and
+            evidence["boundary"] == boundary and type(evidence["sequence"]) is int and
+            evidence["sequence"] == journal_sequence,
+            "mixed_boundary_or_plan")
+    for key in ("plan_sha256", "previous_journal_sha256", "binding_before_sha256", "binding_after_sha256",
+                "route_set_sha256", "queue_before_sha256", "queue_after_sha256"):
+        value = evidence[key]
+        require(type(value) is str and len(value) == 64 and all(c in "0123456789abcdef" for c in value),
+                "independent_digest_type")
+    require(evidence["binding_before_sha256"] == evidence["binding_after_sha256"], "binding_identity_drift")
+    require_fresh_window(evidence["observed_ms"], now_ms, 120000)
+    require(evidence["route_set_sha256"] == digest_value(sorted(before)), "independent_route_set")
+    prior_queue, later_queue = {}, {}
+    for identity in before:
+        require(type(identity) is str and bool(identity), "active_route_identity_type")
+        change = classify_state_change(before[identity], after[identity])["classification"]
+        require(change in {"exact_bytes", "sequence_only_advance"}, "active_queue_or_history_drift")
+        prior_queue[identity] = {k: v for k, v in state(before[identity]).items() if k != "lastSequence"}
+        later_queue[identity] = {k: v for k, v in state(after[identity]).items() if k != "lastSequence"}
+    require(evidence["queue_before_sha256"] == digest_value(prior_queue) and
+            evidence["queue_after_sha256"] == digest_value(later_queue) and
+            evidence["queue_before_sha256"] == evidence["queue_after_sha256"], "independent_queue_preservation")
+    require_frozen_observations(tasks_before, tasks_after)
+    return {"result": "synthetic_boundary_verified", "authorizes_mutation": False}
