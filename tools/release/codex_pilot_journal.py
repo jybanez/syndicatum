@@ -86,6 +86,8 @@ class Journal:
         require(self.root.is_dir(), "missing_attempt_root")
         self.directory = self.root / "journal"
         self.directory.mkdir(mode=0o700, exist_ok=False)
+        self.heads = self.root / "journal-heads"
+        self.heads.mkdir(mode=0o700, exist_ok=False)
         self.attempt_id, self.plan_digest = attempt_id, plan_digest
         require(type(attempt_id) is str and bool(attempt_id) and len(plan_digest) == 64, "journal_anchor")
         self.previous = "0" * 64
@@ -104,7 +106,16 @@ class Journal:
             writer.write(raw)
             writer.flush()
             os.fsync(writer.fileno())
-        self.previous = hashlib.sha256(raw).hexdigest()
+        record_hash = hashlib.sha256(raw).hexdigest()
+        # Write a new immutable head reference, never overwrite HEAD in place.
+        # Failure leaves the record/attempt reserved; do not resume or erase it.
+        head = encode(dict(attempt_id=self.attempt_id, plan_sha256=self.plan_digest,
+                           sequence=self.sequence, record_sha256=record_hash))
+        with (self.heads / f"{self.sequence:06d}.json").open("xb") as writer:
+            writer.write(head)
+            writer.flush()
+            os.fsync(writer.fileno())
+        self.previous = record_hash
         self.sequence += 1
         return value
 
@@ -134,3 +145,22 @@ def verify_record(record, attempt_id, plan_digest, previous_hash, sequence, now_
     require(PRODUCERS.get(record["kind"]) == record["producer"], "producer_mismatch")
     validate_payload(record["kind"], record["data"])
     return hashlib.sha256(encode(record)).hexdigest()
+
+
+def verify_retained_chain(root, attempt_id, plan_digest, final_sequence, retained_head_digest, now_ms, max_age_ms):
+    """Final head digest must be retained independently of this journal tree."""
+    require(type(final_sequence) is int and 0 <= final_sequence < 10000, "journal_sequence_bounds")
+    root = Path(root)
+    names = {f"{i:06d}.json" for i in range(final_sequence + 1)}
+    require({p.name for p in (root / "journal").iterdir()} == names and
+            {p.name for p in (root / "journal-heads").iterdir()} == names, "partial_or_extra_journal")
+    previous = "0" * 64
+    for index in range(final_sequence + 1):
+        raw = (root / "journal" / f"{index:06d}.json").read_bytes()
+        record = json.loads(raw)
+        previous = verify_record(record, attempt_id, plan_digest, previous, index, now_ms, max_age_ms)
+        head_bytes = (root / "journal-heads" / f"{index:06d}.json").read_bytes()
+        head = json.loads(head_bytes)
+        require(head == dict(attempt_id=attempt_id, plan_sha256=plan_digest, sequence=index, record_sha256=previous), "head_reference_mismatch")
+    require(hashlib.sha256(head_bytes).hexdigest() == retained_head_digest, "retained_head_drift")
+    return previous

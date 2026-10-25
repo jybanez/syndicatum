@@ -26,9 +26,56 @@ backup_spec.loader.exec_module(backup_module)
 journal_spec = importlib.util.spec_from_file_location("pilot_journal", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_journal.py")
 journal_module = importlib.util.module_from_spec(journal_spec)
 journal_spec.loader.exec_module(journal_module)
+mapping_spec = importlib.util.spec_from_file_location("pilot_native_mapping", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_native_mapping.py")
+mapping_module = importlib.util.module_from_spec(mapping_spec)
+mapping_spec.loader.exec_module(mapping_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_native_mapping_rejects_extra_partial_and_native_type_drift(self):
+        key = b"fixture-only-private-key-32bytes!!"
+        locks = {k: dict(present=True, raw="101\n", size=4, mtime="fixture-time") for k in ("background", "listener")}
+        typed = mapping_module.map_locks(locks)
+        journal_module.validate_payload("locks", typed)
+        for bad in ({}, {**locks, "extra": {}}, {**locks, "listener": {"present": "false"}},
+                    {**locks, "listener": dict(present=True, raw="101 junk", size=8, mtime="fixture-time")}):
+            with self.assertRaises(mapping_module.MappingStop):
+                mapping_module.map_locks(bad)
+        raw = [dict(pid=100, parent_pid=1, executable="fixture-shell", command_line="private", started="parent-time"),
+               dict(pid=101, parent_pid=100, executable="fixture-node", command_line="private", started="start-time")]
+        mapped = mapping_module.map_processes(raw, key, "fixture-node")
+        journal_module.validate_payload("processes", mapped)
+        self.assertEqual(mapped[1]["role"], "listener")
+        self.assertNotIn("private", json.dumps(mapped))
+        with self.assertRaises(mapping_module.MappingStop):
+            mapping_module.map_processes([raw[1]], key, "fixture-node")
+        with self.assertRaises(mapping_module.MappingStop):
+            mapping_module.map_processes([{**raw[0], "extra": True}], key, "fixture-node")
+        run = dict(hive="HKCU", key="fixture", view="Registry64", name="private name", kind="String", raw_command="private command")
+        mapped = mapping_module.map_registrations(None, [run], key)
+        journal_module.validate_payload("registrations", mapped)
+        self.assertNotIn("private command", json.dumps(mapped))
+        with self.assertRaises(mapping_module.MappingStop):
+            mapping_module.map_registrations(None, [run, run], key)
+
+    def test_retained_head_chain_and_partial_head_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            journal = journal_module.Journal(temporary, "fixture-attempt", "a" * 64)
+            journal.append("health", journal_module.PRODUCERS["health"], dict(pid=101, timestamp_ms=100, readiness="degraded", unavailable_count=2), 100)
+            head = Path(temporary) / "journal-heads/000000.json"
+            anchor = pilot.digest(head.read_bytes())
+            self.assertEqual(len(journal_module.verify_retained_chain(temporary, "fixture-attempt", "a" * 64, 0, anchor, 101, 10)), 64)
+            with self.assertRaises(journal_module.EvidenceStop):
+                journal_module.verify_retained_chain(temporary, "fixture-attempt", "a" * 64, 0, "b" * 64, 101, 10)
+            # Simulate a failed next head creation, retaining the previous head.
+            (Path(temporary) / "journal-heads/000001.json").mkdir()
+            with self.assertRaises(OSError):
+                journal.append("health", journal_module.PRODUCERS["health"], dict(pid=101, timestamp_ms=101, readiness="degraded", unavailable_count=2), 101)
+            with self.assertRaises(FileExistsError):
+                journal_module.Journal(temporary, "fixture-attempt", "a" * 64)
+            self.assertEqual(pilot.digest(head.read_bytes()), anchor)
+            with self.assertRaises(journal_module.EvidenceStop):
+                journal_module.verify_retained_chain(temporary, "fixture-attempt", "a" * 64, 0, anchor, 101, 10)
     def test_evidence_journal_rejects_stale_mixed_and_reused_collectors(self):
         with tempfile.TemporaryDirectory() as temporary:
             journal = journal_module.Journal(temporary, "fixture-attempt", "a" * 64)
