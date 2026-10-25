@@ -1,32 +1,58 @@
 {
-  "status": "SOURCE_REVIEW_ONLY_NOT_EXECUTION_AUTHORITY",
-  "accepted_runner_head": "6593116a9d8f94cede63a3004a818acb5f349306",
-  "existing_packet_sha256": "d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a",
+  "status": "SOURCE_REVIEW_ONLY_NO_EXECUTION_AUTHORITY",
+  "accepted_baseline": "6593116a9d8f94cede63a3004a818acb5f349306",
+  "fresh_payload_identity_head": "8bc1e5ac51fa8ef0323e0a9432ccf8627ed2cbb5",
+  "new_packet_sha256": "51a21324b2d7e701aff04bac049fa5022fd7cbfed1084902977ccea0d6218845",
+  "new_packet_bytes": 3718,
+  "new_capture_identity": "developer-a1-140ab028ea4e4f00821e07a46b8f8260",
+  "parent": {
+    "repository_path": "tools/release/codex_developer_a1_parent.js",
+    "git_blob_bytes_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
+    "bytes": 5170
+  },
   "wrapper": {
     "repository_path": "tools/release/codex_developer_a1_tool_host.py",
-    "git_blob_bytes_sha256": "9e5f44492a3a4b38eb9e87ea50c2f223986369f209a37bec78c135024ad0100f",
-    "bytes": 11637
+    "git_blob_bytes_sha256": "4b73a87ecbe0ada7d769b8f11ab78b818ddf37d88883d87521f284e60ce258a6",
+    "bytes": 12969
   },
-  "inert_proof": {
-    "canonical_response_bytes": 4949,
-    "chunks": 9,
-    "response_sha256": "6d188ac9de2dc0b1bb03016ff65fd72ba7fc5f2a36a8da8ea0277c232d34721d",
-    "result": "transport_ok",
-    "exit": 0,
+  "prior_evidence": {
+    "packet_sha256": "d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a",
+    "files": 25,
+    "bytes": 247723,
+    "preserve": true,
+    "stopped_authority_ids": [
+      11683,
+      11684,
+      11697,
+      11698
+    ]
+  },
+  "inert_actual_exec_proof": {
+    "seven_checkpoints": {
+      "status": "transport_complete",
+      "responses": 7,
+      "protected_reads": 14,
+      "helper_processes_for_hashing": 0
+    },
+    "timeout_checkpoint3": {
+      "status": "STOP_NO_RETRY",
+      "responses": 2,
+      "protected_reads": 4,
+      "late_input": "rejected_closed_process",
+      "exit_code": 0
+    },
     "native_A1": false,
-    "scope": "Retained pre-source-reader-edit PTY proof; framing unchanged; current-source6 inert tests include stalled reader"
+    "note": "Developer-reported proof after unbuffered-input fix; subsequent changes are run-mode payload/proposal identity constants, inert framing unchanged"
   },
-  "stopped_authority_ids": [
-    11683,
-    11684
-  ],
-  "host_source_acquisition": {
-    "maximum_git_children": 23,
-    "seconds_per_read": 10,
-    "aggregate_seconds": 60,
-    "maximum_blob_bytes_postread": 1048576,
-    "maximum_stderr_bytes_postread": 65536,
-    "maximum_total_bytes": 16777216,
-    "timeout": "preserve primary; terminal reader; no kill/retry/successor"
+  "host_bounds": {
+    "python_pty": 1,
+    "git_reads": 23,
+    "per_git_seconds": 10,
+    "aggregate_git_seconds": 60,
+    "authority_exchanges": 7,
+    "seconds_per_exchange": 90,
+    "response_bytes": 65536,
+    "line_bytes": 1024,
+    "digest_helper_processes": 0
   }
 }

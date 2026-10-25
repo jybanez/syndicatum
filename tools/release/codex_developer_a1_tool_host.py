@@ -6,8 +6,8 @@ never loads runner/probes, reads proposal, creates capture or launches a child.
 import argparse,base64,ctypes,hashlib,json,os,queue,re,secrets,subprocess,sys,threading,time,types
 from pathlib import Path
 PROFILE='1f397680dd1cddc0.2.33'
-HEAD='6593116a9d8f94cede63a3004a818acb5f349306'
-PACKET_SHA='d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a'
+HEAD='8bc1e5ac51fa8ef0323e0a9432ccf8627ed2cbb5'
+PACKET_SHA='51a21324b2d7e701aff04bac049fa5022fd7cbfed1084902977ccea0d6218845'
 CHUNK=768;MAX_RAW=65536;MAX_LINE=1024;DEADLINE=90
 
 def canonical(v):return json.dumps(v,sort_keys=True,separators=(',',':')).encode()
@@ -72,7 +72,7 @@ def existing_proposal(folder_lookup=None):
             check(ctypes.windll.shell32.SHGetFolderPathW(None,5,None,0,buffer)==0,'documents_resolution')
             return buffer.value
     parent=Path(folder_lookup());check(parent.is_absolute() and parent.is_dir(),'documents_parent')
-    return parent/'Syndicatum-A1-proposed-owner-packet-346c2e3.json'
+    return parent/'Syndicatum-A1-proposed-owner-packet-140ab028ea4e4f00821e07a46b8f8260.json'
 
 def echo_control():
     # Best effort console echo suppression. Framing remains safe with echo ON.
@@ -86,14 +86,14 @@ def echo_control():
     if not kernel.SetConsoleMode(handle,mode.value & ~4):return lambda:None
     return lambda:kernel.SetConsoleMode(handle,mode.value)
 
-def validate_authority(value,session,sequence,request_id,approval_id,wrapper_sha):
+def validate_authority(value,session,sequence,request_id,approval_id,wrapper_sha,parent_sha):
     check(value['session']==session and value['sequence']==sequence,'authority_context')
     check(0<=time.time_ns()//1000000-value['host_observed_ms']<=120000,'authority_freshness')
     req=value['request'];approval=value['approval']
     check(req['profile']['profile_id']==approval['profile']['profile_id']==PROFILE,'authority_profile')
     r=req['message'];e=approval['message']
     check(r['id']==request_id and r['project_id']==2 and r['deleted_at'] is None and r['revision_count']==0 and r['sender']['participant_id']==36,'canonical_request')
-    check(r['action_requested'] is True and r['action_request_type']=='approval' and all(x in r['body'] for x in (HEAD,PACKET_SHA,wrapper_sha)),'request_scope_pins')
+    check(r['action_requested'] is True and r['action_request_type']=='approval' and all(x in r['body'] for x in (HEAD,PACKET_SHA,wrapper_sha,parent_sha)),'request_scope_pins')
     check(any(x['participant_id']==28 for x in r['addressees']),'owner_addressee')
     check(e['id']==approval_id and e['project_id']==2 and e['deleted_at'] is None and e['revision_count']==0 and e['sender']['participant_id']==28,'canonical_owner')
     check(e['system_event']['type']=='responsibility.approval_approved','canonical_positive_event')
@@ -123,21 +123,40 @@ class GitBlobReader:
             # Preserve original TimeoutExpired/IO error; no kill, retry, successor.
             raise
 
+def marker_tag(session,request_id,approval_id,mode):
+    return digest(('%s|%s|%s|%s'%(session,request_id,approval_id,mode)).encode())[:12]
+def challenge_marker(tag,sequence):return '!Q%s:%d!'%(tag,sequence)
+def outcome_marker(tag,ok):return '!O%s:%s!'%(tag,'OK' if ok else 'STOP')
+
 def main(argv=None):
-    parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=('inert','run'),required=True);parser.add_argument('--session',required=True);parser.add_argument('--request-id',type=int);parser.add_argument('--approval-id',type=int);parser.add_argument('--wrapper-sha');args=parser.parse_args(argv)
+    parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=('inert','run'),required=True);parser.add_argument('--session',required=True);parser.add_argument('--request-id',type=int);parser.add_argument('--approval-id',type=int);parser.add_argument('--wrapper-sha');parser.add_argument('--parent-sha');parser.add_argument('--inert-count',type=int,default=1);parser.add_argument('--inert-short-at',type=int,default=0);args=parser.parse_args(argv)
     check(re.fullmatch('[a-f0-9]{48}',args.session),'host_session')
     restore=echo_control()
     try:
+        tag=marker_tag(args.session,args.request_id,args.approval_id,args.mode)
         if args.mode=='inert':
-            print('\nA1Q '+canonical({'operation':'protected_authority','session':args.session,'sequence':1,'mode':'inert','profile_id':PROFILE}).decode(),flush=True)
-            value=read_response(sys.stdin.buffer,args.session,1)
-            check(value['session']==args.session and value['sequence']==1 and type(value.get('request')) is dict and type(value.get('approval')) is dict,'inert_actual_shape')
-            print('\nA1O '+canonical({'mode':'inert','session':args.session,'status':'transport_ok','response_sha256':digest(canonical(value))}).decode(),flush=True)
+            check(1<=args.inert_count<=7 and 0<=args.inert_short_at<=7,'inert_checkpoint_bounds')
+            completed=0
+            try:
+                for sequence in range(1,args.inert_count+1):
+                    # Long inert display noise deliberately wraps in a narrow PTY.
+                    print('inert-display-no-authority:'+('x'*150),flush=True)
+                    print('\n'+challenge_marker(tag,sequence),flush=True)
+                    global DEADLINE
+                    DEADLINE=2 if sequence==args.inert_short_at else 90
+                    value=read_response(sys.stdin.buffer.raw,args.session,sequence)
+                    check(value['session']==args.session and value['sequence']==sequence and type(value.get('request')) is dict and type(value.get('approval')) is dict,'inert_actual_shape')
+                    completed+=1
+                print('\n'+outcome_marker(tag,True),flush=True)
+                print(canonical({'mode':'inert','status':'transport_ok','completed':completed}).decode(),flush=True)
+            except Exception as error:
+                print('\n'+outcome_marker(tag,False),flush=True)
+                print(canonical({'mode':'inert','status':'STOP_NO_RETRY','completed':completed,'error_type':type(error).__name__}).decode(),flush=True)
             return
-        check(args.request_id and args.approval_id and re.fullmatch('[a-f0-9]{64}',args.wrapper_sha or ''),'new_owner_binding_required')
-        check(args.request_id!=11683 and args.approval_id!=11684,'stopped_authority_no_replay')
+        check(args.request_id and args.approval_id and re.fullmatch('[a-f0-9]{64}',args.wrapper_sha or '') and re.fullmatch('[a-f0-9]{64}',args.parent_sha or ''),'new_owner_binding_required')
+        check(args.request_id not in (11683,11697) and args.approval_id not in (11684,11698),'stopped_authority_no_replay')
         reader=GitBlobReader();blob=reader.read
-        raw=existing_proposal().read_bytes();check(len(raw)==3717 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
+        raw=existing_proposal().read_bytes();check(len(raw)==3718 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
         packet=json.loads(raw);check(canonical(packet)==raw,'existing_proposal_canonical')
         review=json.loads(blob('docs/codex-developer-pilot-admission-packet.json'))['next_A1_decision_draft'];source={}
         for row in review['complete_sources_and_scope']:
@@ -149,9 +168,9 @@ def main(argv=None):
         def authorize(binding,scope):
             nonlocal sequence
             check(binding==PACKET_SHA and scope=='Developer A1 only','host_scope');sequence+=1
-            print('\nA1Q '+canonical({'operation':'protected_authority','session':args.session,'sequence':sequence,'mode':'run','profile_id':PROFILE,'request_id':args.request_id,'approval_id':args.approval_id}).decode(),flush=True)
-            value=read_response(sys.stdin.buffer,args.session,sequence)
-            validate_authority(value,args.session,sequence,args.request_id,args.approval_id,args.wrapper_sha);receipts.append(value)
+            print('\n'+challenge_marker(tag,sequence),flush=True)
+            value=read_response(sys.stdin.buffer.raw,args.session,sequence)
+            validate_authority(value,args.session,sequence,args.request_id,args.approval_id,args.wrapper_sha,args.parent_sha);receipts.append(value)
         outcome={}
         try:
             result=module.run(packet,source,authorize)
@@ -163,8 +182,9 @@ def main(argv=None):
             if target.is_dir():
                 try:
                     with (target/'owner-authority-and-outcome.json').open('xb') as f:
-                        f.write(canonical({'receipts':receipts,'outcome':outcome,'wrapper_sha256':args.wrapper_sha}));f.flush();os.fsync(f.fileno())
+                        f.write(canonical({'receipts':receipts,'outcome':outcome,'wrapper_sha256':args.wrapper_sha,'parent_sha256':args.parent_sha}));f.flush();os.fsync(f.fileno())
                 except Exception:outcome['authority_capture']='unavailable_no_retry'
-            print('\nA1O '+canonical({'mode':'run','session':args.session,'outcome':outcome}).decode(),flush=True)
+            print('\n'+outcome_marker(tag,outcome.get('status')=='observations_only_not_install_admission'),flush=True)
+            print(canonical({'mode':'run','outcome':outcome}).decode(),flush=True)
     finally:restore()
 if __name__=='__main__':main()
