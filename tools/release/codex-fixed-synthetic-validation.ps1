@@ -111,6 +111,7 @@ try {
             $path=Join-Path $Root ($name+'.bin')
             $stream=[IO.FileStream]::new($path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
             try { $files[$name]=@{path=$path;identity=[FixedStorageHandle]::Identity($stream.SafeFileHandle);
+                final_path=[FixedStorageHandle]::Path($stream.SafeFileHandle);
                 length=$stream.Length;acl=(Get-FixedAclPin $stream)} } finally { $stream.Dispose() }
         }
         @{root=$Root;namespace='isolated-synthetic-only';slots=4;width=2048;files=$files}

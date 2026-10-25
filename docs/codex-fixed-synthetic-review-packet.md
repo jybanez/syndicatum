@@ -151,3 +151,13 @@ reached and verifies original error IDs propagate (including validation from bot
 Open and Inspect). It restores stubs afterward. No native initializer, filesystem
 primitive or harness is invoked by that regression. Existing fake storage contract
 tests remain separate; neither class of test proves native correctness.
+
+## Current STOP state after11628 (supersedes draft admission status)
+
+The separately approved55a445 attempt ran ONCE and failed during path traversal;
+its five-file tree now exists as immutable evidence. See the11628 STOP record.
+The current packet is blocked; no next identity is selected and no retry is
+allowed under11628. Source now fixes provider-only parent traversal and pins a
+new setup's normalized handle name explicitly. Only inert actual-helper/constructor
+coverage was added; no native rerun or old manifest update occurred. Both prior
+trees remain untouched. Further source review/CI/owner authority is separate.

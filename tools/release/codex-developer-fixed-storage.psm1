@@ -11,8 +11,9 @@ function Assert-FixedPath([string]$Path,[string]$Root) {
     }
     $cursor=Get-Item -LiteralPath $absolute -Force -ErrorAction Stop
     while ($null -ne $cursor) {
+        if ($cursor -isnot [IO.FileSystemInfo]) { throw 'STOP: non-filesystem path object' }
         if ($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'STOP: reparse ancestor' }
-        $cursor=if ($cursor.PSIsContainer) { $cursor.Parent } else { $cursor.Directory }
+        $cursor=if ($cursor -is [IO.DirectoryInfo]) { $cursor.Parent } else { $cursor.Directory }
     }
 }
 function Initialize-FixedHandleApi {
@@ -109,7 +110,9 @@ function New-FixedWindowsApi([hashtable]$Manifest) {
         Validate=$primitives.Validate;Open=$primitives.Open
         Inspect={param($Handle,$Pin)
             $final=& $primitives.Path $Handle
-            if ($final -cne ('\\?\'+$Pin.path)) { throw 'STOP: final handle path' }
+            if (-not $Pin.ContainsKey('final_path') -or $Pin.final_path -isnot [string] -or
+                -not $Pin.final_path.StartsWith('\\?\',[StringComparison]::Ordinal) -or
+                $final -cne $Pin.final_path) { throw 'STOP: final handle path' }
             @{identity=(& $primitives.Identity $Handle);length=(& $primitives.Length $Handle);acl=(& $primitives.Acl $Handle)}
         }.GetNewClosure()
         Read=$primitives.Read;Write=$primitives.Write;Flush=$primitives.Flush;Close=$primitives.Close

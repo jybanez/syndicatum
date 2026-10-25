@@ -1,9 +1,9 @@
 {
   "status": "SOURCE_REVIEW_ONLY_UNEXECUTED_NOT_AUTHORIZED",
   "harness": "tools/release/codex-fixed-synthetic-validation.ps1",
-  "harness_sha256": "eefee5746771cbb6461e9282d96321a8e2db972197c0b83a7672a9252cc226cd",
+  "harness_sha256": "57a5e2ae91387ca33efe96a91009d8a858b15a1f0d2886919673f519ef1b51d4",
   "backend": "tools/release/codex-developer-fixed-storage.psm1",
-  "backend_sha256": "6f101867744f047d43d8f6d67c91193c67d171fc54c76e4484e94ffc56909b6e",
+  "backend_sha256": "84ed263e6e74a116ad31ddf2a2358a695b8d34e5b641b12c2a970398752a644b",
   "source_eol": "LF pinned by .gitattributes",
   "runtime": {
     "version": "PowerShell 7.6.8",
@@ -43,7 +43,7 @@
   "production_readiness_or_power_loss_proven": false,
   "compiler_scratch": "NONE APPROVED: unknown file/directory/reparse entry stops; observed inventory retained",
   "occupied_rejection": "FixedStorageOccupiedSlot only; both complete container bytes unchanged",
-  "historical_attempt": "11616: one native invocation STOP; evidence retained; authority exhausted",
-  "admission_blocker": "New distinct identity is DRAFT source only, unreviewed/unapproved; no new tree created. Prior tree is immutable evidence.",
+  "historical_attempt": "11628: one native invocation STOP on path traversal; 11616 and11628 evidence retained; both approvals exhausted",
+  "admission_blocker": "Current55a445 test root exists as immutable11628 evidence; earlier1cf42 tree also retained. No next root selected or native retry authorized.",
   "previous_root_leaf": "syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3"
 }
