@@ -1,0 +1,196 @@
+"""SOURCE ONLY: fixed-session journal + canonical receipt + preparation binding.
+
+Sealed fake transports only; no native/storage setup/CLI/tool/token entry point.
+"""
+import base64
+import json
+import math
+
+from codex_developer_fixed_journal import (CanonicalAuthority, FakeFixedSessionAPI, FixedJournal,
+    SessionStorage, Stop, check, digest, packed, unframe)
+from codex_developer_native_b import DeveloperBAdapter
+
+
+SCOPES = {"connector_task_run_suppression", "owned_listener_stop", "private_cutoff_capture"}
+OPERATIONS = ("suppress", "stop", "cutoff")
+
+
+def plan_context(plan):
+    # The approval event ID is known only AFTER approving the reviewed request.
+    # Exclude only that ID to avoid a self-referential approval/plan digest.
+    return digest(packed({key: value for key, value in plan.items() if key != "owner_authority_message_id"}))
+
+
+class RetainedHead:
+    """Trusted caller-owned handoff, separate from the mutable writer bytes.
+
+    Inert object only; durable/authenticated live handoff remains an admission gap.
+    """
+    def __init__(self):
+        self.value = None
+        self.history = []
+
+    def retain(self, core, head, expected_previous):
+        check((self.value is None and expected_previous is None) or
+              (self.value is not None and packed(self.value) == expected_previous), "trusted_handoff_compare_and_advance")
+        value = {"head": head, "sequence": core.index, "plan_sha256": core.expected["plan_sha256"],
+                 "attempt_id": core.expected["attempt_id"], "namespace": core.pin["namespace"]}
+        self.value = value
+        self.history.append(packed(value))
+
+    def head(self, core):
+        check(self.value is not None and self.value == {"head": core.external_head, "sequence": core.index,
+              "plan_sha256": core.expected["plan_sha256"], "attempt_id": core.expected["attempt_id"],
+              "namespace": core.pin["namespace"]}, "trusted_handoff_changed")
+        return self.value["head"]
+
+
+class FixedPreparationJournal:
+    """Preparation journal protocol over existing fixed containers; no directories.
+
+    Large logical observations are bounded multipart records plus commit, with a
+    flushed/read-back independent head per physical record. A partial attempt is
+    terminal and cannot be resumed, rebuilt or replayed.
+    """
+    def __init__(self, core, handoff, native_context):
+        check(type(core) is FixedJournal and type(handoff) is RetainedHead and handoff.value is None,
+              "new_fixed_handoff_required")
+        self.core, self.handoff, self.context = core, handoff, native_context
+        self.spans, self.admitted, self.pending = [], [], None
+        self.terminal = False
+        handoff.retain(core, core.external_head, None)
+
+    @property
+    def retained_head(self):
+        return self.handoff.head(self.core)
+
+    def verify(self, retained_head):
+        check(not self.terminal and retained_head == self.retained_head, "integrated_journal_terminal_or_handoff")
+        self.core.verify(retained_head)
+        for start, count, expected_sha, logical_id in self.spans:
+            chunks = []
+            for index in range(count):
+                record = unframe(self.core.storage.read("records", start + index))
+                data = record["data"]
+                check(record["kind"] == "preparation_part" and data["logical_id"] == logical_id and
+                      data["part"] == index and data["parts"] == count and data["sha256"] == expected_sha,
+                      "integrated_part_binding")
+                chunks.append(base64.b64decode(data["raw_base64"], validate=True))
+            raw = b"".join(chunks)
+            commit = unframe(self.core.storage.read("records", start + count))
+            check(digest(raw) == expected_sha and commit["kind"] == "preparation_commit" and
+                  commit["data"] == {"logical_id": logical_id, "parts": count, "sha256": expected_sha,
+                                     "plan_context_sha256": self.context}, "integrated_logical_commit")
+            value = json.loads(raw)
+            check(packed(value) == raw and value["plan_context_sha256"] == self.context,
+                  "integrated_logical_context")
+
+    def _append(self, kind, value):
+        previous = packed(self.handoff.value)
+        head = self.core.append_evidence(kind, value, self.retained_head)
+        self.handoff.retain(self.core, head, previous)
+
+    def append(self, boundary, producer, data):
+        try:
+            self.verify(self.retained_head)
+            observation = {"boundary": boundary, "producer": producer, "data": data,
+                           "plan_context_sha256": self.context,
+                           "canonical_evidence": self.core.authority.latest}
+            raw = packed(observation)
+            check(len(raw) <= 33554432 and self.core.pin["width"] >= 2048, "integrated_evidence_bound")
+            chunk_size = (self.core.pin["width"] - 1024) * 3 // 4
+            count = max(1, math.ceil(len(raw) / chunk_size))
+            intent = producer == "intent"
+            check(self.core.index + count + 1 + int(intent) <= self.core.pin["slots"], "integrated_capacity_stop")
+            if intent:
+                operation = data["operation"]
+                check(operation in OPERATIONS and self.pending is None, "integrated_intent_order")
+                previous = packed(self.handoff.value)
+                result = self.core.model_action(operation, self.retained_head, self.context)
+                self.handoff.retain(self.core, result["head_sha256"], previous)
+                self.pending = operation
+            start, logical_id = self.core.index, len(self.spans)
+            payload_sha = digest(raw)
+            for index in range(count):
+                self._append("preparation_part", {"logical_id": logical_id, "part": index, "parts": count,
+                    "sha256": payload_sha, "raw_base64": base64.b64encode(raw[index * chunk_size:(index + 1) * chunk_size]).decode()})
+            self._append("preparation_commit", {"logical_id": logical_id, "parts": count, "sha256": payload_sha,
+                                                "plan_context_sha256": self.context})
+            self.spans.append((start, count, payload_sha, logical_id))
+            self.verify(self.retained_head)
+            return self.retained_head
+        except Exception:
+            self.terminal = True
+            self.core._stop()
+            raise
+
+    def admit(self, operation, head):
+        try:
+            self.verify(head)
+            check(len(self.admitted) < len(OPERATIONS) and operation == OPERATIONS[len(self.admitted)] and
+                  self.pending == operation, "integrated_action_replay_or_order")
+            # AFTER all evidence writes, immediately before the backend operation.
+            self.core._authority()
+            self.verify(head)
+            self.admitted.append(operation)
+            self.pending = None
+        except Exception:
+            self.terminal = True
+            self.core._stop()
+            raise
+
+    def close_terminal(self):
+        self.terminal = True
+        self.core._stop()
+
+
+class IntegratedPreparation:
+    """Composes the actual preparation adapter; only fake transports admitted."""
+    def __init__(self, native_plan_raw, authority, session_api, full_manifest_raw,
+                 reviewed_fixed_plan_raw, expected_receipt_raw, now_ms, handoff):
+        check(type(authority) is CanonicalAuthority and type(session_api) is FakeFixedSessionAPI,
+              "source_only_integrated_transports")
+        self.plan = json.loads(native_plan_raw)
+        check(packed(self.plan) == native_plan_raw, "integrated_native_plan_canonical")
+        self.context = plan_context(self.plan)
+        check(authority.context == self.context and authority.approval_id == self.plan["owner_authority_message_id"],
+              "integrated_canonical_context_binding")
+        full_sha = digest(full_manifest_raw)
+        check(self.plan["fixed_storage_manifest_sha256"] == full_sha, "integrated_full_manifest_binding")
+        self.storage = SessionStorage(session_api, full_manifest_raw, full_sha)
+        self.authority, self.now, self.handoff = authority, now_ms, handoff
+        self.fixed_plan_raw, self.receipt_raw = reviewed_fixed_plan_raw, expected_receipt_raw
+        fixed_plan = json.loads(reviewed_fixed_plan_raw)
+        check(fixed_plan["operations"] == {name: self.context for name in OPERATIONS} and
+              all(fixed_plan[key] == self.plan[key] for key in ("mechanism_head", "candidate_commit", "attempt_id", "cutoff_id")),
+              "integrated_reviewed_context")
+        self.journal = None
+        self.built = False
+
+    def verify_authority(self, approval_id, native_digest, scopes):
+        check(approval_id == self.plan["owner_authority_message_id"] and scopes == SCOPES and
+              native_digest == digest(packed(self.plan)), "integrated_authority_binding")
+        receipt = self.authority.get(approval_id)
+        check(packed(receipt) == self.receipt_raw, "integrated_expected_receipt")
+        now = self.now()
+        check(type(now) is int and type(receipt["not_before_ms"]) is int and type(receipt["expires_ms"]) is int and
+              receipt["not_before_ms"] <= now < receipt["expires_ms"], "integrated_authority_expired")
+        return True
+
+    def journal_factory(self, plan, native_digest):
+        check(self.journal is None and packed(plan) == packed(self.plan) and native_digest == digest(packed(plan)),
+              "integrated_journal_reuse")
+        projected = packed(self.storage.manifest)
+        core = FixedJournal(self.storage, projected, digest(projected), self.authority,
+                            self.receipt_raw, None, self.fixed_plan_raw, self.now)
+        self.journal = FixedPreparationJournal(core, self.handoff, self.context)
+        return self.journal
+
+    def build(self, preparation_backend):
+        # Live backends still hit their existing unconditional gates. The tests
+        # provide the existing inert preparation backend; no real transport here.
+        check(not self.built, "integrated_runner_no_replay")
+        self.built = True
+        return DeveloperBAdapter(packed(self.plan), digest(packed(self.plan)), preparation_backend,
+            self.verify_authority, now_ms=self.now, journal_factory=self.journal_factory,
+            action_admission=lambda operation, head: self.journal.admit(operation, head))

@@ -1,5 +1,10 @@
 # Developer B native preparation candidate
 
+Current proposed journal/authority route: see
+`codex-developer-integrated-preparation.md`. Preparation requires the fixed-file
+journal/admission integration; the old directory-flush dependency below is
+historical context, not the selected path. Native gates remain closed.
+
 SOURCE ONLY; not deployed or executable in this revision. Python's
 `NATIVE_B_ENABLED` is false and the PowerShell module's exported dispatcher
 unconditionally throws before any native collection/action. Opening either gate

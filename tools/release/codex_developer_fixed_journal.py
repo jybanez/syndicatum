@@ -1,6 +1,6 @@
-"""SOURCE ONLY: fixed-container model, memory storage and fake transport only.
+"""SOURCE ONLY: fixed-container journal and sealed fake session/canonical seams.
 
-No native handles, canonical API, live storage establishment or cutover integration.
+Integrated preparation consumes this protocol; no native/API/storage setup here.
 """
 import copy
 import hashlib
@@ -69,6 +69,12 @@ class MemoryStorage:
         self.events.append(kind + "-flush")
         check(self.fault != kind + "-flush", "uncertain_flush")
 
+    def sizes(self):
+        return {name: len(raw) for name, raw in self.files.items()}
+
+    def pristine(self):
+        return all(not any(raw) for raw in self.files.values())
+
 
 class FakeAuthority:
     """Test fixture transport; not a canonical owner-message retrieval bridge."""
@@ -80,6 +86,169 @@ class FakeAuthority:
         check(self.available, "authority_unavailable")
         check(self.message["message_id"] == message_id, "authority_id")
         return copy.deepcopy(self.message)
+
+
+class FakeCanonicalTimeline:
+    """Existing canonical message shape, INERT responses only; no API access."""
+    def __init__(self, messages):
+        self.messages, self.available = copy.deepcopy(messages), True
+        self.profile = {"profile_id": "1f397680dd1cddc0.2.33", "project_id": 2,
+                        "participant_id": 36, "agent_id": 33,
+                        "syndicatum_url": "https://syndicatum.wizaya.com"}
+
+    def get_message(self, identity):
+        check(self.available and identity in self.messages, "canonical_message_unavailable")
+        return {"profile": copy.deepcopy(self.profile), "message": copy.deepcopy(self.messages[identity])}
+
+
+class CanonicalAuthority:
+    """Canonical approval/request comparison through a sealed fake transport.
+
+    Retrieval/authentication is deliberately not inferred from the message body.
+    A real protected-tool transport remains closed/unimplemented here.
+    """
+    @staticmethod
+    def material(message):
+        value = {key: message[key] for key in ("id", "project_id", "body", "action_requested",
+                                               "action_request_type", "edited", "revision_count", "deleted_at")}
+        value["sender_id"] = message["sender"]["participant_id"]
+        value["addressees"] = sorted((item["participant_id"], item["reason"]) for item in message["addressees"])
+        return value
+
+    def __init__(self, timeline, request_id, approval_id, trusted_request_sha256, plan_context_sha256):
+        check(type(timeline) is FakeCanonicalTimeline, "source_only_canonical_transport")
+        self.timeline, self.request_id, self.approval_id = timeline, request_id, approval_id
+        self.request_digest, self.context = trusted_request_sha256, plan_context_sha256
+        self.latest = None
+
+    def get(self, message_id):
+        check(message_id == self.approval_id, "canonical_approval_id")
+        request = self.timeline.get_message(self.request_id)
+        self.latest = {"request": request, "approval": None}
+        approval = self.timeline.get_message(self.approval_id)
+        self.latest["approval"] = approval  # Retain available rejected input too.
+        expected_profile = {"profile_id": "1f397680dd1cddc0.2.33", "project_id": 2,
+                            "participant_id": 36, "agent_id": 33,
+                            "syndicatum_url": "https://syndicatum.wizaya.com"}
+        check(all({key: response["profile"][key] for key in expected_profile} == expected_profile
+                  for response in (request, approval)), "canonical_identity")
+        r, a = request["message"], approval["message"]
+        check(digest(packed(self.material(r))) == self.request_digest, "canonical_request_changed")
+        check(r["id"] == self.request_id and r["project_id"] == a["project_id"] == 2 and
+              r["sender"]["participant_id"] == 36 and r["action_requested"] is True and
+              r["action_request_type"] == "approval" and r["edited"] is False and r["revision_count"] == 0 and
+              r["deleted_at"] is None and a["deleted_at"] is None and
+              28 in [item["participant_id"] for item in r["addressees"]], "canonical_request_scope")
+        event = a["system_event"]
+        check(a["id"] == self.approval_id and a["sender"]["participant_id"] == 28 and
+              a["message_kind"] == "system" and a["edited"] is False and a["revision_count"] == 0 and
+              a["reply_to_message_id"] == self.request_id and
+              36 in [item["participant_id"] for item in a["addressees"]] and
+              event["type"] == "responsibility.approval_approved" and
+              event["data"]["request_message_id"] == self.request_id and
+              event["data"]["actor_participant_id"] == event["data"]["initial_responder_participant_id"] == 28 and
+              event["data"]["kind"] == "approval_approved", "canonical_owner_approval")
+        body = json.loads(r["body"])
+        check(packed(body).decode() == r["body"] and set(body) == {"purpose", "plan_context_sha256", "receipt"}
+              and body["purpose"] == "Developer-only preparation" and body["plan_context_sha256"] == self.context,
+              "canonical_plan_context")
+        return {**body["receipt"], "server": expected_profile["syndicatum_url"], "project_id": 2,
+                "message_id": a["id"], "sender_id": 28, "addressee_id": 36, "revision": 0,
+                "body_sha256": digest(r["body"].encode()), "revoked": False}
+
+
+class FakeFixedSessionAPI:
+    """Low-level existing-file session contract matching the Windows callbacks."""
+    def __init__(self, manifest):
+        self.manifest, self.held, self.fault = copy.deepcopy(manifest), False, None
+        self.files = {name: bytearray(pin["length"]) for name, pin in manifest["files"].items()}
+        self.calls = []
+
+    def open_existing_pair(self):
+        check(not self.held, "session_contended")
+        self.held = True
+        self.calls.append(("open_pair",))
+
+    def inspect(self):
+        check(self.held, "session_not_held")
+        value = copy.deepcopy(self.manifest)
+        for name in value["files"]:
+            value["files"][name]["length"] = len(self.files[name])
+        return value
+
+    def read(self, name, offset, count):
+        check(self.held, "session_not_held")
+        return bytes(self.files[name][offset:offset + count])
+
+    def write(self, name, offset, raw):
+        check(self.held, "session_not_held")
+        self.calls.append(("write", name, offset))
+        if self.fault == "partial":
+            self.files[name][offset:offset + 7] = raw[:7]
+            raise Stop("session_partial_write")
+        self.files[name][offset:offset + len(raw)] = raw
+
+    def flush(self, name):
+        self.calls.append(("file_flush", name))
+        check(self.fault != "flush", "session_flush_uncertain")
+
+    def close(self):
+        if self.held:
+            self.calls.append(("close_pair",))
+        self.held = False
+
+
+class SessionStorage:
+    """Pinned projection plus FULL native-manifest checks at every file operation."""
+    def __init__(self, api, full_manifest_raw, full_manifest_sha256):
+        check(type(api) is FakeFixedSessionAPI, "source_only_storage_transport")
+        check(digest(full_manifest_raw) == full_manifest_sha256, "full_storage_manifest_anchor")
+        self.full = json.loads(full_manifest_raw)
+        check(packed(self.full) == full_manifest_raw and set(self.full["files"]) == {"records", "heads"}, "full_manifest_schema")
+        self.api = api
+        m = self.full
+        for pin in m["files"].values():
+            check(set(pin) == {"path", "identity", "length", "acl", "final_path"} and
+                  pin["length"] == m["slots"] * m["width"] and all(type(pin[k]) is str and pin[k]
+                  for k in ("path", "identity", "acl", "final_path")), "full_file_pin")
+        self.manifest = {"namespace": m["namespace"], "root": m["root"], "slots": m["slots"], "width": m["width"],
+                         "record_id": m["files"]["records"]["identity"], "head_id": m["files"]["heads"]["identity"]}
+
+    def acquire(self):
+        self.api.open_existing_pair()
+
+    def release(self):
+        self.api.close()
+
+    def observe(self):
+        check(self.api.inspect() == self.full, "full_storage_identity_acl_path_drift")
+        return copy.deepcopy(self.manifest)
+
+    def sizes(self):
+        self.observe()
+        return {name: pin["length"] for name, pin in self.full["files"].items()}
+
+    def pristine(self):
+        return all(not any(self.read(name, index)) for name in ("records", "heads")
+                   for index in range(self.manifest["slots"]))
+
+    def read(self, kind, index):
+        self.observe()
+        width = self.manifest["width"]
+        check(0 <= index < self.manifest["slots"], "session_read_bound")
+        raw = self.api.read(kind, index * width, width)
+        check(len(raw) == width, "session_short_read")
+        return raw
+
+    def write(self, kind, index, raw):
+        check(len(raw) == self.manifest["width"] and not any(self.read(kind, index)), "session_occupied_slot")
+        self.api.write(kind, index * self.manifest["width"], raw)
+        self.observe()
+
+    def flush(self, kind):
+        self.observe()
+        self.api.flush(kind)
+        self.observe()
 
 
 def frame(value, width):
@@ -110,7 +279,8 @@ class FixedJournal:
         self.index, self.previous = 0, "0" * 64
         self.external_head = externally_retained_head
         try:
-            check(type(storage) is MemoryStorage and type(authority) is FakeAuthority, "source_only_fake_seams")
+            check(type(storage) in (MemoryStorage, SessionStorage) and
+                  type(authority) in (FakeAuthority, CanonicalAuthority), "source_only_fake_seams")
             check(type(pinned_manifest_raw) is bytes and digest(pinned_manifest_raw) == pinned_manifest_sha256,
                   "manifest_anchor")
             self.pin = json.loads(pinned_manifest_raw)
@@ -165,7 +335,7 @@ class FixedJournal:
             storage.acquire()
             self.owned = True
             self._pin()
-            check(all(not any(raw) for raw in storage.files.values()), "occupied_or_partial_attempt_no_resume")
+            check(storage.pristine(), "occupied_or_partial_attempt_no_resume")
             self._append("reservation", {"authority": self.expected})
             self._authority()
         except Exception:
@@ -181,8 +351,9 @@ class FixedJournal:
     def _pin(self):
         check(self.storage.observe() == self.pin, "storage_identity_or_namespace_changed")
         expected_size = self.pin["slots"] * self.pin["width"]
-        check(set(self.storage.files) == {"records", "heads"} and
-              all(len(raw) == expected_size for raw in self.storage.files.values()), "storage_capacity_changed")
+        sizes = self.storage.sizes()
+        check(set(sizes) == {"records", "heads"} and
+              all(size == expected_size for size in sizes.values()), "storage_capacity_changed")
 
     def _authority(self):
         current = self.authority.get(self.expected["message_id"])
@@ -256,6 +427,15 @@ class FixedJournal:
             # action admission; changed/expired authority consumes the intent.
             self._authority()
             return {"head_sha256": head, "synthetic_intent_only": True, "authorizes_mutation": False}
+        except Exception:
+            self._stop()
+            raise
+
+    def append_evidence(self, kind, data, independent_head):
+        """Private evidence only; never grants a command or installation capability."""
+        try:
+            self.verify(independent_head)
+            return self._append(kind, data)
         except Exception:
             self._stop()
             raise

@@ -120,6 +120,11 @@ class WindowsBackend:
 
 
 class CutoverJournal:
+    """Historical directory fixture only; never selected by preparation defaults.
+
+    The proposed integration injects FixedPreparationJournal instead. Retained
+    solely for old component regressions; not a production durability mechanism.
+    """
     def __init__(self, plan, plan_digest, barrier):
         self.root, self.head_root = Path(plan["evidence_root"]), Path(plan["head_root"])
         require(self.root.resolve() != self.head_root.resolve() and
@@ -158,6 +163,10 @@ class CutoverJournal:
         require((self.sequence == 0 and retained_head is None) or
                 (self.sequence > 0 and sha(head_raw) == retained_head), "external_head_drift")
 
+    def close_terminal(self):
+        # Historical fixture has no continuously held file handles.
+        pass
+
     def append(self, boundary, producer, data):
         self.verify(self.retained_head)
         record = {"attempt_id": self.plan["attempt_id"], "cutoff_id": self.plan["cutoff_id"],
@@ -182,10 +191,12 @@ class CutoverJournal:
 
 class DeveloperBAdapter:
     """Native operation binding with fail-closed postimages; never installs."""
-    def __init__(self, plan_raw, plan_digest, backend, authority_verifier, now_ms=None):
+    def __init__(self, plan_raw, plan_digest, backend, authority_verifier, now_ms=None,
+                 journal_factory=None, action_admission=None):
         self.plan, self.digest = anchored(plan_raw, plan_digest), plan_digest
         self.backend, self.authority_verifier = backend, authority_verifier
         self.now = now_ms or (lambda: time.time_ns() // 1000000)
+        self.journal_factory, self.action_admission = journal_factory, action_admission
         self.journal, self.last_clock, self.cutoff, self.cutoff_raw = None, None, None, None
         self.stage, self.mutations = "admission", []
         self.started, self.terminal, self.boundary_index = False, False, 0
@@ -242,6 +253,8 @@ class DeveloperBAdapter:
         require_fresh_window(self.last_clock["utc_ms"], self.now(), 120000)
         self.journal.append(operation, "intent", {"operation": operation})
         self.journal.verify(self.journal.retained_head)
+        require(callable(self.action_admission), "fixed_action_admission_required")
+        self.action_admission(operation, self.journal.retained_head)
         self.mutations.append(operation)  # Intent is retained before invoking native code.
         operation_plan = dict(self.plan)
         if operation == "stop":
@@ -290,13 +303,12 @@ class DeveloperBAdapter:
             require(type(p["listener"]["pid"]) is int and p["listener"]["pid"] > 0 and
                     set(p["lock_sha256"]) == {"background.lock", "listener.lock"} and
                     "background.json" in p["static_files"], "listener_or_static_plan")
+            require(callable(self.journal_factory) and callable(self.action_admission), "fixed_preparation_integration_required")
             admitted = self.backend.invoke("admission", p)
             self._clock(admitted["clock"])
             require(admitted["private_roots_checked"] is True, "external_boundary_not_checked")
-            def barrier():
-                result = self.backend.invoke("flush", p)
-                require(result.get("directory_flush_confirmed") is True, "directory_durability_not_confirmed")
-            self.journal = CutoverJournal(p, self.digest, barrier)
+            # Integrated preparation requires a fixed-file journal; no directory flush.
+            self.journal = self.journal_factory(p, self.digest)
             before = self._snapshot("pre-suppression")
             require(TASK in before["tasks"] and sha(base64.b64decode(before["tasks"][TASK], validate=True)) == p["task_xml_sha256"], "task_preimage_drift")
             require(encode(before["runs"]) == encode(p["run_preimage"]), "run_preimage_drift")
@@ -314,6 +326,8 @@ class DeveloperBAdapter:
             self._quiescent(independent)
             self._preserved(stopped, independent)
             self.stage = "capture-cutoff"
+            self.journal.append("capture-cutoff", "intent", {"operation": "cutoff"})
+            self.action_admission("cutoff", self.journal.retained_head)
             cutoff = self.backend.invoke("cutoff", p)
             for capture in (cutoff["before"], cutoff["after"]):
                 self._clock(capture["clock"]); self._quiescent(capture)
@@ -334,6 +348,8 @@ class DeveloperBAdapter:
                     except Exception: secondary.append("failure_postimage_unavailable")
                 try: self.journal.append(self.stage, "stopped", {"code": code})
                 except Exception: secondary.append("failure_journal_unavailable")
+                try: self.journal.close_terminal()
+                except Exception: secondary.append("failure_session_close_uncertain")
             return {"result": "stopped", "stage": self.stage, "code": code, "secondary_errors": secondary,
                     "uncertain_pid": getattr(error, "pid", None), "authorizes_install": False}
 

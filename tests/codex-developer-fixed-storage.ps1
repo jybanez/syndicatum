@@ -130,32 +130,35 @@ import base64, json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path.cwd() / "tools/release"))
 sys.path.insert(0, str(pathlib.Path.cwd() / "tests"))
 import importlib.util
-spec=importlib.util.spec_from_file_location("fixture", "tests/codex-developer-fixed-journal.py")
+spec=importlib.util.spec_from_file_location("fixture", "tests/codex-developer-integrated-preparation.py")
 fixture=importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
-store=fixture.fixed.MemoryStorage(slots=2, width=2048)
-model=fixture.open_model(store)
-result=model.model_action("synthetic-first", model.external_head, "reviewed-first")
-print(json.dumps({"frames": {name: [base64.b64encode(store.read(name,i)).decode() for i in range(2)]
+runner, backend, api, timeline, handoff=fixture.setup()
+result=runner.build(backend).prepare()
+assert result["result"] == "cutoff_prepared_only", result
+core=runner.journal.core
+print(json.dumps({"manifest":api.manifest,"count":core.index,
+                  "frames":{name:[base64.b64encode(core.storage.read(name,i)).decode() for i in range(core.index)]
                             for name in ("records","heads")}, "head":result["head_sha256"]}))
 '@
     $compositionText=$pythonCode | python -
     if ($LASTEXITCODE -ne 0) { throw 'Python composition model failed' }
     $composition=$compositionText | ConvertFrom-Json -AsHashtable
     $fixture=Fixture
-    $fixture.manifest.width=2048
+    $fixture.manifest=$composition.manifest
     foreach ($pin in $fixture.manifest.files.Values) {
-        $pin.length=4096
-        $fixture.state.bytes[$pin.path]=[byte[]]::new(4096)
+        $fixture.state.bytes[$pin.path]=[byte[]]::new($pin.length)
     }
     $session=Open-FixedSession $fixture.manifest $fixture.api
-    foreach ($index in @(0,1)) {
+    foreach ($index in 0..($composition.count-1)) {
         foreach ($name in @('records','heads')) {
             $frame=[Convert]::FromBase64String($composition.frames[$name][$index])
             Write-FixedSlot $session $name $index $frame
         }
     }
-    $actualHead=[byte[]]::new(2048)
-    [Buffer]::BlockCopy($fixture.state.bytes['fake-heads'],2048,$actualHead,0,2048)
+    $width=$composition.manifest.width
+    $actualHead=[byte[]]::new($width)
+    [Buffer]::BlockCopy($fixture.state.bytes[$composition.manifest.files.heads.path],
+        ($composition.count-1)*$width,$actualHead,0,$width)
     $actualDigest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($actualHead)).ToLowerInvariant()
     if ($actualDigest -cne $composition.head) { throw 'Cross-language retained head mismatch' }
     Close-FixedSession $session

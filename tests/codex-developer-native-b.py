@@ -109,7 +109,12 @@ class NativeBFixtures(unittest.TestCase):
         backend = InertBackend(plan, fault)
         raw = native.encode(plan)
         adapter = native.DeveloperBAdapter(raw, native.sha(raw), backend,
-            lambda message, digest, scope: authority, now_ms=lambda: backend.time + 1)
+            lambda message, digest, scope: authority, now_ms=lambda: backend.time + 1,
+            # Historical directory fixture only; not the integrated path.
+            journal_factory=lambda p, d: native.CutoverJournal(p, d,
+                lambda: native.require(backend.invoke("flush", p).get("directory_flush_confirmed") is True,
+                                       "directory_durability_not_confirmed")),
+            action_admission=lambda operation, head: None)
         return adapter, backend
 
     def test_closed_native_gate_before_any_source_file_or_process_access(self):
