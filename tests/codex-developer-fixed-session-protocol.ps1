@@ -12,6 +12,16 @@ $module=Get-Module 'codex-developer-fixed-storage'
 & $module {
     param($Protocol)
     . $Protocol
+    $input=[IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes('{"inert":true}'+"`n"))
+    if ((Read-FixedProtocolFrame $input) -cne '{"inert":true}') { throw 'Bounded input frame mismatch' }
+    $output=[IO.MemoryStream]::new()
+    Write-FixedProtocolFrame $output '{"inert":true}'
+    if ([Text.Encoding]::UTF8.GetString($output.ToArray()) -cne ('{"inert":true}'+"`n")) { throw 'Bounded output frame mismatch' }
+    foreach ($bytes in @([byte[]]::new(0),[byte[]]@(255,10))) {
+        $rejected=$false
+        try { $null=Read-FixedProtocolFrame ([IO.MemoryStream]::new($bytes)) } catch { $rejected=$true }
+        if (-not $rejected) { throw 'EOF/malformed UTF8 frame accepted' }
+    }
     function New-Context { @{sequence=0;identity='';terminal=$false;openAttempted=$false;closeAttempted=$false;closeUncertain=$false;session=$null} }
     $manifest=@{root='inert-root';namespace='inert-session';slots=2;width=512;files=@{
         records=@{path='inert-records';final_path='inert-records';identity='one';length=1024;acl='private'}

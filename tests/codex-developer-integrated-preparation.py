@@ -17,7 +17,7 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
-def setup(handoff_manifest_sha256=None):
+def setup(handoff_manifest_sha256=None, private_receipt_manifest_sha256=None):
     plan = fixture.plan_for(Path("INERT-NOT-A-FILESYSTEM-ROOT"))
     slots, width = 128, 8192
     manifest = {"root": "INERT-FIXED-ROOT", "namespace": "new-integrated-attempt", "slots": slots, "width": width,
@@ -28,6 +28,8 @@ def setup(handoff_manifest_sha256=None):
     plan["fixed_storage_manifest_sha256"] = fixed.digest(manifest_raw)
     if handoff_manifest_sha256 is not None:
         plan["independent_handoff_manifest_sha256"] = handoff_manifest_sha256
+    if private_receipt_manifest_sha256 is not None:
+        plan["private_receipt_manifest_sha256"] = private_receipt_manifest_sha256
     context = integrated.plan_context(plan)
     api = fixed.FakeFixedSessionAPI(manifest)
     projection = fixed.SessionStorage(api, manifest_raw, fixed.digest(manifest_raw)).manifest
@@ -111,7 +113,7 @@ class IntegratedPreparationFixtures(unittest.TestCase):
                 self.assertEqual(backend.calls, calls)
 
     def test_boundary_publication_age_and_close_uncertainty_are_terminal(self):
-        for mode in ("age", "close", "failure-close"):
+        for mode in ("age", "close", "failure-close", "expiry-close"):
             with self.subTest(mode=mode):
                 runner, backend, api, _, _ = setup()
                 adapter = runner.build(backend)
@@ -128,8 +130,13 @@ class IntegratedPreparationFixtures(unittest.TestCase):
                     self.assertLess(backend.time, 999999)
                 else:
                     closes = []
+                    original_close = api.close
                     def uncertain_close():
                         closes.append(1)
+                        if mode == "expiry-close":
+                            original_close()
+                            backend.time = 1000000
+                            return
                         raise fixed.Stop("fixture_close_uncertain")
                     api.close = uncertain_close
                     if mode == "failure-close":
@@ -141,7 +148,7 @@ class IntegratedPreparationFixtures(unittest.TestCase):
                         for boundary in ("before-remove", "after-remove", "before-add", "after-add", "before-plugin-add"):
                             head = adapter.verify_boundary(boundary, head)["head_sha256"]
                         with self.assertRaises(fixed.Stop): adapter.verify_boundary("after-plugin-add", head)
-                    self.assertTrue(adapter.session_close_uncertain)
+                    self.assertEqual(adapter.session_close_uncertain, mode != "expiry-close")
                     self.assertEqual(closes, [1])
                     runner.journal.close_terminal()
                     self.assertEqual(closes, [1])

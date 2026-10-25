@@ -1,5 +1,33 @@
 # Definitions only. Runs inside the existing storage module scope with its API.
 # No process, native API, storage setup or IO happens by loading this file.
+function Read-FixedProtocolFrame([IO.Stream]$Stream,[int]$TimeoutMs=30000) {
+    if ($TimeoutMs -le 0 -or $TimeoutMs -gt 120000) { throw 'STOP: protocol deadline bound' }
+    $watch=[Diagnostics.Stopwatch]::StartNew()
+    $bytes=[Collections.Generic.List[byte]]::new()
+    $one=[byte[]]::new(1)
+    while ($true) {
+        $remaining=$TimeoutMs-[int]$watch.ElapsedMilliseconds
+        if ($remaining -le 0) { throw 'STOP: protocol read timeout uncertain' }
+        $pending=$Stream.ReadAsync($one,0,1)
+        if (-not $pending.Wait($remaining)) { throw 'STOP: protocol read timeout uncertain' }
+        if ($pending.GetAwaiter().GetResult() -ne 1) { throw 'STOP: protocol EOF uncertain' }
+        if ($one[0] -eq 10) { break }
+        if ($bytes.Count -ge 2097152) { throw 'STOP: protocol frame bound' }
+        $bytes.Add($one[0])
+    }
+    if (-not $bytes.Count -or $watch.ElapsedMilliseconds -gt $TimeoutMs) { throw 'STOP: protocol empty/late frame' }
+    return ([Text.UTF8Encoding]::new($false,$true)).GetString($bytes.ToArray())
+}
+function Write-FixedProtocolFrame([IO.Stream]$Stream,[string]$Json,[int]$TimeoutMs=30000) {
+    $raw=([Text.UTF8Encoding]::new($false,$true)).GetBytes($Json+"`n")
+    if ($TimeoutMs -le 0 -or $TimeoutMs -gt 120000 -or $raw.Length -gt 2097153) { throw 'STOP: protocol output bound' }
+    $watch=[Diagnostics.Stopwatch]::StartNew()
+    $pending=$Stream.WriteAsync($raw,0,$raw.Length)
+    if (-not $pending.Wait($TimeoutMs)) { throw 'STOP: protocol write timeout uncertain' }
+    $null=$pending.GetAwaiter().GetResult()
+    $remaining=$TimeoutMs-[int]$watch.ElapsedMilliseconds
+    if ($remaining -le 0 -or -not $Stream.FlushAsync().Wait($remaining)) { throw 'STOP: protocol flush timeout uncertain' }
+}
 function Close-FixedProtocol($Context) {
     if ($Context.closeAttempted) { return }
     $Context.closeAttempted=$true

@@ -9,16 +9,14 @@ $module=Get-Module 'codex-developer-fixed-storage'
     . $ProtocolPath
     $context=@{sequence=0;identity='';terminal=$false;openAttempted=$false;
         closeAttempted=$false;closeUncertain=$false;session=$null}
+    $inputStream=[Console]::OpenStandardInput()
+    $outputStream=[Console]::OpenStandardOutput()
     try {
         while (-not $context.terminal) {
-            # Future host admission must supply bounded/deadline-aware framing;
-            # ReadLine alone cannot hard-bound a blocked OS/pipe read. Gate closed.
-            $line=[Console]::In.ReadLine()
-            if ($null -eq $line -or $line.Length -gt 2097152) { throw 'STOP: protocol EOF/bound' }
+            $line=Read-FixedProtocolFrame $inputStream
             $request=$line | ConvertFrom-Json -AsHashtable
             $response=Invoke-FixedProtocol $context $request {param($manifest) New-FixedWindowsApi $manifest}
-            [Console]::Out.WriteLine(($response | ConvertTo-Json -Depth 30 -Compress))
-            [Console]::Out.Flush()
+            Write-FixedProtocolFrame $outputStream ($response | ConvertTo-Json -Depth 30 -Compress)
         }
     } finally { Close-FixedProtocol $context }
 } (Join-Path $PSScriptRoot 'codex-developer-fixed-session-protocol.ps1')

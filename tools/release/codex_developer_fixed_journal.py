@@ -121,8 +121,31 @@ class CanonicalAuthority:
         self.timeline, self.request_id, self.approval_id = timeline, request_id, approval_id
         self.request_digest, self.context = trusted_request_sha256, plan_context_sha256
         self.latest = None
+        self.cached = None
+
+    def refresh(self):
+        self.cached = None  # Explicit new host invocation, never a stale-age bypass.
+
+    def close_terminal(self):
+        close = getattr(self.timeline, "close_terminal", None)
+        if close: close()
 
     def get(self, message_id):
+        from codex_developer_host_handoff import TrustedAgentChannel
+        wire = getattr(self.timeline, "wire", None)
+        host = wire.channel if wire is not None and type(wire.channel) is TrustedAgentChannel else None
+        if host is not None and self.cached is not None:
+            host.check_cached_freshness(self.cached[0])
+            check(message_id == self.approval_id, "canonical_approval_id")
+            return copy.deepcopy(self.cached[1])
+        receipt = self._get(message_id)
+        if host is not None:
+            started = min(item["started_ms"] for item in host.deliveries[-2:])
+            host.check_cached_freshness(started)
+            self.cached = (started, copy.deepcopy(receipt))
+        return receipt
+
+    def _get(self, message_id):
         check(message_id == self.approval_id, "canonical_approval_id")
         request = self.timeline.get_message(self.request_id)
         self.latest = {"request": request, "approval": None}

@@ -125,7 +125,12 @@ class FixedPreparationJournal:
             self._append("preparation_commit", {"logical_id": logical_id, "parts": count, "sha256": payload_sha,
                                                 "plan_context_sha256": self.context})
             self.spans.append((start, count, payload_sha, logical_id))
+            # Refresh at every completed logical publication; physical multipart
+            # writes only reuse the same bounded-age validated snapshot. This
+            # avoids hundreds of redundant host tool round trips per observation.
+            self.core.authority.refresh()
             self.verify(self.retained_head)
+            self.core._authority()  # Final time check after potentially slow verification.
             return self.retained_head
         except Exception as error:
             self._abort(error)
@@ -137,8 +142,10 @@ class FixedPreparationJournal:
             check(len(self.admitted) < len(OPERATIONS) and operation == OPERATIONS[len(self.admitted)] and
                   self.pending == operation, "integrated_action_replay_or_order")
             # AFTER all evidence writes, immediately before the backend operation.
+            self.core.authority.refresh()
             self.core._authority()
             self.verify(head)
+            self.core._authority()
             self.admitted.append(operation)
             self.pending = None
         except Exception as error:
@@ -151,10 +158,15 @@ class FixedPreparationJournal:
             error.close_uncertain = True
             error.add_note("integrated_close_uncertain; no retry")
 
+    def check_final_time(self):
+        receipt, now = self.core.expected, self.core.now()
+        check(type(now) is int and receipt["not_before_ms"] <= now < receipt["expires_ms"],
+              "terminal_authority_time_window")
+
     def close_terminal(self):
         self.terminal = True
         errors = []
-        for close in (self.core._stop, self.handoff.close_terminal):
+        for close in (self.core._stop, self.handoff.close_terminal, self.core.authority.close_terminal):
             try: close()
             except Exception as error: errors.append(error)
         if errors:
@@ -178,6 +190,17 @@ class IntegratedPreparation:
         full_sha = digest(full_manifest_raw)
         check(self.plan["fixed_storage_manifest_sha256"] == full_sha, "integrated_full_manifest_binding")
         self.storage = SessionStorage(session_api, full_manifest_raw, full_sha)
+        from codex_developer_host_handoff import TrustedAgentChannel
+        wire = getattr(authority.timeline, "wire", None)
+        if wire is not None and type(wire.channel) is TrustedAgentChannel:
+            host = wire.channel
+            check(self.plan.get("private_receipt_manifest_sha256") == host.manifest_sha256 and
+                  host.context == self.context and host.ids == (authority.request_id, authority.approval_id),
+                  "trusted_host_receipt_context_pin")
+            stores = [self.storage.manifest, host.storage.manifest]
+            if type(handoff) is DurableHead: stores.append(handoff.storage.manifest)
+            ids = [m[k] for m in stores for k in ("record_id", "head_id")]
+            check(len(ids) == len(set(ids)), "trusted_host_receipt_storage_overlap")
         if type(handoff) is DurableHead:
             check(self.plan.get("independent_handoff_manifest_sha256") == handoff.manifest_sha256 and
                   handoff.storage.manifest["namespace"] != self.storage.manifest["namespace"] and
@@ -195,7 +218,12 @@ class IntegratedPreparation:
     def verify_authority(self, approval_id, native_digest, scopes):
         check(approval_id == self.plan["owner_authority_message_id"] and scopes == SCOPES and
               native_digest == digest(packed(self.plan)), "integrated_authority_binding")
-        receipt = self.authority.get(approval_id)
+        try:
+            receipt = self.authority.get(approval_id)
+        except Exception as error:
+            try: self.authority.close_terminal()
+            except Exception: error.close_uncertain = True
+            raise
         check(packed(receipt) == self.receipt_raw, "integrated_expected_receipt")
         now = self.now()
         check(type(now) is int and type(receipt["not_before_ms"]) is int and type(receipt["expires_ms"]) is int and

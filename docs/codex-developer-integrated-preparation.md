@@ -43,8 +43,10 @@ Both existing native execution gates remain closed. The persistent session and
 protected-host wire contracts now compose here; production defaults refuse and
 only inert channels are exercised. No native/file/network/tool entry is enabled.
 See `codex-developer-integrated-procedure.md` for the single complete proposed
-sequence, exact capabilities missing from the current protected tools, and the
-remaining bounded-IPC/host-provenance admission blocks.
+sequence, implemented trusted-agent mediation/closed launch and bounded IPC, and
+the remaining real-host provenance/admission validation. Existing protected tools
+are sufficient for cooperating-host mediation; no special export/global CAS is
+required merely because Python does not directly dispatch MCP calls.
 
 ## Binding without a self-referential approval digest
 
@@ -100,14 +102,15 @@ cleanup call; final-close uncertainty is tested independently.
 
 ## Remaining live admission/validation gaps (not another component milestone)
 
-- Connect the REAL protected-tool canonical retrieval and trusted persisted
-  receipt/head handoff. The parser is integrated, but fake responses are not
-  authenticated owner authority. Future requests need the reviewed structured
+- Admit the REAL protected-tool invocation/private receipt/head handoff wiring.
+  Trusted-agent invocation and one-use pinned receipt delivery are implemented;
+  inert callbacks are not evidence of live protected-tool origin or private host
+  ownership. Future requests need the reviewed structured
   binding format; old isolated-test approvals cannot authorize preparation.
-- Connect one persistent gated Windows fixed-file session to this protocol and
+- Admit the implemented, still gated persistent Windows fixed-file session and
   admit exact existing storage setup/ACL/identity/capacity and complete-data size/
   performance bounds. Multipart/capacity STOP is implemented; actual full-data
-  footprint and session transport are not validated. Do not create live storage
+  footprint and native pipe/session behavior are not validated. Do not create live storage
   or claim power-loss durability from the earlier8-KiB synthetic pass.
 - Review ONE complete Developer-only preparation/install procedure using fresh
   current revision/provenance/preimages, bounded backup/storage, native guard and

@@ -24,14 +24,13 @@ class ClosedWindowsProcess:
 
 
 class ClosedProtectedHost:
-    """Agent-host boundary; Python cannot directly invoke a protected MCP tool.
+    """No-host default. Supply trusted-agent mediation, never pasted plan JSON.
 
-    The installed tool has get_message(profile_id, message_id), but no opaque
-    authenticated receipt or durable compare-and-advance handoff operation. A
-    pasted JSON response is not a trusted host dispatch. No HTTP/token fallback.
+    Existing Codex protected tool calls suffice; no special export/global CAS is
+    required. Only Python's unattended no-host path refuses. No HTTP/token path.
     """
     def exchange(self, request):
-        raise Stop("protected_host_dispatch_and_durable_handoff_unavailable")
+        raise Stop("trusted_agent_host_not_supplied")
 
 
 class InertChannel:
@@ -46,7 +45,9 @@ class InertChannel:
 
 class CorrelatedChannel:
     def __init__(self, channel, session):
-        check(type(channel) in (InertChannel, ClosedWindowsProcess, ClosedProtectedHost), "unreviewed_transport")
+        from codex_developer_host_handoff import TrustedAgentChannel
+        from codex_developer_process_ipc import PinnedWindowsProcess
+        check(type(channel) in (InertChannel, ClosedWindowsProcess, ClosedProtectedHost, TrustedAgentChannel, PinnedWindowsProcess), "unreviewed_transport")
         check(type(session) is str and bool(session), "transport_session")
         self.channel, self.session, self.sequence, self.terminal = channel, session, 0, False
 
@@ -139,7 +140,7 @@ class ProtectedCanonicalTimeline:
 
     Both request/approval are fetched afresh through exact profile-bound calls.
     Only a trusted host can supply their provenance; InertChannel proves framing,
-    not authentication. Production dispatch is closed with a precise blocker.
+    not authentication. The no-host default refuses; trusted mediation is explicit.
     """
     def __init__(self, channel=None, session="developer-protected-host"):
         self.wire = CorrelatedChannel(channel or ClosedProtectedHost(), session)
@@ -148,6 +149,11 @@ class ProtectedCanonicalTimeline:
         check(type(identity) is int and identity > 0, "protected_message_id")
         return self.wire.call("protected_get_message", {"tool": "syndicatum_get_message",
                               "profile_id": PROFILE, "message_id": identity})
+
+    def close_terminal(self):
+        self.wire.terminal = True
+        close = getattr(self.wire.channel, "close_terminal", None)
+        if close: close()
 
 
 class DurableHead:

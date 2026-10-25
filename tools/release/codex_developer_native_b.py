@@ -167,6 +167,9 @@ class CutoverJournal:
         # Historical fixture has no continuously held file handles.
         pass
 
+    def check_final_time(self):
+        pass  # Historical directory fixture; never selected by preparation default.
+
     def append(self, boundary, producer, data):
         self.verify(self.retained_head)
         record = {"attempt_id": self.plan["attempt_id"], "cutoff_id": self.plan["cutoff_id"],
@@ -396,6 +399,7 @@ class DeveloperBAdapter:
             self.boundary_index += 1
             if self.boundary_index == len(order):
                 self._close_terminal()
+                self.journal.check_final_time()
                 self._fresh(current["before"]["clock"], current["after"]["clock"], current["clock"])
             return {"result": "boundary_verified_only", "head_sha256": head, "authorizes_install": False}
         except Exception as error:

@@ -128,7 +128,7 @@ class TransportFixtures(unittest.TestCase):
         runner, _, api, _, _, _, _ = setup_transport()
         windows = transport.WindowsSessionAPI(fixed.packed(api.manifest))
         with self.assertRaisesRegex(fixed.Stop, 'source_only_persistent_windows_gate'): windows.open_existing_pair()
-        with self.assertRaisesRegex(fixed.Stop, 'protected_host_dispatch_and_durable_handoff_unavailable'):
+        with self.assertRaisesRegex(fixed.Stop, 'trusted_agent_host_not_supplied'):
             transport.ProtectedCanonicalTimeline().get_message(99999)
 
     def test_open_pin_mismatch_and_handoff_flush_uncertainty_do_not_leak_or_replay(self):
