@@ -197,7 +197,7 @@ suppression, stop, install, activation, merge or other-machine action is authori
 
 The concrete packet is `docs/codex-developer-pilot-admission-packet.json`. It is
 SOURCE_ONLY_DRAFT_NOT_AUTHORITY. It contains the candidate pin, exact Git-blob
-SHA-256/length of every mechanism module (16 files), entrypoint names, quantitative
+SHA-256/length of every mechanism module (17 files), entrypoint names, quantitative
 limits, ordered A-F phases, expected results and uncertainty handling. Source must
 be staged as those exact blob bytes; an autocrlf checkout is not assumed identical.
 The packet intentionally does not hash itself or invent its eventual review head;
@@ -334,3 +334,29 @@ routed delivery. It supports current ready/zero-unavailable routes and explicitl
 reviewed degraded routes, without inventing faults in production. Inert tests pass
 both the installed-awaiting-owner handoff and final ready lifecycle verification;
 actual installed lifecycle/delivery remains unobserved and unresolved.
+
+
+## Failed-command observation and concrete collector (#11662)
+
+A failed command now produces a bounded independent postimage assessment before
+terminal close. Nonzero exit, guard rejection and partial results never authorize
+a successor command. A possibly active child retains its identity and a precise
+unavailable reason; the coordinator does not race it, kill it, wait in a loop or
+infer unchanged state. Even an exited root requires independent writer-quiescence
+metadata. Collector/publication errors preserve the primary command error.
+
+The source collector validates a nonce-bound metadata envelope, source hashes,
+context, operation, schema and freshness, then independently hashes the reviewed
+artifact layout and reads managed Git identity. Failed observations retain partial
+state without applying success assertions. Inert lifecycle fixtures exercise this
+actual collector with byte readers: the archive has48 files while the installed
+fixture has47. Neither implies the actual native installation count. Native reader,
+worker, CLI and assembly gates remain closed; actual producer provenance and root
+mapping are still admission evidence, not established by these fixtures.
+
+After source review, the smallest coherent A1 decision must name the exact pinned
+CLI metadata/version/effective-source observations, installed and managed layout
+mapping, bounded dependency/module/stdin handshake, and any newly allocated private
+capture/write-probe scope in one packet. No B setup, C stop/install or activation
+is included. Current packet remains non-executable and requests no protected
+contents or persistent probe under existing authority.

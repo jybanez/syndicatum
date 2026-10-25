@@ -11,14 +11,22 @@ sys.path.insert(0,str(ROOT/'tools/release'))
 import codex_developer_lifecycle as lifecycle
 import codex_developer_host_assembly as assembly
 import codex_developer_fixed_journal as fixed
+import codex_developer_install_collector as collector_module
 specmod=importlib.util.spec_from_file_location('prep_fixture',ROOT/'tests/codex-developer-integrated-preparation.py')
 fixture=importlib.util.module_from_spec(specmod);specmod.loader.exec_module(fixture)
 
 
 def setup(fault=None):
-    spec={'unrelated_sha256':'a'*64,'preinstall_files':{'old':'b'*64},'candidate_files':{'file'+str(i):'c'*64 for i in range(48)},
-          'marketplace_preimage':{'source':'old'},'marketplace_postimage':lifecycle.MARKETPLACE,
-          'archive_sha256':lifecycle.ARCHIVE_SHA,'capacity':{'logical_upper_bytes':[16384]*36,
+    before_files={'old.mjs':b'old-source'}
+    after_files={'new'+str(i)+'.mjs':('source-'+str(i)).encode() for i in range(47)}
+    binding={'collector_source_sha256':fixed.digest(Path(collector_module.__file__).read_bytes()),
+             'metadata_producer_source_sha256':'f'*64,'managed_root_role':'managed',
+             'installed_before':{'root_role':'old','files':list(before_files)},
+             'installed_after':{'root_role':'new','files':list(after_files)}}
+    spec={'unrelated_sha256':'a'*64,'preinstall_files':{k:fixed.digest(v) for k,v in before_files.items()},
+          'candidate_files':{k:fixed.digest(v) for k,v in after_files.items()},'collector_binding_sha256':fixed.digest(fixed.packed(binding)),
+          'marketplace_preimage':{'source':'old','head':'b'*40},'marketplace_postimage':lifecycle.MARKETPLACE,
+          'archive_sha256':lifecycle.ARCHIVE_SHA,'capacity':{'logical_upper_bytes':[32768]*36,
           'failure_publications':3,'projected_total_ms':10000,'worst_observation_ms':1000}}
     if fault=='capacity':spec['capacity']['projected_total_ms']=120001
     runner,backend,api,_,_=fixture.setup(lifecycle=True,installation_spec_sha256=fixed.digest(fixed.packed(spec)))
@@ -34,28 +42,106 @@ def setup(fault=None):
             return journal
         runner.journal_factory=slow_factory
     state=assembly.TrustedHostState(runner,backend)
-    market=dict(spec['marketplace_preimage']); files=dict(spec['preinstall_files']);calls=[]
+    market=dict(spec['marketplace_preimage']);roots={'old':dict(before_files),'new':{}};calls=[]
+    class Reader:
+        def __init__(self):self.calls=[]
+        def layout(self,description,partial=False):
+            self.calls.append((description['root_role'],partial))
+            if fault=='collection-fail' and partial:raise ValueError('inert secondary')
+            data=roots[description['root_role']]
+            if not partial:fixed.check(sorted(data)==sorted(description['files']),'inert_layout_inventory')
+            return {k:fixed.digest(v) for k,v in data.items()}
+        def git_head(self,role):return 'b'*40 if market and market.get('source')=='old' else lifecycle.CANDIDATE
+    reader=Reader()
     class Dispatcher:
         def invoke(self,operation):
-            nonlocal market,files
+            nonlocal market
             calls.append(operation)
+            if fault in ('guard','nonzero','writer-live','collection-fail','timeout','partial-result') and operation=='marketplace_remove':
+                if fault!='guard':market=None
+                if fault=='partial-result':return {'operation':operation,'exit_code':0,'argv_sha256':'0'*64}
+                raise RuntimeError('primary_command_failure')
             if fault=='command' and operation=='marketplace_add':raise TimeoutError('inert uncertain command')
             if operation=='marketplace_remove':market=None
             else:market=dict(spec['marketplace_postimage'])
-            if operation=='plugin_add':files=dict(spec['candidate_files'])
+            if operation=='plugin_add':
+                roots['new']=dict(after_files)
+                if fault=='postimage':roots['new'].pop(next(iter(roots['new'])))
             return {'operation':operation,'exit_code':0,'argv_sha256':fixed.digest(fixed.packed(list(lifecycle.COMMANDS[operation])))}
-    def observe(operation):
-        value={'operation':operation,'marketplace':market,'candidate_files':files,
-               'unrelated_sha256':spec['unrelated_sha256'],'observed_ms':backend.time,
-               'shared_staging_entries':[],'concurrent_cli_operations':[]}
+        def failure_context(self):
+            return {'collection_safe':fault not in ('command','timeout'),'reason':'command_not_started' if fault=='guard' else ('child_may_be_running' if fault in ('command','timeout') else 'root_exited_requires_independent_quiescence'),
+                    'child':None if fault=='guard' else {'pid':123,'created_filetime':456}}
+    metadata_calls=[]
+    def metadata(challenge):
+        operation=challenge['operation'];metadata_calls.append(operation)
+        value={'marketplace':market,'unrelated_sha256':spec['unrelated_sha256'],'observed_ms':backend.time,
+               'shared_staging_entries':[],'concurrent_cli_operations':[],'writer_processes':[]}
         if fault=='staging':value['shared_staging_entries']=['unrelated-entry']
-        if fault=='postimage' and operation=='plugin_add':value['candidate_files']={}
         if fault=='age' and operation=='before-marketplace_add':value['observed_ms']-=120001
-        return fixed.packed(value)
+        if fault=='writer-live' and operation=='marketplace_remove':value['writer_processes']=[{'pid':789,'parent_pid':123}]
+        return fixed.packed({'challenge':challenge,'producer_source_sha256':'f'*64,'facts':value})
+    observe=collector_module.InstallObservationCollector(metadata,reader,runner.now,binding,spec['collector_binding_sha256'],runner.context)
+    observe.metadata_calls=metadata_calls;observe.reader_fixture=reader
     return state,Dispatcher(),observe,spec,api,calls
 
 
 class LifecycleFixtures(unittest.TestCase):
+    def test_failed_command_collects_independent_postimage_or_precise_unavailability(self):
+        for mode in ('nonzero','guard','partial-result','timeout','writer-live','collection-fail'):
+            with self.subTest(mode=mode):
+                state,dispatch,observe,spec,api,calls=setup(mode)
+                controller=lifecycle.DeveloperLifecycle(state,dispatch,observe,spec)
+                with self.assertRaises(Exception) as caught:controller.run()
+                result=controller.failure_assessment
+                self.assertEqual(calls,['marketplace_remove'])
+                self.assertEqual(result['operation'],'marketplace_remove')
+                if mode=='timeout':
+                    self.assertEqual(result['status'],'unavailable')
+                    self.assertEqual(result['reason'],'child_may_be_running')
+                    self.assertEqual(result['child']['pid'],123)
+                    self.assertNotIn('marketplace_remove',observe.metadata_calls)
+                elif mode in ('collection-fail','writer-live'):
+                    self.assertEqual(str(caught.exception),'primary_command_failure')
+                    self.assertEqual(result['status'],'unavailable')
+                    self.assertEqual(result['reason'],'independent_writer_quiescence_unavailable' if mode=='writer-live' else 'independent_collection_failed')
+                else:
+                    self.assertEqual(result['status'],'retained')
+                    import base64
+                    raw=base64.b64decode(result['raw_base64'],validate=True)
+                    self.assertEqual(fixed.digest(raw),result['sha256'])
+                    value=json.loads(raw)
+                    self.assertIn('collector_provenance',value)
+                    self.assertTrue(any(partial for _,partial in observe.reader_fixture.calls))
+                self.assertTrue(state.closed)
+                self.assertFalse(api.held)
+                before=list(calls)
+                with self.assertRaises(fixed.Stop):controller.run()
+                self.assertEqual(calls,before)
+
+    def test_collector_source_context_and_quiescence_are_not_caller_fact_maps(self):
+        state,dispatch,observe,spec,api,calls=setup()
+        original=observe.metadata
+        def wrong_context(challenge):
+            value=json.loads(original(challenge));value['challenge']['context_sha256']='0'*64
+            return fixed.packed(value)
+        observe.metadata=wrong_context
+        with self.assertRaises(fixed.Stop):lifecycle.DeveloperLifecycle(state,dispatch,observe,spec).run()
+        self.assertEqual(observe.reader_fixture.calls,[])
+        self.assertEqual(calls,[])
+        state,dispatch,observe,spec,api,calls=setup()
+        original=observe.metadata
+        def writer_present(challenge):
+            value=json.loads(original(challenge));value['facts']['writer_processes']=[{'pid':123}]
+            return fixed.packed(value)
+        observe.metadata=writer_present
+        with self.assertRaises(collector_module.ObservationUnavailable):
+            lifecycle.DeveloperLifecycle(state,dispatch,observe,spec).run()
+        self.assertEqual(observe.reader_fixture.calls,[])
+        with patch.object(collector_module.Path,'exists') as read:
+            with self.assertRaisesRegex(RuntimeError,'SOURCE_ONLY'):
+                collector_module.NativeInstallReader({'old':'NO-READ'}).layout({'root_role':'old','files':[]})
+            read.assert_not_called()
+
     def test_new_readonly_reload_acceptance_checks_runtime_and_never_resumes_install(self):
         plan={'candidate_files':{'new':'c'*64},'unrelated_run_values':{},'malformed_artifacts':{},
               'protected_identity_hashes':{},'malformed_route_tokens':[],'max_health_age_ms':1000,
@@ -84,6 +170,7 @@ class LifecycleFixtures(unittest.TestCase):
         controller=lifecycle.DeveloperLifecycle(state,dispatch,observe,spec)
         result=controller.run()
         self.assertEqual(calls,list(lifecycle.COMMANDS))
+        self.assertEqual(len(spec['candidate_files']),47) # archive48 != installed-layout47
         self.assertEqual(result['result'],'installed_awaiting_owner_normal_reload')
         self.assertEqual(result['activation'],'awaiting_owner')
         self.assertFalse(result['authorizes_resume'])

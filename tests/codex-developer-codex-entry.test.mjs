@@ -32,10 +32,12 @@ test('source entry refuses before any execution tool or private packet operation
   assert.equal(calls,0);
 });
 test('pilot independent evidence capability is correlated and required before launch',async()=>{
-  const p={...packet,operation:'pilot',installation_spec_sha256:'c'.repeat(64)};
+  const p={...packet,operation:'pilot',installation_spec_sha256:'c'.repeat(64),collector_binding_sha256:'d'.repeat(64),
+    collector_binding:{metadata_producer_source_sha256:'f'.repeat(64)},source_files:[{name:'codex_developer_codex_entry.mjs',sha256:'f'.repeat(64)}]};
   let started=0, collected=0, delivered;
   const session={async start(){started++;return JSON.stringify({kind:'install_observation_challenge',session:p.session,
-    operation:'before-marketplace_remove',spec_sha256:p.installation_spec_sha256})+'\n';},
+    operation:'before-marketplace_remove',spec_sha256:p.installation_spec_sha256,challenge:{operation:'before-marketplace_remove',
+      context_sha256:p.reviewed.context_sha256,binding_sha256:p.collector_binding_sha256,nonce:'e'.repeat(48),sequence:1}})+'\n';},
     async send(value){delivered=value;return JSON.stringify({kind:'assembly_result',session:p.session,
       session_closed:true,authorizes_install:false})+'\n';},async finish(){},poison(){}};
   const tools={[tool]:async()=>{throw new Error('unused');}};
@@ -46,5 +48,5 @@ test('pilot independent evidence capability is correlated and required before la
   }});
   assert.equal(collected,1);
   assert.equal(delivered.kind,'install_observation_delivery');
-  assert.equal(Buffer.from(delivered.raw_base64,'base64').toString(),'{"inert":true}');
+  assert.deepEqual(JSON.parse(Buffer.from(delivered.raw_base64,'base64').toString()).facts,{inert:true});
 });

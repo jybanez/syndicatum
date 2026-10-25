@@ -12,9 +12,10 @@ import threading
 import queue
 import time
 
-from codex_developer_fixed_journal import check, digest, packed
+from codex_developer_fixed_journal import check, digest, packed, Stop
 from codex_developer_process_ipc import PinnedWindowsProcess, _unique, sha_file
 from codex_pilot_sequence import verify_acceptance, bound_object
+from codex_developer_install_collector import InstallObservationCollector
 
 CANDIDATE = '9141daa08d896f2524be30b96d01ab2a14398757'
 ARCHIVE_SHA = '331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb'
@@ -35,6 +36,14 @@ class NativeCliDispatcher:
     def __init__(self, executable, executable_sha256, neutral_directory):
         self.executable, self.sha, self.cwd = executable, executable_sha256, neutral_directory
         self.started, self.terminal, self.evidence = set(), False, []
+        self.child=None
+        self.child_identity=None
+
+    def failure_context(self):
+        if self.child is None:return {'collection_safe':True,'reason':'command_not_started','child':None}
+        exited=self.child.poll() is not None
+        return {'collection_safe':exited,'reason':'root_exited_requires_independent_quiescence' if exited else 'child_may_be_running',
+                'child':self.child_identity or {'pid':self.child.pid}}
 
     @staticmethod
     def gate():
@@ -44,6 +53,7 @@ class NativeCliDispatcher:
         self.gate()  # Before executable reads, process start or mutation.
         check(not self.terminal and operation in COMMANDS and operation not in self.started, 'cli_dispatch_no_replay')
         self.started.add(operation)
+        self.child=None;self.child_identity=None
         child = None
         try:
             executable, cwd = Path(self.executable), Path(self.cwd)
@@ -53,10 +63,12 @@ class NativeCliDispatcher:
             child = subprocess.Popen([self.executable,*COMMANDS[operation]],executable=self.executable,
                 cwd=self.cwd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                 shell=False,close_fds=True,creationflags=subprocess.CREATE_NO_WINDOW)
+            self.child=child
             # Fresh child only; reuse bounded reads/deadlines, never a reconnect.
             helper= PinnedWindowsProcess(self.executable,'NO-WORKER',{},30)
             helper.child=child
             identity=helper._probe()
+            self.child_identity=identity
             check(identity['sha256']==self.sha,'cli_child_pin')
             deadline=time.monotonic()+30
             def bounded_read(stream,limit):
@@ -106,11 +118,16 @@ class DeveloperLifecycle:
     def __init__(self, host_state, dispatcher, observe_install, install_spec):
         self.state,self.dispatcher,self.observe,self.spec=host_state,dispatcher,observe_install,install_spec
         self.started,self.terminal=False,False
-        check(callable(observe_install),'independent_install_collector_required')
+        self.active_command=None
+        self.failure_assessment=None
+        self.last_observation={}
+        check(type(observe_install) is InstallObservationCollector and
+              digest(packed(observe_install.binding))==install_spec['collector_binding_sha256'] and
+              observe_install.context==host_state.runner.context,'independent_install_collector_required')
 
     def _postimage(self, operation, raw):
         value=json.loads(raw,object_pairs_hook=_unique)
-        check(packed(value)==raw and set(value)=={'operation','marketplace','candidate_files','unrelated_sha256','observed_ms','shared_staging_entries','concurrent_cli_operations'},
+        check(packed(value)==raw and set(value)=={'operation','marketplace','candidate_files','unrelated_sha256','observed_ms','shared_staging_entries','concurrent_cli_operations','collector_provenance'},
               'installation_postimage_schema')
         self._quiet(value)
         check(value['operation']==operation and value['unrelated_sha256']==self.spec['unrelated_sha256'],
@@ -130,7 +147,7 @@ class DeveloperLifecycle:
         raw=self.observe('before-'+operation)
         value=json.loads(raw,object_pairs_hook=_unique)
         check(packed(value)==raw,'installation_preimage_canonical')
-        check(set(value)=={'operation','marketplace','candidate_files','unrelated_sha256','observed_ms','shared_staging_entries','concurrent_cli_operations'} and
+        check(set(value)=={'operation','marketplace','candidate_files','unrelated_sha256','observed_ms','shared_staging_entries','concurrent_cli_operations','collector_provenance'} and
               value['operation']=='before-'+operation and value['unrelated_sha256']==self.spec['unrelated_sha256'] and
               value['candidate_files']==self.spec['preinstall_files'],'installation_preimage')
         expected={'marketplace_remove':self.spec['marketplace_preimage'],'marketplace_add':None,
@@ -179,7 +196,7 @@ class DeveloperLifecycle:
             check(digest(packed(self.spec))==self.state.runner.plan.get('installation_spec_sha256'),
                   'installation_spec_context_pin')
             check(self.spec['archive_sha256']==ARCHIVE_SHA and self.spec['marketplace_postimage']==MARKETPLACE and
-                  len(self.spec['candidate_files'])==48 and all(type(value) is str and len(value)==64 and
+                  0<len(self.spec['candidate_files'])<=512 and all(type(value) is str and len(value)==64 and
                   all(c in '0123456789abcdef' for c in value) for value in self.spec['candidate_files'].values()),
                   'exact_install_artifact_spec')
             self._capacity()
@@ -197,14 +214,18 @@ class DeveloperLifecycle:
                 head=journal.admit_lifecycle(operation,journal.retained_head)
                 self.state.adapter._fresh(self.state.adapter.last_clock)
                 self._fresh(preimage)
+                self.active_command=operation
                 result=self.dispatcher.invoke(operation)
                 check(result['operation']==operation and result['exit_code']==0 and
                       result['argv_sha256']==digest(packed(list(COMMANDS[operation]))),'command_result_uncertain')
                 journal.append(operation,'command-result',result)
                 head=self.state.boundary(after,journal.retained_head)['head_sha256']
-                postimage=self._postimage(operation,self.observe(operation))
+                raw=self.observe(operation,command_context={'collection_safe':True,'child':result.get('child')})
+                self.last_observation[operation]=raw
+                postimage=self._postimage(operation,raw)
                 journal.append(operation,'independent-install-postimage',postimage)
                 head=journal.retained_head
+                self.active_command=None
             # Activation dispatch is deliberately owner-controlled normal reload:
             # never restart the old plugin, launch a second MCP server or reopen UI.
             journal.append('activation','owner-intent',{'policy':'owner_normal_close_reopen','forced_reopen':False})
@@ -221,6 +242,8 @@ class DeveloperLifecycle:
                     'owner_instruction':'When ready, close Codex and open it normally. Do not force reopen.'}
         except Exception as error:
             self.terminal=True
+            if self.active_command is not None:
+                self._failed_postimage(error)
             if self.state.runner.journal is not None:
                 try:self.state.runner.journal.append('lifecycle','uncertain-dispatch-evidence',
                     {'evidence':getattr(self.dispatcher,'evidence',[]),'code':type(error).__name__})
@@ -228,6 +251,42 @@ class DeveloperLifecycle:
             try:self.state.close_terminal()
             except Exception:error.add_note('lifecycle_close_uncertain; no replay')
             raise
+
+    def _failed_postimage(self, primary):
+        operation=self.active_command
+        context={'collection_safe':False,'reason':'command_process_state_unavailable','child':None}
+        try:
+            probe=getattr(self.dispatcher,'failure_context',None)
+            if probe:context=probe()
+            if context.get('collection_safe') is not True:
+                assessment={'operation':operation,'status':'unavailable','reason':context.get('reason','quiescence_not_proven'),
+                            'child':context.get('child')}
+            else:
+                raw=self.last_observation.get(operation)
+                if raw is None:
+                    collect=getattr(self.observe,'failed',self.observe)
+                    raw=collect(operation,command_context=context)
+                check(type(raw) is bytes and len(raw)<=32768,'failed_postimage_bound')
+                value=json.loads(raw,object_pairs_hook=_unique)
+                check(packed(value)==raw and value['operation']==operation,'failed_postimage_context')
+                check(type(value['concurrent_cli_operations']) is list and not value['concurrent_cli_operations'],
+                      'independent_command_quiescence_unavailable')
+                self._fresh(value)
+                # Failed/partial commands need observations, NOT success-state
+                # assertions or inference that the preimage stayed unchanged.
+                assessment={'operation':operation,'status':'retained','child':context.get('child'),
+                            'completeness':'bounded_partial_observation_not_success',
+                            'raw_base64':base64.b64encode(raw).decode(),'sha256':digest(raw)}
+        except Exception as secondary:
+            code=getattr(secondary,'code',None)
+            if code is None and isinstance(secondary,Stop) and str(secondary).replace('_','').isalnum():code=str(secondary)
+            assessment={'operation':operation,'status':'unavailable','reason':code or 'independent_collection_failed',
+                        'error_type':type(secondary).__name__,'child':context.get('child')}
+            primary.add_note('independent_failed_postimage_unavailable; primary preserved')
+        self.failure_assessment=assessment
+        primary.failed_command_postimage=assessment
+        try:self.state.runner.journal.append('lifecycle','failed-command-postimage',assessment)
+        except Exception:primary.add_note('failed_postimage_publication_unavailable')
 
 
 def verify_after_owner_reload(plan_raw,plan_sha,evidence_raw,evidence_sha):

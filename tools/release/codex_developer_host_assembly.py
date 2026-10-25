@@ -55,13 +55,14 @@ class AgentStdioLink:
         finally:
             self.pending = False
 
-    def installation_snapshot(self, operation, spec_sha256):
+    def installation_snapshot(self, challenge, spec_sha256):
+        operation=challenge['operation']
         check(not self.closed and not self.pending,'agent_install_observation_lifetime')
         self.pending=True
         deadline=time.monotonic()+30
         try:
             self.emit({'kind':'install_observation_challenge','session':self.session,
-                       'operation':operation,'spec_sha256':spec_sha256},deadline)
+                       'operation':operation,'spec_sha256':spec_sha256,'challenge':challenge},deadline)
             value=self.io._bounded(lambda:self.io._read_frame(65536),deadline)
             check(value.get('kind')=='install_observation_delivery' and value.get('session')==self.session and
                   value.get('operation')==operation and value.get('spec_sha256')==spec_sha256,
@@ -86,6 +87,7 @@ class TrustedHostState:
     def __init__(self, runner, backend, link=None):
         self.runner, self.backend, self.link = runner, backend, link
         self.adapter, self.started, self.closed = None, False, False
+        self.close_uncertain=False
 
     def prepare(self, *, lifecycle=False):
         check(not self.started and not self.closed, 'host_assembly_no_replay')
@@ -118,6 +120,7 @@ class TrustedHostState:
             except Exception as error: errors.append(error)
         if self.link is not None: self.link.closed = True
         if errors:
+            self.close_uncertain=True
             errors[0].close_uncertain = True
             raise errors[0]
 
@@ -166,7 +169,11 @@ def main():
             from codex_developer_lifecycle import NativeCliDispatcher
             dispatcher=NativeCliDispatcher(config['cli_executable'],config['cli_sha256'],config['neutral_directory'])
             spec=config['installation_spec']
-            result=state.run_pilot(dispatcher,lambda op:link.installation_snapshot(op,digest(packed(spec))),spec)
+            from codex_developer_install_collector import InstallObservationCollector, NativeInstallReader
+            binding=config['collector_binding']
+            observer=InstallObservationCollector(lambda challenge:link.installation_snapshot(challenge,digest(packed(spec))),
+                NativeInstallReader(binding['roots']),state.runner.now,binding,spec['collector_binding_sha256'],state.runner.context)
+            result=state.run_pilot(dispatcher,observer,spec)
         else:result = state.prepare()
         # A preparation-only attempt is consumed; full pilot never resumes it.
         # Pilot activation is handed to the owner after final installed checks.
@@ -174,6 +181,13 @@ def main():
         link.emit({'kind': 'assembly_result', 'session': config['session'], 'result': result,
                    'session_closed': True, 'installer_dispatch': 'closed_source', 'authorizes_install': False},
                   time.monotonic() + 30)
+    except Exception as error:
+        try:state.close_terminal()
+        except Exception:error.add_note('assembly_close_uncertain')
+        link.emit({'kind':'assembly_result','session':config['session'],
+                   'result':{'result':'stopped','primary_error_type':type(error).__name__,
+                             'failed_command_postimage':getattr(error,'failed_command_postimage',None)},
+                   'session_closed':not state.close_uncertain,'authorizes_install':False},time.monotonic()+30)
     finally:
         state.close_terminal()
 

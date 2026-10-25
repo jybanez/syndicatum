@@ -18,15 +18,15 @@
     "all_native_gates": "closed_unconditionally",
     "installer_dispatch": "IMPLEMENTED_CLOSED",
     "activation_dispatch": "IMPLEMENTED_OWNER_CONTROLLED_RELOAD",
-    "install_observation_binding": "NOT_ADMITTED",
+    "install_observation_binding": "IMPLEMENTED_SOURCE_ONLY; native root/producer/runtime admission pending",
     "readonly_acceptance": "implemented; independent new evidence, never resumes C/D"
   },
   "source_files": [
     {
       "name": "codex_developer_codex_entry.mjs",
       "repository_path": "tools/release/codex_developer_codex_entry.mjs",
-      "git_blob_bytes_sha256": "f10b801ce24922f0f111d8b6a8d48eb36c8da66937a6866cda1e873e419f7462",
-      "size": 11572
+      "git_blob_bytes_sha256": "e9dd8191dcac6a3daffab7ab7b3b691cd862e042583ec31fd1343fc373f7efcc",
+      "size": 12530
     },
     {
       "name": "codex_developer_agent_host.mjs",
@@ -37,8 +37,8 @@
     {
       "name": "codex_developer_host_assembly.py",
       "repository_path": "tools/release/codex_developer_host_assembly.py",
-      "git_blob_bytes_sha256": "483598152c1780bd82ed72bd272421d333df18e3926312d6db7809bfec8568b0",
-      "size": 9452
+      "git_blob_bytes_sha256": "ab727d8b8f3b0042d045ffbdcc33350d47ac5563cec6aa8e7edd0857111f10bc",
+      "size": 10464
     },
     {
       "name": "codex_developer_host_handoff.py",
@@ -49,8 +49,8 @@
     {
       "name": "codex_developer_integrated_preparation.py",
       "repository_path": "tools/release/codex_developer_integrated_preparation.py",
-      "git_blob_bytes_sha256": "4c1acc1746dc883ebe67d9ec34bd9f9ee308c20d860037510428e7b9a30bc203",
-      "size": 15562
+      "git_blob_bytes_sha256": "6d9e121044f720d2551e45b597d49acd421faa9a0546438e27ea89cbc1499aa4",
+      "size": 15589
     },
     {
       "name": "codex_developer_transport.py",
@@ -91,14 +91,20 @@
     {
       "name": "codex_developer_lifecycle.py",
       "repository_path": "tools/release/codex_developer_lifecycle.py",
-      "git_blob_bytes_sha256": "87cd97b423e551903399de5ce392f15ed187f7be7a5a15a6d8a3187c3e5c4299",
-      "size": 15080
+      "git_blob_bytes_sha256": "f265d18f6e55d51343443b10e5acf48a58bd5a734d01913c3304d1ebd3ec90e2",
+      "size": 18889
     },
     {
       "name": "codex_pilot_sequence.py",
       "repository_path": "tools/release/codex_pilot_sequence.py",
       "git_blob_bytes_sha256": "0aa7148a89ca24da1c453f7617bd6b56093f9be66c06d02b547deeec98697dad",
       "size": 12971
+    },
+    {
+      "name": "codex_developer_install_collector.py",
+      "repository_path": "tools/release/codex_developer_install_collector.py",
+      "git_blob_bytes_sha256": "5defe425f9073c6042cef1dc720212e203f906bc961855d577c3b0835d0ab9fc",
+      "size": 9520
     },
     {
       "name": "codex-developer-fixed-session-protocol.ps1",
@@ -354,10 +360,34 @@
   "remaining_evidence": [
     "fresh exact raw preimages/cutoff and configuration-layer/source registration proof",
     "complete admitted dependency closure/actual tool-stdin/module loading",
-    "independent installation collector implementation/provenance binding for the typed host capability; absent capability rejects before launch",
+    "actual native collector root/layout and metadata producer provenance admission; concrete source collector tested inertly",
     "new private receipt/head/writer manifests and ACL identities, verified external backup",
     "measured complete evidence cardinality and elapsed-time budget; aggregate byte estimates are not allocation permission",
     "actual installed postimages/owner-controlled activation and observed lifecycle/delivery acceptance"
   ],
-  "ready_for_owner_execution": false
+  "ready_for_owner_execution": false,
+  "collector_review": {
+    "source": "codex_developer_install_collector.py",
+    "native_gate": "closed_unconditionally",
+    "archive_inventory_is_install_layout": false,
+    "inert_installed_fixture_files": 47,
+    "actual_installed_layout": "not captured; existing0.2.7 metadata45 files is not target0.2.10 layout",
+    "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
+  },
+  "next_A1_decision_draft": {
+    "status": "after corrected source review only; no execution authority",
+    "scope": [
+      "exact pinned CLI version and effective marketplace/source metadata",
+      "reviewed actual installed/managed artifact mapping",
+      "bounded runtime dependency/module/stdin handshake",
+      "explicit newly allocated private capture/probe scope if needed"
+    ],
+    "excluded": [
+      "B setup",
+      "C stop/install",
+      "activation",
+      "protected contents",
+      "other machines"
+    ]
+  }
 }

@@ -113,7 +113,7 @@ class FixedPreparationJournal:
                 if index<len(limits['lengths']):limit=limits['lengths'][index]
                 else:
                     check(index<len(limits['lengths'])+limits['failure_count'] and
-                          (producer in ('stopped','uncertain-dispatch-evidence') or boundary=='failure-postimage'),
+                          (producer in ('stopped','uncertain-dispatch-evidence','failed-command-postimage') or boundary=='failure-postimage'),
                           'unreviewed_logical_publication')
                     limit=max(limits['lengths'])
                 check(len(raw)<=limit,'admitted_logical_projection_exceeded')

@@ -19,7 +19,7 @@ spec.loader.exec_module(fixture)
 
 def setup(handoff_manifest_sha256=None, private_receipt_manifest_sha256=None, lifecycle=False, installation_spec_sha256=None):
     plan = fixture.plan_for(Path("INERT-NOT-A-FILESYSTEM-ROOT"))
-    slots, width = (256 if lifecycle else 128), 8192
+    slots, width = (512 if lifecycle else 128), 8192
     manifest = {"root": "INERT-FIXED-ROOT", "namespace": "new-integrated-attempt", "slots": slots, "width": width,
                 "files": {name: {"path": "INERT-FIXED-ROOT/" + name, "identity": "fixture-volume:" + name,
                     "length": slots * width, "acl": "private-fixture-acl", "final_path": "fixture-normalized:" + name}

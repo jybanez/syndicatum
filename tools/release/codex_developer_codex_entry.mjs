@@ -8,11 +8,14 @@ export const SOURCE_FILES = Object.freeze([
   'codex_developer_process_ipc.py','codex_developer_fixed_journal.py','codex_developer_native_b.py',
   'codex_developer_freshness.py','codex-developer-fixed-session-worker.ps1',
   'codex_developer_lifecycle.py','codex_pilot_sequence.py',
+  'codex_developer_install_collector.py',
   'codex-developer-fixed-session-protocol.ps1','codex-developer-fixed-storage.psm1','codex-developer-native-b.psm1',
 ]);
 const fail = message => {throw new Error(message);};
 const quote = value => "'" + value.replaceAll("'", "''") + "'";
 const MAX_OUTPUT = 32768;
+const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?
+  Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 
 export class CodexToolSession {
   constructor(tools, packet) {this.tools=tools;this.packet=structuredClone(packet);this.id=null;this.terminal=false;this.exitCode=null;}
@@ -150,17 +153,23 @@ export async function runCodexHost({tools, packet, session=new CodexToolSession(
         const allowed=['before-marketplace_remove','marketplace_remove','before-marketplace_add','marketplace_add','before-plugin_add','plugin_add'];
         if(packet.operation!=='pilot'||typeof collectInstallation!=='function'||!allowed.includes(value.operation)||
             value.operation!==evidenceOrder[evidenceIndex++]||
-            value.spec_sha256!==packet.installation_spec_sha256)fail('unadmitted installation observation');
+            value.spec_sha256!==packet.installation_spec_sha256||value.challenge?.operation!==value.operation||
+            value.challenge?.context_sha256!==packet.reviewed.context_sha256||
+            value.challenge?.binding_sha256!==packet.collector_binding_sha256)fail('unadmitted installation observation');
         // Capability belongs to the trusted host. Never eval a collector or read
         // an arbitrary path/command from a challenge or an untrusted plan.
         let timer;
         let raw;
-        try{raw=await Promise.race([collectInstallation({operation:value.operation,spec_sha256:value.spec_sha256}),
+        try{raw=await Promise.race([collectInstallation({operation:value.operation,spec_sha256:value.spec_sha256,challenge:value.challenge}),
           new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('installation observation timeout; no replay')),30000);})]);
         }finally{clearTimeout(timer);}
         if(!(raw instanceof Uint8Array)||raw.byteLength>32768)fail('installation observation shape/bound');
+        const producer=packet.source_files.find(x=>x.name==='codex_developer_codex_entry.mjs')?.sha256;
+        if(producer!==packet.collector_binding.metadata_producer_source_sha256)fail('metadata producer source mismatch');
+        const envelope={challenge:value.challenge,producer_source_sha256:producer,facts:JSON.parse(Buffer.from(raw).toString('utf8'))};
         append(await session.send({kind:'install_observation_delivery',session:packet.session,
-          operation:value.operation,spec_sha256:value.spec_sha256,raw_base64:Buffer.from(raw).toString('base64')}));
+          operation:value.operation,spec_sha256:value.spec_sha256,raw_base64:Buffer.from(JSON.stringify(canonical(envelope))
+            .replace(/[\u007f-\uffff]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'))).toString('base64')}));
       }else if(value.kind==='assembly_result'){
         if(value.authorizes_install!==false||value.session_closed!==true||queue.length||pending.trim())
           fail('incomplete/overbroad assembly completion');
