@@ -86,12 +86,13 @@ the earlier is_symlink/is_junction-only attestation did not cover these flags an
 is withdrawn as sufficient. Both private proposals and all prior evidence remain
 unchanged. Do not invoke the old51a21324 proposal under this changed source.
 
-The runner now uses a shared check_nonreparse_chain guard over lstat metadata,
+The runner now uses a shared check_nonreparse_chain guard over lstat plus direct GetFileAttributesW,
 rejecting FILE_ATTRIBUTE_REPARSE_POINT for every tag and portable symlink mode,
 with at most64 ancestors. It checks capture parent and runtime paths before writes
 or byte hashing. Inert tests cover a reparse-flagged ordinary-directory mode at
-root/ancestor even when it is not a junction or symlink. A read-only comparison
-confirmed agreement with full Windows flags. The existing LocalApplicationData
+root/ancestor even when it is not a junction or symlink. The first Python-lstat-only comparison did not reproduce the full Windows flag
+and is not accepted as confirmation; the direct Win32 query was added for that
+coverage gap. Current candidate checks are separate read-only observations. The existing LocalApplicationData
 known-folder parent passes all ancestor checks; no directory was created there.
 It is a candidate only. New parent/attempt/proposal source binding and review are
 still required before a future single owner decision. Old51a21324 bytes must not

@@ -58,9 +58,10 @@
     "digest_helper_processes": 0
   },
   "reparse_correction": {
-    "guard": "lstat full FILE_ATTRIBUTE_REPARSE_POINT, all tags, max64 ancestors",
+    "guard": "lstat plus direct GetFileAttributesW, all Windows reparse tags, max64 ancestors",
     "old_parent": "rejected:2 non-link flagged ancestors",
     "existing_local_appdata_candidate": "Developer-local read-only full-chain pass; not yet approved or allocated",
-    "old_packet_51a21324": "unchanged; do not invoke with changed runner source"
+    "old_packet_51a21324": "unchanged; do not invoke with changed runner source",
+    "comparison_note": "Initial lstat-only check failed to reproduce full flag; direct Win32 added; do not claim initial comparison passed"
   }
 }

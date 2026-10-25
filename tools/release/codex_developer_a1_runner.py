@@ -14,12 +14,24 @@ def require(value,code):
     if not value:raise ValueError(code)
 
 def check_nonreparse_chain(path,metadata=None):
-    """All Windows reparse tags, including non-symlink cloud placeholders."""
-    path=Path(path);metadata=metadata or (lambda item:item.lstat())
+    """Direct Windows attributes include tags that Python stat may normalize."""
+    path=Path(path)
+    get_attributes=None
+    if metadata is None and os.name=='nt':
+        import ctypes as c
+        from ctypes import wintypes as w
+        get_attributes=c.WinDLL('kernel32',use_last_error=True).GetFileAttributesW
+        get_attributes.argtypes=[w.LPCWSTR];get_attributes.restype=w.DWORD
     chain=[path,*path.parents];require(len(chain)<=64,'ancestor_bound')
     for item in chain:
-        info=metadata(item)
-        require(not (getattr(info,'st_file_attributes',0)&0x400) and not stat.S_ISLNK(info.st_mode),'windows_reparse_point')
+        info=metadata(item) if metadata else item.lstat()
+        flags=getattr(info,'st_file_attributes',0)
+        if get_attributes is not None:
+            native=get_attributes(str(item))
+            require(native!=0xFFFFFFFF,'windows_attributes_unavailable')
+            flags|=native
+        require(not (flags&0x400) and not stat.S_ISLNK(info.st_mode),'windows_reparse_point')
+
 
 class NativeHost:
     """Windows-only native footprint. No process on object construction."""
