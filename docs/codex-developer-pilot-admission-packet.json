@@ -375,7 +375,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "NEW_IDENTITY_SOURCE_FOR_REVIEW_ONLY; original occupied capture and d31b0341 proposal immutable; no native replay",
+    "status": "REPARSE_GUARD_SOURCE_CORRECTION_ONLY; existing proposal51a21324 remains unchanged but is no longer an execution proposal for these changed bytes; new parent/proposal review required",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -510,8 +510,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_runner.py",
-        "git_blob_bytes_sha256": "b5efb8d30a45161e2700940f63167de7af275bfd5494902d47aa5d09d91f2c6b",
-        "size": 12038
+        "git_blob_bytes_sha256": "ac55d507ca85caf0eb09366ab5868be8e12fb79d1b10779a1fad1c5fe4c4ccc8",
+        "size": 12411
       },
       {
         "repository_path": "docs/codex-developer-a1-admission.md",

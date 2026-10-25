@@ -154,7 +154,7 @@ def main(argv=None):
                 print(canonical({'mode':'inert','status':'STOP_NO_RETRY','completed':completed,'error_type':type(error).__name__}).decode(),flush=True)
             return
         check(args.request_id and args.approval_id and re.fullmatch('[a-f0-9]{64}',args.wrapper_sha or '') and re.fullmatch('[a-f0-9]{64}',args.parent_sha or ''),'new_owner_binding_required')
-        check(args.request_id not in (11683,11697) and args.approval_id not in (11684,11698),'stopped_authority_no_replay')
+        check(args.request_id not in (11683,11697,11704) and args.approval_id not in (11684,11698,11705),'stopped_authority_no_replay')
         reader=GitBlobReader();blob=reader.read
         raw=existing_proposal().read_bytes();check(len(raw)==3718 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
         packet=json.loads(raw);check(canonical(packet)==raw,'existing_proposal_canonical')

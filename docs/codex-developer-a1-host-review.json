@@ -1,5 +1,5 @@
 {
-  "status": "SOURCE_REVIEW_ONLY_NO_EXECUTION_AUTHORITY",
+  "status": "SOURCE_CORRECTION_ONLY_NOT_READY_FOR_OWNER_EXECUTION; new fully-nonreparse parent/proposal review pending",
   "accepted_baseline": "6593116a9d8f94cede63a3004a818acb5f349306",
   "fresh_payload_identity_head": "8bc1e5ac51fa8ef0323e0a9432ccf8627ed2cbb5",
   "new_packet_sha256": "51a21324b2d7e701aff04bac049fa5022fd7cbfed1084902977ccea0d6218845",
@@ -12,8 +12,8 @@
   },
   "wrapper": {
     "repository_path": "tools/release/codex_developer_a1_tool_host.py",
-    "git_blob_bytes_sha256": "4b73a87ecbe0ada7d769b8f11ab78b818ddf37d88883d87521f284e60ce258a6",
-    "bytes": 12969
+    "git_blob_bytes_sha256": "233678cdccafe98c96569567df79683fd4c089369304c298fe5958fcbae4a223",
+    "bytes": 12981
   },
   "prior_evidence": {
     "packet_sha256": "d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a",
@@ -24,7 +24,9 @@
       11683,
       11684,
       11697,
-      11698
+      11698,
+      11704,
+      11705
     ]
   },
   "inert_actual_exec_proof": {
@@ -54,5 +56,11 @@
     "response_bytes": 65536,
     "line_bytes": 1024,
     "digest_helper_processes": 0
+  },
+  "reparse_correction": {
+    "guard": "lstat full FILE_ATTRIBUTE_REPARSE_POINT, all tags, max64 ancestors",
+    "old_parent": "rejected:2 non-link flagged ancestors",
+    "existing_local_appdata_candidate": "Developer-local read-only full-chain pass; not yet approved or allocated",
+    "old_packet_51a21324": "unchanged; do not invoke with changed runner source"
   }
 }

@@ -1,7 +1,7 @@
 """A1-only runner; trusted Codex host supplies fresh canonical owner authorization.
 No CLI main, worker, storage, lifecycle, listener or install call is present.
 """
-import base64, hashlib, json, os, re, secrets, subprocess, threading, time
+import base64, hashlib, json, os, re, secrets, stat, subprocess, threading, time
 from pathlib import Path
 
 CAPTURE_ID='developer-a1-140ab028ea4e4f00821e07a46b8f8260'
@@ -13,6 +13,14 @@ def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':')
 def require(value,code):
     if not value:raise ValueError(code)
 
+def check_nonreparse_chain(path,metadata=None):
+    """All Windows reparse tags, including non-symlink cloud placeholders."""
+    path=Path(path);metadata=metadata or (lambda item:item.lstat())
+    chain=[path,*path.parents];require(len(chain)<=64,'ancestor_bound')
+    for item in chain:
+        info=metadata(item)
+        require(not (getattr(info,'st_file_attributes',0)&0x400) and not stat.S_ISLNK(info.st_mode),'windows_reparse_point')
+
 class NativeHost:
     """Windows-only native footprint. No process on object construction."""
     def __init__(self):self.children=[]
@@ -22,7 +30,8 @@ class NativeHost:
         from ctypes import wintypes as w
         require(os.name=='nt' and re.fullmatch(r'S-1-5-21-(?:[0-9]+-){2}[0-9]+-[0-9]+',sid),'capture_sid')
         base=Path(parent)
-        require(base.is_absolute() and base.is_dir() and not any(x.is_symlink() or x.is_junction() for x in [base,*base.parents]),'capture_parent')
+        require(base.is_absolute() and base.is_dir(),'capture_parent')
+        check_nonreparse_chain(base)
         require(not str(base).lower().startswith('c:\\wamp64\\www') and '.syndicatum' not in [x.lower() for x in base.parts],'capture_location')
         adv=c.WinDLL('advapi32',use_last_error=True);kernel=c.WinDLL('kernel32',use_last_error=True)
         adv.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes=[w.LPCWSTR,w.DWORD,c.POINTER(c.c_void_p),c.POINTER(w.ULONG)]
@@ -94,7 +103,8 @@ def run(packet,source_bytes,authorize,host=None):
             require(re.fullmatch(r'[A-Za-z0-9_.-]+',name) and sha(source_bytes[name])==row['sha256'] and len(source_bytes[name])==row['size'],'source_bytes')
         require(sha(source_bytes['codex-developer-a1-admission.md'])==packet['scope_document_sha256'],'scope_document_binding')
         for row in packet['executables'].values():
-            path=Path(row['path']);require(path.is_absolute() and path.is_file() and not any(x.is_symlink() or x.is_junction() for x in [path,*path.parents]),'runtime_path')
+            path=Path(row['path']);require(path.is_absolute() and path.is_file(),'runtime_path')
+            check_nonreparse_chain(path)
             require(path.stat().st_size<=536870912 and sha(path.read_bytes())==row['sha256'],'runtime_pin')
         capture=host.create_capture(packet['capture_parent'],packet['owner_sid'])
         # Verified Git blob bytes are materialized, never copied from autocrlf checkout.

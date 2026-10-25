@@ -75,3 +75,24 @@ noise, extra/wrong/duplicate markers, timeout/late no successor, EOF/truncation,
 CRLF, duplicate response keys, Git stalls and absolute acquisition budget. No native
 retry is authorized. Review the exact parent+wrapper/payload identity and current
 CI first, then ONE fresh owner decision with the new proposal and total overhead.
+
+
+## Parent reparse mismatch11705: source correction pending new proposal
+
+Owner event11705/request11704 is consumed by preflight STOP, not replay authority.
+ZERO host Git reads/diagnostics/capture allocation occurred. Full Windows reparse
+attributes rejected the proposed capture parent's two non-link reparse ancestors;
+the earlier is_symlink/is_junction-only attestation did not cover these flags and
+is withdrawn as sufficient. Both private proposals and all prior evidence remain
+unchanged. Do not invoke the old51a21324 proposal under this changed source.
+
+The runner now uses a shared check_nonreparse_chain guard over lstat metadata,
+rejecting FILE_ATTRIBUTE_REPARSE_POINT for every tag and portable symlink mode,
+with at most64 ancestors. It checks capture parent and runtime paths before writes
+or byte hashing. Inert tests cover a reparse-flagged ordinary-directory mode at
+root/ancestor even when it is not a junction or symlink. A read-only comparison
+confirmed agreement with full Windows flags. The existing LocalApplicationData
+known-folder parent passes all ancestor checks; no directory was created there.
+It is a candidate only. New parent/attempt/proposal source binding and review are
+still required before a future single owner decision. Old51a21324 bytes must not
+be overwritten, refreshed or replayed; source status remains non-executable.

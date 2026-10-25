@@ -1,5 +1,6 @@
 """Inert parsers and A1 orchestration only; never native launch/capture."""
-import importlib.util, io, json, sys, tempfile, unittest, hashlib, subprocess
+import importlib.util, io, json, sys, tempfile, unittest, hashlib, subprocess, stat
+from types import SimpleNamespace
 from unittest.mock import patch
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -72,6 +73,15 @@ class Cases(unittest.TestCase):
    self.assertEqual(launch.call_count,1)
    self.assertEqual(stopped.exception.child_identity['pid'],99)
    self.assertEqual(stopped.exception.stable_postimage,'unavailable_until_independently_quiescent')
+ def test_all_reparse_tags_including_cloud_without_symlink(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp)
+   clean=lambda item:SimpleNamespace(st_file_attributes=0,st_mode=stat.S_IFDIR)
+   runner.check_nonreparse_chain(path,clean)
+   for bad_at in [path,path.parent]:
+    def metadata(item):return SimpleNamespace(st_file_attributes=0x400 if item==bad_at else 0,st_mode=stat.S_IFDIR)
+    with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,metadata)
+   with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,lambda item:SimpleNamespace(st_file_attributes=0,st_mode=stat.S_IFLNK))
  def test_authority_before_any_host_call(self):
   class Host:
    def __getattr__(self,name):raise AssertionError('host touched before authorization')
