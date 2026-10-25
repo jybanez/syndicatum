@@ -90,7 +90,7 @@ by the trusted caller; same-caller fixtures do not establish external authentici
 A new instance refuses all nonempty storage and any non-null retained prior head;
 it is inspection/fail-closed only after interruption, never a resume mechanism.
 
-Eleven inert fixture methods cover reservation ordering, two-contender exclusion,
+Thirteen inert fixture methods cover reservation ordering, two-contender exclusion,
 occupied/partial storage, failure at every record/head write/flush phase during
 reservation and intent, torn/hash-invalid slots, capacity/oversize, alternate
 root/namespace/file identity/size, every changed receipt field, unavailable
@@ -154,3 +154,19 @@ proposal is exact hashed backend/harness plus two new synthetic pre-established
 container files and private manifest/results, with size/time limits above. It
 requires separate storage-setup/test approval, excludes all live objects and
 native B paths, and is NOT an executable packet or current authorization.
+
+## Exact unexecuted harness candidate (#11594)
+
+See `codex-fixed-synthetic-review-packet.md` and its JSON for the exact candidate
+harness/runtime hashes, fixed new test-tree leaf, source-only status, setup/API
+allowlist, object/byte/time limits and owner-review prerequisites. The harness was
+parsed only; it has not been run, even in default/refusal mode. Its separate
+operator handoff cannot itself prove canonical owner approval. A concrete owner
+request is deferred until source review and green exact-head CI. No live gate
+changes are part of this harness.
+
+The inert PowerShell suite composes Python reservation/intent frames with its
+fake fixed-storage API and checks the resulting retained-head digest. Authority
+is now re-fetched/re-timed after potentially slow intent publication; changed or
+expired authority consumes the intent and stops. This is still not execution
+admission, real canonical retrieval or production integration.

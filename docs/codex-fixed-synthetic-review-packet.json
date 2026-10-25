@@ -1,0 +1,44 @@
+{
+  "status": "SOURCE_REVIEW_ONLY_UNEXECUTED_NOT_AUTHORIZED",
+  "harness": "tools/release/codex-fixed-synthetic-validation.ps1",
+  "harness_sha256": "5f630b65d9bf525f4572bee66baa32a92769ac1889e1305a881ff3eee4162a2a",
+  "backend": "tools/release/codex-developer-fixed-storage.psm1",
+  "backend_sha256": "48cb323e5678c905e4fa55372fe171fa3cc0a0b382678de38579601596cee79e",
+  "source_eol": "LF pinned by .gitattributes",
+  "runtime": {
+    "version": "PowerShell 7.6.8",
+    "pwsh.exe": "b90c0f48ca4b13c9426a7863f3d469baf310ca517721dd0b55551b80ec9fee2a",
+    "System.Private.CoreLib.dll": "0a175cdd09067c52f8b2477cfcebf894b2f926d7302e55ae76fc921529662c7b",
+    "System.Management.Automation.dll": "b98520502ae9054fd06001f578fc1ab04f4ec5bf56e4b527f51bdca2635d78e3",
+    "System.IO.FileSystem.AccessControl.dll": "a87455a818254627457395e85ab4970cc844edf07254456da624a37c99e9a23f"
+  },
+  "root_parent": "existing current-user TEMP; no reparse ancestors",
+  "root_leaf": "syndicatum-fixed-validation-1cf42e339a2e455f9f3b720f3c990af3",
+  "expected_files": [
+    "attempt.json",
+    "records.bin",
+    "heads.bin",
+    "manifest.json",
+    "result.json"
+  ],
+  "containers": {
+    "each_bytes": 8192,
+    "slots": 4,
+    "slot_bytes": 2048
+  },
+  "limits": {
+    "objects": 32,
+    "files": 8,
+    "total_bytes": 1048576,
+    "result_file_bytes": 65536,
+    "cooperative_seconds": 120
+  },
+  "owner_authority_message_id": null,
+  "source_review_complete": false,
+  "exact_head_ci_success": false,
+  "may_execute": false,
+  "automatic_cleanup": false,
+  "automatic_retry": false,
+  "native_cutover_dispatcher_used": false,
+  "production_readiness_or_power_loss_proven": false
+}

@@ -252,6 +252,9 @@ class FixedJournal:
                 prior = unframe(self.storage.read("records", index))
                 check(not (prior["kind"] == "intent" and prior["data"]["operation"] == name), "operation_replay")
             head = self._append("intent", {"operation": name, "reviewed_context": operation_context})
+            # Evidence writes/flushes may be slow. A prior time check is not
+            # action admission; changed/expired authority consumes the intent.
+            self._authority()
             return {"head_sha256": head, "synthetic_intent_only": True, "authorizes_mutation": False}
         except Exception:
             self._stop()

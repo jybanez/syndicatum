@@ -186,6 +186,40 @@ class FixedFixtures(unittest.TestCase):
             model.model_action("synthetic-first", model.external_head, "reviewed-first")
         self.assertTrue(model.closed)
 
+    def test_slow_evidence_requires_fresh_admission_and_consumes_intent(self):
+        for changed in (False, True):
+            store = fixed.MemoryStorage()
+            transport = fixed.FakeAuthority(receipt())
+            model = open_model(store, transport)
+            if changed:
+                original_get = transport.get
+                def get(message_id):
+                    if len(store.events) > 4:
+                        transport.message["revision"] = 99
+                    return original_get(message_id)
+                transport.get = get
+            else:
+                model.now = lambda: 1500 if len(store.events) == 4 else 2000
+            with self.assertRaises(fixed.Stop):
+                model.model_action("synthetic-first", model.external_head, "reviewed-first")
+            self.assertTrue(model.closed)
+            self.assertEqual(fixed.unframe(store.read("records", 1))["kind"], "intent")
+            with self.assertRaisesRegex(fixed.Stop, "no_resume"):
+                open_model(store)
+
+    def test_unexecuted_review_packet_pins_exact_source_and_denies_authority(self):
+        root = Path(__file__).resolve().parents[1]
+        import json
+        packet = json.loads((root / "docs/codex-fixed-synthetic-review-packet.json").read_bytes())
+        self.assertFalse(packet["may_execute"])
+        self.assertIsNone(packet["owner_authority_message_id"])
+        self.assertFalse(packet["source_review_complete"])
+        self.assertFalse(packet["exact_head_ci_success"])
+        for name in ("harness", "backend"):
+            raw = (root / packet[name]).read_bytes()
+            self.assertEqual(fixed.digest(raw), packet[name + "_sha256"])
+            self.assertNotIn(b"\r", raw)
+
 
 if __name__ == "__main__":
     unittest.main()

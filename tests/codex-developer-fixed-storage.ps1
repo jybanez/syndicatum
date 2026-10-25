@@ -88,5 +88,52 @@ $module=Get-Module 'codex-developer-fixed-storage'
     try { Open-FixedSession $fixture.manifest $fixture.api } catch { $rejected=$true }
     if (-not $rejected -or -not $fixture.state.held['fake-records']) { throw 'contention lease damaged' }
     Close-FixedSession $first
+    # Compose exact Python model frames with the PowerShell storage contract.
+    # Python emits memory-only bytes; this API remains the fake fixture above.
+    $pythonCode=@'
+import base64, json, pathlib, sys
+sys.path.insert(0, str(pathlib.Path.cwd() / "tools/release"))
+sys.path.insert(0, str(pathlib.Path.cwd() / "tests"))
+import importlib.util
+spec=importlib.util.spec_from_file_location("fixture", "tests/codex-developer-fixed-journal.py")
+fixture=importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+store=fixture.fixed.MemoryStorage(slots=2, width=2048)
+model=fixture.open_model(store)
+result=model.model_action("synthetic-first", model.external_head, "reviewed-first")
+print(json.dumps({"frames": {name: [base64.b64encode(store.read(name,i)).decode() for i in range(2)]
+                            for name in ("records","heads")}, "head":result["head_sha256"]}))
+'@
+    $compositionText=$pythonCode | python -
+    if ($LASTEXITCODE -ne 0) { throw 'Python composition model failed' }
+    $composition=$compositionText | ConvertFrom-Json -AsHashtable
+    $fixture=Fixture
+    $fixture.manifest.width=2048
+    foreach ($pin in $fixture.manifest.files.Values) {
+        $pin.length=4096
+        $fixture.state.bytes[$pin.path]=[byte[]]::new(4096)
+    }
+    $session=Open-FixedSession $fixture.manifest $fixture.api
+    foreach ($index in @(0,1)) {
+        foreach ($name in @('records','heads')) {
+            $frame=[Convert]::FromBase64String($composition.frames[$name][$index])
+            Write-FixedSlot $session $name $index $frame
+        }
+    }
+    $actualHead=[byte[]]::new(2048)
+    [Buffer]::BlockCopy($fixture.state.bytes['fake-heads'],2048,$actualHead,0,2048)
+    $actualDigest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($actualHead)).ToLowerInvariant()
+    if ($actualDigest -cne $composition.head) { throw 'Cross-language retained head mismatch' }
+    Close-FixedSession $session
 }
 'Fixed storage AST/gate and inert identity/ACL/length/exclusive/slot/flush/readback checks pass.'
+
+# Parse the native-validation candidate, never invoke it (even in default mode).
+$harnessPath=Join-Path $PSScriptRoot '../tools/release/codex-fixed-synthetic-validation.ps1'
+$harnessTokens=$null; $harnessErrors=$null
+$harnessAst=[Management.Automation.Language.Parser]::ParseFile((Resolve-Path $harnessPath),[ref]$harnessTokens,[ref]$harnessErrors)
+if ($harnessErrors.Count) { throw 'Synthetic native harness parse failure' }
+$calls=@($harnessAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true) |
+    ForEach-Object { $_.GetCommandName() })
+if ($calls -contains 'Invoke-FixedStorage' -or $calls -contains 'Invoke-DeveloperNative' -or
+    $calls -contains 'Remove-Item' -or $calls -contains 'Start-Process') { throw 'Harness scope escaped' }
+'Synthetic native-validation harness parsed only; NOT executed.'
