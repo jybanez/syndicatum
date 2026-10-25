@@ -7,6 +7,11 @@ disposable-test prerequisites are not acceptance requirements for this machine.
 Historical PR #160 pilot contracts remain uninvoked reference work. Do not use
 their hardcoded identities to validate or mutate this Developer installation.
 
+Attempt 11545 subsequently stopped at preflight with zero native mutations
+(report 11546). Its authority is exhausted. See
+[the proposed freshness/cutover policy](codex-developer-freshness-policy.md) for
+source-only preparation of a new packet; neither path is yet selected/authorized.
+
 ## Fresh read-only baseline, 2026-10-25
 
 - Windows 11 Home Insider Preview Single Language, build 26220.

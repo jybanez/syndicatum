@@ -29,9 +29,45 @@ journal_spec.loader.exec_module(journal_module)
 mapping_spec = importlib.util.spec_from_file_location("pilot_native_mapping", Path(__file__).resolve().parents[1] / "tools/release/codex_pilot_native_mapping.py")
 mapping_module = importlib.util.module_from_spec(mapping_spec)
 mapping_spec.loader.exec_module(mapping_module)
+freshness_spec = importlib.util.spec_from_file_location("developer_freshness", Path(__file__).resolve().parents[1] / "tools/release/codex_developer_freshness.py")
+freshness_module = importlib.util.module_from_spec(freshness_spec)
+freshness_spec.loader.exec_module(freshness_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_developer_freshness_never_authorizes_state_advancement(self):
+        before = dict(processedMessageIds=["10"], pendingNotifications=[], activeWake=None, lastSequence=20)
+        raw = json.dumps(before).encode()
+        for change, expected in (({}, "exact_bytes"), ({"lastSequence": 21}, "sequence_only_advance"),
+                                 ({"lastSequence": 19}, "sequence_regression"),
+                                 ({"lastSequence": 21, "pendingNotifications": [{"id": "11"}]}, "queue_history_or_wake_changed"),
+                                 ({"processedMessageIds": []}, "queue_history_or_wake_changed")):
+            result = freshness_module.classify_state_change(raw, json.dumps({**before, **change}).encode())
+            self.assertEqual(result["classification"], expected)
+            self.assertIs(result["authorizes_mutation"], False)
+        result = freshness_module.classify_state_change(raw, json.dumps(before, indent=2).encode())
+        self.assertEqual(result["classification"], "serialization_only_change")
+
+    def test_developer_state_classifier_rejects_ambiguous_json_and_boolean_sequence(self):
+        valid = b'{"processedMessageIds":[],"pendingNotifications":[],"activeWake":null,"lastSequence":0}'
+        for invalid in (valid[:-1] + b',"lastSequence":1}', valid.replace(b'"lastSequence":0', b'"lastSequence":false'),
+                        valid.replace(b'null', b'NaN'), b'{}'):
+            with self.assertRaises(freshness_module.FreshnessStop):
+                freshness_module.classify_state_change(valid, invalid)
+        before = valid.replace(b'"activeWake":null', b'"activeWake":{"fixture":true}')
+        after = before.replace(b'true', b'1')
+        self.assertEqual(freshness_module.classify_state_change(before, after)["classification"], "queue_history_or_wake_changed")
+
+    def test_developer_cutoff_cannot_reuse_failed_attempt_or_stale_time(self):
+        freshness_module.require_new_cutoff("failed-11545", "new-fixture", "STOPPED_BEFORE_MUTATION")
+        for args in (("failed-11545", "failed-11545", "STOPPED_BEFORE_MUTATION"), ("failed", "new", "in_progress")):
+            with self.assertRaises(freshness_module.FreshnessStop):
+                freshness_module.require_new_cutoff(*args)
+        freshness_module.require_fresh_window(100, 200, 100)
+        for args in ((100, 201, 100), (100, 99, 100), (True, 200, 100), (0, 0, 120001)):
+            with self.assertRaises(freshness_module.FreshnessStop):
+                freshness_module.require_fresh_window(*args)
+
     def test_marketplace_removal_requires_reviewed_observed_postimage(self):
         before = dict(marketplaces={"syndicatum": {k: v for k, v in pilot.MARKETPLACE_PREIMAGE.items()
                       if k not in {"plugin_key", "plugin_version", "enabled"}}, "other": {"source": "untouched"}},
