@@ -121,3 +121,14 @@ unapproved, so its appearance stops instead of expanding the allowlist. Source
 hashes in the accompanying packet supersede the earlier candidate pins. The
 harness is still parsed only, never invoked (including refusal mode), and no
 owner execution request has been issued.
+
+## Native attempt11616 and current admission blocker
+
+The separately approved single invocation stopped during backend session opening
+because a dynamic callback could not resolve module-private Assert-FixedPath.
+See codex-synthetic-native-stop-11616.md for immutable evidence and source-only
+correction. The five-file tree now exists and is retained. No current packet may
+reuse/clean/rename it; no replacement root has been selected. The changed backend
+pin describes a new source candidate, not a refreshed11616 approval. A later
+isolated test requires exact-source review/CI and a new explicit owner decision
+on the test-tree identity. No second invocation or native validation is authorized.

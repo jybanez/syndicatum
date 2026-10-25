@@ -58,22 +58,41 @@ function Get-FixedAclPin($Stream) {
     $sddl=$acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]'Owner,Group,Access')
     [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sddl))).ToLowerInvariant()
 }
+function New-FixedBoundApi([string]$Root,[hashtable]$Bindings) {
+    # Pure callback composition. Capture bound scriptblocks, not private command
+    # names that disappear when GetNewClosure creates a dynamic module.
+    $ops=@{}
+    foreach ($name in @('Validate','Open','Inspect','Read','Write','Flush','Close')) {
+        if ($Bindings[$name] -isnot [scriptblock]) { throw 'STOP: missing API binding' }
+        $ops[$name]=$Bindings[$name]
+    }
+    @{
+        Open={param($Pin)
+            & $ops.Validate $Pin.path $Root
+            & $ops.Open $Pin
+        }.GetNewClosure()
+        Inspect={param($Handle,$Pin)
+            & $ops.Validate $Pin.path $Root
+            & $ops.Inspect $Handle $Pin
+        }.GetNewClosure()
+        Read=$ops.Read;Write=$ops.Write;Flush=$ops.Flush;Close=$ops.Close
+    }
+}
 function New-FixedWindowsApi([hashtable]$Manifest) {
     # Internal definitions only. Exported dispatcher gates before reaching here.
     Initialize-FixedHandleApi
-    $root=$Manifest.root
-    @{
+    $aclInspector=${function:Get-FixedAclPin}
+    $bindings=@{
+        Validate=${function:Assert-FixedPath}
         Open={param($Pin)
-            Assert-FixedPath $Pin.path $root
             # Open == OPEN_EXISTING; never OpenOrCreate/Create/Truncate.
             [IO.FileStream]::new($Pin.path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,
                 [IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough)
-        }.GetNewClosure()
+        }
         Inspect={param($Handle,$Pin)
-            Assert-FixedPath $Pin.path $root
             $final=[FixedStorageHandle]::Path($Handle.SafeFileHandle)
             if ($final -cne ('\\?\'+$Pin.path)) { throw 'STOP: final handle path' }
-            @{identity=[FixedStorageHandle]::Identity($Handle.SafeFileHandle);length=$Handle.Length;acl=(Get-FixedAclPin $Handle)}
+            @{identity=[FixedStorageHandle]::Identity($Handle.SafeFileHandle);length=$Handle.Length;acl=(& $aclInspector $Handle)}
         }.GetNewClosure()
         Read={param($Handle,$Offset,$Count)
             $null=$Handle.Seek($Offset,[IO.SeekOrigin]::Begin)
@@ -86,6 +105,7 @@ function New-FixedWindowsApi([hashtable]$Manifest) {
         Flush={param($Handle) $Handle.Flush($true)}
         Close={param($Handle) $Handle.Dispose()}
     }
+    New-FixedBoundApi $Manifest.root $bindings
 }
 function Assert-FixedSession($Session) {
     if ($Session.closed) { throw 'STOP: terminal fixed session' }

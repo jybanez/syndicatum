@@ -19,6 +19,34 @@ try { Invoke-FixedStorage -Manifest @{} } catch {
 }
 if (-not $blocked) { throw 'Native fixed gate opened' }
 $module=Get-Module 'codex-developer-fixed-storage'
+# Exercise returned callbacks AFTER leaving module scope, with pure private
+# helpers and fake file/handle operations. No New-FixedWindowsApi invocation.
+$scopeFixture=& $module {
+    function Assert-PureScopePath($Path,$Root) {
+        if ($Path -cne ($Root+'/file')) { throw 'pure scope path rejected' }
+    }
+    function Get-PureScopeAcl($Handle) { 'pure-private-acl' }
+    $acl=${function:Get-PureScopeAcl}
+    $bindings=@{
+        Validate=${function:Assert-PureScopePath}
+        Open={param($pin) @{path=$pin.path;fake=$true}}
+        Inspect={param($handle,$pin) @{acl=(& $acl $handle);fake=$handle.fake}}.GetNewClosure()
+        Read={};Write={};Flush={};Close={}
+    }
+    $api=New-FixedBoundApi 'synthetic-root' $bindings
+    $broken={Assert-PureScopePath 'synthetic-root/file' 'synthetic-root'}.GetNewClosure()
+    @{api=$api;broken=$broken}
+}
+$scopePin=@{path='synthetic-root/file'}
+$scopeHandle=& $scopeFixture.api.Open $scopePin
+$scopeObserved=& $scopeFixture.api.Inspect $scopeHandle $scopePin
+if (-not $scopeObserved.fake -or $scopeObserved.acl -cne 'pure-private-acl') { throw 'Bound private helper lost module scope' }
+$scopeRejected=$false
+try { & $scopeFixture.api.Open @{path='wrong-path'} } catch { $scopeRejected=$true }
+if (-not $scopeRejected) { throw 'Bound private path helper bypassed' }
+$legacyFailed=$false
+try { & $scopeFixture.broken } catch { $legacyFailed=$true }
+if (-not $legacyFailed) { throw 'Scope regression negative control did not reproduce missing helper' }
 & $module {
     function Fixture {
         $manifest=@{root='fake-root';namespace='fake-authority';slots=2;width=512;files=@{
