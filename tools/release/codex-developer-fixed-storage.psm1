@@ -130,13 +130,45 @@ function Write-FixedSlot($Session,[string]$Name,[int]$Index,[byte[]]$Bytes) {
         $offset=[long]$Index*$Session.manifest.width
         $handle=$Session.handles[$Name]
         $old=& $Session.api.Read $handle $offset $Bytes.Length
-        if ($old.Length -ne $Bytes.Length -or @($old | Where-Object { $_ -ne 0 }).Count) { throw 'STOP: occupied slot' }
+        if ($old.Length -ne $Bytes.Length) { throw 'STOP: short slot read' }
+        if (@($old | Where-Object { $_ -ne 0 }).Count) {
+            throw [Management.Automation.ErrorRecord]::new(
+                [InvalidOperationException]::new('STOP: occupied slot'),'FixedStorageOccupiedSlot',
+                [Management.Automation.ErrorCategory]::InvalidOperation,$null)
+        }
         & $Session.api.Write $handle $offset $Bytes
         & $Session.api.Flush $handle
         $actual=& $Session.api.Read $handle $offset $Bytes.Length
         if ([Convert]::ToBase64String($actual) -cne [Convert]::ToBase64String($Bytes)) { throw 'STOP: readback' }
         Assert-FixedSession $Session
     } catch { Close-FixedSession $Session; throw }
+}
+function Confirm-FixedOccupiedEvidence($Failure,[hashtable]$Before,[hashtable]$After) {
+    # Pure comparison. Unexpected backend errors retain their original record.
+    if ($null -eq $Failure) { throw 'STOP: overwrite did not reject' }
+    if (($Failure.FullyQualifiedErrorId -split ',')[0] -cne 'FixedStorageOccupiedSlot') { throw $Failure }
+    foreach ($map in @($Before,$After)) {
+        if ($null -eq $map -or $map.Count -ne 2 -or -not $map.ContainsKey('records') -or
+            -not $map.ContainsKey('heads')) { throw 'STOP: incomplete container evidence' }
+    }
+    foreach ($name in @('records','heads')) {
+        if ($Before[$name] -isnot [byte[]] -or $After[$name] -isnot [byte[]] -or
+            [Convert]::ToBase64String($Before[$name]) -cne [Convert]::ToBase64String($After[$name])) {
+            throw 'STOP: rejected overwrite changed container bytes'
+        }
+    }
+}
+function Assert-FixedSyntheticInventory([array]$Entries) {
+    # Flat footprint only. No compiler scratch is currently approved.
+    $allowed=@{'attempt.json'=65536;'records.bin'=8192;'heads.bin'=8192;'manifest.json'=65536;'result.json'=65536}
+    $seen=@{}; $total=0L
+    foreach ($entry in $Entries) {
+        if ($entry.reparse -or $entry.directory) { throw 'STOP: reparse/directory object forbidden' }
+        if (-not $allowed.ContainsKey($entry.name) -or $seen.ContainsKey($entry.name)) { throw 'STOP: unknown/duplicate synthetic object' }
+        if ($entry.length -lt 0 -or $entry.length -gt $allowed[$entry.name]) { throw 'STOP: synthetic file length' }
+        $seen[$entry.name]=$true; $total+=$entry.length
+    }
+    if ($Entries.Count -gt 5 -or $total -gt 1048576) { throw 'STOP: synthetic footprint bounds' }
 }
 function Invoke-FixedStorage {
     [CmdletBinding()]

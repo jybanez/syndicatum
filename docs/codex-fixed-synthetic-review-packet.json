@@ -1,9 +1,9 @@
 {
   "status": "SOURCE_REVIEW_ONLY_UNEXECUTED_NOT_AUTHORIZED",
   "harness": "tools/release/codex-fixed-synthetic-validation.ps1",
-  "harness_sha256": "5f630b65d9bf525f4572bee66baa32a92769ac1889e1305a881ff3eee4162a2a",
+  "harness_sha256": "b9adff56b18d6b528c0548f181312b853d47b2515903afb0f3a5f3bf38255781",
   "backend": "tools/release/codex-developer-fixed-storage.psm1",
-  "backend_sha256": "48cb323e5678c905e4fa55372fe171fa3cc0a0b382678de38579601596cee79e",
+  "backend_sha256": "9785b7c55d1192e16087ea171bb32104033a664a0ec27499c66b489f114774f3",
   "source_eol": "LF pinned by .gitattributes",
   "runtime": {
     "version": "PowerShell 7.6.8",
@@ -27,8 +27,8 @@
     "slot_bytes": 2048
   },
   "limits": {
-    "objects": 32,
-    "files": 8,
+    "objects": 5,
+    "files": 5,
     "total_bytes": 1048576,
     "result_file_bytes": 65536,
     "cooperative_seconds": 120
@@ -40,5 +40,7 @@
   "automatic_cleanup": false,
   "automatic_retry": false,
   "native_cutover_dispatcher_used": false,
-  "production_readiness_or_power_loss_proven": false
+  "production_readiness_or_power_loss_proven": false,
+  "compiler_scratch": "NONE APPROVED: unknown file/directory/reparse entry stops; observed inventory retained",
+  "occupied_rejection": "FixedStorageOccupiedSlot only; both complete container bytes unchanged"
 }

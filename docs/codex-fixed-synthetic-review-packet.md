@@ -33,10 +33,11 @@ Create the new root without Force; existing root is a permanent stop/no-retry.
 Set only its new ACL owner to the current SID, disable inherited rules and allow
 current user/SYSTEM. Exclusively create `attempt.json`, two 8192-byte zero-filled
 containers, `manifest.json`, and `result.json`; no replacement. Protect only the
-new container ACLs. No existing file is resized or truncated. Managed compiler
-scratch is directed to the same tree using process-local TEMP/TMP, restored on
-exit. Any scratch remains evidence; no automatic deletion. All recursive objects
-count toward the packet's 32-object/8-file/1-MiB ceiling; result files <=64 KiB.
+new container ACLs. No existing file is resized or truncated. Managed compiler scratch is directed to the same tree using process-local
+TEMP/TMP, restored on exit, but NO scratch footprint is approved. Any compiler
+file or directory is unknown and causes STOP, even under the byte/count limits.
+Only the five named regular files are allowed; result files <=64 KiB and total
+bytes <=1 MiB. No automatic deletion occurs.
 
 Allowed operations: bounded read/hash of pinned sources/runtime; path/ancestor
 attribute reads; exact new directory/file creation and ACL setup; FileStream
@@ -45,13 +46,18 @@ handle identity/final-path APIs GetFileInformationByHandle and
 GetFinalPathNameByHandleW; handle-backed GetAccessControl; current SID and
 monotonic Stopwatch. No CreateFile volume call, SetLength, rename or cleanup.
 Module Add-Type loads the reviewed handle helper in memory; its platform behavior
-and scratch footprint are themselves unverified until an approved test.
+and whether it produces any unknown scratch are unverified. Unknown scratch
+blocks the candidate; it is never normalized as an allowed exception.
 
 The 120-second deadline is checked between stages, not a guarantee that a blocked
 OS call can be interrupted. A hung native call has uncertain outcome: no new
 attempt, automatic kill or retry. An operator would retain the process and files
-for separately authorized handling. Count/size checks detect excess at stage
-boundaries; they do not intercept arbitrary runtime-internal writes in advance.
+for separately authorized handling. At each check, inspect the root for reparse status, enumerate direct children
+ONLY (up to33 observations, then stop) and record names/types/reparse flags/lengths.
+Never descend into directories or inspect reparse target lengths. Reject every
+unknown/duplicate name, directory, reparse entry or invalid per-file length.
+Retain this observed inventory in the result, including rejected entries. These
+stage checks do not intercept runtime-internal writes before they happen.
 If strict hard real-time/resource containment is required, this harness cannot
 provide it without a separately reviewed supervisor. Do not claim that limit met.
 
@@ -66,14 +72,20 @@ provide it without a separately reviewed supervisor. Do not claim that limit met
 4. Write/read back synthetic record slot 0 then synthetic head slot 0. Expected:
    exact bytes and unchanged identities/lengths/ACLs. These are test patterns,
    not a live authority or mutation journal.
-5. Attempt to overwrite occupied record slot 0. Expected: rejection, terminal
-   session and no further writes. Record the bounded result; preserve all bytes.
+5. Capture both full container byte arrays under the held handles, then attempt
+   overwrite. Expected: exact FixedStorageOccupiedSlot error classification and
+   terminal session. Every other exception is STOP, never expected success.
+   Independently read both files after rejection through read-only pinned
+   identity/length/ACL handles; require both full arrays unchanged. Retain their
+   before/after hashes. Post-rejection reads do not reopen a writable session.
 
 Failure at any stage retains partial evidence and STOP status. There is no
 rollback, recapture-in-place, repair, resume, cleanup or retry. The result file
 contains generic status only; it does not expose raw private machine configuration.
-If result writing also fails, retain the original error and partial tree without
-trying a new destination. External trusted orchestration retains packet digest,
+If result writing or handle close also fails, retain/rethrow the ORIGINAL error
+record, report secondary failure separately and preserve the partial tree; never
+try a new destination. Failure-result writing may write only a bounded new known
+result.json without traversing rejected objects; it cannot turn STOP into success. External trusted orchestration retains packet digest,
 source/runtime pins and result digest; the test cannot fabricate independent
 provenance. Physical failure-domain independence is not asserted.
 
@@ -97,3 +109,15 @@ exact packet and new tree to synthetic setup/ACL/file API testing only. Do not
 combine it with connector suppression/listener stop, install, activation or
 restart authority. That later approval request must state the cooperative timing
 limit and uncertain-call handling above. Nothing here authorizes execution.
+
+## Targeted correction #11597
+
+The typed occupied classification and complete before/after comparisons are
+shared pure helpers tested inertly for unrelated errors and unexpected changes
+to either container. Inventory validation is likewise shared with inert fixtures
+for unknown-under-limit, directory and reparse objects. No recursive enumeration
+is used by the harness. Runtime compilation scratch is unresolved and explicitly
+unapproved, so its appearance stops instead of expanding the allowlist. Source
+hashes in the accompanying packet supersede the earlier candidate pins. The
+harness is still parsed only, never invoked (including refusal mode), and no
+owner execution request has been issued.

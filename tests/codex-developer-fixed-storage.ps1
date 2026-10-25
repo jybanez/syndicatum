@@ -68,7 +68,10 @@ $module=Get-Module 'codex-developer-fixed-storage'
     $fixture.manifest.files.records.identity='caller-change'
     Assert-FixedSession $session
     $rejected=$false
-    try { Write-FixedSlot $session 'records' 0 $bytes } catch { $rejected=$true }
+    try { Write-FixedSlot $session 'records' 0 $bytes } catch {
+        if (($_.FullyQualifiedErrorId -split ',')[0] -cne 'FixedStorageOccupiedSlot') { throw }
+        $rejected=$true
+    }
     if (-not $rejected -or -not $session.closed) { throw 'occupied slot accepted' }
     foreach ($fault in @('identity','acl','length','partial','flush','readback','capacity')) {
         $fixture=Fixture
@@ -124,6 +127,36 @@ print(json.dumps({"frames": {name: [base64.b64encode(store.read(name,i)).decode(
     $actualDigest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($actualHead)).ToLowerInvariant()
     if ($actualDigest -cne $composition.head) { throw 'Cross-language retained head mismatch' }
     Close-FixedSession $session
+    # Expected rejection must be specifically classified and preserve BOTH files.
+    $specific=[Management.Automation.ErrorRecord]::new([InvalidOperationException]::new('occupied'),
+        'FixedStorageOccupiedSlot',[Management.Automation.ErrorCategory]::InvalidOperation,$null)
+    $unrelated=[Management.Automation.ErrorRecord]::new([IO.IOException]::new('read failed'),
+        'UnrelatedReadFailure',[Management.Automation.ErrorCategory]::ReadError,$null)
+    $before=@{records=[byte[]]@(1,2);heads=[byte[]]@(3,4)}
+    Confirm-FixedOccupiedEvidence $specific $before $before
+    $rejected=$false
+    try { Confirm-FixedOccupiedEvidence $unrelated $before $before } catch {
+        if (($_.FullyQualifiedErrorId -split ',')[0] -cne 'UnrelatedReadFailure') { throw }
+        $rejected=$true
+    }
+    if (-not $rejected) { throw 'Unrelated exception reported as occupied success' }
+    foreach ($name in @('records','heads')) {
+        $after=@{records=[byte[]]@(1,2);heads=[byte[]]@(3,4)}
+        $after[$name][0]=9
+        $rejected=$false
+        try { Confirm-FixedOccupiedEvidence $specific $before $after } catch { $rejected=$true }
+        if (-not $rejected) { throw 'Unexpected changed bytes reported as success' }
+    }
+    $known=@{name='records.bin';directory=$false;reparse=$false;length=8192}
+    Assert-FixedSyntheticInventory @($known)
+    foreach ($bad in @(
+        @{name='unknown.txt';directory=$false;reparse=$false;length=1},
+        @{name='records.bin';directory=$false;reparse=$true;length=-1},
+        @{name='scratch';directory=$true;reparse=$false;length=-1})) {
+        $rejected=$false
+        try { Assert-FixedSyntheticInventory @($bad) } catch { $rejected=$true }
+        if (-not $rejected) { throw 'Unknown/reparse/directory footprint accepted' }
+    }
 }
 'Fixed storage AST/gate and inert identity/ACL/length/exclusive/slot/flush/readback checks pass.'
 
