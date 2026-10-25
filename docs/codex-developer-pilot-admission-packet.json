@@ -375,7 +375,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "REPARSE_GUARD_SOURCE_CORRECTION_ONLY; existing proposal51a21324 remains unchanged but is no longer an execution proposal for these changed bytes; new parent/proposal review required",
+    "status": "SOURCE_REVIEW_ONLY: shared full preflight and existing LocalApplicationData parent; old51a21324 proposal unchanged; separately bound proposal required",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -510,18 +510,18 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_runner.py",
-        "git_blob_bytes_sha256": "5353e98d5a142b60ca072d4508b9b9d7eadbce029af2c47f849b2922fabb51f4",
-        "size": 12956
+        "git_blob_bytes_sha256": "f9348c4ace8199f71a41e23fe4ea953ebcb94ab63c5665abc2446085dcfae09d",
+        "size": 16614
       },
       {
         "repository_path": "docs/codex-developer-a1-admission.md",
-        "git_blob_bytes_sha256": "a3898d522328e13261c25d773e6379f9505a85acd6d16f69215a512ac7f11667",
-        "size": 10299
+        "git_blob_bytes_sha256": "add932796a61a2d8dfe80ac7c890ff1aeecd85759d4db26cf57e92c78b792f80",
+        "size": 12038
       }
     ],
     "capture_identity": "developer-a1-140ab028ea4e4f00821e07a46b8f8260",
     "runner": "tools/release/codex_developer_a1_runner.py::run",
-    "scope_document_sha256": "a3898d522328e13261c25d773e6379f9505a85acd6d16f69215a512ac7f11667",
+    "scope_document_sha256": "add932796a61a2d8dfe80ac7c890ff1aeecd85759d4db26cf57e92c78b792f80",
     "checkout_policy": "Materialize verified reviewed Git-blob bytes into fresh private capture; never execute autocrlf checkout bytes",
     "limits": {
       "capture_files": 32,
@@ -535,6 +535,8 @@
     },
     "scope_limits": "No worker/assembly launch, storage setup, install, activation, root walk or complete runtime closure proof. Actual production metadata callback and writer-quiescence provenance remain pending.",
     "child_evidence_limits": "Owned Popen PID only; requested executable and parent monotonic sample are not OS image/creation-time proof. Both verification flags false. No reattachment.",
-    "parent_transport_source": "tools/release/codex_developer_a1_parent.js (separate decision digest, no helper process)"
+    "parent_transport_source": "tools/release/codex_developer_a1_parent.js (separate decision digest, no helper process)",
+    "preflight": "codex_developer_a1_runner.py::validate_environment; same source for read-only admission and execution; no capture/command on admission",
+    "candidate_parent": "existing LocalApplicationData known folder; exact absolute path stays private"
   }
 }

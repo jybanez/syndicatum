@@ -162,3 +162,30 @@ the reserved attempt identity; its separately created proposal must bind the new
 identity, reviewed source hashes and scope digest. All diagnostics/bounds/effects
 and STOP protections remain unchanged. Parent and wrapper transport digests are
 separate owner-decision bindings, not replacements inside the22-file payload.
+
+
+## Consistent parent admission after preflight STOP11705
+
+Capture parent is the EXISTING Windows LocalApplicationData known-folder directory,
+with the exact absolute path in the new separately bound private proposal. Do not
+create a parent directory, use the old proposed parent, bypass a reparse point or
+change either preserved proposal. Leaf140ab028ea4e4f00821e07a46b8f8260 was never
+allocated; the reviewed leaf under this different existing parent must be absent.
+
+The same validate_environment(packet) is used for read-only owner admission and
+inside execution before create_capture. It checks local absolute parent/runtime
+paths, location constraints, every ancestor (max64) using lstat plus direct Win32
+FILE_ATTRIBUTE_REPARSE_POINT, missing/inaccessible metadata, current token SID,
+parent OWNER SID (current user or SYSTEM), absent target and all four runtime pins.
+Token and owner queries use short-lived native read-only handles/security metadata;
+no helper process, protected config read or persistent handle is added. Creation
+repeats the full attribute guard immediately before its atomic owner/SYSTEM ACL.
+There is no separate ad-hoc PowerShell path-eligibility implementation to diverge.
+
+The earlier PowerShell reparse snapshot and later unflagged native reads are kept
+as inconsistent observations; no normalization cause is claimed and no stopped run
+is resumed. Source tests include non-link reparse attributes, native-only flags,
+missing attributes, owner/SID mismatch, runtime drift and occupied-target rejection.
+Complete this shared preflight on the exact new proposal BEFORE another owner
+request and repeat it on execution for drift. Native diagnostics and installation
+remain outside source-review authority.

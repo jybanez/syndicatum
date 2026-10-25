@@ -30,7 +30,7 @@ class Cases(unittest.TestCase):
    with self.subTest(fault=fault),tempfile.TemporaryDirectory() as tmp:
     calls=[];auth=[];source={n:(ROOT/('docs' if n.endswith('-admission.md') else 'tools/release')/n).read_bytes() for n in runner.REQUIRED_SOURCES}
     exe=Path(tmp)/'inert-executable';exe.write_bytes(b'inert executable fixture; never launched');pin=runner.sha(exe.read_bytes())
-    p={'capture_identity':runner.CAPTURE_ID,'scope':'Developer A1 only','native_effects_accepted':True,'executables':{r:{'path':str(exe),'sha256':pin} for r in ('cli','python','node','powershell')},'sources':{n:{'sha256':runner.sha(b),'size':len(b)} for n,b in source.items()},'scope_document_sha256':runner.sha(source['codex-developer-a1-admission.md']),'capture_parent':tmp,'owner_sid':'inert'}
+    p={'capture_identity':runner.CAPTURE_ID,'scope':'Developer A1 only','native_effects_accepted':True,'executables':{r:{'path':str(exe),'sha256':pin} for r in ('cli','python','node','powershell')},'sources':{n:{'sha256':runner.sha(b),'size':len(b)} for n,b in source.items()},'scope_document_sha256':runner.sha(source['codex-developer-a1-admission.md']),'capture_parent':tmp,'owner_sid':runner.windows_sid() if runner.os.name=='nt' else 'inert'}
     class Host:
      def create_capture(self,parent,sid):
       out=Path(parent)/runner.CAPTURE_ID;out.mkdir();return out
@@ -59,7 +59,7 @@ class Cases(unittest.TestCase):
      self.assertEqual(len(calls),1 if fault in ('nonzero','timeout') else 5 if fault=='wrong_node' else 6 if fault=='wrong_ps' else 4)
      if fault in ('nonzero','timeout'):self.assertEqual(str(stopped.exception),'ORIGINAL_'+fault)
     count=len(calls)
-    with self.assertRaises(FileExistsError):runner.run(p,source,lambda *v:auth.append(v),Host())
+    with self.assertRaisesRegex(ValueError,'capture_occupied'):runner.run(p,source,lambda *v:auth.append(v),Host())
     self.assertEqual(len(calls),count)
  def test_parent_deadline_keeps_primary_and_never_kills_or_retries(self):
   class Child:
@@ -84,6 +84,17 @@ class Cases(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,lambda item:SimpleNamespace(st_file_attributes=0,st_mode=stat.S_IFLNK))
    with self.assertRaisesRegex(ValueError,'windows_reparse_point'):runner.check_nonreparse_chain(path,clean,lambda item:0x400)
    with self.assertRaisesRegex(ValueError,'windows_attributes_unavailable'):runner.check_nonreparse_chain(path,clean,lambda item:0xFFFFFFFF)
+ def test_shared_preflight_owner_runtime_and_occupied_target_fail_closed(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp);exe=path/'fixture';exe.write_bytes(b'not executable')
+   p={'capture_parent':tmp,'capture_identity':runner.CAPTURE_ID,'owner_sid':'inert','executables':{r:{'path':str(exe),'sha256':runner.sha(exe.read_bytes())} for r in ('cli','python','node','powershell')}}
+   self.assertTrue(runner.validate_environment(p,lambda:'inert',lambda path:'inert')['target_absent'])
+   for sid,parent_sid in [('wrong','inert'),('inert','wrong')]:
+    with self.assertRaises(ValueError):runner.validate_environment(p,lambda:sid,lambda path:parent_sid)
+   exe.write_bytes(b'drift')
+   with self.assertRaisesRegex(ValueError,'runtime_pin'):runner.validate_environment(p,lambda:'inert',lambda path:'inert')
+   (path/runner.CAPTURE_ID).mkdir()
+   with self.assertRaisesRegex(ValueError,'capture_occupied'):runner.validate_environment(p,lambda:'inert',lambda path:'inert')
  def test_authority_before_any_host_call(self):
   class Host:
    def __getattr__(self,name):raise AssertionError('host touched before authorization')

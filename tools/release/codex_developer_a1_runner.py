@@ -33,6 +33,65 @@ def check_nonreparse_chain(path,metadata=None,native_attributes=None):
         require(not (flags&0x400) and not stat.S_ISLNK(info.st_mode),'windows_reparse_point')
 
 
+def windows_sid(path=None):
+    """Read current token SID or one directory OWNER SID; close all owned handles."""
+    import ctypes as c
+    from ctypes import wintypes as w
+    require(os.name=='nt','windows_identity_required')
+    adv=c.WinDLL('advapi32',use_last_error=True);kernel=c.WinDLL('kernel32',use_last_error=True)
+    adv.ConvertSidToStringSidW.argtypes=[c.c_void_p,c.POINTER(w.LPWSTR)];adv.ConvertSidToStringSidW.restype=w.BOOL
+    kernel.LocalFree.argtypes=[c.c_void_p];kernel.LocalFree.restype=c.c_void_p
+    descriptor=c.c_void_p();token=w.HANDLE();text=w.LPWSTR()
+    try:
+        if path is not None:
+            adv.GetNamedSecurityInfoW.argtypes=[w.LPCWSTR,w.DWORD,w.DWORD,c.POINTER(c.c_void_p),c.c_void_p,c.c_void_p,c.c_void_p,c.POINTER(c.c_void_p)]
+            adv.GetNamedSecurityInfoW.restype=w.DWORD
+            owner=c.c_void_p()
+            require(adv.GetNamedSecurityInfoW(str(path),1,1,c.byref(owner),None,None,None,c.byref(descriptor))==0,'parent_owner_metadata_unavailable')
+            sid=owner
+        else:
+            kernel.GetCurrentProcess.restype=w.HANDLE
+            adv.OpenProcessToken.argtypes=[w.HANDLE,w.DWORD,c.POINTER(w.HANDLE)];adv.OpenProcessToken.restype=w.BOOL
+            adv.GetTokenInformation.argtypes=[w.HANDLE,w.DWORD,c.c_void_p,w.DWORD,c.POINTER(w.DWORD)];adv.GetTokenInformation.restype=w.BOOL
+            kernel.CloseHandle.argtypes=[w.HANDLE];kernel.CloseHandle.restype=w.BOOL
+            require(adv.OpenProcessToken(kernel.GetCurrentProcess(),8,c.byref(token)),'token_query_unavailable')
+            size=w.DWORD();adv.GetTokenInformation(token,1,None,0,c.byref(size))
+            require(0<size.value<=65536,'token_metadata_bound')
+            buffer=c.create_string_buffer(size.value)
+            require(adv.GetTokenInformation(token,1,buffer,size,c.byref(size)),'token_identity_unavailable')
+            sid=c.cast(buffer,c.POINTER(c.c_void_p))[0]
+        require(adv.ConvertSidToStringSidW(sid,c.byref(text)),'sid_conversion_unavailable')
+        return text.value
+    finally:
+        if text:kernel.LocalFree(c.cast(text,c.c_void_p))
+        if descriptor:kernel.LocalFree(descriptor)
+        if token:kernel.CloseHandle(token)
+
+def validate_environment(packet,identity=None,owner=None):
+    """One read-only admission/execution preflight. No create, command or refresh."""
+    parent=Path(packet['capture_parent'])
+    require(parent.is_absolute() and parent.is_dir() and '..' not in parent.parts,'capture_parent')
+    if os.name=='nt':require(len(parent.drive)==2 and parent.drive[1]==':','local_capture_drive')
+    require(not str(parent).lower().startswith('c:\\wamp64\\www') and '.syndicatum' not in [x.lower() for x in parent.parts],'capture_location')
+    check_nonreparse_chain(parent)
+    require(packet['capture_identity']==CAPTURE_ID,'capture_identity')
+    target=parent/CAPTURE_ID
+    require(not target.exists() and not target.is_symlink() and not target.is_junction(),'capture_occupied')
+    if os.name=='nt' or identity is not None:
+        sid=(identity or windows_sid)()
+        require(packet['owner_sid']==sid,'current_owner_sid_drift')
+        parent_sid=(owner or windows_sid)(parent)
+        require(parent_sid in (sid,'S-1-5-18'),'capture_parent_owner')
+    require(set(packet['executables'])=={'cli','python','node','powershell'},'runtime_roles')
+    for row in packet['executables'].values():
+        path=Path(row['path'])
+        require(path.is_absolute() and '..' not in path.parts,'runtime_path')
+        if os.name=='nt':require(len(path.drive)==2 and path.drive[1]==':','local_runtime_drive')
+        require(path.is_file(),'runtime_file')
+        check_nonreparse_chain(path)
+        require(path.stat().st_size<=536870912 and sha(path.read_bytes())==row['sha256'],'runtime_pin')
+    return {'runtime_pins':4,'parent_constraints':True,'owner_checked':os.name=='nt' or identity is not None,'target_absent':True}
+
 class NativeHost:
     """Windows-only native footprint. No process on object construction."""
     def __init__(self):self.children=[]
@@ -114,10 +173,7 @@ def run(packet,source_bytes,authorize,host=None):
         for name,row in packet['sources'].items():
             require(re.fullmatch(r'[A-Za-z0-9_.-]+',name) and sha(source_bytes[name])==row['sha256'] and len(source_bytes[name])==row['size'],'source_bytes')
         require(sha(source_bytes['codex-developer-a1-admission.md'])==packet['scope_document_sha256'],'scope_document_binding')
-        for row in packet['executables'].values():
-            path=Path(row['path']);require(path.is_absolute() and path.is_file(),'runtime_path')
-            check_nonreparse_chain(path)
-            require(path.stat().st_size<=536870912 and sha(path.read_bytes())==row['sha256'],'runtime_pin')
+        validate_environment(packet)
         capture=host.create_capture(packet['capture_parent'],packet['owner_sid'])
         # Verified Git blob bytes are materialized, never copied from autocrlf checkout.
         require(len(source_bytes)<=24 and sum(map(len,source_bytes.values()))<=16777216,'capture_bounds')
