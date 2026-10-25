@@ -91,7 +91,7 @@ def verify_acceptance(plan_bytes, reviewed_plan_digest, evidence_bytes, retained
             "listener_pid": int, "observed_at_ms": int, "locks": dict, "owner_phases": list,
             "healthy_route_deliveries": int, "acknowledged_replays": int})
         require_fact(plan["max_health_age_ms"] > 0 and 0 < plan["shutdown_bound_ms"] <= 2000 and observed["listener_pid"] > 0, "acceptance_plan_bounds")
-        require_fact(len(plan["malformed_route_tokens"]) == 2 and all(type(v) is str and v for v in plan["malformed_route_tokens"]) and len(set(plan["malformed_route_tokens"])) == 2, "acceptance_route_schema")
+        require_fact(len(plan["malformed_route_tokens"]) <= 512 and all(type(v) is str and v for v in plan["malformed_route_tokens"]) and len(set(plan["malformed_route_tokens"])) == len(plan["malformed_route_tokens"]), "acceptance_route_schema")
         for item in observed["unavailable_routes"].values():
             strict_object(item, {"reason": str, "delivered": int, "acknowledged": int, "history_recovered": bool})
         strict_object(observed["locks"], {"background": int, "listener": int})
@@ -137,7 +137,9 @@ def _verify_acceptance(plan, observed):
     require_fact(first["pid"] == second["pid"] == observed["listener_pid"], "health_process_mismatch")
     require_fact(first["timestamp_ms"] < second["timestamp_ms"] <= observed["observed_at_ms"], "health_not_advancing")
     require_fact(0 <= observed["observed_at_ms"] - second["timestamp_ms"] <= plan["max_health_age_ms"], "health_stale")
-    require_fact(all(item["readiness"] == "degraded" and item["unavailable_count"] == 2 for item in health), "degraded_health_not_explicit")
+    unavailable_count=len(plan["malformed_route_tokens"])
+    readiness='degraded' if unavailable_count else 'ready'
+    require_fact(all(item["readiness"] == readiness and item["unavailable_count"] == unavailable_count for item in health), "degraded_health_not_explicit")
     require_fact(observed["locks"] == {"background": observed["listener_pid"], "listener": observed["listener_pid"]}, "acceptance_lock_mismatch")
     phases = observed["owner_phases"]
     require_fact([item["phase"] for item in phases] == ["two_open", "one_open", "last_closed", "reopened"], "owner_phase_sequence")
@@ -150,7 +152,8 @@ def _verify_acceptance(plan, observed):
     require_fact(closed["test_message_id"] == reopened["test_message_id"] and bool(closed["test_message_id"]), "recovery_message_mismatch")
     require_fact(len(reopened["owner_tokens"]) >= 1 and len(reopened["listener_pids"]) == 1 and reopened["delivery_count"] == 1, "pending_recovery_not_once")
     require_fact(observed["healthy_route_deliveries"] == 1 and observed["acknowledged_replays"] == 0, "healthy_route_or_replay_failure")
-    return {"scope": "device_pilot_only", "routing": "degraded_two_routes_not_recovered"}
+    routing="ready" if not unavailable_count else ("degraded_two_routes_not_recovered" if unavailable_count==2 else "degraded_routes_not_recovered")
+    return {"scope": "device_pilot_only", "routing": routing}
 
 
 def sequence(adapter):

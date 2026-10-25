@@ -19,6 +19,12 @@ MAX_FRAME = 2 * 1024 * 1024
 MAX_STDERR = 65536
 
 
+def sha_file(path, limit=536870912):
+    check(0 < Path(path).stat().st_size <= limit, 'runtime_image_size_bound')
+    with open(path,'rb') as stream:
+        return hashlib.file_digest(stream,'sha256').hexdigest()
+
+
 def _unique(pairs):
     result = {}
     for key, value in pairs:
@@ -52,7 +58,7 @@ class PinnedWindowsProcess:
             path = Path(name)
             check(path.is_absolute() and not path.is_symlink() and path.is_file() and
                   0 < path.stat().st_size <= 134217728 and
-                  hashlib.sha256(path.read_bytes()).hexdigest() == expected, "ipc_executable_or_script_pin")
+                  sha_file(path,134217728) == expected, "ipc_executable_or_script_pin")
 
     def _probe(self):
         # Only the child created by this transport may be observed. Nothing is
@@ -74,7 +80,7 @@ class PinnedWindowsProcess:
             check(bool(api.GetProcessTimes(handle, *(ctypes.byref(t) for t in times))), "ipc_child_creation")
             check(os.path.normcase(path.value) == os.path.normcase(os.path.abspath(self.executable)), "ipc_child_image_changed")
             return {"pid": self.child.pid, "created_filetime": (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime,
-                    "image": path.value, "sha256": hashlib.sha256(Path(path.value).read_bytes()).hexdigest()}
+                    "image": path.value, "sha256": sha_file(path.value)}
         finally:
             check(bool(api.CloseHandle(handle)), "ipc_child_probe_close_uncertain")
 

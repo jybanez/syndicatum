@@ -7,6 +7,7 @@ export const SOURCE_FILES = Object.freeze([
   'codex_developer_host_handoff.py','codex_developer_integrated_preparation.py','codex_developer_transport.py',
   'codex_developer_process_ipc.py','codex_developer_fixed_journal.py','codex_developer_native_b.py',
   'codex_developer_freshness.py','codex-developer-fixed-session-worker.ps1',
+  'codex_developer_lifecycle.py','codex_pilot_sequence.py',
   'codex-developer-fixed-session-protocol.ps1','codex-developer-fixed-storage.psm1','codex-developer-native-b.psm1',
 ]);
 const fail = message => {throw new Error(message);};
@@ -18,16 +19,17 @@ export class CodexToolSession {
   async start() {
     fail('SOURCE_ONLY: trusted Codex assembly launch disabled');
     const p=this.packet;
-    if (p.operation!=='prepare_only' || p.evidence_status!=='captured' || !/^[a-f0-9]{64}$/.test(p.private_packet_sha256))
+    if (!['prepare_only','pilot'].includes(p.operation) || p.evidence_status!=='captured' || !/^[a-f0-9]{64}$/.test(p.private_packet_sha256))
       fail('uncaptured/unreviewed assembly packet');
     // Full dependency and runtime inventory, not only a launcher executable.
     if (JSON.stringify([...p.source_files.map(x=>x.name)].sort())!==JSON.stringify([...SOURCE_FILES].sort()))
       fail('incomplete mechanism source pin set');
-    if (JSON.stringify(Object.keys(p.runtime_trees).sort())!==JSON.stringify(['codex_host','powershell','python']))
+    if (JSON.stringify(Object.keys(p.runtime_trees).sort())!==JSON.stringify(['codex_host','node','powershell','python']))
       fail('incomplete runtime tree set');
     const roots=Object.values(p.runtime_trees);
     if(roots.some(x=>x.status!=='captured'||!Array.isArray(x.files)||!x.files.length||x.files.length>10000))
       fail('uncaptured runtime inventory');
+    if(roots.some(x=>!['dependency_closure','full_tree'].includes(x.inventory_mode)))fail('runtime inventory breadth not admitted');
     const pins=[...p.source_files,...roots.flatMap(x=>x.files)];
     if(pins.some(x=>!/^([A-Za-z]:\\)/.test(x.path)||!/^([a-f0-9]{64})$/.test(x.sha256)))fail('invalid trusted artifact pins');
     if(!/^[a-f0-9]{64}$/.test(p.private_packet_acl_sha256))fail('uncaptured private packet ACL');
@@ -35,13 +37,16 @@ export class CodexToolSession {
       private_packet_sha256:p.private_packet_sha256,private_packet_acl_sha256:p.private_packet_acl_sha256})).toString('base64');
     const verification=`$ErrorActionPreference='Stop'
 $p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')) | ConvertFrom-Json -AsHashtable
+$pinBytes=0L
 foreach($f in $p.pins){$i=Get-Item -LiteralPath $f.path -Force -ErrorAction Stop
+$pinBytes+=$i.Length;if($i.Length -gt 536870912 -or $pinBytes -gt 4294967296){throw 'bounded dependency hash budget'}
 if($i.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'reparse artifact'}
 if((Get-FileHash -LiteralPath $f.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $f.sha256){throw 'artifact drift'}}
 foreach($r in $p.roots){
 $root=[IO.Path]::GetFullPath($r.root);if($root -cne $r.root){throw 'runtime root canonicality'}
 $expected=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach($f in $r.files){if(-not $f.path.StartsWith($root+'\\',[StringComparison]::OrdinalIgnoreCase) -or -not $expected.Add($f.path)){throw 'runtime pin boundary/duplicate'}}
+if($r.inventory_mode -ceq 'dependency_closure'){continue}
 $todo=[Collections.Generic.Stack[string]]::new();$todo.Push($root);$count=0;$total=0L;$directories=0
 while($todo.Count){$dir=$todo.Pop();$directories++;if($directories -gt 10000){throw 'runtime directory bound'}
 $di=Get-Item -LiteralPath $dir -Force -ErrorAction Stop
@@ -108,8 +113,12 @@ if($aclHash -cne $p.private_packet_acl_sha256 -or (Get-FileHash -LiteralPath $p.
 }
 
 export async function runCodexHost({tools, packet, session=new CodexToolSession(tools,packet),
-    clock=()=>Date.now(), monotonic=()=>performance.now()}){
+    clock=()=>Date.now(), monotonic=()=>performance.now(), collectInstallation=null}){
+  if(packet.operation==='pilot'&&typeof collectInstallation!=='function')fail('independent installation collector not admitted');
   const began=monotonic();
+  const evidenceOrder=['before-marketplace_remove','before-marketplace_remove','marketplace_remove',
+    'before-marketplace_add','marketplace_add','before-plugin_add','plugin_add'];
+  let evidenceIndex=0;
   const queue=[];let pending='', host;
   const append=chunk=>{
     pending+=chunk;
@@ -137,6 +146,21 @@ export async function runCodexHost({tools, packet, session=new CodexToolSession(
       if(value.kind==='tool_challenge'){
         if(++count>128)fail('assembly tool invocation capacity');
         await host.handle(value.challenge);
+      }else if(value.kind==='install_observation_challenge'){
+        const allowed=['before-marketplace_remove','marketplace_remove','before-marketplace_add','marketplace_add','before-plugin_add','plugin_add'];
+        if(packet.operation!=='pilot'||typeof collectInstallation!=='function'||!allowed.includes(value.operation)||
+            value.operation!==evidenceOrder[evidenceIndex++]||
+            value.spec_sha256!==packet.installation_spec_sha256)fail('unadmitted installation observation');
+        // Capability belongs to the trusted host. Never eval a collector or read
+        // an arbitrary path/command from a challenge or an untrusted plan.
+        let timer;
+        let raw;
+        try{raw=await Promise.race([collectInstallation({operation:value.operation,spec_sha256:value.spec_sha256}),
+          new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('installation observation timeout; no replay')),30000);})]);
+        }finally{clearTimeout(timer);}
+        if(!(raw instanceof Uint8Array)||raw.byteLength>32768)fail('installation observation shape/bound');
+        append(await session.send({kind:'install_observation_delivery',session:packet.session,
+          operation:value.operation,spec_sha256:value.spec_sha256,raw_base64:Buffer.from(raw).toString('base64')}));
       }else if(value.kind==='assembly_result'){
         if(value.authorizes_install!==false||value.session_closed!==true||queue.length||pending.trim())
           fail('incomplete/overbroad assembly completion');

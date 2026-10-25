@@ -14,6 +14,7 @@ from codex_developer_transport import DurableHead, WindowsSessionAPI
 
 SCOPES = {"connector_task_run_suppression", "owned_listener_stop", "private_cutoff_capture"}
 OPERATIONS = ("suppress", "stop", "cutoff")
+LIFECYCLE_OPERATIONS = ("marketplace_remove", "marketplace_add", "plugin_add", "owner_activation", "acceptance_observe")
 
 
 def plan_context(plan):
@@ -56,12 +57,13 @@ class FixedPreparationJournal:
     flushed/read-back independent head per physical record. A partial attempt is
     terminal and cannot be resumed, rebuilt or replayed.
     """
-    def __init__(self, core, handoff, native_context):
+    def __init__(self, core, handoff, native_context, publication_limits=None):
         check(type(core) is FixedJournal and type(handoff) in (RetainedHead, DurableHead) and handoff.value is None,
               "new_fixed_handoff_required")
         self.core, self.handoff, self.context = core, handoff, native_context
         self.spans, self.admitted, self.pending = [], [], None
         self.terminal = False
+        self.publication_limits=publication_limits
         try:
             handoff.retain(core, core.external_head, None)
         except Exception as error:
@@ -105,6 +107,16 @@ class FixedPreparationJournal:
                            "plan_context_sha256": self.context,
                            "canonical_evidence": self.core.authority.latest}
             raw = packed(observation)
+            if self.publication_limits is not None:
+                limits=self.publication_limits
+                index=len(self.spans)
+                if index<len(limits['lengths']):limit=limits['lengths'][index]
+                else:
+                    check(index<len(limits['lengths'])+limits['failure_count'] and
+                          (producer in ('stopped','uncertain-dispatch-evidence') or boundary=='failure-postimage'),
+                          'unreviewed_logical_publication')
+                    limit=max(limits['lengths'])
+                check(len(raw)<=limit,'admitted_logical_projection_exceeded')
             check(len(raw) <= 33554432 and self.core.pin["width"] >= 2048, "integrated_evidence_bound")
             chunk_size = (self.core.pin["width"] - 1024) * 3 // 4
             count = max(1, math.ceil(len(raw) / chunk_size))
@@ -163,6 +175,22 @@ class FixedPreparationJournal:
         check(type(now) is int and receipt["not_before_ms"] <= now < receipt["expires_ms"],
               "terminal_authority_time_window")
 
+    def admit_lifecycle(self, operation, head):
+        try:
+            check(operation in LIFECYCLE_OPERATIONS and self.admitted == list(OPERATIONS), "lifecycle_after_preparation_only")
+            self.verify(head)
+            self.core.authority.refresh()
+            self.core._authority()
+            previous = packed(self.handoff.value)
+            result = self.core.model_action(operation, head, self.context)
+            self.handoff.retain(self.core, result["head_sha256"], previous)
+            self.verify(self.retained_head)
+            self.core._authority()
+            return self.retained_head
+        except Exception as error:
+            self._abort(error)
+            raise
+
     def close_terminal(self):
         self.terminal = True
         errors = []
@@ -209,11 +237,14 @@ class IntegratedPreparation:
         self.authority, self.now, self.handoff = authority, now_ms, handoff
         self.fixed_plan_raw, self.receipt_raw = reviewed_fixed_plan_raw, expected_receipt_raw
         fixed_plan = json.loads(reviewed_fixed_plan_raw)
-        check(fixed_plan["operations"] == {name: self.context for name in OPERATIONS} and
+        purpose = self.plan.get("authority_purpose", "Developer-only preparation")
+        allowed = OPERATIONS + LIFECYCLE_OPERATIONS if purpose == "Developer-only pilot" else OPERATIONS
+        check(authority.purpose == purpose and fixed_plan["operations"] == {name: self.context for name in allowed} and
               all(fixed_plan[key] == self.plan[key] for key in ("mechanism_head", "candidate_commit", "attempt_id", "cutoff_id")),
               "integrated_reviewed_context")
         self.journal = None
         self.built = False
+        self.publication_limits = None
 
     def verify_authority(self, approval_id, native_digest, scopes):
         check(approval_id == self.plan["owner_authority_message_id"] and scopes == SCOPES and
@@ -236,14 +267,17 @@ class IntegratedPreparation:
         projected = packed(self.storage.manifest)
         core = FixedJournal(self.storage, projected, digest(projected), self.authority,
                             self.receipt_raw, None, self.fixed_plan_raw, self.now)
-        self.journal = FixedPreparationJournal(core, self.handoff, self.context)
+        self.journal = FixedPreparationJournal(core, self.handoff, self.context,self.publication_limits)
         return self.journal
 
-    def build(self, preparation_backend):
+    def build(self, preparation_backend, *, lifecycle=False):
         # Live backends still hit their existing unconditional gates. The tests
         # provide the existing inert preparation backend; no real transport here.
         check(not self.built, "integrated_runner_no_replay")
+        check(not lifecycle or self.plan.get("authority_purpose") == "Developer-only pilot", "explicit_pilot_authority_required")
+        check(not lifecycle or self.publication_limits is not None,"pilot_capacity_not_admitted")
         self.built = True
         return DeveloperBAdapter(packed(self.plan), digest(packed(self.plan)), preparation_backend,
             self.verify_authority, now_ms=self.now, journal_factory=self.journal_factory,
-            action_admission=lambda operation, head: self.journal.admit(operation, head))
+            action_admission=lambda operation, head: self.journal.admit(operation, head),
+            close_after_boundaries=not lifecycle)

@@ -76,10 +76,12 @@ requested by this source review. The installed version last reported was 0.2.7;
    substitution. Each remove/add/plugin-add command requires its named before/after
    frozen boundary. Verify Task XML, Run values, static files and raw cutoff states
    at all six boundaries against the preserved anchors. No retries on timeout,
-   EOF, unknown result or partial outcome. The current adapter only verifies those
-   boundaries; the actual installer/activation command dispatcher remains missing
-   and must be reviewed before execution. After the sixth boundary, the adapter
-   closes both sessions itself and checks freshness again before success.
+   EOF, unknown result or partial outcome. `DeveloperLifecycle` now implements the
+   closed command dispatcher and keeps the SAME C/D sessions through all six
+   boundaries, independent installed postimages and owner-activation handoff.
+   The preparation-only path still closes terminally; it cannot later be promoted.
+   A full new pilot purpose/scopes plus an approved installation-spec digest are
+   required to select the held lifetime. Completion/failure closes once.
 7. **Independent installed verification and separately authorized activation.**
    Verify exact installed source revision, version, all expected files/hashes,
    managed source/cache identity, configuration/bindings/queue/history preservation
@@ -169,8 +171,8 @@ The separate head ledger now persists and verifies the entire retained sequence
 and normalized authority receipt through its own fixed session. The native plan
 pins its full manifest. Its actual independent host ownership and trusted durable
 provenance are not proved by in-process inert fixtures. Real capacity/performance,
-fresh host preimages, backup admission, execution authorities and the installation/
-activation dispatcher remain live admission gaps. Physical power-loss durability
+fresh host preimages, backup admission, execution authorities and real independent
+installation-observation binding remain live admission gaps. Physical power-loss durability
 is not established by file flush/readback or the earlier small synthetic test.
 
 Next executable admission step, AFTER complete source review and explicit owner
@@ -183,18 +185,19 @@ to perform that review. A single pilot authorization can name its conditional
 read-only admission and preparation/install/activation scopes explicitly; separate
 named permissions do not imply a human round trip for each implementation detail.
 If any preimage/authority/pin/ownership/capacity/time check fails, retain that attempt
-and stop before mutation. The installation command dispatcher and observed
-lifecycle/delivery acceptance still require completion/review under that same
+and stop before mutation. The implemented closed installation/owner-activation
+dispatch and observed lifecycle/delivery acceptance still require review under that same
 procedure. This source delivery does not request a new owner queue.
 
-These are explicit blocks on live execution. No native harness, live retrieval, storage setup,
+These are explicit blocks on execution. Supported ordinary read-only diagnosis is
+allowed under the owner objective; no native harness, raw cutoff collection, storage setup,
 suppression, stop, install, activation, merge or other-machine action is authorized.
 
 ## Actual assembly and bounded pilot packet (#11656)
 
 The concrete packet is `docs/codex-developer-pilot-admission-packet.json`. It is
 SOURCE_ONLY_DRAFT_NOT_AUTHORITY. It contains the candidate pin, exact Git-blob
-SHA-256/length of every mechanism module (14 files), entrypoint names, quantitative
+SHA-256/length of every mechanism module (16 files), entrypoint names, quantitative
 limits, ordered A-F phases, expected results and uncertainty handling. Source must
 be staged as those exact blob bytes; an autocrlf checkout is not assumed identical.
 The packet intentionally does not hash itself or invent its eventual review head;
@@ -206,8 +209,8 @@ Concrete call path:
    `codex_developer_codex_entry.mjs::runCodexHost({tools,packet})` constructs the
    actual `createTrustedAgentHost` handler and a `CodexToolSession`. Its production
    start unconditionally refuses before invoking any tool. The unreachable source
-   verifies the complete source set, complete Python/PowerShell/Codex-host runtime
-   tree inventories (not launcher hashes alone), private packet owner/protected
+   verifies the complete source set, admitted Python/PowerShell/Node/Codex-host runtime
+   dependency inventories (not launcher hashes alone), private packet owner/protected
    ACL/descriptor hash/ancestor safety and exact packet digest. The concrete exec
    call uses a pinned Python entry with `-E -s -S -B -u`, no user site/environment
    or bytecode writes, and one tool session. This is an agent host library; a
@@ -234,10 +237,10 @@ Concrete call path:
    from hostile code inside that process. The agent's execution-session capability
    owns the private parent channel. No global CAS or new service is claimed.
 5. Terminal completion/failure closes all owned ledger capabilities once and
-   poisons the parent session against replay. The actual main can perform only
-   preparation, then closes: it cannot continue into installation, implicitly
-   resume that closed attempt or activate anything. Its output explicitly says
-   installer_dispatch=unimplemented and authorizes_install=false. Source tests
+   poisons the parent session against replay. The actual main supports explicit
+   prepare_only or full pilot assembly. A prepare-only completion stays consumed;
+   full pilot holds C/D continuously and cannot reopen a closed preparation. The
+   output grants no new installation/resume authority. Source tests
    exercise `assemble` through protected challenge, canonical parsing, journal,
    all six inert boundaries and terminal close; JS tests exercise the actual host
    pump/handler/private-delivery call path with inert execution/tool responses.
@@ -245,11 +248,13 @@ Concrete call path:
 The host-module loading and actual writable-stdin execution-session behavior are
 real-runtime admission checks, not demonstrated by inert channels. Neither is a
 reason to invent a new server API. No worker or assembly process was launched to
-fill evidence fields. Complete current runtime trees, current installed provenance,
-raw preimages, available disk, new private packet/ACL and container manifests are
-explicitly UNCAPTURED, with their acquisition phases named in the packet. Runtime
-tree verification is bounded to10,000 files/directories and1GiB per tree; an
-overrun/missing/extra/reparse file stops. Source and private packet pins cannot
+fill evidence fields. Focused current binary/manifest/status/disk and device-tree
+metadata are now recorded below. Action-ready provenance/raw preimages, admitted
+runtime closure and new private packet/ACL/container manifests remain uncaptured.
+Runtime verification supports the admitted dependency closure, not blanket whole
+runtime or OS attestation. A full-tree option is explicitly bounded to10,000 files/
+directories and1GiB and is not a default demand to walk unrelated user data.
+Missing/drifted/reparse artifacts stop. Source and private packet pins cannot
 be populated from an untrusted message body.
 
 Proposed setup bounds are three container pairs totaling140MiB, at most192MiB for
@@ -260,11 +265,72 @@ record/receipt/failure-margin formulas and reject before setup/action if they do
 not fit. Authority freshness/native observation age,30s tool/IPC and120s total host
 deadline remain enforced; no silent deadline extension or fresh baseline is allowed.
 
-Precise next owner scope, only after source/packet review: bounded Developer-only
-**A read-only admission** against the exact reviewed head/candidate and preserved
-history. No request has been posted. B setup/C preparation/D install/E activation
-are separately named possible phases of the same coherent pilot authorization,
-not queues per implementation detail. At this revision D/E dispatch are plainly
-UNIMPLEMENTED, and new evidence/manifests are uncaptured, so mutation authority
-must not be requested or inferred yet. A may return only evidence/admission gaps;
-it cannot open gates or launch the native worker to make a missing field pass.
+One coherent later owner decision may name A1 process-based admission, B bounded
+setup, C/D same-session prepare/install, E owner-controlled reload and F independent
+read-only acceptance, conditional on admitted evidence/collectors and exact source.
+Ordinary A0 read-only checks do not need a queue per check and have now been done.
+No request has been posted. All gates remain closed. Missing fields cannot be
+filled by starting a worker or silently treating a source review as live authority.
+
+## Bounded current findings and final lifecycle (#11659)
+
+Supported `connector_background_status`/`connector_status` report running/ready,
+fresh health and no unavailable bindings, but the installed manifest is still
+0.2.7. The manifest and known Python/PowerShell/Node/running Codex-named image were
+hashed without launching those runtimes. CLI image hash matches the earlier
+source-review binary pin; this is not a fresh CLI --version/schema execution.
+The desktop package reports26.1021.3705.0. The listener identity changed from the
+old failed attempt, connector Task is Running and the legacy Run NAME is absent;
+no Run value contents or credentials were read. These facts forbid reusing old
+action preimages. Point-in-time details/hashes and provenance limits are in the
+packet; none are substituted into a consumed attempt.
+
+Canonical state-name candidates total58 files/816831 bytes, largest105418 bytes.
+All state-prefix files including historic suffixes total72/844172 bytes. A bounded
+metadata-only walk of the device data root found193 files/27 directories/20793865
+bytes and no reparses (cap5000 files/256 directories). No state contents were
+parsed and no credential contents were read. System volume free space was
+50286129152 bytes; it is not reserved. This replaces rough estimates only: exact
+raw snapshots, expanded evidence sizes, collector schema, backup and timing are
+still unproved. No blanket runtime-tree or unrelated user-data inventory was run.
+
+The smallest deferred process-based observation is fresh CLI metadata/config-layer
+schema or a runtime/stdin module probe. #11659 explicitly says: "Any observation
+needing new process/worker startup or persistent writes belongs in the explicit
+later packet scope, not assumed read-only authority." Accordingly these A1 fields
+remain missing. Diagnosis used supported status tools and ordinary read-only shell
+operations; no connector/worker, standalone CLI metadata command or runtime probe
+was started and no new approval queue was created. Source test processes remain inert implementation
+validation, not a disguised live runtime probe.
+
+`NativeCliDispatcher` implements only the exact three reviewed commands behind an
+unconditional gate, pinned executable and neutral directory, hidden launch,
+bounded parallel stdout/stderr and deadline, child identity/result retention and
+one-use dispatch. It never retries, rolls back or kills a partial command. The
+trusted host's independent installation collector capability is REQUIRED before
+pilot launch; current live provenance/schema/implementation binding is not admitted
+and is a remaining concrete gap. It cannot be replaced by a caller true flag or
+fresh facts from a public message. Exact preimages, unrelated fingerprints and
+candidate/source postimages are checked before/after each command and journaled.
+The source callback handoff is wired to the same private coordinator session.
+
+Named pilot grants are explicit within one new canonical Developer-only pilot
+request/event: preparation, three exact CLI commands, owner activation and read-only
+acceptance. Old preparation-only or consumed grants cannot be extended. The full
+installation-spec digest and manifest contexts are bound to that request. Native
+and installation observations/authority are rechecked after slow publication;
+stale data stops without rebaseline. C-to-D keeps the same exclusive sessions;
+failure or final handoff consumes/closes them exactly once.
+
+After verified installed bytes/source, activation dispatch returns
+installed_awaiting_owner_normal_reload. It asks the owner to close/open Codex
+normally WHEN READY; it never forces reopen, restarts the old plugin or spawns a
+second MCP server. The candidate's normal MCP/session startup supplies activation
+on that owner action. The old preparation/installation session is closed. F is a
+NEW read-only evidence context and cannot resume C/D. Its verifier checks original
+retained plan/evidence anchors, the running candidate runtime hash, normal owner
+close/open phases, no closed-session delivery/forced reopen, and exactly-once
+routed delivery. It supports current ready/zero-unavailable routes and explicitly
+reviewed degraded routes, without inventing faults in production. Inert tests pass
+both the installed-awaiting-owner handoff and final ready lifecycle verification;
+actual installed lifecycle/delivery remains unobserved and unresolved.

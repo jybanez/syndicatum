@@ -17,15 +17,17 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
-def setup(handoff_manifest_sha256=None, private_receipt_manifest_sha256=None):
+def setup(handoff_manifest_sha256=None, private_receipt_manifest_sha256=None, lifecycle=False, installation_spec_sha256=None):
     plan = fixture.plan_for(Path("INERT-NOT-A-FILESYSTEM-ROOT"))
-    slots, width = 128, 8192
+    slots, width = (256 if lifecycle else 128), 8192
     manifest = {"root": "INERT-FIXED-ROOT", "namespace": "new-integrated-attempt", "slots": slots, "width": width,
                 "files": {name: {"path": "INERT-FIXED-ROOT/" + name, "identity": "fixture-volume:" + name,
                     "length": slots * width, "acl": "private-fixture-acl", "final_path": "fixture-normalized:" + name}
                     for name in ("records", "heads")}}
     manifest_raw = fixed.packed(manifest)
     plan["fixed_storage_manifest_sha256"] = fixed.digest(manifest_raw)
+    if lifecycle: plan["authority_purpose"] = "Developer-only pilot"
+    if installation_spec_sha256 is not None: plan["installation_spec_sha256"] = installation_spec_sha256
     if handoff_manifest_sha256 is not None:
         plan["independent_handoff_manifest_sha256"] = handoff_manifest_sha256
     if private_receipt_manifest_sha256 is not None:
@@ -34,12 +36,14 @@ def setup(handoff_manifest_sha256=None, private_receipt_manifest_sha256=None):
     api = fixed.FakeFixedSessionAPI(manifest)
     projection = fixed.SessionStorage(api, manifest_raw, fixed.digest(manifest_raw)).manifest
     reviewed = {key: plan[key] for key in ("mechanism_head", "candidate_commit", "attempt_id", "cutoff_id")}
-    reviewed.update(notification_interruption=True, operations={name: context for name in integrated.OPERATIONS},
+    operations = integrated.OPERATIONS + integrated.LIFECYCLE_OPERATIONS if lifecycle else integrated.OPERATIONS
+    reviewed.update(notification_interruption=True, operations={name: context for name in operations},
                     storage_manifest_sha256=fixed.digest(fixed.packed(projection)))
     reviewed_raw = fixed.packed(reviewed)
     receipt = {key: reviewed[key] for key in ("mechanism_head", "candidate_commit", "attempt_id", "cutoff_id", "notification_interruption")}
-    receipt.update(not_before_ms=500, expires_ms=999999, scopes=list(integrated.OPERATIONS), plan_sha256=fixed.digest(reviewed_raw))
-    body = fixed.packed({"purpose": "Developer-only preparation", "plan_context_sha256": context, "receipt": receipt}).decode()
+    receipt.update(not_before_ms=500, expires_ms=999999, scopes=list(operations), plan_sha256=fixed.digest(reviewed_raw))
+    purpose = plan.get("authority_purpose", "Developer-only preparation")
+    body = fixed.packed({"purpose": purpose, "plan_context_sha256": context, "receipt": receipt}).decode()
     request = {"id": 99998, "project_id": 2, "sender": {"participant_id": 36}, "body": body,
         "addressees": [{"participant_id": 28, "reason": "direct", "seen_at": None}], "action_requested": True,
         "action_request_type": "approval", "edited": False, "revision_count": 0, "deleted_at": None}
@@ -49,7 +53,7 @@ def setup(handoff_manifest_sha256=None, private_receipt_manifest_sha256=None):
         "data": {"request_message_id": 99998, "actor_participant_id": 28, "initial_responder_participant_id": 28,
                  "kind": "approval_approved"}}}
     timeline = fixed.FakeCanonicalTimeline({99998: request, approval["id"]: approval})
-    authority = fixed.CanonicalAuthority(timeline, 99998, approval["id"], fixed.digest(fixed.packed(fixed.CanonicalAuthority.material(request))), context)
+    authority = fixed.CanonicalAuthority(timeline, 99998, approval["id"], fixed.digest(fixed.packed(fixed.CanonicalAuthority.material(request))), context, purpose)
     expected = fixed.packed(authority.get(approval["id"]))
     backend = fixture.InertBackend(plan)
     handoff = integrated.RetainedHead()

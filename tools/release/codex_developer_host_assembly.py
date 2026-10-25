@@ -1,7 +1,8 @@
 """One Python coordinator, trusted caller-owned private ledgers, closed CLI.
 
 The Codex host pumps tool challenges through this coordinator's private stdio.
-No installer/activation dispatcher exists. CLI gate refuses before packet read.
+Pilot CLI dispatch is closed; activation is owner-controlled normal reload.
+CLI gate refuses before packet read.
 """
 import json
 from pathlib import Path
@@ -54,6 +55,26 @@ class AgentStdioLink:
         finally:
             self.pending = False
 
+    def installation_snapshot(self, operation, spec_sha256):
+        check(not self.closed and not self.pending,'agent_install_observation_lifetime')
+        self.pending=True
+        deadline=time.monotonic()+30
+        try:
+            self.emit({'kind':'install_observation_challenge','session':self.session,
+                       'operation':operation,'spec_sha256':spec_sha256},deadline)
+            value=self.io._bounded(lambda:self.io._read_frame(65536),deadline)
+            check(value.get('kind')=='install_observation_delivery' and value.get('session')==self.session and
+                  value.get('operation')==operation and value.get('spec_sha256')==spec_sha256,
+                  'agent_install_observation_correlation')
+            import base64
+            raw=base64.b64decode(value['raw_base64'],validate=True)
+            check(len(raw)<=32768,'agent_install_observation_bound')
+            return raw
+        except Exception:
+            self.closed=True
+            raise
+        finally:self.pending=False
+
 
 class TrustedHostState:
     """Trusted caller layer owns three disjoint exclusive session capabilities.
@@ -66,10 +87,10 @@ class TrustedHostState:
         self.runner, self.backend, self.link = runner, backend, link
         self.adapter, self.started, self.closed = None, False, False
 
-    def prepare(self):
+    def prepare(self, *, lifecycle=False):
         check(not self.started and not self.closed, 'host_assembly_no_replay')
         self.started = True
-        self.adapter = self.runner.build(self.backend)
+        self.adapter = self.runner.build(self.backend, lifecycle=lifecycle)
         result = self.adapter.prepare()
         if result['result'] == 'stopped': self.close_terminal()
         return result
@@ -100,6 +121,10 @@ class TrustedHostState:
             errors[0].close_uncertain = True
             raise errors[0]
 
+    def run_pilot(self, dispatcher, observe_install, install_spec):
+        from codex_developer_lifecycle import DeveloperLifecycle
+        return DeveloperLifecycle(self,dispatcher,observe_install,install_spec).run()
+
 
 def assemble(config, trusted_invoke, now_ms, *, session_factory=None, backend=None, link=None):
     """Actual object graph used by the closed CLI; inert factories only in tests.
@@ -107,7 +132,7 @@ def assemble(config, trusted_invoke, now_ms, *, session_factory=None, backend=No
     config is the trusted agent's private digest-verified packet, not message JSON.
     Live CLI must validate packet/source/runtime/ACL admission before calling this.
     """
-    check(config['operation'] == 'prepare_only', 'installer_activation_dispatch_unimplemented')
+    check(config['operation'] in ('prepare_only','pilot'), 'host_assembly_operation')
     if session_factory is None:
         def session_factory(role, manifest_raw):
             process = PinnedWindowsProcess(config['powershell_executable'], config['worker_script'], config['worker_pins'])
@@ -119,7 +144,8 @@ def assemble(config, trusted_invoke, now_ms, *, session_factory=None, backend=No
     receipt_channel = TrustedAgentChannel(trusted_invoke, now_ms, apis['receipt'], manifests['receipt'],
         config['receipt_manifest_sha256'], request_id, approval_id, config['native_context_sha256'])
     authority = CanonicalAuthority(ProtectedCanonicalTimeline(receipt_channel), request_id, approval_id,
-                                   config['request_material_sha256'], config['native_context_sha256'])
+                                   config['request_material_sha256'], config['native_context_sha256'],
+                                   config['native_plan'].get('authority_purpose','Developer-only preparation'))
     runner = IntegratedPreparation(packed(config['native_plan']), authority, apis['writer'], manifests['writer'],
         packed(config['reviewed_fixed_plan']), packed(config['expected_receipt']), now_ms, caller_head)
     actual_backend = backend if backend is not None else WindowsBackend(config['native_module'], config['native_module_sha256'])
@@ -136,11 +162,17 @@ def main():
     link = AgentStdioLink(config['session'], sys.stdin.buffer, sys.stdout.buffer)
     state = assemble(config, link.invoke, lambda: time.time_ns() // 1000000, link=link)
     try:
-        result = state.prepare()
-        # No install/activation command can follow preparation in this source.
+        if config['operation']=='pilot':
+            from codex_developer_lifecycle import NativeCliDispatcher
+            dispatcher=NativeCliDispatcher(config['cli_executable'],config['cli_sha256'],config['neutral_directory'])
+            spec=config['installation_spec']
+            result=state.run_pilot(dispatcher,lambda op:link.installation_snapshot(op,digest(packed(spec))),spec)
+        else:result = state.prepare()
+        # A preparation-only attempt is consumed; full pilot never resumes it.
+        # Pilot activation is handed to the owner after final installed checks.
         state.close_terminal()
         link.emit({'kind': 'assembly_result', 'session': config['session'], 'result': result,
-                   'session_closed': True, 'installer_dispatch': 'unimplemented', 'authorizes_install': False},
+                   'session_closed': True, 'installer_dispatch': 'closed_source', 'authorizes_install': False},
                   time.monotonic() + 30)
     finally:
         state.close_terminal()

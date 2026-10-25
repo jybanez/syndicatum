@@ -16,15 +16,17 @@
     "python_builder": "tools/release/codex_developer_host_assembly.py::assemble",
     "storage_worker": "tools/release/codex-developer-fixed-session-worker.ps1",
     "all_native_gates": "closed_unconditionally",
-    "installer_dispatch": "UNIMPLEMENTED",
-    "activation_dispatch": "UNIMPLEMENTED"
+    "installer_dispatch": "IMPLEMENTED_CLOSED",
+    "activation_dispatch": "IMPLEMENTED_OWNER_CONTROLLED_RELOAD",
+    "install_observation_binding": "NOT_ADMITTED",
+    "readonly_acceptance": "implemented; independent new evidence, never resumes C/D"
   },
   "source_files": [
     {
       "name": "codex_developer_codex_entry.mjs",
       "repository_path": "tools/release/codex_developer_codex_entry.mjs",
-      "git_blob_bytes_sha256": "9d12492b87ee42048a07a4d274c04191c0a5761fe34590bed66c50d5365130d0",
-      "size": 9498
+      "git_blob_bytes_sha256": "f10b801ce24922f0f111d8b6a8d48eb36c8da66937a6866cda1e873e419f7462",
+      "size": 11572
     },
     {
       "name": "codex_developer_agent_host.mjs",
@@ -35,8 +37,8 @@
     {
       "name": "codex_developer_host_assembly.py",
       "repository_path": "tools/release/codex_developer_host_assembly.py",
-      "git_blob_bytes_sha256": "637242f8517f78926c1187a2b8de021c85947a2411e72736fb9fbec0b521bd93",
-      "size": 7550
+      "git_blob_bytes_sha256": "483598152c1780bd82ed72bd272421d333df18e3926312d6db7809bfec8568b0",
+      "size": 9452
     },
     {
       "name": "codex_developer_host_handoff.py",
@@ -47,8 +49,8 @@
     {
       "name": "codex_developer_integrated_preparation.py",
       "repository_path": "tools/release/codex_developer_integrated_preparation.py",
-      "git_blob_bytes_sha256": "ca8fdab35f1f2d7f8642684ced5e5b75e250c25a516af1535ccbdd3915b38b99",
-      "size": 13464
+      "git_blob_bytes_sha256": "4c1acc1746dc883ebe67d9ec34bd9f9ee308c20d860037510428e7b9a30bc203",
+      "size": 15562
     },
     {
       "name": "codex_developer_transport.py",
@@ -59,20 +61,20 @@
     {
       "name": "codex_developer_process_ipc.py",
       "repository_path": "tools/release/codex_developer_process_ipc.py",
-      "git_blob_bytes_sha256": "d9f39d45ea0bd707d91dc1eee89bbe2a7beace941edad32c8ffe7db982fd5022",
-      "size": 9031
+      "git_blob_bytes_sha256": "590eaec4ed50f601398fe022c3d28b5ce387b3e9665e7759adce44a203a00fdf",
+      "size": 9190
     },
     {
       "name": "codex_developer_fixed_journal.py",
       "repository_path": "tools/release/codex_developer_fixed_journal.py",
-      "git_blob_bytes_sha256": "537ca19211645de000867d3e2333e397d98782a81977848cef079e4bebaae94e",
-      "size": 23448
+      "git_blob_bytes_sha256": "31b45b97843ee4944fe401addbd06edbec7ce97520176fdd9fa0d1c7a439d708",
+      "size": 23620
     },
     {
       "name": "codex_developer_native_b.py",
       "repository_path": "tools/release/codex_developer_native_b.py",
-      "git_blob_bytes_sha256": "de60383e28a75701f68991fcb916c2846f381c24feb6e85e04ba8f31b5009376",
-      "size": 24690
+      "git_blob_bytes_sha256": "3c2bc2f699b9eeafecd9f025e23b35bb4dee1f3a4af39978252c0801d128e263",
+      "size": 24892
     },
     {
       "name": "codex_developer_freshness.py",
@@ -85,6 +87,18 @@
       "repository_path": "tools/release/codex-developer-fixed-session-worker.ps1",
       "git_blob_bytes_sha256": "78dabd0ee7412a173ef9f75386eb02baffbb92568e5dd0556e55065afcad586d",
       "size": 1115
+    },
+    {
+      "name": "codex_developer_lifecycle.py",
+      "repository_path": "tools/release/codex_developer_lifecycle.py",
+      "git_blob_bytes_sha256": "87cd97b423e551903399de5ce392f15ed187f7be7a5a15a6d8a3187c3e5c4299",
+      "size": 15080
+    },
+    {
+      "name": "codex_pilot_sequence.py",
+      "repository_path": "tools/release/codex_pilot_sequence.py",
+      "git_blob_bytes_sha256": "0aa7148a89ca24da1c453f7617bd6b56093f9be66c06d02b547deeec98697dad",
+      "size": 12971
     },
     {
       "name": "codex-developer-fixed-session-protocol.ps1",
@@ -108,34 +122,72 @@
   "source_staging": "Exact Git blob bytes, not an assumed autocrlf checkout. No private staging has occurred.",
   "runtime_trees": {
     "codex_host": {
-      "status": "UNCAPTURED",
+      "status": "PARTIAL_EXECUTABLE_ONLY",
       "root": null,
       "files": null,
       "acquisition_phase": "A",
       "maximum_files": 10000,
       "maximum_directories": 10000,
       "maximum_bytes": 1073741824,
-      "requirements": "Exact complete no-reparse file inventory and hashes, no unknown files; trusted system APIs remain OS trust, not full-OS attestation."
+      "requirements": "Bounded admitted dependency closure, not blanket full runtime/OS attestation. Actual import/loaded-module closure and source/runtime loading remain uncaptured; no unrelated user-data walk.",
+      "inventory_mode": "dependency_closure",
+      "executable_observation": {
+        "version": "package26.1021.3705.0; image file version unavailable",
+        "bytes": 354661168,
+        "sha256": "1103e9e09c71fa2cd0afd6d8f3b9a2d63174fe8efd7cb5bd09f1cb14ef58a098",
+        "provenance": "Get-Item/Get-FileHash on known executable or existing running image; not executed"
+      }
     },
     "python": {
-      "status": "UNCAPTURED",
+      "status": "PARTIAL_EXECUTABLE_ONLY",
       "root": null,
       "files": null,
       "acquisition_phase": "A",
       "maximum_files": 10000,
       "maximum_directories": 10000,
       "maximum_bytes": 1073741824,
-      "requirements": "Exact complete no-reparse file inventory and hashes, no unknown files; trusted system APIs remain OS trust, not full-OS attestation."
+      "requirements": "Bounded admitted dependency closure, not blanket full runtime/OS attestation. Actual import/loaded-module closure and source/runtime loading remain uncaptured; no unrelated user-data walk.",
+      "inventory_mode": "dependency_closure",
+      "executable_observation": {
+        "version": "3.12.6",
+        "bytes": 103704,
+        "sha256": "737a7e3b71e3578f8432acc7dd88c452e593622c544bc13da4789d69c63da5ae",
+        "provenance": "Get-Item/Get-FileHash on known executable or existing running image; not executed"
+      }
     },
     "powershell": {
-      "status": "UNCAPTURED",
+      "status": "PARTIAL_EXECUTABLE_ONLY",
       "root": null,
       "files": null,
       "acquisition_phase": "A",
       "maximum_files": 10000,
       "maximum_directories": 10000,
       "maximum_bytes": 1073741824,
-      "requirements": "Exact complete no-reparse file inventory and hashes, no unknown files; trusted system APIs remain OS trust, not full-OS attestation."
+      "requirements": "Bounded admitted dependency closure, not blanket full runtime/OS attestation. Actual import/loaded-module closure and source/runtime loading remain uncaptured; no unrelated user-data walk.",
+      "inventory_mode": "dependency_closure",
+      "executable_observation": {
+        "version": "7.6.8",
+        "bytes": 301360,
+        "sha256": "b90c0f48ca4b13c9426a7863f3d469baf310ca517721dd0b55551b80ec9fee2a",
+        "provenance": "Get-Item/Get-FileHash on known executable or existing running image; not executed"
+      }
+    },
+    "node": {
+      "status": "PARTIAL_EXECUTABLE_ONLY",
+      "root": null,
+      "files": null,
+      "acquisition_phase": "A",
+      "maximum_files": 10000,
+      "maximum_directories": 10000,
+      "maximum_bytes": 1073741824,
+      "requirements": "Bounded admitted dependency closure, not blanket full runtime/OS attestation. Actual import/loaded-module closure and source/runtime loading remain uncaptured; no unrelated user-data walk.",
+      "inventory_mode": "dependency_closure",
+      "executable_observation": {
+        "version": "22.12.0",
+        "bytes": 82818704,
+        "sha256": "b3b117a08ee61efee09e6fd523ab33c0c018da1b570bde08e4fd914dc1170ed6",
+        "provenance": "known existing Node executable, metadata/hash only; not executed"
+      }
     }
   },
   "private_packet": {
@@ -150,7 +202,7 @@
       "id": "A",
       "kind": "read_only_admission",
       "permission": "fresh Developer-only current evidence and runtime/source verification",
-      "status": "NOT_AUTHORIZED_BY_SOURCE_REVIEW",
+      "status": "PARTIAL_A0_OBSERVED_A1_DEFERRED",
       "required": [
         "current installed source/version/full inventory",
         "current CLI/runtime versions and complete runtime hash trees",
@@ -160,7 +212,11 @@
         "source pins, private path/ACL/identity, available disk, capacity/time estimates"
       ],
       "expected": "bounded comparison report; no state/config rewrite or rebaseline",
-      "missing_current_evidence": true
+      "missing_current_evidence": true,
+      "subphases": {
+        "A0": "supported existing-tool status, targeted image/manifest hashes and device metadata observed",
+        "A1": "fresh CLI metadata/effective config provenance, loaded-runtime closure/stdio probe require new processes and remain in explicit later packet scope"
+      }
     },
     {
       "id": "B",
@@ -176,30 +232,35 @@
       "id": "C",
       "kind": "prepare",
       "permission": "exact Task/Run suppression, exact owned-listener stop and cutoff capture; notification interruption explicit",
-      "status": "BLOCKED_CLOSED_GATES_AND_REVIEW",
+      "status": "IMPLEMENTED_CLOSED_PILOT_AUTHORITY_REQUIRED",
       "expected": "one prepared cutoff, preserved anchors, held exclusive sessions; no install authority",
-      "requirement": "new request/positive owner event bound to exact reviewed mechanism/candidate/manifests/attempt/time/scope; no consumed authority"
+      "requirement": "new request/positive owner event bound to exact reviewed mechanism/candidate/manifests/attempt/time/scope; no consumed authority",
+      "lifetime": "same held C/D session; preparation-only completion is consumed and cannot be promoted/reopened",
+      "authority": "new canonical Developer-only pilot request/event with separately named exact prep/CLI/owner-activation/read-only acceptance operations, installation spec SHA and complete manifests"
     },
     {
       "id": "D",
       "kind": "install",
       "permission": "exact CLI marketplace remove/add candidate plus plugin add, six before/after frozen boundaries",
-      "status": "BLOCKED_UNIMPLEMENTED_DISPATCH",
-      "expected": "independent exact installed inventory and revision; no automatic retry/rollback"
+      "status": "IMPLEMENTED_CLOSED_OBSERVER_NOT_ADMITTED",
+      "expected": "independent exact installed inventory and revision; no automatic retry/rollback",
+      "dispatch": "exact three CLI commands only, one-use, independent before/after facts and six frozen boundaries; no retries"
     },
     {
       "id": "E",
       "kind": "activation",
       "permission": "explicit new lifecycle activation/restart; no forced Codex reopen",
-      "status": "BLOCKED_UNIMPLEMENTED_DISPATCH",
-      "expected": "owner-approved activation only after installed verification"
+      "status": "IMPLEMENTED_OWNER_CONTROLLED_RELOAD",
+      "expected": "owner-approved activation only after installed verification",
+      "dispatch": "verified installed result requests normal owner close/open; never invokes old connector restart, starts second MCP server or forces reopen"
     },
     {
       "id": "F",
       "kind": "acceptance",
       "permission": "observe normal close/open and explicitly authorized routed-delivery check",
-      "status": "NOT_PERFORMED",
-      "expected": "listener follows intended session, exact route delivers once, one failed route does not block another; installed revision/evidence recorded"
+      "status": "VERIFIER_IMPLEMENTED_OBSERVATIONS_MISSING",
+      "expected": "listener follows intended session, exact route delivers once, one failed route does not block another; installed revision/evidence recorded",
+      "acceptance": "separate new read-only context with independent retained original hashes, running candidate runtime SHA, owner phases and exactly-once delivery; ready0-unavailable and reviewed degraded cases supported"
     }
   ],
   "capacity": {
@@ -222,14 +283,81 @@
     "worker_frame_bytes_limit": 2097152,
     "maximum_tool_invocations": 128,
     "performance": "UNCAPTURED; A must measure/estimate total under120s and each native observation under120s. Tool/IPC deadline30s; no increase or retry to fit.",
-    "formula": "Use measured complete raw payloads plus canonical evidence: sum ceil(logical_bytes/((width-1024)*3//4))+commits+intents+reservation+bounded failure margin <=512; head ledger slots >= physical writer heads; receipt invocations incl failure margin <=128. Reject BEFORE setup/preparation if any bound cannot fit."
+    "formula": "Use measured complete raw payloads plus canonical evidence: sum ceil(logical_bytes/((width-1024)*3//4))+commits+intents+reservation+bounded failure margin <=512; head ledger slots >= physical writer heads; receipt invocations incl failure margin <=128. Reject BEFORE setup/preparation if any bound cannot fit.",
+    "enforced_before_prepare": "Spec pins36 logical publication upper bounds,7 action intents+reservation,3-8 failure-publication margin, writer/head/receipt slot arithmetic, projected total<=120s and worst observation<=120s. Actual publications are checked against the admitted bound; unknown or overflowing data stops without rebaseline."
   },
   "uncertainty": "STOP, retain raw evidence/identities/receipt/head history; close at most once, report uncertain close separately; no reconnect/replay/cleanup/forced kill/rollback or evidence reconstruction.",
   "owner_authority": {
     "requested_now": false,
     "form": "One coherent Developer pilot authorization with separately named A/B/C/D/E/F scopes, exact reviewed head/candidate/new attempt and quantitative bounds; not one queue per implementation detail.",
-    "currently_eligible_scope_after_review": "A read-only admission only; no setup/prepare/install/activation until exact evidence/manifests and missing dispatchers are complete and reviewed.",
+    "currently_eligible_scope_after_review": "One coherent later pilot decision naming A1 process-based admission, bounded B setup, C/D same-session preparation/install, E owner normal reload and F read-only acceptance, conditional on admitted collector/source/runtime/evidence. Not requested now; all gates remain closed and missing facts cannot be silently filled or refreshed.",
     "consumed_authorities": "11545 and all isolated-test approvals are consumed; old roots and #11582 anchors immutable.",
-    "current_fields": "All current host evidence, new request/approval IDs and manifest/ACL/runtime pins remain uncaptured; never fabricate or reuse historical values."
-  }
+    "current_fields": "Focused status/metadata/binary findings are recorded above; raw action preimages, new request/approval IDs and full runtime/ACL/manifest/collector pins remain uncaptured."
+  },
+  "read_only_findings": {
+    "observed_utc_date": "2026-10-25",
+    "scope": "point-in-time supported tools and bounded ordinary metadata/code hashes; not cutover preimages",
+    "connector": {
+      "installed_manifest_version": "0.2.7",
+      "manifest_sha256": "8f12d742d1edcd0167c13e202104c056b98c57ef898b850c25c00fd00ccc8a68",
+      "running": true,
+      "readiness": "ready",
+      "health_fresh": true,
+      "unavailable_bindings": 0,
+      "source_runtime_sha256": "4d497260d37add74799233fcdd899e006dfe4045cbdef3c435c9fe40e3088a6b",
+      "provenance": "existing connector_background_status/status tools; no restart"
+    },
+    "startup": {
+      "connector_task_present": true,
+      "connector_task_state": "Running",
+      "legacy_run_name_present": false,
+      "run_value_contents_read": false,
+      "old_preimages_reusable": false
+    },
+    "data": {
+      "canonical_state_name_candidates": 58,
+      "candidate_bytes": 816831,
+      "largest_candidate_bytes": 105418,
+      "all_state_prefix_files": 72,
+      "all_state_prefix_bytes": 844172,
+      "device_tree_metadata_files": 193,
+      "device_tree_metadata_directories": 27,
+      "device_tree_metadata_bytes": 20793865,
+      "reparse_entries": 0,
+      "credential_contents_read": false,
+      "queue_contents_parsed": false,
+      "limitations": "filename/length/tree aggregates only; not raw cutoff, backup or effective-binding classification"
+    },
+    "disk": {
+      "volume_role": "system/private-staging candidate",
+      "free_bytes": 50286129152,
+      "reserved_bytes": 0
+    },
+    "node": {
+      "version": "22.12.0",
+      "bytes": 82818704,
+      "sha256": "b3b117a08ee61efee09e6fd523ab33c0c018da1b570bde08e4fd914dc1170ed6"
+    },
+    "limits": "Known binaries only (largest354661168 bytes); device metadata walk capped5000 files/256 directories,193/27 observed. No worker/CLI metadata command/runtime probe launched; no credential contents, config/queue writes or live storage setup.",
+    "atomic_snapshot": false,
+    "health_sample_utc": "2026-10-25T06:59:59.134Z",
+    "not_action_preimages": true,
+    "target_cache_metadata": {
+      "files": 45,
+      "directories": 8,
+      "bytes": 345815,
+      "reparse_entries": 0,
+      "complete_within_metadata_bounds": true
+    },
+    "marketplace_provenance": "Not captured: one known default managed path was absent; not proof the configured marketplace is absent. Fresh effective source/config-layer/managed root still requires admitted CLI metadata."
+  },
+  "remaining_evidence": [
+    "fresh exact raw preimages/cutoff and configuration-layer/source registration proof",
+    "complete admitted dependency closure/actual tool-stdin/module loading",
+    "independent installation collector implementation/provenance binding for the typed host capability; absent capability rejects before launch",
+    "new private receipt/head/writer manifests and ACL identities, verified external backup",
+    "measured complete evidence cardinality and elapsed-time budget; aggregate byte estimates are not allocation permission",
+    "actual installed postimages/owner-controlled activation and observed lifecycle/delivery acceptance"
+  ],
+  "ready_for_owner_execution": false
 }

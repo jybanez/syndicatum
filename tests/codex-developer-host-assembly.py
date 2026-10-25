@@ -31,9 +31,9 @@ class AssemblyFixtures(unittest.TestCase):
             raw=subprocess.check_output(['git','show',':'+item['repository_path']],cwd=ROOT)
             self.assertEqual(hashlib.sha256(raw).hexdigest(),item['git_blob_bytes_sha256'])
         self.assertFalse(packet['owner_authority']['requested_now'])
-        self.assertTrue(all(tree['status']=='UNCAPTURED' for tree in packet['runtime_trees'].values()))
-        self.assertEqual(packet['entrypoints']['installer_dispatch'],'UNIMPLEMENTED')
-        self.assertEqual(packet['entrypoints']['activation_dispatch'],'UNIMPLEMENTED')
+        self.assertTrue(all(tree['status']!='captured' for tree in packet['runtime_trees'].values()))
+        self.assertEqual(packet['entrypoints']['installer_dispatch'],'IMPLEMENTED_CLOSED')
+        self.assertEqual(packet['entrypoints']['activation_dispatch'],'IMPLEMENTED_OWNER_CONTROLLED_RELOAD')
         self.assertEqual([phase['id'] for phase in packet['phases']],list('ABCDEF'))
         capacity=packet['capacity']
         self.assertEqual(sum(2*capacity[role]['slots']*capacity[role]['width'] for role in

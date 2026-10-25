@@ -31,3 +31,20 @@ test('source entry refuses before any execution tool or private packet operation
   await assert.rejects(new CodexToolSession(tools,packet).start(),/SOURCE_ONLY/);
   assert.equal(calls,0);
 });
+test('pilot independent evidence capability is correlated and required before launch',async()=>{
+  const p={...packet,operation:'pilot',installation_spec_sha256:'c'.repeat(64)};
+  let started=0, collected=0, delivered;
+  const session={async start(){started++;return JSON.stringify({kind:'install_observation_challenge',session:p.session,
+    operation:'before-marketplace_remove',spec_sha256:p.installation_spec_sha256})+'\n';},
+    async send(value){delivered=value;return JSON.stringify({kind:'assembly_result',session:p.session,
+      session_closed:true,authorizes_install:false})+'\n';},async finish(){},poison(){}};
+  const tools={[tool]:async()=>{throw new Error('unused');}};
+  await assert.rejects(runCodexHost({tools,packet:p,session}),/collector not admitted/);
+  assert.equal(started,0);
+  await runCodexHost({tools,packet:p,session,collectInstallation:async value=>{
+    collected++;assert.equal(value.spec_sha256,p.installation_spec_sha256);return new TextEncoder().encode('{"inert":true}');
+  }});
+  assert.equal(collected,1);
+  assert.equal(delivered.kind,'install_observation_delivery');
+  assert.equal(Buffer.from(delivered.raw_base64,'base64').toString(),'{"inert":true}');
+});

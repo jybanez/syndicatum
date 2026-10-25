@@ -115,11 +115,14 @@ class CanonicalAuthority:
         value["addressees"] = sorted((item["participant_id"], item["reason"]) for item in message["addressees"])
         return value
 
-    def __init__(self, timeline, request_id, approval_id, trusted_request_sha256, plan_context_sha256):
+    def __init__(self, timeline, request_id, approval_id, trusted_request_sha256, plan_context_sha256,
+                 purpose="Developer-only preparation"):
         from codex_developer_transport import ProtectedCanonicalTimeline
         check(type(timeline) in (FakeCanonicalTimeline, ProtectedCanonicalTimeline), "source_only_canonical_transport")
         self.timeline, self.request_id, self.approval_id = timeline, request_id, approval_id
         self.request_digest, self.context = trusted_request_sha256, plan_context_sha256
+        check(purpose in ("Developer-only preparation", "Developer-only pilot"), "canonical_purpose")
+        self.purpose = purpose
         self.latest = None
         self.cached = None
 
@@ -174,7 +177,7 @@ class CanonicalAuthority:
               event["data"]["kind"] == "approval_approved", "canonical_owner_approval")
         body = json.loads(r["body"])
         check(packed(body).decode() == r["body"] and set(body) == {"purpose", "plan_context_sha256", "receipt"}
-              and body["purpose"] == "Developer-only preparation" and body["plan_context_sha256"] == self.context,
+              and body["purpose"] == self.purpose and body["plan_context_sha256"] == self.context,
               "canonical_plan_context")
         return {**body["receipt"], "server": expected_profile["syndicatum_url"], "project_id": 2,
                 "message_id": a["id"], "sender_id": 28, "addressee_id": 36, "revision": 0,

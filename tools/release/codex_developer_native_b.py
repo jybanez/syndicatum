@@ -195,7 +195,7 @@ class CutoverJournal:
 class DeveloperBAdapter:
     """Native operation binding with fail-closed postimages; never installs."""
     def __init__(self, plan_raw, plan_digest, backend, authority_verifier, now_ms=None,
-                 journal_factory=None, action_admission=None):
+                 journal_factory=None, action_admission=None, close_after_boundaries=True):
         self.plan, self.digest = anchored(plan_raw, plan_digest), plan_digest
         self.backend, self.authority_verifier = backend, authority_verifier
         self.now = now_ms or (lambda: time.time_ns() // 1000000)
@@ -203,6 +203,8 @@ class DeveloperBAdapter:
         self.journal, self.last_clock, self.cutoff, self.cutoff_raw = None, None, None, None
         self.stage, self.mutations = "admission", []
         self.started, self.terminal, self.boundary_index = False, False, 0
+        require(type(close_after_boundaries) is bool, "boundary_lifetime_type")
+        self.close_after_boundaries = close_after_boundaries
         self.session_close_attempted, self.session_close_uncertain = False, False
 
     def _fresh(self, *clocks):
@@ -397,7 +399,7 @@ class DeveloperBAdapter:
             head = self.journal.append(boundary, "native-frozen-boundary-confirmed", {"verified": True})
             self._fresh(current["before"]["clock"], current["after"]["clock"], current["clock"])
             self.boundary_index += 1
-            if self.boundary_index == len(order):
+            if self.boundary_index == len(order) and self.close_after_boundaries:
                 self._close_terminal()
                 self.journal.check_final_time()
                 self._fresh(current["before"]["clock"], current["after"]["clock"], current["clock"])
