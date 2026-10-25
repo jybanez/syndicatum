@@ -75,6 +75,25 @@ action and preserve no-replay. The retained-anchor component tests remain separa
 No filesystem/native API or live canonical retrieval is used by the new end-to-end
 test; source-only Git/other historical fixtures keep their existing scope.
 
+### Freshness and terminal lifetime correction (#11647)
+
+The retained observation is checked again after journal, authority and handoff
+work, immediately before suppression, stop and cutoff invocation. No new snapshot
+is substituted to make an expired observation pass. Cutoff publication and every
+boundary publication recheck all capture clocks before returning success; boundary
+capture also checks the retained clock after journal verification. The final
+boundary closes the continuously held session and checks capture age once more
+after close. Any boundary failure closes terminally as well. Close is attempted
+once: uncertainty propagates and is recorded separately without retrying the close
+or any action. A failed close does not turn a failed boundary into success.
+
+Integrated delay regressions retain valid owner authority while aging the native
+observation beyond 120 seconds during each action intent, cutoff publication,
+boundary verification/raw publication/final publication. Each stops before the
+affected action or successful result, closes terminally and cannot replay. The
+successful six-boundary path releases its session without an external test-only
+cleanup call; final-close uncertainty is tested independently.
+
 ## Remaining live admission/validation gaps (not another component milestone)
 
 - Connect the REAL protected-tool canonical retrieval and trusted persisted

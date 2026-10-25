@@ -345,8 +345,8 @@ class FixedJournal:
     def _stop(self):
         self.closed = True
         if self.owned:
-            self.storage.release()
             self.owned = False
+            self.storage.release()  # A close uncertainty is terminal; never retry.
 
     def _pin(self):
         check(self.storage.observe() == self.pin, "storage_identity_or_namespace_changed")

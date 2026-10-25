@@ -200,6 +200,22 @@ class DeveloperBAdapter:
         self.journal, self.last_clock, self.cutoff, self.cutoff_raw = None, None, None, None
         self.stage, self.mutations = "admission", []
         self.started, self.terminal, self.boundary_index = False, False, 0
+        self.session_close_attempted, self.session_close_uncertain = False, False
+
+    def _fresh(self, *clocks):
+        now = self.now()
+        for clock in clocks:
+            require_fresh_window(clock["utc_ms"], now, 120000)
+
+    def _close_terminal(self):
+        self.terminal = True
+        if self.journal is not None and not self.session_close_attempted:
+            self.session_close_attempted = True
+            try:
+                self.journal.close_terminal()
+            except Exception:
+                self.session_close_uncertain = True
+                raise
 
     def _clock(self, value):
         require(type(value) is dict and set(value) == {"utc_ms", "ticks", "frequency", "boot_utc"}, "native_clock_schema")
@@ -259,6 +275,7 @@ class DeveloperBAdapter:
         operation_plan = dict(self.plan)
         if operation == "stop":
             operation_plan["retained_stop_anchor"] = self.preservation_anchor
+        self._fresh(preimage["clock"])
         native_result = self.backend.invoke(operation, operation_plan)
         expected = {"suppress": "exact_startup_suppression", "stop": "exact_owned_listener_stop"}[operation]
         require(type(native_result) is dict and native_result.get("completed") is True and
@@ -328,6 +345,7 @@ class DeveloperBAdapter:
             self.stage = "capture-cutoff"
             self.journal.append("capture-cutoff", "intent", {"operation": "cutoff"})
             self.action_admission("cutoff", self.journal.retained_head)
+            self._fresh(independent["clock"])
             cutoff = self.backend.invoke("cutoff", p)
             for capture in (cutoff["before"], cutoff["after"]):
                 self._clock(capture["clock"]); self._quiescent(capture)
@@ -335,6 +353,7 @@ class DeveloperBAdapter:
             self._clock(cutoff["clock"])
             self._cutoff_states(cutoff)
             head = self.journal.append("cutoff", "native-handle-state-and-task", cutoff)
+            self._fresh(cutoff["before"]["clock"], cutoff["after"]["clock"], cutoff["clock"])
             self.cutoff = cutoff
             self.cutoff_raw = encode(cutoff)
             return {"result": "cutoff_prepared_only", "head_sha256": head, "authorizes_install": False}
@@ -348,7 +367,7 @@ class DeveloperBAdapter:
                     except Exception: secondary.append("failure_postimage_unavailable")
                 try: self.journal.append(self.stage, "stopped", {"code": code})
                 except Exception: secondary.append("failure_journal_unavailable")
-                try: self.journal.close_terminal()
+                try: self._close_terminal()
                 except Exception: secondary.append("failure_session_close_uncertain")
             return {"result": "stopped", "stage": self.stage, "code": code, "secondary_errors": secondary,
                     "uncertain_pid": getattr(error, "pid", None), "authorizes_install": False}
@@ -361,6 +380,7 @@ class DeveloperBAdapter:
                     boundary == order[self.boundary_index], "missing_or_out_of_order_boundary")
             self.journal.verify(independently_retained_head)
             baseline = json.loads(self.cutoff_raw)
+            self._fresh(self.last_clock)
             current = self.backend.invoke("cutoff", self.plan)
             self.journal.append(boundary, "native-boundary-raw", current)
             for capture in (current["before"], current["after"]):
@@ -369,9 +389,13 @@ class DeveloperBAdapter:
             self._clock(current["clock"])
             require_frozen_observations(self._cutoff_states(baseline), self._cutoff_states(current))
             head = self.journal.append(boundary, "native-frozen-boundary-confirmed", {"verified": True})
+            self._fresh(current["before"]["clock"], current["after"]["clock"], current["clock"])
             self.boundary_index += 1
-            if self.boundary_index == len(order): self.terminal = True
+            if self.boundary_index == len(order):
+                self._close_terminal()
+                self._fresh(current["before"]["clock"], current["after"]["clock"], current["clock"])
             return {"result": "boundary_verified_only", "head_sha256": head, "authorizes_install": False}
-        except Exception:
-            self.terminal = True
+        except Exception as error:
+            try: self._close_terminal()
+            except Exception: error.add_note("failure_session_close_uncertain; no retry")
             raise
