@@ -40,3 +40,25 @@ Future adapter review requires:
 The isolated Windows test host remains unresolved; do not use HomeServer as a
 fixture. No live backup, marketplace/Task/Run mutation, stop/restart, install,
 message send or state repair is authorized by this contract's creation or merge.
+# Source-only removal verification phase
+
+Owner message 11510 conditionally approves preparation for the exact recorded
+Git marketplace identity. It does not authorize execution. The fixture sequence
+separates removal, independent removal-postimage verification, unrelated-entry
+preservation, local-directory addition, and plugin installation. No native
+removal/add/install implementation is supplied by these phase names.
+
+The pure removal verifier consumes separately collected before/after inventories,
+an unambiguous successful command result, and a digest-anchored review artifact.
+That artifact binds owner message 11510 and retained disposable-semantics evidence
+to the expected target plugin postimage. Marketplace absence must be observed;
+plugin removal is never inferred from marketplace absence. A preserved plugin or
+an absent plugin is accepted only when it matches the separately reviewed
+postimage. All unrelated marketplace/plugin records must match exactly, including
+JSON value types. Unknown outcomes or drift stop the sequence before local add.
+
+These pure checks cannot establish that a digest came from Commercial approval
+or that snapshots came from native collectors. The final adapter must bind actual
+retained semantics results, Commercial review, native inventories, and final
+exact-head execution authority. Those integrations remain incomplete and HOLD.
+

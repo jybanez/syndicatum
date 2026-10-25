@@ -32,6 +32,34 @@ mapping_spec.loader.exec_module(mapping_module)
 
 
 class PilotContractTest(unittest.TestCase):
+    def test_marketplace_removal_requires_reviewed_observed_postimage(self):
+        before = dict(marketplaces={"syndicatum": {k: v for k, v in pilot.MARKETPLACE_PREIMAGE.items()
+                      if k not in {"plugin_key", "plugin_version", "enabled"}}, "other": {"source": "untouched"}},
+                      plugins={"codex@syndicatum": {k: pilot.MARKETPLACE_PREIMAGE[k]
+                      for k in ("plugin_key", "plugin_version", "enabled")}, "other@other": {"enabled": True}})
+        after = copy.deepcopy(before)
+        del after["marketplaces"]["syndicatum"]
+        review = json.dumps(dict(owner_message_id=11510, semantics_sha256="b" * 64,
+                                 expected_plugin_post=before["plugins"]["codex@syndicatum"])).encode()
+        result = dict(outcome="confirmed", exit_code=0)
+        pilot.validate_marketplace_removal(before, after, result, review, pilot.digest(review))
+        for change in ("present", "unrelated", "plugin", "ambiguous", "boolean", "anchor"):
+            observed, outcome, anchor = copy.deepcopy(after), dict(result), pilot.digest(review)
+            if change == "present":
+                observed["marketplaces"]["syndicatum"] = before["marketplaces"]["syndicatum"]
+            elif change == "unrelated":
+                observed["plugins"]["other@other"]["enabled"] = 1
+            elif change == "plugin":
+                del observed["plugins"]["codex@syndicatum"]
+            elif change == "ambiguous":
+                outcome["outcome"] = "unknown"
+            elif change == "boolean":
+                outcome["exit_code"] = False
+            else:
+                anchor = "c" * 64
+            with self.subTest(change=change), self.assertRaises(pilot.Stop):
+                pilot.validate_marketplace_removal(before, observed, outcome, review, anchor)
+
     def test_retained_journal_requires_exact_canonical_bytes(self):
         import hashlib
         for changed in ("whitespace", "duplicate", "head-whitespace"):
@@ -258,6 +286,9 @@ class PilotContractTest(unittest.TestCase):
         self.assertLess(stages.index("verify_initial_backup"), stages.index("suppress_exact_owned_task"))
         self.assertLess(stages.index("verify_suppression_and_unrelated_entries"), stages.index("stop_exact_owned_process"))
         self.assertLess(stages.index("verify_quiescent_backup_and_corrupt_artifacts"), stages.index("install_exact_staged_artifact"))
+        self.assertLess(stages.index("verify_marketplace_owner_approval_and_disposable_semantics"), stages.index("remove_exact_marketplace_via_reviewed_adapter"))
+        self.assertLess(stages.index("verify_exact_marketplace_removal_postimage"), stages.index("add_exact_local_marketplace_via_reviewed_adapter"))
+        self.assertLess(stages.index("verify_unrelated_marketplace_and_plugin_preservation"), stages.index("add_exact_local_marketplace_via_reviewed_adapter"))
         for failed_stage in stages:
             fixture = Fixture(failed_stage, fail_evidence=True)
             result = sequence_module.sequence(fixture)

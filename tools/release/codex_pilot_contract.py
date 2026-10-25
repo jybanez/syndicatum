@@ -39,6 +39,50 @@ def validate_marketplace_preimage(actual):
     require(actual == MARKETPLACE_PREIMAGE, "marketplace preimage drift")
 
 
+def validate_marketplace_removal(before, after, result, reviewed_post_raw, reviewed_post_digest):
+    """Pure observed-state check, not a removal adapter or execution authority.
+
+    Plugin-cache effects must be observed in the disposable test and separately
+    reviewed; do not assume marketplace removal also removes its installed plugin.
+    """
+    reviewed = anchored_json(reviewed_post_raw, reviewed_post_digest)
+    require(type(reviewed) is dict and set(reviewed) ==
+            {"owner_message_id", "semantics_sha256", "expected_plugin_post"}, "removal review schema")
+    require(type(reviewed["owner_message_id"]) is int and reviewed["owner_message_id"] == 11510,
+            "removal owner authority")
+    semantics = reviewed["semantics_sha256"]
+    require(type(semantics) is str and len(semantics) == 64 and
+            all(c in "0123456789abcdef" for c in semantics) and semantics != "0" * 64,
+            "removal semantics anchor")
+    require(reviewed["expected_plugin_post"] is None or type(reviewed["expected_plugin_post"]) is dict,
+            "removal plugin post schema")
+    for snapshot in (before, after):
+        require(type(snapshot) is dict and set(snapshot) == {"marketplaces", "plugins"} and
+                all(type(snapshot[k]) is dict for k in snapshot), "marketplace inventory schema")
+        require(all(type(k) is str and type(v) is dict
+                    for group in snapshot.values() for k, v in group.items()), "marketplace entry schema")
+    market_fields = {k: v for k, v in MARKETPLACE_PREIMAGE.items()
+                     if k not in {"plugin_key", "plugin_version", "enabled"}}
+    plugin_fields = {k: MARKETPLACE_PREIMAGE[k] for k in ("plugin_key", "plugin_version", "enabled")}
+    require(before["marketplaces"].get("syndicatum") == market_fields and
+            before["plugins"].get("codex@syndicatum") == plugin_fields, "marketplace removal preimage drift")
+    validate_marketplace_preimage({**before["marketplaces"]["syndicatum"],
+                                   **before["plugins"]["codex@syndicatum"]})
+    require(type(result) is dict and set(result) == {"outcome", "exit_code"} and
+            type(result["exit_code"]) is int and result == {"outcome": "confirmed", "exit_code": 0},
+            "ambiguous marketplace removal")
+    require("syndicatum" not in after["marketplaces"], "marketplace removal not observed")
+    expected_plugin = reviewed["expected_plugin_post"]
+    require(("codex@syndicatum" not in after["plugins"]) if expected_plugin is None else
+            json.dumps(after["plugins"].get("codex@syndicatum"), sort_keys=True, allow_nan=False) ==
+            json.dumps(expected_plugin, sort_keys=True, allow_nan=False), "plugin removal postimage drift")
+    for group, target in (("marketplaces", "syndicatum"), ("plugins", "codex@syndicatum")):
+        prior = {k: v for k, v in before[group].items() if k != target}
+        later = {k: v for k, v in after[group].items() if k != target}
+        require(json.dumps(prior, sort_keys=True, allow_nan=False) ==
+                json.dumps(later, sort_keys=True, allow_nan=False), "unrelated marketplace plugin drift")
+
+
 class Stop(RuntimeError):
     """Unmet invariant; never implies automatic retry or rollback."""
 
