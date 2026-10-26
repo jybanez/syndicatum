@@ -405,6 +405,8 @@ jobs:
             python tests/codex-developer-lifecycle.py | tee ci-evidence/codex-developer-lifecycle.txt
             python tests/codex-developer-metadata.py | tee ci-evidence/codex-developer-metadata.txt
             python tests/codex-developer-admission.py | tee ci-evidence/codex-developer-admission.txt
+            python tests/codex-developer-process-only.py | tee ci-evidence/codex-developer-process-only.txt
+            node --test tests/codex-developer-process-launch.test.mjs | tee ci-evidence/codex-developer-process-launch.txt
             python tests/codex-developer-admission-native.py | tee ci-evidence/codex-developer-admission-native.txt
             node --test tests/codex-developer-admission-launch.test.mjs | tee ci-evidence/codex-developer-admission-launch.txt
             python tests/codex-developer-a1.py | tee ci-evidence/codex-developer-a1.txt

@@ -371,3 +371,44 @@ acquisition be proposed. Reserved proposed names are
 never substitute these into the consumed11748 proposal/approval. Keep8s/query
 and120s acquisition limits. No diagnostic, native allocation, repeat acquisition,
 B/C/D setup, installation, activation or merge is authorized by this document.
+
+
+### Concrete PROCESS-ONLY entry (11755)
+
+codex_developer_process_launch.js -> codex_developer_process_host.py ->
+codex_developer_process_only.run is the distinct process-only chain. It reuses
+unchanged accepted parent/framing and exactly the accepted EvidenceSink class
+source, with PROCESS-ONLY scope. Production gates and old admission sources are
+unchanged. Ten pinned Python blobs plus catalog are eleven bounded local Git
+children (10s/child,60s aggregate,2MiB total); one normal pinned tool shell/one
+Python child; zero CLI children. Initial two protected reads precede execution,
+then seven fresh checkpoint pairs use the unchanged parent protocol.120s includes
+checkpoint time after preload. Flags remain -E -s -S -B -P -u -c. Exact scope,
+leaf, head/proposal/host/launcher/parent pins must match fresh owner authority.
+The JSON process_observation section pins the separate ten-source closure.
+
+Checkpoint1 verifies known runtime executable pins, owner/parent/full reparse
+chains, atomically creates ONLY developer-0210-process-origin-11752-v1, verifies
+owner/SYSTEM ACL and stages/readbacks sources/proposal. Checkpoint2 constructs
+only the observer; checkpoint3 invokes processes(discovery=True) exactly once.
+Checkpoint4 retains proposal/raw evidence and explicit UNVERIFIED historical
+settlement; incomplete coverage stops before5. Checkpoints5/6 are authority and
+shared-budget boundaries only,7 publishes proposal-only terminal evidence.
+No NativeFactory.observers, CLI, runtime/layout/ref/staging call occurs.
+The reused capture factory verifies two unchanged retained executable paths
+plus Python, reads owner/System32 metadata and creates the private sink; its
+CLI-capable methods are never invoked. All loader/tool logging/ACL/read effects
+remain explicit, and process coverage remains limited to the existing families.
+
+The sink charges171186 frozen prior bytes before any payload, thereby reducing
+this capture's physical ceiling to16606030 bytes while retaining3 terminal
+slots/640KiB. Manifest payload_bytes is SHARED accounted bytes, including the
+171186 prior bytes, not physical size of this new capture. New physical bytes
+must also be independently totaled after capture. No old file is appended to,
+read to reconstruct missing stdio, or changed. Unknown image hashes stay unknown;
+no automatic exclusion, settlement or B/C/D admission. Terminal exception writes
+only the existing three control records; no retry/kill/successor. Inert tests
+exercise success, query failure, coverage gap, sink failure, exact sink-source
+reuse and no CLI calls; separate pure launcher tests verify denial, one-use,
+unchanged parent and actual bootstrap command limit. Neither suite is native
+Windows acceptance. No live diagnostic or allocation has run.

@@ -671,8 +671,8 @@
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "0332e278717f481d7dbf7e6c9dcb440d7d561a1d3961084d2dc069a07eafffd8",
-      "size": 24462
+      "git_blob_bytes_sha256": "dd1ed02c6a80c9c257c5fb445f74cbc21904b72d8d7bd826eeda399c74d0b6f0",
+      "size": 27228
     }
   ],
   "admission_acquisition": {
@@ -831,5 +831,168 @@
     "consumption": "trusted host/task record required across runtimes; launcher in-memory set plus exclusive capture prevents local/allocated-root replay",
     "owner_decision": "NOT_REQUESTED_PENDING_SOURCE_REVIEW_AND_CURRENT_HEAD_CI",
     "ready_for_owner_execution": false
+  },
+  "process_observation": {
+    "status": "SOURCE_REVIEW_ONLY_NOT_AUTHORITY",
+    "scope": "Developer PROCESS-ONLY",
+    "source_request": 11755,
+    "entry": "tools/release/codex_developer_process_host.py::main -> codex_developer_process_only.run",
+    "proposal_filename": "Syndicatum-Developer-process-origin-11752-v1.json",
+    "private_proposal_status": "NOT_CREATED",
+    "capture_identity": "developer-0210-process-origin-11752-v1",
+    "existing_parent_path_sha256": "77c775d422390019b43d9f0fc693eadaf4b714cdaafa208b6eed5f1dc8d52d91",
+    "retained_root_map_sha256": "16c23f0c3a50008f75fbeee852f660f9646285bc99905c009b17720317e58047",
+    "parent_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
+    "parent_source": {
+      "repository_path": "tools/release/codex_developer_a1_parent.js",
+      "git_blob_bytes_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
+      "size": 5170
+    },
+    "launcher_source": {
+      "repository_path": "tools/release/codex_developer_process_launch.js",
+      "git_blob_bytes_sha256": "fb1ddf547c26b00602dd3f6d47b4ab4331a4d098a02b38ab48fb02ec09b8fc2d",
+      "size": 4153
+    },
+    "source_files": [
+      {
+        "name": "codex_developer_process_only.py",
+        "repository_path": "tools/release/codex_developer_process_only.py",
+        "git_blob_bytes_sha256": "4528bd056e3d47d35726c190844b1c6366108bdb1d0f19b36ed219b723eff20e",
+        "size": 6727
+      },
+      {
+        "name": "codex_developer_admission_native.py",
+        "repository_path": "tools/release/codex_developer_admission_native.py",
+        "git_blob_bytes_sha256": "c4639e4bbeafbb44ce41146edf0b88b960283e7f22440462822f88f95d245ef5",
+        "size": 11864
+      },
+      {
+        "name": "codex_developer_process_host.py",
+        "repository_path": "tools/release/codex_developer_process_host.py",
+        "git_blob_bytes_sha256": "fa879833412428ad1b67cc83c248672833e82df4b62c260f49c85242f23a852b",
+        "size": 7893
+      },
+      {
+        "name": "codex_developer_a1_tool_host.py",
+        "repository_path": "tools/release/codex_developer_a1_tool_host.py",
+        "git_blob_bytes_sha256": "1514f3880ca942ae21d536b0bf2e1fbca64005f1c927c8d0f2e5fbae31d49dbd",
+        "size": 12999
+      },
+      {
+        "name": "codex_developer_a1_runner.py",
+        "repository_path": "tools/release/codex_developer_a1_runner.py",
+        "git_blob_bytes_sha256": "b68f97a784b5a96fac50a8efda76631340282874977f6aa2a5224fee9edba819",
+        "size": 17558
+      },
+      {
+        "name": "codex_developer_fixed_journal.py",
+        "repository_path": "tools/release/codex_developer_fixed_journal.py",
+        "git_blob_bytes_sha256": "31b45b97843ee4944fe401addbd06edbec7ce97520176fdd9fa0d1c7a439d708",
+        "size": 23620
+      },
+      {
+        "name": "codex_developer_process_ipc.py",
+        "repository_path": "tools/release/codex_developer_process_ipc.py",
+        "git_blob_bytes_sha256": "590eaec4ed50f601398fe022c3d28b5ce387b3e9665e7759adce44a203a00fdf",
+        "size": 9190
+      },
+      {
+        "name": "codex_developer_install_collector.py",
+        "repository_path": "tools/release/codex_developer_install_collector.py",
+        "git_blob_bytes_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
+        "size": 13593
+      },
+      {
+        "name": "codex_developer_metadata_producer.py",
+        "repository_path": "tools/release/codex_developer_metadata_producer.py",
+        "git_blob_bytes_sha256": "937e7447bcec41cdc50d08047df945f61b133835b802557468b86cd0d2696a59",
+        "size": 22185
+      },
+      {
+        "name": "codex_developer_windows_observer.py",
+        "repository_path": "tools/release/codex_developer_windows_observer.py",
+        "git_blob_bytes_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
+        "size": 17393
+      }
+    ],
+    "retained_executable_hashes": {
+      "python": "737a7e3b71e3578f8432acc7dd88c452e593622c544bc13da4789d69c63da5ae",
+      "cli": "1103e9e09c71fa2cd0afd6d8f3b9a2d63174fe8efd7cb5bd09f1cb14ef58a098",
+      "powershell": "b90c0f48ca4b13c9426a7863f3d469baf310ca517721dd0b55551b80ec9fee2a"
+    },
+    "launch": {
+      "javascript_hash_helpers": 0,
+      "normal_pinned_tool_shells": 1,
+      "python_capture_host": 1,
+      "python_flags": [
+        "-E",
+        "-s",
+        "-S",
+        "-B",
+        "-P",
+        "-u",
+        "-c"
+      ],
+      "pty": true,
+      "login": false,
+      "command_character_cap": 30000,
+      "local_git_children": 11,
+      "git_per_child_seconds": 10,
+      "git_aggregate_seconds": 60,
+      "git_raw_total_cap": 2097152,
+      "fixed_readonly_cli_children": 0,
+      "protected_reads_before_execution": 2,
+      "protected_checkpoint_reads": 14,
+      "source_preload_effects": "local Git via trusted PATH, no network clone; no OS-image equivalence claim"
+    },
+    "checkpoints": [
+      "capture_only_preflight_and_allocation",
+      "construct_process_observer_only",
+      "one_process_origin_observation",
+      "retain_current_origin_proposals",
+      "process_evidence_only_no_successor",
+      "shared_capacity_and_proposal_boundary",
+      "terminal_process_proposal"
+    ],
+    "durable_sink": {
+      "files": 64,
+      "bytes": 16777216,
+      "per_record_bytes": 1048576,
+      "reserved_terminal_files": 3,
+      "reserved_terminal_bytes": 655360,
+      "exclusive_writes": true,
+      "fsync": true,
+      "exact_readback": true,
+      "actual_root_allocation": "NOT_PERFORMED",
+      "actual_acl_readback": "NOT_PERFORMED",
+      "contents": [
+        "reviewed sources/proposal",
+        "root ACL provenance",
+        "process raw query prefixes and origin proposals",
+        "historical identity limitations",
+        "protected authority receipts",
+        "timings/outcome/manifest"
+      ]
+    },
+    "observation_deadline_seconds": 120,
+    "terminal_retention_exception": "up to3 reserved capture-only records; no probe, successor, repair, kill or replay",
+    "native_claims": "UNEXECUTED; inert orchestration, launch denial and typed Win32 stubs only",
+    "new_evidence_is_not_authority": true,
+    "automatic_process_exclusions": false,
+    "automatic_BCD_promotion": false,
+    "capture_budget": "same16MiB shared allowance;171186 frozen prior bytes charged before payload and640KiB terminal reserve; current maximum16606030 bytes",
+    "consumption": "trusted host/task record required across runtimes; launcher in-memory set plus exclusive capture prevents local/allocated-root replay",
+    "owner_decision": "NOT_REQUESTED_PENDING_SOURCE_REVIEW_AND_CURRENT_HEAD_CI",
+    "ready_for_owner_execution": false,
+    "shared_frozen_bytes": 171186,
+    "excluded_calls": [
+      "CLI queries",
+      "runtime closure",
+      "layout/ref/staging inventory",
+      "listener control",
+      "install/activation",
+      "unknown image hashing",
+      "process kill or wait retry"
+    ]
   }
 }
