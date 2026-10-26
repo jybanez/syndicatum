@@ -375,7 +375,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "SOURCE_REVIEW_ONLY: shared full preflight and existing LocalApplicationData parent; old51a21324 proposal unchanged; separately bound proposal required",
+    "status": "FRESH_ORIGIN_COMPARISON_ATTEMPT_SOURCE_FOR_REVIEW_ONLY; prior29-file capture and all proposals preserved; no execution authority",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -510,18 +510,18 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_runner.py",
-        "git_blob_bytes_sha256": "f9348c4ace8199f71a41e23fe4ea953ebcb94ab63c5665abc2446085dcfae09d",
-        "size": 16614
+        "git_blob_bytes_sha256": "fc0675776c868ca16f9de47a597efc44d1eaf43435ae1285d8494880f24a4266",
+        "size": 17479
       },
       {
         "repository_path": "docs/codex-developer-a1-admission.md",
-        "git_blob_bytes_sha256": "add932796a61a2d8dfe80ac7c890ff1aeecd85759d4db26cf57e92c78b792f80",
-        "size": 12038
+        "git_blob_bytes_sha256": "e17b86bb12cd6a3a2dfcd3dcd2e8d5c48567931e9e70833c0e223fe5ffe16d24",
+        "size": 13784
       }
     ],
-    "capture_identity": "developer-a1-140ab028ea4e4f00821e07a46b8f8260",
+    "capture_identity": "developer-a1-5eb6ed67761e450288a3da8968d93f72",
     "runner": "tools/release/codex_developer_a1_runner.py::run",
-    "scope_document_sha256": "add932796a61a2d8dfe80ac7c890ff1aeecd85759d4db26cf57e92c78b792f80",
+    "scope_document_sha256": "e17b86bb12cd6a3a2dfcd3dcd2e8d5c48567931e9e70833c0e223fe5ffe16d24",
     "checkout_policy": "Materialize verified reviewed Git-blob bytes into fresh private capture; never execute autocrlf checkout bytes",
     "limits": {
       "capture_files": 32,

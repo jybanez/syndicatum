@@ -4,7 +4,7 @@ No CLI main, worker, storage, lifecycle, listener or install call is present.
 import base64, hashlib, json, os, re, secrets, stat, subprocess, threading, time
 from pathlib import Path
 
-CAPTURE_ID='developer-a1-140ab028ea4e4f00821e07a46b8f8260'
+CAPTURE_ID='developer-a1-5eb6ed67761e450288a3da8968d93f72'
 
 REQUIRED_SOURCES=frozenset(['codex_developer_codex_entry.mjs', 'codex_developer_agent_host.mjs', 'codex_developer_host_assembly.py', 'codex_developer_host_handoff.py', 'codex_developer_integrated_preparation.py', 'codex_developer_transport.py', 'codex_developer_process_ipc.py', 'codex_developer_fixed_journal.py', 'codex_developer_native_b.py', 'codex_developer_freshness.py', 'codex-developer-fixed-session-worker.ps1', 'codex_developer_lifecycle.py', 'codex_pilot_sequence.py', 'codex_developer_install_collector.py', 'codex-developer-fixed-session-protocol.ps1', 'codex-developer-fixed-storage.psm1', 'codex-developer-native-b.psm1', 'codex_developer_a1_module_probe.py', 'codex_developer_a1_module_probe.mjs', 'codex-developer-a1-module-probe.ps1', 'codex_developer_a1_runner.py', 'codex-developer-a1-admission.md'])
 
@@ -91,6 +91,18 @@ def validate_environment(packet,identity=None,owner=None):
         check_nonreparse_chain(path)
         require(path.stat().st_size<=536870912 and sha(path.read_bytes())==row['sha256'],'runtime_pin')
     return {'runtime_pins':4,'parent_constraints':True,'owner_checked':os.name=='nt' or identity is not None,'target_absent':True}
+
+def staged_origin_matches(observed,expected,expected_bytes,uri=False):
+    """Only two known staged spellings; never open a reported outside path."""
+    if type(observed) is not str:return False
+    expected=Path(expected)
+    check_nonreparse_chain(expected)
+    resolved=expected.resolve(strict=True)
+    check_nonreparse_chain(resolved)
+    require(expected.is_file() and resolved.is_file() and expected.samefile(resolved),'staged_origin_identity')
+    require(expected.stat().st_size<=1048576 and expected.read_bytes()==expected_bytes,'staged_origin_bytes')
+    allowed={expected.as_uri(),resolved.as_uri()} if uri else {str(expected),str(resolved)}
+    return observed in allowed
 
 class NativeHost:
     """Windows-only native footprint. No process on object construction."""
@@ -216,9 +228,9 @@ def run(packet,source_bytes,authorize,host=None):
                     elif i==4:
                         declared=source_bytes['codex_developer_codex_entry.mjs'].decode().split('Object.freeze([',1)[1].split(']);',1)[0]
                         expected=re.findall(r"'([^']+)'",declared)
-                        require(set(value)=={'nonce','source_files','entry_url'} and value['source_files']==expected and value['entry_url']==(capture/'codex_developer_codex_entry.mjs').resolve().as_uri(),'node_module_origin_or_sources')
+                        require(set(value)=={'nonce','source_files','entry_url'} and value['source_files']==expected and staged_origin_matches(value['entry_url'],capture/'codex_developer_codex_entry.mjs',source_bytes['codex_developer_codex_entry.mjs'],uri=True),'node_module_origin_or_sources')
                     else:
-                        require(set(value)=={'nonce','module','protocol_origin'} and value['module']==str((capture/'codex-developer-fixed-storage.psm1').resolve()) and value['protocol_origin']==str((capture/'codex-developer-fixed-session-protocol.ps1').resolve()),'powershell_module_origins')
+                        require(set(value)=={'nonce','module','protocol_origin'} and staged_origin_matches(value['module'],capture/'codex-developer-fixed-storage.psm1',source_bytes['codex-developer-fixed-storage.psm1']) and staged_origin_matches(value['protocol_origin'],capture/'codex-developer-fixed-session-protocol.ps1',source_bytes['codex-developer-fixed-session-protocol.ps1']),'powershell_module_origins')
         return {'packet_sha256':binding,'capture_identity':CAPTURE_ID,'records':records,'status':'observations_only_not_install_admission'}
     except Exception as primary:
         if capture is not None:

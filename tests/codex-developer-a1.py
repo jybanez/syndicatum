@@ -26,7 +26,7 @@ class Cases(unittest.TestCase):
   for raw in BAD:
    with self.subTest(raw=raw[:80]),self.assertRaises(ValueError):probe.parse_frame(raw)
  def test_stop_preserves_primary_no_successor_or_replay(self):
-  for fault in ('nonzero','timeout','trailing','bad_nonce','missing','wrong_python','wrong_node','wrong_ps','none'):
+  for fault in ('nonzero','timeout','trailing','bad_nonce','missing','wrong_python','wrong_node','wrong_ps','argv_spelling','none'):
    with self.subTest(fault=fault),tempfile.TemporaryDirectory() as tmp:
     calls=[];auth=[];source={n:(ROOT/('docs' if n.endswith('-admission.md') else 'tools/release')/n).read_bytes() for n in runner.REQUIRED_SOURCES}
     exe=Path(tmp)/'inert-executable';exe.write_bytes(b'inert executable fixture; never launched');pin=runner.sha(exe.read_bytes())
@@ -49,11 +49,13 @@ class Cases(unittest.TestCase):
        if fault=='missing':out={'nonce':nonce}
        if fault=='wrong_python' and i==3:out['modules']['codex_developer_host_assembly']='outside.py'
        if fault=='wrong_node' and i==4:out['entry_url']='file:///outside.mjs'
+       if fault=='argv_spelling' and i==4:out['entry_url']=(Path(cwd)/'codex_developer_codex_entry.mjs').as_uri()
+       if fault=='argv_spelling' and i==5:out.update(module=str(Path(cwd)/'codex-developer-fixed-storage.psm1'),protocol_origin=str(Path(cwd)/'codex-developer-fixed-session-protocol.ps1'))
        if fault=='wrong_ps' and i==5:out['module']='outside.psm1'
        raw=json.dumps(out).encode()
        if i==3 and fault=='trailing':raw+=b'x'
       return {'identity':{'pid':123},'stdout':raw,'stderr':b'','exit':0}
-    if fault=='none':self.assertEqual(runner.run(p,source,lambda *v:auth.append(v),Host())['status'],'observations_only_not_install_admission');self.assertEqual(len(calls),6)
+    if fault in ('none','argv_spelling'):self.assertEqual(runner.run(p,source,lambda *v:auth.append(v),Host())['status'],'observations_only_not_install_admission');self.assertEqual(len(calls),6)
     else:
      with self.assertRaises(Exception) as stopped:runner.run(p,source,lambda *v:auth.append(v),Host())
      self.assertEqual(len(calls),1 if fault in ('nonzero','timeout') else 5 if fault=='wrong_node' else 6 if fault=='wrong_ps' else 4)
@@ -95,6 +97,22 @@ class Cases(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'runtime_pin'):runner.validate_environment(p,lambda:'inert',lambda path:'inert')
    (path/runner.CAPTURE_ID).mkdir()
    with self.assertRaisesRegex(ValueError,'capture_occupied'):runner.validate_environment(p,lambda:'inert',lambda path:'inert')
+ def test_staged_origins_allow_only_two_known_samefile_byte_pinned_spellings(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);(root/'sub').mkdir();file=root/'entry.mjs';file.write_bytes(b'reviewed source')
+   # Portable inert filesystem alias; production parent paths reject '..'.
+   known=root/'sub'/'..'/'entry.mjs'
+   self.assertNotEqual(known.as_uri(),known.resolve().as_uri())
+   for uri in (False,True):
+    for path in (known,known.resolve()):
+     observed=path.as_uri() if uri else str(path)
+     self.assertTrue(runner.staged_origin_matches(observed,known,b'reviewed source',uri))
+    outside=root/'outside.mjs';outside.write_bytes(b'reviewed source')
+    self.assertFalse(runner.staged_origin_matches(outside.as_uri() if uri else str(outside),known,b'reviewed source',uri))
+   for observed in (None,'https://outside/entry.mjs','file://outside/entry.mjs',known.as_uri()+'?x',known.as_uri()+'#x'):
+    self.assertFalse(runner.staged_origin_matches(observed,known,b'reviewed source',True))
+   file.write_bytes(b'drift')
+   with self.assertRaisesRegex(ValueError,'staged_origin_bytes'):runner.staged_origin_matches(known.as_uri(),known,b'reviewed source',True)
  def test_authority_before_any_host_call(self):
   class Host:
    def __getattr__(self,name):raise AssertionError('host touched before authorization')

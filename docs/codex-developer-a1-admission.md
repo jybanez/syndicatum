@@ -68,7 +68,7 @@ No bytecode writes (Python -B).
 
 ## Private footprint and output binding
 
-Exact reserved identity: `developer-a1-140ab028ea4e4f00821e07a46b8f8260` created once only AFTER
+Exact reserved identity: `developer-a1-5eb6ed67761e450288a3da8968d93f72` created once only AFTER
 owner authority, outside every prior evidence root. Owner/current SID and SYSTEM
 only, protected ACL; refuse occupied destination/reparse/ancestor ambiguity. Maximum
 one directory,32 ordinary capture files,16MiB total; no preallocated journal,
@@ -189,3 +189,30 @@ missing attributes, owner/SID mismatch, runtime drift and occupied-target reject
 Complete this shared preflight on the exact new proposal BEFORE another owner
 request and repeat it on execution for drift. Native diagnostics and installation
 remain outside source-review authority.
+
+
+## Staged origin spelling and occupied-run preservation11719
+
+Run11719 exited0 for five diagnostic children but STOPPED on Node origin validation;
+PowerShell was not started. The29-file/296627-byte capture and proposal2d8b188e
+remain immutable, alongside earlier25-file evidence and both earlier proposals.
+The new leaf named above is a distinct future attempt, not a resume or cleanup.
+
+staged_origin_matches accepts ONLY the exact approved argv/staged spelling OR its
+strictly resolved spelling, both derived from the known expected file. Before
+comparison it rejects reparse ancestors, requires both spellings to identify the
+same regular file and checks bytes against the reviewed payload (max1MiB). It
+NEVER opens a reported outside URI/path or casefolds/loosens arbitrary input.
+Node retains exact nonce/schema/source-list checks; PowerShell retains exact
+schema and both module/protocol origins. Other origins, queries/fragments, byte
+drift and unavailable identity remain STOP. Python's accepted canonical origins
+remain unchanged. This is not OS loader/hostile-process attestation.
+
+Retained-result analysis found the Node URI equals the exact approved argv spelling
+and the two known expected spellings are samefile. It was not case-only or a tilde
+short-name difference; no unproven normalization cause is asserted. Proposed
+comparison returned true in READ-ONLY analysis after verifying the retained source
+byte pin. This does not retroactively pass the consumed run or authorize a retry.
+Accepted parent transport, shared environment preflight, six commands and all
+quantitative capture/child/host bounds stay unchanged. Review one new separately
+bound proposal and source before a fresh owner decision; no capture allocation now.
