@@ -309,3 +309,65 @@ an uncertainty note and preserves the original read failure. No new path, retry,
 successor probe or native rehearsal is introduced. At most two known ref records
 produce two <=1MiB prefix files and two small status records; existing64-file /
 16MiB limits and the three reserved terminal records remain unchanged.
+
+
+### Stopped acquisition11748: narrow correction and next scope (11752)
+
+The frozen19-file/171186-byte admission capture is consumed STOP_NO_RETRY.
+Its fingerprint is ce155f4dc4b464e17888ee09270a12fb4ed427232b0875d45d234e389be81827;
+manifest00b4e079e702ac29cf55a10f737a29c9ed2d9ab771c739e00e9e7dfd1e014403.
+Only two authority checkpoints ran. Marketplace listing completed; plugin
+listing raised TimeoutExpired at its8s bound. Exit/settlement remain unknown.
+No timeout stdout/stderr fields were retained, which is unavailable historical
+evidence, NOT proof of no output. No missing historical bytes are reconstructed.
+The capture/proposal are never changed, resumed, reused or cleaned up.
+
+The source correction replaces buffered read(4096) with bounded read1 calls.
+Each channel starts with an explicit empty observed prefix and not_started
+state. Before the blocking pipe read it becomes read_inflight; returned bytes
+are retained immediately, up to the original channel cap, with total received
+count and truncation flag. EOF and read_unavailable/error type are separate.
+A timeout snapshots both channel states/prefixes under the lock; zero observed
+bytes while in-flight never implies EOF or an empty child output. Missing read1
+or read errors remain unavailable rather than silently using buffered read.
+Only one sentinel byte above the cap is read. The original TimeoutExpired and
+original Popen PID remain; no kill, termination, reattachment, wait retry,
+successor query or increased time limit. In-flight daemon reader state can
+change later, but cannot mutate the frozen record snapshot.
+
+**Next process-only observation proposal, not executable authority:** before
+another CLI acquisition decision, reuse NativeWindowsObserver.processes with
+discovery=True once. No NativeReadOnlyCli construction/call, CLI child, install
+collector layout/ref query, runtime closure, listener action or mutation is in
+this proposed check. Use only the three retained known Python/CLI/PowerShell
+image pins already verified; do not open an unknown image for hashing. Read
+Toolhelp process metadata (<=4096 total, <=128 selected fixed CLI/Git/script
+family identities), QueryFullProcessImageNameW and creation/parent identities;
+<=16 known image pins/512MiB aggregate and <=262144 bytes raw origin prefixes.
+Retain complete/query_finished/unknown-origin flags and original failure;
+unknown image or coverage gap means unavailable, never an empty writer set.
+A current PID/name match cannot establish identity or settlement of the old
+child: its creation identity and OS image were not verified at launch. Even a
+complete current snapshot can only describe possible current writers within
+the observer's documented family coverage. No termination or monitoring loop.
+
+The process-only check needs a separately reviewed pinned capture-only entry,
+fresh owner decision, and private evidence sink before running. Proposed sole
+fresh leaf: developer-0210-process-origin-11752-v1; private proposal filename
+Syndicatum-Developer-process-origin-11752-v1.json. Neither exists or is allocated
+by this source change. Bound the proposed check to120s including fresh protected
+authority and a separate <=60s local source preload; no CLI query budget is
+spent. Keep the same64-file/16MiB sink ceilings, <=1MiB records and3 terminal
+slots/640KiB reserve, funded within the SAME shared16MiB acquisition allowance
+including frozen171186 bytes and any later capture. Exact source closure,
+entry/launch pins, authority checkpoints, incidental effects and achievable
+remaining capacity must be bound in the concrete executable proposal; this
+plan alone cannot launch the existing admission entry (which would run CLI).
+
+Only after that check's scope/evidence review can a distinct subsequent CLI
+acquisition be proposed. Reserved proposed names are
+ developer-0210-admission-11752-v2 and
+ Syndicatum-Developer-admission-11752-v2.json;
+never substitute these into the consumed11748 proposal/approval. Keep8s/query
+and120s acquisition limits. No diagnostic, native allocation, repeat acquisition,
+B/C/D setup, installation, activation or merge is authorized by this document.

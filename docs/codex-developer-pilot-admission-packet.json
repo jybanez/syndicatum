@@ -133,8 +133,8 @@
     {
       "name": "codex_developer_metadata_producer.py",
       "repository_path": "tools/release/codex_developer_metadata_producer.py",
-      "git_blob_bytes_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
-      "size": 21194
+      "git_blob_bytes_sha256": "937e7447bcec41cdc50d08047df945f61b133835b802557468b86cd0d2696a59",
+      "size": 22185
     },
     {
       "name": "codex_developer_windows_observer.py",
@@ -538,8 +538,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_metadata_producer.py",
-        "git_blob_bytes_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
-        "size": 21194
+        "git_blob_bytes_sha256": "937e7447bcec41cdc50d08047df945f61b133835b802557468b86cd0d2696a59",
+        "size": 22185
       },
       {
         "repository_path": "tools/release/codex_developer_windows_observer.py",
@@ -663,7 +663,7 @@
     "new_native_operations_authorized": false,
     "process_origin_discovery": "CLOSED; query metadata only, <=16 unknown image paths privately; no unknown image file read; PROPOSED_NOT_ADMISSION",
     "native_api_test_boundary": "stubbed Win32 adapter paths and inert producer/consumer exercised; no real native process/runtime probe",
-    "metadata_producer_source_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
+    "metadata_producer_source_sha256": "937e7447bcec41cdc50d08047df945f61b133835b802557468b86cd0d2696a59",
     "windows_observer_source_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
     "collector_source_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
     "unrelated_scope": "all returned unrelated registration fields plus complete reviewed layouts for every installed syndicatum cache sibling; no global cache byte-attestation"
@@ -671,8 +671,8 @@
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "53530acb8de8429b573fcdf340b179c0401acf30f407eaf54e650232779a3559",
-      "size": 20314
+      "git_blob_bytes_sha256": "0332e278717f481d7dbf7e6c9dcb440d7d561a1d3961084d2dc069a07eafffd8",
+      "size": 24462
     }
   ],
   "admission_acquisition": {
@@ -748,8 +748,8 @@
       {
         "name": "codex_developer_metadata_producer.py",
         "repository_path": "tools/release/codex_developer_metadata_producer.py",
-        "git_blob_bytes_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
-        "size": 21194
+        "git_blob_bytes_sha256": "937e7447bcec41cdc50d08047df945f61b133835b802557468b86cd0d2696a59",
+        "size": 22185
       },
       {
         "name": "codex_developer_windows_observer.py",

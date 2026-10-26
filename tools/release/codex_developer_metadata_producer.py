@@ -116,7 +116,9 @@ class NativeReadOnlyCli:
         child=subprocess.Popen([executable,*READ_COMMANDS[command]],executable=executable,cwd=str(cwd),
             stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
             shell=False,close_fds=True,creationflags=subprocess.CREATE_NO_WINDOW)
-        self.child=child;result=queue.Queue(maxsize=2);prefixes={};lock=threading.Lock()
+        self.child=child;result=queue.Queue(maxsize=2);lock=threading.Lock()
+        channels={name:{'prefix':b'','received_bytes':0,'read_state':'not_started','error_type':None,
+                        'prefix_truncated':False} for name in ('stdout','stderr')}
         record={'command':command,'argv_sha256':digest(packed(list(READ_COMMANDS[command]))),
                 'root_pid':child.pid,'os_image_verified':False,'creation_time_verified':False,
                 'status':'started_uncertain','exit':None}
@@ -124,14 +126,24 @@ class NativeReadOnlyCli:
         def drain(name,stream,limit):
             chunks=bytearray()
             try:
+                # BufferedReader.read may wait for 4096 bytes or EOF. read1
+                # returns the available short pipe read without filling it.
+                read=stream.read1
                 while True:
-                    raw=stream.read(4096)
-                    if not raw:break
+                    with lock:channels[name]['read_state']='read_inflight'
+                    raw=read(min(4096,limit+1-len(chunks)))
+                    if not raw:
+                        with lock:channels[name]['read_state']='eof'
+                        break
                     chunks.extend(raw)
-                    with lock:prefixes[name]=bytes(chunks[:limit])
+                    with lock:
+                        channels[name].update(prefix=bytes(chunks[:limit]),received_bytes=len(chunks),
+                                              prefix_truncated=len(chunks)>limit,read_state='prefix_received')
                     check(len(chunks)<=limit,'metadata_cli_output_bound')
                 result.put((name,bytes(chunks),None))
-            except Exception as error:result.put((name,None,error))
+            except Exception as error:
+                with lock:channels[name].update(read_state='read_unavailable',error_type=type(error).__name__)
+                result.put((name,None,error))
         for name,stream,limit in (('stdout',child.stdout,262144),('stderr',child.stderr,65536)):
             threading.Thread(target=drain,args=(name,stream,limit),daemon=True).start()
         limit=min(deadline,time.monotonic()+8)
@@ -152,7 +164,8 @@ class NativeReadOnlyCli:
             # No kill, cleanup, child reattachment or successor command.
             with lock:
                 record.update({'status':'failed_uncertain','error_type':type(error).__name__,
-                    **{name+'_prefix_base64':base64.b64encode(raw).decode('ascii') for name,raw in prefixes.items()}})
+                    **{name+'_prefix_base64':base64.b64encode(state['prefix']).decode('ascii') for name,state in channels.items()},
+                    'channel_reads':{name:{k:v for k,v in state.items() if k!='prefix'} for name,state in channels.items()}})
             error.add_note('metadata query uncertain; child may remain; no replay')
             raise
 

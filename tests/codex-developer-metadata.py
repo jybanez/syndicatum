@@ -124,6 +124,48 @@ class Cases(unittest.TestCase):
                     self.assertEqual(start.call_count,1)
                     child.kill.assert_not_called();child.terminate.assert_not_called()
 
+    def test_short_pipe_prefix_survives_timeout_and_zero_is_not_unavailable(self):
+        import threading,base64
+        for fault in ('short','zero','unavailable'):
+            with self.subTest(fault=fault):
+                entered=threading.Event();release=threading.Event();threads=[]
+                thread_type=threading.Thread
+                def thread_factory(*args,**kwargs):
+                    t=thread_type(*args,**kwargs);threads.append(t);return t
+                class Pipe:
+                    def __init__(self):self.calls=0
+                    def read(self,*args):raise AssertionError('blocking buffered read forbidden')
+                    def read1(self,count):
+                        self.calls+=1
+                        if fault=='unavailable':
+                            entered.set();raise OSError('inert unavailable')
+                        if fault=='short' and self.calls==1:return b'short'
+                        entered.set();release.wait(2);return b''
+                pin={'sha256':'a'*64,'size':1}
+                cli=producer.NativeReadOnlyCli({'cli':{'path':'INERT.exe','pin':pin},'neutral_directory':'C:/inert'})
+                child=MagicMock(pid=123);child.stdout=Pipe();child.stderr=io.BytesIO(b'')
+                def timeout(**kwargs):
+                    self.assertTrue(entered.wait(1))
+                    if fault=='unavailable':threads[0].join(1);self.assertFalse(threads[0].is_alive())
+                    raise producer.subprocess.TimeoutExpired('INERT',8)
+                child.wait.side_effect=timeout
+                cwd=MagicMock();cwd.is_dir.return_value=True
+                try:
+                    with patch.object(producer.threading,'Thread',side_effect=thread_factory), \
+                         patch.object(cli,'gate'),patch.object(producer,'stable_file',return_value=pin), \
+                         patch.object(producer,'check_nonreparse_chain'),patch.object(producer,'Path',return_value=cwd), \
+                         patch.object(producer.subprocess,'CREATE_NO_WINDOW',0,create=True), \
+                         patch.object(producer.subprocess,'Popen',return_value=child) as start:
+                        with self.assertRaises(producer.subprocess.TimeoutExpired):cli.read('marketplaces',time.monotonic()+30)
+                        row=cli.results[0];state=row['channel_reads']['stdout']
+                        self.assertEqual(base64.b64decode(row['stdout_prefix_base64']),b'short' if fault=='short' else b'')
+                        self.assertEqual(state['received_bytes'],5 if fault=='short' else 0)
+                        self.assertEqual(state['read_state'],'read_unavailable' if fault=='unavailable' else 'read_inflight')
+                        self.assertEqual(row['root_pid'],123);self.assertIsNone(row['exit'])
+                        with self.assertRaises(Stop):cli.read('plugins',time.monotonic()+30)
+                        self.assertEqual(start.call_count,1);child.kill.assert_not_called();child.terminate.assert_not_called()
+                finally:release.set()
+
     def test_handle_close_failure_keeps_original_observation_error(self):
         kernel=MagicMock();kernel.CloseHandle.return_value=False
         try:
