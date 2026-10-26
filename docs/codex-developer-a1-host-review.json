@@ -1,10 +1,10 @@
 {
-  "status": "COHERENT_LOCAL_PARENT_SOURCE_PROPOSAL_FOR_REVIEW_NOT_EXECUTION_AUTHORITY",
+  "status": "FRESH_STAGED_ORIGIN_SOURCE_PROPOSAL_FOR_REVIEW_NOT_EXECUTION_AUTHORITY",
   "accepted_baseline": "6593116a9d8f94cede63a3004a818acb5f349306",
-  "fresh_payload_identity_head": "03432ed8253964ea828b62157b7d947c7f3bc6e5",
-  "new_packet_sha256": "2d8b188e69e3469594af7883e0650ff3964642905d474dbe129dee0ed549972a",
+  "fresh_payload_identity_head": "91470aa91af51d772bda021a48c2419f88994ef2",
+  "new_packet_sha256": "77c9bb9063b41275225c82e09cc161f2b3eca3787d9de09d3eb0eb872b1c9970",
   "new_packet_bytes": 3713,
-  "new_capture_identity": "developer-a1-140ab028ea4e4f00821e07a46b8f8260",
+  "new_capture_identity": "developer-a1-5eb6ed67761e450288a3da8968d93f72",
   "parent": {
     "repository_path": "tools/release/codex_developer_a1_parent.js",
     "git_blob_bytes_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
@@ -12,8 +12,8 @@
   },
   "wrapper": {
     "repository_path": "tools/release/codex_developer_a1_tool_host.py",
-    "git_blob_bytes_sha256": "f9f7a7e8fa9d567e08fbcdb3d0cffde0606a65cd2c226e2a41c8ae0f5d4fcb09",
-    "bytes": 12987
+    "git_blob_bytes_sha256": "1514f3880ca942ae21d536b0bf2e1fbca64005f1c927c8d0f2e5fbae31d49dbd",
+    "bytes": 12999
   },
   "prior_evidence": {
     "packet_sha256": "d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a",
@@ -26,7 +26,9 @@
       11697,
       11698,
       11704,
-      11705
+      11705,
+      11718,
+      11719
     ]
   },
   "inert_actual_exec_proof": {
@@ -67,13 +69,32 @@
   "new_capture_parent": "existing LocalApplicationData known folder; exact path private",
   "preserved_proposals": [
     "d31b0341272b8dd602f4ad1c316eb0127d87e264bc6c35aaf4af43c9b52b899a",
-    "51a21324b2d7e701aff04bac049fa5022fd7cbfed1084902977ccea0d6218845"
+    "51a21324b2d7e701aff04bac049fa5022fd7cbfed1084902977ccea0d6218845",
+    "2d8b188e69e3469594af7883e0650ff3964642905d474dbe129dee0ed549972a"
   ],
   "preflight": {
     "same_source_for_admission_and_execution": "codex_developer_a1_runner.py::validate_environment",
     "native_token_SID_and_parent_owner": true,
     "all_currently_possible_checks_passed": "Developer-local attestation before proposal submission",
     "capture_created": false,
-    "tests_runner": 7
+    "tests_runner": 8
+  },
+  "preserved_captures": [
+    {
+      "files": 25,
+      "bytes": 247723,
+      "inventory_sha256": "7e2178e2af9013af7e8374e1542ff924f41c2bd30be49c9ebb013a7e1a561a7d"
+    },
+    {
+      "files": 29,
+      "bytes": 296627,
+      "inventory_sha256": "8ba9b3b0c494457e9f065f595ca5e6cf0cbfea5054cdbae617b011c99bb79a10"
+    }
+  ],
+  "origin_comparison": {
+    "allowed": "ONLY exact expected argv spelling or strict resolved spelling",
+    "guards": "both known chains nonreparse; same regular file; exact pinned bytes; no reported outside-path IO",
+    "retained_analysis_only": true,
+    "retroactive_acceptance": false
   }
 }

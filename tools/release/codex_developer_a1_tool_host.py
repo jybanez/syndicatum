@@ -6,8 +6,8 @@ never loads runner/probes, reads proposal, creates capture or launches a child.
 import argparse,base64,ctypes,hashlib,json,os,queue,re,secrets,subprocess,sys,threading,time,types
 from pathlib import Path
 PROFILE='1f397680dd1cddc0.2.33'
-HEAD='03432ed8253964ea828b62157b7d947c7f3bc6e5'
-PACKET_SHA='2d8b188e69e3469594af7883e0650ff3964642905d474dbe129dee0ed549972a'
+HEAD='91470aa91af51d772bda021a48c2419f88994ef2'
+PACKET_SHA='77c9bb9063b41275225c82e09cc161f2b3eca3787d9de09d3eb0eb872b1c9970'
 CHUNK=768;MAX_RAW=65536;MAX_LINE=1024;DEADLINE=90
 
 def canonical(v):return json.dumps(v,sort_keys=True,separators=(',',':')).encode()
@@ -72,7 +72,7 @@ def existing_proposal(folder_lookup=None):
             check(ctypes.windll.shell32.SHGetFolderPathW(None,5,None,0,buffer)==0,'documents_resolution')
             return buffer.value
     parent=Path(folder_lookup());check(parent.is_absolute() and parent.is_dir(),'documents_parent')
-    return parent/'Syndicatum-A1-proposed-owner-packet-local-140ab028ea4e4f00821e07a46b8f8260.json'
+    return parent/'Syndicatum-A1-proposed-owner-packet-local-5eb6ed67761e450288a3da8968d93f72.json'
 
 def echo_control():
     # Best effort console echo suppression. Framing remains safe with echo ON.
@@ -154,7 +154,7 @@ def main(argv=None):
                 print(canonical({'mode':'inert','status':'STOP_NO_RETRY','completed':completed,'error_type':type(error).__name__}).decode(),flush=True)
             return
         check(args.request_id and args.approval_id and re.fullmatch('[a-f0-9]{64}',args.wrapper_sha or '') and re.fullmatch('[a-f0-9]{64}',args.parent_sha or ''),'new_owner_binding_required')
-        check(args.request_id not in (11683,11697,11704) and args.approval_id not in (11684,11698,11705),'stopped_authority_no_replay')
+        check(args.request_id not in (11683,11697,11704,11718) and args.approval_id not in (11684,11698,11705,11719),'stopped_authority_no_replay')
         reader=GitBlobReader();blob=reader.read
         raw=existing_proposal().read_bytes();check(len(raw)==3713 and digest(raw)==PACKET_SHA,'existing_proposal_drift')
         packet=json.loads(raw);check(canonical(packet)==raw,'existing_proposal_canonical')
