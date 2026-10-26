@@ -95,19 +95,33 @@ class NativeInstallReader:
         check_nonreparse_chain(git)
         check(git.is_dir(),'managed_git_boundary')
         def read(path):
-            check_nonreparse_chain(path)
-            before=path.stat()
-            check(path.is_file() and before.st_size<=1048576,'managed_ref_bound')
-            with path.open('rb') as stream:raw=stream.read(1048577)
-            check(len(raw)<=1048576,'managed_ref_bound')
-            check_nonreparse_chain(path)
-            after=path.stat()
-            check(len(raw)==before.st_size and (before.st_size,before.st_mtime_ns,before.st_ino)==
-                  (after.st_size,after.st_mtime_ns,after.st_ino),'managed_ref_read_drift')
+            record=None
             if self.retain_ref_bytes:
-                self.ref_reads.append({'role':role,'relative':path.relative_to(git).as_posix(),
-                                       'raw_base64':base64.b64encode(raw).decode('ascii')})
-            return raw.decode('ascii').strip()
+                record={'role':role,'relative':path.relative_to(git).as_posix(),'raw_base64':'',
+                        'status':'read_started','bytes_returned':None,'prefix_bytes':0,'prefix_truncated':False}
+                self.ref_reads.append(record)
+            try:
+                check_nonreparse_chain(path)
+                before=path.stat()
+                check(path.is_file() and before.st_size<=1048576,'managed_ref_bound')
+                with path.open('rb') as stream:raw=stream.read(1048577)
+                # Retain bytes BEFORE bounds, post-read metadata or decoding can
+                # fail. Only the bounded prefix is retained, never a retry.
+                if record is not None:
+                    prefix=raw[:1048576]
+                    record.update({'raw_base64':base64.b64encode(prefix).decode('ascii'),'status':'bytes_unverified',
+                                   'bytes_returned':len(raw),'prefix_bytes':len(prefix),'prefix_truncated':len(raw)>len(prefix)})
+                check(len(raw)<=1048576,'managed_ref_bound')
+                check_nonreparse_chain(path)
+                after=path.stat()
+                check(len(raw)==before.st_size and (before.st_size,before.st_mtime_ns,before.st_ino)==
+                      (after.st_size,after.st_mtime_ns,after.st_ino),'managed_ref_read_drift')
+                value=raw.decode('ascii').strip()
+                if record is not None:record['status']='read_verified'
+                return value
+            except Exception as error:
+                if record is not None:record.update({'status':'read_failed','error_type':type(error).__name__})
+                raise
         value=read(git/'HEAD')
         if value.startswith('ref: '):
             name=value[5:];parts=PurePosixPath(name)

@@ -103,8 +103,8 @@
     {
       "name": "codex_developer_install_collector.py",
       "repository_path": "tools/release/codex_developer_install_collector.py",
-      "git_blob_bytes_sha256": "81af4f4483f82c6f8289d38908ad7127803be01f72d953a7b00ca8d7b88871a4",
-      "size": 12687
+      "git_blob_bytes_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
+      "size": 13593
     },
     {
       "name": "codex-developer-fixed-session-protocol.ps1",
@@ -493,8 +493,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_install_collector.py",
-        "git_blob_bytes_sha256": "81af4f4483f82c6f8289d38908ad7127803be01f72d953a7b00ca8d7b88871a4",
-        "size": 12687
+        "git_blob_bytes_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
+        "size": 13593
       },
       {
         "repository_path": "tools/release/codex-developer-fixed-session-protocol.ps1",
@@ -665,14 +665,14 @@
     "native_api_test_boundary": "stubbed Win32 adapter paths and inert producer/consumer exercised; no real native process/runtime probe",
     "metadata_producer_source_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
     "windows_observer_source_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
-    "collector_source_sha256": "81af4f4483f82c6f8289d38908ad7127803be01f72d953a7b00ca8d7b88871a4",
+    "collector_source_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
     "unrelated_scope": "all returned unrelated registration fields plus complete reviewed layouts for every installed syndicatum cache sibling; no global cache byte-attestation"
   },
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "525e6a1073d84b15f4918f4de2634e076e4662860a779c3587c3dbfb3023c6ef",
-      "size": 19605
+      "git_blob_bytes_sha256": "53530acb8de8429b573fcdf340b179c0401acf30f407eaf54e650232779a3559",
+      "size": 20314
     }
   ],
   "admission_acquisition": {
@@ -700,8 +700,8 @@
       {
         "name": "codex_developer_admission.py",
         "repository_path": "tools/release/codex_developer_admission.py",
-        "git_blob_bytes_sha256": "50bf5533abd5d880d45b2b874cc2be44d379944bed0d27ced6caf2862c0adc46",
-        "size": 11103
+        "git_blob_bytes_sha256": "e44ba8a42cf6757efe263c13963b1dc884d3c64bebf23a755c62b15aa7cbe4ce",
+        "size": 11395
       },
       {
         "name": "codex_developer_admission_native.py",
@@ -742,8 +742,8 @@
       {
         "name": "codex_developer_install_collector.py",
         "repository_path": "tools/release/codex_developer_install_collector.py",
-        "git_blob_bytes_sha256": "81af4f4483f82c6f8289d38908ad7127803be01f72d953a7b00ca8d7b88871a4",
-        "size": 12687
+        "git_blob_bytes_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
+        "size": 13593
       },
       {
         "name": "codex_developer_metadata_producer.py",

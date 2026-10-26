@@ -299,3 +299,13 @@ capture leaf is not a second free16 MiB allocation. Do not append B/C/D data to
 the consumed admission capture. Actual source/sink/journal/backup sizes and
 predicted publication cardinality must be reviewed before B setup; no silent
 budget enlargement or conditional promotion to mutation.
+
+Raw managed-ref failure evidence (Assessor11740): the reader records a bounded
+prefix and read status immediately after bytes arrive, before bound, drift or
+ASCII checks. Failures retain their prefix/status; an earlier verified HEAD is
+not discarded when a later ref fails. Admission publishes accumulated ref proof
+in a finally path without rereading any ref. If publication fails too, it adds
+an uncertainty note and preserves the original read failure. No new path, retry,
+successor probe or native rehearsal is introduced. At most two known ref records
+produce two <=1MiB prefix files and two small status records; existing64-file /
+16MiB limits and the three reserved terminal records remain unchanged.

@@ -1,5 +1,6 @@
 """One C/D lifetime and owner-controlled reload, inert dispatch/observations."""
 import importlib.util
+import base64
 import io
 import json
 from pathlib import Path
@@ -151,6 +152,27 @@ class LifecycleFixtures(unittest.TestCase):
                     with self.assertRaisesRegex(fixed.Stop,'managed_ref_path'):reader.git_head('managed')
                     git.__truediv__.assert_called_once_with('HEAD')
                     git.joinpath.assert_not_called()
+
+    def test_ref_drift_bound_and_decode_failure_retain_bounded_unverified_prefix(self):
+        for fault in ('drift','bound','decode'):
+            reader=collector_module.NativeInstallReader({'managed':'bound-private-root'},retain_ref_bytes=True)
+            root=MagicMock();root.is_absolute.return_value=True;root.drive='C:';root.parts=('C:\\','artifact')
+            git=MagicMock();head=MagicMock();root.__truediv__.return_value=git;git.__truediv__.return_value=head
+            head.relative_to.return_value.as_posix.return_value='HEAD'
+            before=MagicMock(st_size=40,st_mtime_ns=1,st_ino=2)
+            after=MagicMock(st_size=40,st_mtime_ns=2 if fault=='drift' else 1,st_ino=2)
+            head.stat.side_effect=[before,after]
+            raw=b'a'*1048577 if fault=='bound' else b'\xff'*40 if fault=='decode' else b'a'*40
+            head.open.return_value=io.BytesIO(raw)
+            with self.subTest(fault=fault),patch.object(reader,'gate'),patch.object(collector_module,'Path',return_value=root), \
+                 patch.object(collector_module,'check_nonreparse_chain'):
+                with self.assertRaises(Exception):reader.git_head('managed')
+            self.assertEqual(len(reader.ref_reads),1)
+            record=reader.ref_reads[0];prefix=base64.b64decode(record['raw_base64'])
+            self.assertEqual(prefix,raw[:1048576]);self.assertEqual(record['status'],'read_failed')
+            self.assertEqual(record['bytes_returned'],len(raw));self.assertLessEqual(len(prefix),1048576)
+            self.assertEqual(record['prefix_truncated'],fault=='bound')
+            self.assertEqual(head.open.call_count,1)
 
     def test_failed_command_collects_independent_postimage_or_precise_unavailability(self):
         for mode in ('nonzero','guard','partial-result','timeout','writer-live','collection-fail'):

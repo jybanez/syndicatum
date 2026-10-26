@@ -146,12 +146,19 @@ def run(packet,sources,authorize,factory,*,clock=time.monotonic):
         for index,role in enumerate(siblings):
             result=phase('sibling_'+str(index),lambda role=role:discover_layout(reader,role))
             sink.json('sibling-'+str(index)+'.json',result)
-        managed=phase('managed_refs',lambda:reader.managed_state('managed'))
-        sink.json('managed-state.json',managed)
-        for index,record in enumerate(getattr(reader,'ref_reads',[])):
-            raw=base64.b64decode(record['raw_base64'],validate=True)
-            sink.write('managed-ref-'+str(index)+'.bin',raw)
-            sink.json('managed-ref-'+str(index)+'.json',{k:v for k,v in record.items() if k!='raw_base64'})
+        try:
+            managed=phase('managed_refs',lambda:reader.managed_state('managed'))
+            sink.json('managed-state.json',managed)
+        finally:
+            primary=sys.exception()
+            try:
+                for index,record in enumerate(getattr(reader,'ref_reads',[])):
+                    raw=base64.b64decode(record['raw_base64'],validate=True)
+                    sink.write('managed-ref-'+str(index)+'.bin',raw)
+                    sink.json('managed-ref-'+str(index)+'.json',{k:v for k,v in record.items() if k!='raw_base64'})
+            except Exception:
+                if primary is None:raise
+                primary.add_note('raw_managed_ref_evidence_capture_uncertain; primary preserved')
         sink.json('staging-metadata.json',phase('staging_metadata',lambda:factory.staging(binding)))
         checkpoint(6,'process_origins_no_auto_exclusions')
         try:processes=phase('process_origins',lambda:windows.processes(packet['known_process_image_pins'],discovery=True))

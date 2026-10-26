@@ -21,7 +21,7 @@ class Store:
     def read(self,name,limit):return b'wrong' if self.bad_read else self.files[name][:limit]
 
 
-def fixture(*,deny=0,cli_failure=False,gap=False):
+def fixture(*,deny=0,cli_failure=False,gap=False,ref_failure=False):
     sources={'reviewed.py':b'reviewed-source'}
     packet={'scope':admission.SCOPE,'capture_identity':admission.CAPTURE_ID,
             'sources':{name:{'sha256':admission.sha(raw),'size':len(raw)} for name,raw in sources.items()},
@@ -43,7 +43,10 @@ def fixture(*,deny=0,cli_failure=False,gap=False):
             calls.append(('layout',description['root_role'],partial))
             if description['root_role']=='installed_0210':return {'!root':'unavailable:root_absent'}
             return {'plugin.json':'unread:metadata:inert' if partial else 'a'*64}
-        def managed_state(self,role):calls.append(('head',));return {'present':True,'head':'b'*40}
+        def managed_state(self,role):
+            calls.append(('head',))
+            if ref_failure:raise ValueError('later_ref_unavailable')
+            return {'present':True,'head':'b'*40}
     class Windows:
         def runtime(self,pins,**kwargs):
             calls.append(('runtime',));return {'status':'PROPOSED_NOT_ADMISSION','pins':{'inert':'raw-runtime-origin'},'runtime':{'files':1}}
@@ -118,6 +121,24 @@ class Cases(unittest.TestCase):
             admission.run(packet,sources,authorize,factory)
         self.assertIn('raw_cli_evidence_capture_uncertain; primary preserved',caught.exception.__notes__)
         self.assertNotIn(('runtime',),calls)
+
+    def test_later_ref_failure_retains_earlier_head_and_never_continues(self):
+        packet,sources,authorize,factory,calls,store=fixture(ref_failure=True)
+        with self.assertRaisesRegex(ValueError,'later_ref_unavailable'):admission.run(packet,sources,authorize,factory)
+        self.assertEqual(store.files['managed-ref-0.bin'],b'ref: refs/heads/main\n')
+        self.assertIn('managed-ref-0.json',store.files)
+        self.assertEqual(sum(c[0]=='head' for c in calls),1)
+        self.assertNotIn(('processes',),calls)
+        self.assertEqual(json.loads(store.files['outcome.json'])['status'],'STOP_NO_RETRY')
+        self.assertLessEqual(len(store.files),admission.MAX_FILES)
+        self.assertLessEqual(sum(map(len,store.files.values())),admission.MAX_BYTES)
+
+    def test_ref_sink_failure_does_not_replace_the_original_ref_failure(self):
+        packet,sources,authorize,factory,calls,store=fixture(ref_failure=True);store.fail='managed-ref-0.bin'
+        with self.assertRaisesRegex(ValueError,'later_ref_unavailable') as caught:
+            admission.run(packet,sources,authorize,factory)
+        self.assertIn('raw_managed_ref_evidence_capture_uncertain; primary preserved',caught.exception.__notes__)
+        self.assertNotIn(('processes',),calls)
 
     def test_coverage_gap_is_durable_stop_never_quiescence_or_automatic_exclusion(self):
         packet,sources,authorize,factory,calls,store=fixture(gap=True)
