@@ -192,3 +192,110 @@ exact remove/add/plugin-add sequence. CLI internal staging/cleanup/replacement
 effects remain explicit; no outer replay/rollback. Owner controls normal Codex
 close/open and separate notification/lifecycle acceptance. Source/runtime/layout/
 authority/capacity drift must stop before mutation. No native gate is opened.
+
+## Admission-only executable specification (Assessor 11736)
+
+This extension supplies executable source for the next **acquisition-only**
+decision. It is not that decision and was not run. No newly discovered layout,
+runtime pin, process origin or exclusion can become B/C/D authority automatically.
+The resulting raw evidence and proposed pins require separate source/evidence
+review before an eventual bounded B/C/D decision.
+
+Entry chain:
+
+1. In the existing trusted JavaScript tool runtime, evaluate the unchanged
+   `codex_developer_a1_parent.js` (SHA-256
+   `f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857`) and the
+   separately pinned `codex_developer_admission_launch.js`. No hashing helper
+   or transport service starts. Its initial two protected reads validate the
+   exact new request/owner event, purpose, capture ID, proposal/head/entry/parent/
+   launcher pins **before** invoking the execution tool.
+2. `build` produces one command for the pinned PowerShell tool shell, login
+   disabled, exact repository cwd and existing PTY mechanism. It launches pinned
+   Python with `-E -s -S -B -P -u -c` and the exact base64 Git-blob bootstrap.
+   `-P` excludes unsafe cwd imports. Command <=30000 characters; no shell-built
+   filesystem mutations or hidden helper launch. The bootstrap arguments name
+   the immutable source head, private proposal path/hash, entry/parent hashes,
+   48-hex session and fresh request/approval IDs.
+3. `codex_developer_admission_host.py::main` reads only the fixed Known Documents
+   filename `Syndicatum-Developer-admission-11736-v1.json` (<=64 KiB), checks
+   canonical bytes/hash and the exact public source catalog. It performs exactly
+   11 local `git show` acquisitions: public packet plus 10 named source blobs,
+   <=10s each /60s aggregate, <=1 MiB stdout /64 KiB stderr each, <=2 MiB total.
+   Local Git comes from the existing trusted host PATH, as in accepted A1; no
+   reproducible binary/source or Git OS-image verification is claimed. No
+   network clone, checkout, worker or installer runs. Git timeout consumes the
+   attempt without kill/retry/successor, including before capture allocation.
+4. The host reuses the unchanged accepted A1 framing/authority functions in its
+   own module instance. It does not invoke A1 main/run or change its source,
+   captures or proposals. Seven authority checkpoints use exact profile
+   `1f397680dd1cddc0.2.33` and current canonical request/owner event. Host freshness,
+   deletion/revision, sender/owner, positive event and all purpose/pin checks
+   apply. Parent framing is unchanged; total protected reads are initial2 plus
+   14 across those seven checkpoints. The initial pair is a pre-launch guard;
+   the seven native checkpoint pairs are durably captured.
+5. `codex_developer_admission.py::run` drives only the capture/discovery phases
+   below. `codex_developer_admission_native.py::NativeFactory` grants query-only
+   capabilities under current receipt/deadline checks. Production assembly,
+   installer, worker and listener gates remain closed. Neither old A1 nor the
+   new capture can be resumed as a pilot.
+
+Seven fixed checkpoints:
+
+| Checkpoint | Authorized acquisition if the new owner decision is granted |
+| --- | --- |
+| 1 | Verify exact Python/CLI/PowerShell hashes (<=512 MiB/file, <=1 GiB total), token/parent owner, full reparse chains and exact Python identity; atomically create only the new capture; read back protected DACL with exactly two owner/SYSTEM full-control ACEs; stage/readback 10 reviewed source files and proposal |
+| 2 | Two fixed CLI list commands; preserve raw stdout/stderr and bounded failure prefixes even if the second query fails |
+| 3 | Two-pass proposed loaded Python/native runtime closure under exactly Python install, new capture and actual System32 roots; no directory walk and no auto-admission |
+| 4 | Actual installed_027 /installed_0210 metadata discovery followed by exact inventory hashing, or separately recorded absence |
+| 5 | All installed syndicatum sibling layouts (<=16), independent managed presence/HEAD/ref bytes and bounded immediate staging metadata |
+| 6 | One bounded process-origin snapshot, image/creation identities, raw query prefixes and review-only role hints; no automatic exclusions; unknown hashes/coverage gaps are captured then STOP |
+| 7 | Current authority, measured timing/cardinality, proposal-only outcome, raw evidence manifest and verified readback |
+
+The sole allocation is the new leaf
+`developer-0210-admission-11736-v1` under the same retained existing parent
+(path hash77c775d422390019b43d9f0fc693eadaf4b714cdaafa208b6eed5f1dc8d52d91).
+No capture/proposal has been created by this source preparation. Occupancy or
+uncertainty means STOP; never choose another leaf, reuse, clean up or replay.
+The JS launcher consumes a decision before launch within its lifetime. The
+cooperating host must also record consumption in the existing task/timeline
+before execution; its in-memory set is not a cross-runtime replay ledger.
+Pre-allocation failures consume the decision too, as in accepted A1 handling.
+
+The private canonical proposal supplies exactly named source pins, head, fixed
+capture identity/parent/hash/owner SID, retained A1 result1/result2 paths and
+fixed hashes, root-map hash16c23f0c3a50008f75fbeee852f660f9646285bc99905c009b17720317e58047,
+known executable paths/sizes/hashes, three exact runtime discovery roots,
+known process-image pins, repository/proposal paths and launcher hash. It has no
+installer commands, worker plan, credentials, admission-ready flag or executable
+JSON callback. Source catalog and launch pins are in `admission_acquisition` in
+the adjacent JSON. A concrete private proposal and positive owner event are
+still prerequisites; this schema is not a fabricated captured packet.
+
+Durable sink: <=64 exclusive files /16 MiB total, <=1 MiB per record; every
+write flushes/fsyncs and compares exact readback. Names cannot escape the capture
+or be overwritten. Raw CLI bytes, partial prefixes, two runtime-origin passes,
+process identities/origins, layouts, managed ref bytes, source/proposal, authority
+receipts, timing and manifest stay private. No upload or public-file link.
+Three slots /640 KiB are reserved for receipts/outcome/manifest. On failure only
+those three terminal publications may complete after the observation deadline;
+no successor probe or repair is allowed. Original errors survive evidence-write
+failure. Unknown native query origins/prefixes are capped at262144 bytes and
+never relabeled complete. Filesystem/API stalls remain non-interruptible; capture
+and source/CLI limits stop at the next control point, with no forced child kill.
+
+The acquisition has a 120s observation/authority budget after the bounded source
+preload; exact source-preload, query, runtime, layout and authority timing is
+recorded. Raw counts and bytes are measured, not guessed. Loader/DLL reads,
+Known Documents/System32/token/ACL metadata, console echo restoration, normal
+tool/shell logging and CLI native cache/log/network effects are explicit. Python
+bytecode writes are disabled; existing bytecode origins are included.
+
+This capture consumes part of the **existing** 16 MiB collector/capture allowance,
+not an additional allowance. Frozen admission bytes plus any later new C/D raw
+sink must fit that shared allowance (or be separately funded by admitted logical
+evidence capacity within the same201326592 cap). The earlier unused proposed B
+capture leaf is not a second free16 MiB allocation. Do not append B/C/D data to
+the consumed admission capture. Actual source/sink/journal/backup sizes and
+predicted publication cardinality must be reviewed before B setup; no silent
+budget enlargement or conditional promotion to mutation.

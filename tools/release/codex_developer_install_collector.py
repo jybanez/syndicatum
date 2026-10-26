@@ -23,7 +23,8 @@ class ObservationUnavailable(RuntimeError):
 
 
 class NativeInstallReader:
-    def __init__(self,roots):self.roots=dict(roots)
+    def __init__(self,roots,*,retain_ref_bytes=False):
+        self.roots=dict(roots);self.retain_ref_bytes=retain_ref_bytes;self.ref_reads=[]
     @staticmethod
     def gate():raise RuntimeError('SOURCE_ONLY: independent native installation reader disabled')
 
@@ -103,6 +104,9 @@ class NativeInstallReader:
             after=path.stat()
             check(len(raw)==before.st_size and (before.st_size,before.st_mtime_ns,before.st_ino)==
                   (after.st_size,after.st_mtime_ns,after.st_ino),'managed_ref_read_drift')
+            if self.retain_ref_bytes:
+                self.ref_reads.append({'role':role,'relative':path.relative_to(git).as_posix(),
+                                       'raw_base64':base64.b64encode(raw).decode('ascii')})
             return raw.decode('ascii').strip()
         value=read(git/'HEAD')
         if value.startswith('ref: '):

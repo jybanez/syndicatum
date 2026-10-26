@@ -27,6 +27,14 @@ def close_observation_handle(kernel,handle,code):
         else:raise ObservationUnavailable(code)
 
 
+def record_origin_prefix(evidence,value):
+    candidate={**evidence,'origins':[*evidence['origins'],value]}
+    if len(packed(candidate))>262144:
+        evidence['truncated']=True
+        raise ObservationUnavailable('raw_origin_evidence_bound')
+    evidence['origins'].append(value)
+
+
 def stable_file(path, limit=536870912):
     """Only called behind a native gate with an already admitted exact path."""
     path = Path(path)
@@ -64,6 +72,7 @@ class NativeWindowsObserver:
 
     def processes(self, image_pins, *, discovery=False):
         self.gate()
+        self.last_process_evidence={'complete':False,'query_finished':False,'origins':[],'scanned':0,'truncated':False}
         check(os.name == 'nt', 'windows_observation_required')
         check(type(image_pins) is dict and (0 if discovery else 1)<=len(image_pins)<=16 and
               sum(p['size'] for p in image_pins.values())<=536870912,'process_image_scope_bound')
@@ -93,9 +102,11 @@ class NativeWindowsObserver:
             if not ok:raise ObservationUnavailable('process_snapshot_empty_or_failed')
             while ok:
                 count+=1
+                self.last_process_evidence['scanned']=count
                 if count>4096:raise ObservationUnavailable('process_snapshot_bound')
                 name=entry.name.lower()
                 if name in self.FAMILIES:
+                    self.last_process_evidence['querying_pid']=int(entry.pid)
                     if len(rows)>=128:raise ObservationUnavailable('process_family_bound')
                     handle=kernel.OpenProcess(0x1000,False,entry.pid)
                     if not handle:raise ObservationUnavailable('process_identity_unavailable')
@@ -109,6 +120,8 @@ class NativeWindowsObserver:
                         # Only read exact reviewed images, not a path nominated by
                         # an unexpected process. Unknown images stop immediately.
                         image=buffer.value
+                        record_origin_prefix(self.last_process_evidence,{'pid':int(entry.pid),'parent_pid':int(entry.parent),
+                            'created_filetime':(created.dwHighDateTime<<32)|created.dwLowDateTime,'image':image})
                         if image not in image_pins and not discovery:raise ObservationUnavailable('process_image_unadmitted')
                         if image not in image_pins:
                             unadmitted[digest(image.encode('utf-8'))]=image
@@ -129,6 +142,7 @@ class NativeWindowsObserver:
         report={'complete':not bool(unadmitted),'families':sorted(self.FAMILIES),'scanned':count,
                 'observer_pid':os.getpid(),
                 'processes':sorted(rows,key=lambda x:(x['pid'],x['created_filetime']))}
+        self.last_process_evidence['complete']=report['complete'];self.last_process_evidence['query_finished']=True
         if discovery:
             return {'status':'PROPOSED_NOT_ADMISSION','snapshot':report,'unadmitted_image_origins':unadmitted}
         return report
@@ -141,6 +155,7 @@ class NativeWindowsObserver:
         PSAPI observation boundary; never describe this as complete OS trust.
         """
         self.gate()
+        self.last_runtime_evidence={'complete':False,'origins':[],'truncated':False}
         check(os.name=='nt','windows_observation_required')
         discovery=pins is None
         if discovery:
@@ -152,6 +167,7 @@ class NativeWindowsObserver:
               all(type(v['size']) is int and 0<=v['size']<=268435456 for v in pins['files'].values()) and
               sum(v['size'] for v in pins['files'].values())<=536870912,'runtime_closure_bound')
         def admitted_path(path):
+            record_origin_prefix(self.last_runtime_evidence,{'path':str(path)})
             if discovery:
                 check(PureWindowsPath(path).is_absolute() and '..' not in PureWindowsPath(path).parts and
                       any(PureWindowsPath(path).is_relative_to(PureWindowsPath(root)) for root in discovery_roots),
@@ -212,9 +228,15 @@ class NativeWindowsObserver:
                 check(total<536870912,'runtime_discovery_byte_bound')
                 proposed[path]=stable_file(path,min(268435456,536870912-total));total+=proposed[path]['size']
             candidate={'files':proposed,'builtin_frozen':sorted(identities),'absent_bytecode':sorted(absent)}
+            self.runtime_proposed_pins=candidate
             # Repeat the actual loaded closure and bytes. This is still a
             # proposed manifest requiring review, never self-admission.
-            return {'status':'PROPOSED_NOT_ADMISSION','pins':candidate,'runtime':self.runtime(candidate)}
+            first=self.last_runtime_evidence;first['complete']=True
+            self.runtime_raw_passes=[first]
+            try:checked=self.runtime(candidate)
+            finally:self.runtime_raw_passes.append(self.last_runtime_evidence)
+            return {'status':'PROPOSED_NOT_ADMISSION','pins':candidate,'runtime':checked,
+                    'raw_passes':self.runtime_raw_passes}
         if len(files)>256 or sorted(files)!=sorted(pins['files']) or sorted(identities)!=pins['builtin_frozen'] or sorted(absent)!=pins['absent_bytecode']:
             raise ObservationUnavailable('runtime_closure_unadmitted')
         total=0;observed={}
@@ -223,6 +245,7 @@ class NativeWindowsObserver:
             total+=value['size']
             if total>536870912 or value!=pins['files'][path]:raise ObservationUnavailable('runtime_closure_pin_drift')
             observed[digest(path.encode('utf-8'))]=value
+        self.last_runtime_evidence['complete']=True
         return {'closure_sha256':digest(packed({'files':observed,'builtin_frozen':sorted(identities)})),
                 'files':len(files),'bytes':total,'boundary':'loaded_python_files_and_psapi_modules'}
 

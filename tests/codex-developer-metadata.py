@@ -207,6 +207,8 @@ class Cases(unittest.TestCase):
                     value=observer.processes({},discovery=True)
                     self.assertEqual(value['status'],'PROPOSED_NOT_ADMISSION')
                     self.assertFalse(value['snapshot']['complete']);read.assert_not_called()
+                    self.assertFalse(observer.last_process_evidence['complete'])
+                    self.assertTrue(observer.last_process_evidence['query_finished'])
                     with self.assertRaises(windows.ObservationUnavailable):windows.verify_process_observation(value,[])
                 else:
                     value=observer.processes({image:pin})
