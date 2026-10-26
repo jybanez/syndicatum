@@ -31,7 +31,8 @@ Python's previously accepted canonical-module comparison is unchanged. This is
 cooperating-code evidence, not OS loader or hostile-process attestation.
 
 Eight runner methods pass: both allowed spellings, identical-content outside file,
-HTTP/foreign authority/query/fragment rejection, changed bytes, original STOP/no
+HTTP/foreign authority/query/fragment rejection, forced same-file identity mismatch,
+changed bytes, original STOP/no
 successor, full environment/SID/owner/reparse and pinned packet tests. Proposed
 comparison evaluated true against the retained byte-pinned Node result READ-ONLY.
 That analysis does not retroactively accept or resume the consumed run.

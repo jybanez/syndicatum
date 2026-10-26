@@ -111,6 +111,8 @@ class Cases(unittest.TestCase):
     self.assertFalse(runner.staged_origin_matches(outside.as_uri() if uri else str(outside),known,b'reviewed source',uri))
    for observed in (None,'https://outside/entry.mjs','file://outside/entry.mjs',known.as_uri()+'?x',known.as_uri()+'#x'):
     self.assertFalse(runner.staged_origin_matches(observed,known,b'reviewed source',True))
+   with patch.object(runner.Path,'samefile',return_value=False):
+    with self.assertRaisesRegex(ValueError,'staged_origin_identity'):runner.staged_origin_matches(known.as_uri(),known,b'reviewed source',True)
    file.write_bytes(b'drift')
    with self.assertRaisesRegex(ValueError,'staged_origin_bytes'):runner.staged_origin_matches(known.as_uri(),known,b'reviewed source',True)
  def test_authority_before_any_host_call(self):
