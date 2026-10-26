@@ -14,8 +14,8 @@ function parsed(result){
 function build({parent,parentSource,launcherSource,hostSource,proposalSource,context}){
  if(parent.sha256(parentSource)!==PARENT_SHA)fail('accepted parent pin');
  const p=JSON.parse(proposalSource),proposalSha=parent.sha256(proposalSource),entrySha=parent.sha256(hostSource);
- if(parent.canonical(p)!==proposalSource||p.scope!=='Developer PROCESS-ONLY'||
-    p.capture_identity!=='developer-0210-process-origin-11752-v1'||
+ if(parent.canonical(p)!==proposalSource||p.scope!=='Developer PROCESS-ATTRIBUTION-ONLY'||
+    p.capture_identity!=='developer-0210-process-attribution-11766-v1'||
     p.launcher_sha256!==parent.sha256(launcherSource))fail('admission proposal scope');
  for(const value of [p.python?.path,p.powershell?.path,p.proposal_path,p.repository_root,p.capture_parent])
   if(typeof value!=='string'||!(/^[A-Za-z]:\\/).test(value))fail('admission local path shape');
@@ -45,7 +45,7 @@ async function launch(options){
     e.system_event?.type!=='responsibility.approval_approved'||e.system_event.data?.request_message_id!==context.requestId||
     e.system_event.data?.actor_participant_id!==28||e.system_event.data?.kind!=='approval_approved')fail('admission owner authority');
  for(const pin of [b.packet.source_head,b.proposalSha,b.entrySha,PARENT_SHA,b.packet.launcher_sha256,
-   'Developer PROCESS-ONLY','developer-0210-process-origin-11752-v1'])if(!m.body.includes(pin))fail('admission canonical scope pins');
+   'Developer PROCESS-ATTRIBUTION-ONLY','developer-0210-process-attribution-11766-v1'])if(!m.body.includes(pin))fail('admission canonical scope pins');
  const attempt=`${context.requestId}:${context.approvalId}:${b.proposalSha}`;
  if(consumed.has(attempt))fail('admission decision consumed; no replay');
  consumed.add(attempt);

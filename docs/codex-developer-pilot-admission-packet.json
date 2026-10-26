@@ -671,8 +671,8 @@
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "543e874924d255acb62ccc785be37768d283b2a47b46ef2c1acf5d35115a7c25",
-      "size": 30011
+      "git_blob_bytes_sha256": "89de47b2b2728a6a2f1f09f8333624d20320939d86dc6ffb5f1192207f6df7ef",
+      "size": 31877
     }
   ],
   "admission_acquisition": {
@@ -834,12 +834,12 @@
   },
   "process_observation": {
     "status": "SOURCE_REVIEW_ONLY_NOT_AUTHORITY",
-    "scope": "Developer PROCESS-ONLY",
-    "source_request": 11755,
+    "scope": "Developer PROCESS-ATTRIBUTION-ONLY",
+    "source_request": 11766,
     "entry": "tools/release/codex_developer_process_host.py::main -> codex_developer_process_only.run",
-    "proposal_filename": "Syndicatum-Developer-process-origin-11752-v1.json",
+    "proposal_filename": "Syndicatum-Developer-process-attribution-11766-v1.json",
     "private_proposal_status": "NOT_CREATED",
-    "capture_identity": "developer-0210-process-origin-11752-v1",
+    "capture_identity": "developer-0210-process-attribution-11766-v1",
     "existing_parent_path_sha256": "77c775d422390019b43d9f0fc693eadaf4b714cdaafa208b6eed5f1dc8d52d91",
     "retained_root_map_sha256": "16c23f0c3a50008f75fbeee852f660f9646285bc99905c009b17720317e58047",
     "parent_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
@@ -850,15 +850,15 @@
     },
     "launcher_source": {
       "repository_path": "tools/release/codex_developer_process_launch.js",
-      "git_blob_bytes_sha256": "fb1ddf547c26b00602dd3f6d47b4ab4331a4d098a02b38ab48fb02ec09b8fc2d",
-      "size": 4153
+      "git_blob_bytes_sha256": "bf86b8f55c539147651c9cbe8163c0ce75ee368c83e6d03aff1c7ab314a79037",
+      "size": 4187
     },
     "source_files": [
       {
         "name": "codex_developer_process_only.py",
         "repository_path": "tools/release/codex_developer_process_only.py",
-        "git_blob_bytes_sha256": "2a2b9fb852f8ab8ce93ea46fced57a431e2472d7beb54a1dbb3f4fe587341288",
-        "size": 7308
+        "git_blob_bytes_sha256": "61ce4ff57bf0ccc007fc58d8c899e5e159f3bb60c38c2bb37ba46f4b5e6f34b3",
+        "size": 7325
       },
       {
         "name": "codex_developer_admission_native.py",
@@ -869,8 +869,8 @@
       {
         "name": "codex_developer_process_host.py",
         "repository_path": "tools/release/codex_developer_process_host.py",
-        "git_blob_bytes_sha256": "58dc3aa1410bfac09a96a4b46f5d4525926174563d9351d26ebf792dfc928242",
-        "size": 8017
+        "git_blob_bytes_sha256": "a8ea1acaad45dfbad4f26db9f7eb3a29c5eb8e038066c3112a7ff736cc44f2f1",
+        "size": 8034
       },
       {
         "name": "codex_developer_a1_tool_host.py",
@@ -980,11 +980,11 @@
     "new_evidence_is_not_authority": true,
     "automatic_process_exclusions": false,
     "automatic_BCD_promotion": false,
-    "capture_budget": "same16MiB shared allowance;171186 frozen prior bytes charged before payload and640KiB terminal reserve; current maximum16606030 bytes",
+    "capture_budget": "same16MiB shared allowance;346528 frozen prior bytes charged before payload and640KiB terminal reserve; current maximum16430688 bytes",
     "consumption": "trusted host/task record required across runtimes; launcher in-memory set plus exclusive capture prevents local/allocated-root replay",
     "owner_decision": "NOT_REQUESTED_PENDING_SOURCE_REVIEW_AND_CURRENT_HEAD_CI",
     "ready_for_owner_execution": false,
-    "shared_frozen_bytes": 171186,
+    "shared_frozen_bytes": 346528,
     "excluded_calls": [
       "CLI queries",
       "runtime closure",

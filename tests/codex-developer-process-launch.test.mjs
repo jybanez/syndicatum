@@ -9,11 +9,11 @@ const parent=vm.runInNewContext(parentSource),launcher=vm.runInNewContext(launch
 const hostSource='print("inert")\n',profile='1f397680dd1cddc0.2.33';
 function setup(){
  const context={session:'a'.repeat(48),requestId:99998,approvalId:99999};
- const p={scope:'Developer PROCESS-ONLY',capture_identity:'developer-0210-process-origin-11752-v1',
+ const p={scope:'Developer PROCESS-ATTRIBUTION-ONLY',capture_identity:'developer-0210-process-attribution-11766-v1',
   source_head:'b'.repeat(40),launcher_sha256:parent.sha256(launcherSource),
   sources:{'codex_developer_process_host.py':{sha256:parent.sha256(hostSource),size:hostSource.length}},
   python:{path:'C:\\inert\\python.exe'},powershell:{path:'C:\\inert\\pwsh.exe'},
-  proposal_path:'C:\\inert\\Syndicatum-Developer-process-origin-11752-v1.json',
+  proposal_path:'C:\\inert\\Syndicatum-Developer-process-attribution-11766-v1.json',
   repository_root:'C:\\inert\\repo',capture_parent:'C:\\inert\\private'};
  return {parent,parentSource,launcherSource,hostSource,proposalSource:parent.canonical(p),context};
 }

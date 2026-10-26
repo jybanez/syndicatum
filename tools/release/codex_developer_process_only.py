@@ -12,8 +12,8 @@ import re
 import sys
 import time
 
-SCOPE='Developer PROCESS-ONLY'
-CAPTURE_ID='developer-0210-process-origin-11752-v1'
+SCOPE='Developer PROCESS-ATTRIBUTION-ONLY'
+CAPTURE_ID='developer-0210-process-attribution-11766-v1'
 MAX_FILES=64
 MAX_BYTES=16777216
 MAX_RECORD=1048576
@@ -72,7 +72,7 @@ def run(packet,sources,authorize,factory,*,clock=time.monotonic):
     require(sum(len(raw) for raw in sources.values())<=1048576,'process_source_total')
     for name,raw in sources.items():
         require({'sha256':sha(raw),'size':len(raw)}==packet['sources'][name],'process_source_pin')
-    require(packet['shared_frozen_bytes']==171186 and packet['shared_capture_allowance_bytes']==MAX_BYTES,
+    require(packet['shared_frozen_bytes']==346528 and packet['shared_capture_allowance_bytes']==MAX_BYTES,
             'process_shared_allowance')
     began=clock();sink=None;receipts=[];timings={}
     def checkpoint(index,label):
@@ -88,7 +88,7 @@ def run(packet,sources,authorize,factory,*,clock=time.monotonic):
         sink=EvidenceSink(factory.create_capture(packet))
         # Existing frozen admission data consumes the SAME allowance. Reserve
         # its bytes before any ordinary payload, preserving terminal reserve.
-        sink.bytes=171186
+        sink.bytes=346528
         for name,raw in sources.items():sink.write(name,raw)
         sink.json('proposal.json',packet);factory.staged(sink.store)
         sink.json('root-provenance.json',factory.root_provenance)
@@ -123,7 +123,7 @@ def run(packet,sources,authorize,factory,*,clock=time.monotonic):
         outcome={'scope':SCOPE,'status':'PROPOSED_NOT_ADMISSION','native_admission':False,
             'historical_child_settlement':'UNVERIFIED','cli_queries':0,'process_queries':1,
             'timings_ms':timings,'total_ms':round((clock()-began)*1000),
-            'frozen_prior_bytes':171186,'shared_accounted_bytes_before_terminal':sink.bytes}
+            'frozen_prior_bytes':346528,'shared_accounted_bytes_before_terminal':sink.bytes}
         sink.json('authority-receipts.json',receipts);sink.finish(outcome);return outcome
     except Exception as primary:
         if sink is not None:

@@ -13,7 +13,7 @@ fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 class Cases(unittest.TestCase):
     def exercise(self,fault=None):
         p,s,authorize,old,calls,store=fixture.fixture()
-        p.update(scope=core.SCOPE,capture_identity=core.CAPTURE_ID,shared_frozen_bytes=171186,
+        p.update(scope=core.SCOPE,capture_identity=core.CAPTURE_ID,shared_frozen_bytes=346528,
                  shared_capture_allowance_bytes=16777216)
         class Factory:
             root_provenance={'scope':'inert'}
@@ -62,7 +62,7 @@ class Cases(unittest.TestCase):
         for fault,(code,api) in cases.items():
             with self.subTest(fault=fault):
                 p,s,authorize,old,calls,store=fixture.fixture()
-                p.update(scope=core.SCOPE,capture_identity=core.CAPTURE_ID,shared_frozen_bytes=171186,
+                p.update(scope=core.SCOPE,capture_identity=core.CAPTURE_ID,shared_frozen_bytes=346528,
                          shared_capture_allowance_bytes=16777216,known_process_image_pins={})
                 class Factory:
                     root_provenance={};guard=staticmethod(lambda:None)

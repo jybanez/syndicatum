@@ -455,3 +455,32 @@ request it is explicitly deferred to that evidence review. No owner request,
 proposal/capture allocation, observation or repeat CLI acquisition is authorized
 by this source correction; all earlier approvals remain consumed. Installed
 0.2.7 and the listener remain unchanged.
+
+
+### Fresh attribution-only binding preparation (11766)
+
+Assessor accepted the attribution source correction and justified ONE new
+process diagnostic to distinguish the previously unavailable failure class.
+Current process entry/launcher scope is now Developer PROCESS-ATTRIBUTION-ONLY;
+fresh sole leaf developer-0210-process-attribution-11766-v1 and private proposal
+Syndicatum-Developer-process-attribution-11766-v1.json. Prior scope names and
+proposals above are historical consumed bindings, never alternate launch inputs.
+The same process-only mechanism/ten-source closure/accepted parent is retained;
+no query, family, image, unknown-origin, read,120s acquisition or60s preload limit
+changes. Seven checkpoints and zero CLI/runtime/layout/ref/staging activity.
+
+Both frozen captures are charged before payload:171186+175342=346528 bytes,
+leaving16430688 maximum new physical bytes inside the shared16777216 allowance,
+with3 terminal slots/640KiB reserved. Manifest payload_bytes remains shared
+accounted bytes; new physical bytes are separately totaled. Private proposal
+preflights bind both immutable fingerprints, current reviewed source/catalog/
+entry/launcher/parent, known executable pins, owner/ACL/full paths and absent
+fresh leaf. Pure command bound must use actual request/event IDs before launch.
+
+An attributed unavailable process still STOPs. No permission escalation,
+automatic exclusion, ignored vanished identity, coverage shrink, second query,
+kill/restart or automatic CLI acquisition follows. Result remains proposed and
+historical settlement unverified; review the new evidence before any next step.
+Preparation alone is not execution authority; one fresh exact owner approval is
+required after current-head checks/final sanitized binding review. All consumed
+pairs and prior evidence/proposals remain unchanged. No native action occurred.

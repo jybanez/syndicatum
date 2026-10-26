@@ -13,7 +13,7 @@ import sys
 import time
 import types
 
-SCOPE='Developer PROCESS-ONLY'
+SCOPE='Developer PROCESS-ATTRIBUTION-ONLY'
 NAMES=frozenset(('codex_developer_admission_native.py',
  'codex_developer_process_host.py','codex_developer_process_only.py','codex_developer_a1_tool_host.py','codex_developer_a1_runner.py',
  'codex_developer_fixed_journal.py','codex_developer_process_ipc.py','codex_developer_install_collector.py',
@@ -46,7 +46,7 @@ def main(argv=None):
     import ctypes as c
     documents=c.create_unicode_buffer(32768)
     require(c.windll.shell32.SHGetFolderPathW(None,5,None,0,documents)==0,'admission_documents_lookup')
-    require(proposal==Path(documents.value)/'Syndicatum-Developer-process-origin-11752-v1.json','admission_proposal_location')
+    require(proposal==Path(documents.value)/'Syndicatum-Developer-process-attribution-11766-v1.json','admission_proposal_location')
     require(proposal.is_absolute() and proposal.stat().st_size<=65536,'admission_proposal_bound')
     raw=proposal.read_bytes();require(sha(raw)==args.proposal_sha,'admission_proposal_pin')
     packet=json.loads(raw);require(packed(packet)==raw and packet['scope']==SCOPE and packet['source_head']==args.head,
