@@ -162,6 +162,9 @@ def main():
     check(len(config_raw) <= 1048576 and digest(config_raw) == sys.argv[2], 'private_assembly_packet_pin')
     config = json.loads(config_raw)
     check(packed(config) == config_raw, 'private_assembly_packet_canonical')
+    if config['operation']=='pilot':
+        from codex_developer_metadata_producer import validate_native_admission
+        validate_native_admission(config['collector_binding'])
     link = AgentStdioLink(config['session'], sys.stdin.buffer, sys.stdout.buffer)
     state = assemble(config, link.invoke, lambda: time.time_ns() // 1000000, link=link)
     try:
@@ -170,9 +173,12 @@ def main():
             dispatcher=NativeCliDispatcher(config['cli_executable'],config['cli_sha256'],config['neutral_directory'])
             spec=config['installation_spec']
             from codex_developer_install_collector import InstallObservationCollector, NativeInstallReader
+            from codex_developer_metadata_producer import NativeMetadataProducer
             binding=config['collector_binding']
-            observer=InstallObservationCollector(lambda challenge:link.installation_snapshot(challenge,digest(packed(spec))),
-                NativeInstallReader(binding['roots']),state.runner.now,binding,spec['collector_binding_sha256'],state.runner.context)
+            reader=NativeInstallReader(binding['roots'])
+            producer=NativeMetadataProducer(binding,reader,state.runner.now)
+            observer=InstallObservationCollector(producer,reader,state.runner.now,binding,
+                spec['collector_binding_sha256'],state.runner.context)
             result=state.run_pilot(dispatcher,observer,spec)
         else:result = state.prepare()
         # A preparation-only attempt is consumed; full pilot never resumes it.

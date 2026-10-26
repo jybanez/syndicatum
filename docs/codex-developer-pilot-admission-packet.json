@@ -18,15 +18,15 @@
     "all_native_gates": "closed_unconditionally",
     "installer_dispatch": "IMPLEMENTED_CLOSED",
     "activation_dispatch": "IMPLEMENTED_OWNER_CONTROLLED_RELOAD",
-    "install_observation_binding": "IMPLEMENTED_SOURCE_ONLY; native root/producer/runtime admission pending",
+    "install_observation_binding": "IMPLEMENTED_CLOSED_SCHEMA_2_NATIVE_PRODUCER; actual runtime/layout/writer admission pending",
     "readonly_acceptance": "implemented; independent new evidence, never resumes C/D"
   },
   "source_files": [
     {
       "name": "codex_developer_codex_entry.mjs",
       "repository_path": "tools/release/codex_developer_codex_entry.mjs",
-      "git_blob_bytes_sha256": "257679a23eae46bb51f45ac87fbfee475f0f38759680a60051e501c947c8a0d2",
-      "size": 12564
+      "git_blob_bytes_sha256": "12861ae40b881d49b3e8a1594bbbff67d4961e436a1e67d55a6375aa48c8c315",
+      "size": 12817
     },
     {
       "name": "codex_developer_agent_host.mjs",
@@ -37,8 +37,8 @@
     {
       "name": "codex_developer_host_assembly.py",
       "repository_path": "tools/release/codex_developer_host_assembly.py",
-      "git_blob_bytes_sha256": "ab727d8b8f3b0042d045ffbdcc33350d47ac5563cec6aa8e7edd0857111f10bc",
-      "size": 10464
+      "git_blob_bytes_sha256": "a7313b6037efea12892799f85f68f7be3c84e446577c0248fc1535562f185241",
+      "size": 10761
     },
     {
       "name": "codex_developer_host_handoff.py",
@@ -91,8 +91,8 @@
     {
       "name": "codex_developer_lifecycle.py",
       "repository_path": "tools/release/codex_developer_lifecycle.py",
-      "git_blob_bytes_sha256": "f265d18f6e55d51343443b10e5acf48a58bd5a734d01913c3304d1ebd3ec90e2",
-      "size": 18889
+      "git_blob_bytes_sha256": "1c352a0c93e56d1c27ca987cb35d219f0467a65e1090fa1b8cc5cf69671b496d",
+      "size": 19014
     },
     {
       "name": "codex_pilot_sequence.py",
@@ -103,8 +103,8 @@
     {
       "name": "codex_developer_install_collector.py",
       "repository_path": "tools/release/codex_developer_install_collector.py",
-      "git_blob_bytes_sha256": "f1c63b85c8866759f4c5531e8e313482748cb66750971d78929b8d72e72549b6",
-      "size": 9872
+      "git_blob_bytes_sha256": "2d8d9dfa8b29645a8d1397f7460e8651fc5c11ffee48f9445bee145b7f82d838",
+      "size": 12370
     },
     {
       "name": "codex-developer-fixed-session-protocol.ps1",
@@ -127,8 +127,20 @@
     {
       "name": "codex_developer_a1_runner.py",
       "repository_path": "tools/release/codex_developer_a1_runner.py",
-      "git_blob_bytes_sha256": "fc0675776c868ca16f9de47a597efc44d1eaf43435ae1285d8494880f24a4266",
-      "size": 17479
+      "git_blob_bytes_sha256": "b68f97a784b5a96fac50a8efda76631340282874977f6aa2a5224fee9edba819",
+      "size": 17558
+    },
+    {
+      "name": "codex_developer_metadata_producer.py",
+      "repository_path": "tools/release/codex_developer_metadata_producer.py",
+      "git_blob_bytes_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
+      "size": 21194
+    },
+    {
+      "name": "codex_developer_windows_observer.py",
+      "repository_path": "tools/release/codex_developer_windows_observer.py",
+      "git_blob_bytes_sha256": "94424f030556d09e867d53ec3f5e1d99177a06e2b1ddee66c19213ee55dd568c",
+      "size": 15945
     }
   ],
   "source_staging": "Exact Git blob bytes, not an assumed autocrlf checkout. No private staging has occurred.",
@@ -381,7 +393,7 @@
     "failure": "bounded partial observation after independent quiescence, otherwise precise unavailability and retained child identity; never replay"
   },
   "next_A1_decision_draft": {
-    "status": "FRESH_ORIGIN_COMPARISON_ATTEMPT_SOURCE_FOR_REVIEW_ONLY; prior29-file capture and all proposals preserved; no execution authority",
+    "status": "HISTORICAL_CONSUMED_NOT_AN_EXECUTION_REQUEST",
     "scope": [
       "exact pinned CLI version and effective marketplace/source metadata",
       "reviewed actual installed/managed artifact mapping",
@@ -416,8 +428,8 @@
     "complete_sources_and_scope": [
       {
         "repository_path": "tools/release/codex_developer_codex_entry.mjs",
-        "git_blob_bytes_sha256": "257679a23eae46bb51f45ac87fbfee475f0f38759680a60051e501c947c8a0d2",
-        "size": 12564
+        "git_blob_bytes_sha256": "12861ae40b881d49b3e8a1594bbbff67d4961e436a1e67d55a6375aa48c8c315",
+        "size": 12817
       },
       {
         "repository_path": "tools/release/codex_developer_agent_host.mjs",
@@ -426,8 +438,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_host_assembly.py",
-        "git_blob_bytes_sha256": "ab727d8b8f3b0042d045ffbdcc33350d47ac5563cec6aa8e7edd0857111f10bc",
-        "size": 10464
+        "git_blob_bytes_sha256": "a7313b6037efea12892799f85f68f7be3c84e446577c0248fc1535562f185241",
+        "size": 10761
       },
       {
         "repository_path": "tools/release/codex_developer_host_handoff.py",
@@ -471,8 +483,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_lifecycle.py",
-        "git_blob_bytes_sha256": "f265d18f6e55d51343443b10e5acf48a58bd5a734d01913c3304d1ebd3ec90e2",
-        "size": 18889
+        "git_blob_bytes_sha256": "1c352a0c93e56d1c27ca987cb35d219f0467a65e1090fa1b8cc5cf69671b496d",
+        "size": 19014
       },
       {
         "repository_path": "tools/release/codex_pilot_sequence.py",
@@ -481,8 +493,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_install_collector.py",
-        "git_blob_bytes_sha256": "f1c63b85c8866759f4c5531e8e313482748cb66750971d78929b8d72e72549b6",
-        "size": 9872
+        "git_blob_bytes_sha256": "2d8d9dfa8b29645a8d1397f7460e8651fc5c11ffee48f9445bee145b7f82d838",
+        "size": 12370
       },
       {
         "repository_path": "tools/release/codex-developer-fixed-session-protocol.ps1",
@@ -516,13 +528,23 @@
       },
       {
         "repository_path": "tools/release/codex_developer_a1_runner.py",
-        "git_blob_bytes_sha256": "fc0675776c868ca16f9de47a597efc44d1eaf43435ae1285d8494880f24a4266",
-        "size": 17479
+        "git_blob_bytes_sha256": "b68f97a784b5a96fac50a8efda76631340282874977f6aa2a5224fee9edba819",
+        "size": 17558
       },
       {
         "repository_path": "docs/codex-developer-a1-admission.md",
         "git_blob_bytes_sha256": "e17b86bb12cd6a3a2dfcd3dcd2e8d5c48567931e9e70833c0e223fe5ffe16d24",
         "size": 13784
+      },
+      {
+        "repository_path": "tools/release/codex_developer_metadata_producer.py",
+        "git_blob_bytes_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
+        "size": 21194
+      },
+      {
+        "repository_path": "tools/release/codex_developer_windows_observer.py",
+        "git_blob_bytes_sha256": "94424f030556d09e867d53ec3f5e1d99177a06e2b1ddee66c19213ee55dd568c",
+        "size": 15945
       }
     ],
     "capture_identity": "developer-a1-5eb6ed67761e450288a3da8968d93f72",
@@ -560,9 +582,97 @@
   },
   "collector_preparation": {
     "document": "docs/codex-developer-collector-preparation.md",
-    "status": "PARTIAL_SOURCE_PREPARATION_NOT_ADMITTED",
-    "native_metadata_producer": "PENDING",
-    "independent_writer_observation": "PENDING",
-    "new_native_operations_authorized": false
-  }
+    "status": "IMPLEMENTED_CLOSED_AWAITING_SOURCE_REVIEW_AND_NATIVE_ADMISSION",
+    "metadata_schema": 2,
+    "native_metadata_producer": "tools/release/codex_developer_metadata_producer.py::NativeMetadataProducer.collect",
+    "native_windows_observer": "tools/release/codex_developer_windows_observer.py::NativeWindowsObserver",
+    "preassembly_pure_prerequisites": "validate_native_admission; before assembly/worker construction; not native evidence or authority",
+    "binding_and_record_provenance": "source/runtime pins, copied/digest-sealed binding, nonce/sequence/context, before/after writer+runtime proof, reader inventory binding",
+    "retained_root_map_sha256": "16c23f0c3a50008f75fbeee852f660f9646285bc99905c009b17720317e58047",
+    "root_mapping_correction": "A1 plugin source.path is managed/plugins/codex, not installed cache; cache layout is source-derived and not freshly inventoried",
+    "retained_result_records": [
+      {
+        "index": 1,
+        "bytes": 1324,
+        "sha256": "fdb41dfe306df541c8db84a8773d58b31a445bc9cfaab0f2c35f39079ea066b9"
+      },
+      {
+        "index": 2,
+        "bytes": 13954,
+        "sha256": "6a16fd4282fabc7576544d09555c43c0d3813288748da0a68aa517a27ec41083"
+      }
+    ],
+    "observed_marketplace_fields": [
+      "url",
+      "head"
+    ],
+    "dispatch_only_fields": [
+      "ref",
+      "sparse"
+    ],
+    "actual_installed_and_unrelated_inventory": "UNAVAILABLE_NOT_NEWLY_COLLECTED",
+    "actual_collector_runtime_closure": "UNAVAILABLE_NOT_COLLECTED",
+    "independent_writer_native_acceptance": "UNAVAILABLE_NOT_EXECUTED; bounded family coverage/exclusions require explicit review",
+    "runtime_discovery": "CLOSED; actual loaded modules only under <=3 exact admitted roots; <=256 files/512MiB x2; PROPOSED_NOT_ADMISSION",
+    "bounds": {
+      "observations": 7,
+      "readonly_cli_children": 14,
+      "cli_child_seconds": 8,
+      "observation_seconds": 30,
+      "stdout_per_child": 262144,
+      "stderr_per_child": 65536,
+      "metadata_envelope": 32768,
+      "processes_per_snapshot": 4096,
+      "relevant_processes": 128,
+      "process_image_pins": 16,
+      "process_image_bytes_per_snapshot": 536870912,
+      "runtime_files": 256,
+      "runtime_bytes_per_observation": 536870912,
+      "unrelated_layouts": 16,
+      "unrelated_bytes_per_layout": 16777216,
+      "staging_immediate_entries_per_scope": 512,
+      "reported_staging_entries": 128
+    },
+    "effects": [
+      "normal interpreter/DLL loads and file metadata/hash reads",
+      "Python -E -s -S -B; existing bytecode may be read, no automatic bytecode writes",
+      "CLI native config/auth reads; possible metadata refresh, cache/log writes and network",
+      "Toolhelp process snapshots, query-only image/creation metadata; no command lines or process mutation",
+      "no native operations executed in this preparation"
+    ],
+    "proposed_B_setup": {
+      "leaf_template": "developer-0210-11731-{capture,backup,writer,head,receipt}-v1",
+      "canonical_private_root_map_sha256": "7291f5ca54defc02f041337491f2d360f76b8e753f24bac4068762f7327748ce",
+      "existing_parent_path_sha256": "77c775d422390019b43d9f0fc693eadaf4b714cdaafa208b6eed5f1dc8d52d91",
+      "retained_owner_sid_sha256": "849c72d8778132055b8c4c3d1dbafcf424d83531b86a6eaa2177813a16b7c95e",
+      "ACL": "fresh atomic owner/SYSTEM only; SID, identity, final paths and exact readback manifests required",
+      "absence_and_free_space": "NOT_NEWLY_CHECKED",
+      "container_bytes": 146800640,
+      "logical_evidence_bytes": 33554432,
+      "collector_capture_allowance": 16777216,
+      "private_total": 197132288,
+      "private_cap": 201326592,
+      "remaining_margin": 4194304,
+      "separate_backup_cap": 1073741824,
+      "backup_inventory_actual": "UNAVAILABLE; admit exact opaque preimages, byte totals and original ACLs before setup",
+      "raw_query_durable_sink": "NOT_BOUND; bounded private memory only, journal envelope/input hashes separately retained"
+    },
+    "time_admission": "UNAVAILABLE_UNMEASURED; retain 120000ms pilot bound; per-call FS/API stalls not asynchronously interrupted",
+    "eventual_decision": "ONE integrated B/C/D scope: admitted acquisition, bounded setup and verified backup, same-session suppression/stop/install, owner normal reload and separate acceptance",
+    "ready_for_owner_execution": false,
+    "new_native_operations_authorized": false,
+    "process_origin_discovery": "CLOSED; query metadata only, <=16 unknown image paths privately; no unknown image file read; PROPOSED_NOT_ADMISSION",
+    "native_api_test_boundary": "stubbed Win32 adapter paths and inert producer/consumer exercised; no real native process/runtime probe",
+    "metadata_producer_source_sha256": "ce8fd0612bd8c46e53ea55bb425dfef417e2755c71ba144ffccaea26826e5bd3",
+    "windows_observer_source_sha256": "94424f030556d09e867d53ec3f5e1d99177a06e2b1ddee66c19213ee55dd568c",
+    "collector_source_sha256": "2d8d9dfa8b29645a8d1397f7460e8651fc5c11ffee48f9445bee145b7f82d838",
+    "unrelated_scope": "all returned unrelated registration fields plus complete reviewed layouts for every installed syndicatum cache sibling; no global cache byte-attestation"
+  },
+  "review_documents": [
+    {
+      "repository_path": "docs/codex-developer-collector-preparation.md",
+      "git_blob_bytes_sha256": "a67f7443bbbf478b6f12b7984389d21868684399cf0844bd1a5300fc4e212092",
+      "size": 11833
+    }
+  ]
 }

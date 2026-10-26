@@ -50,3 +50,13 @@ test('pilot independent evidence capability is correlated and required before la
   assert.equal(delivered.kind,'install_observation_delivery');
   assert.deepEqual(JSON.parse(Buffer.from(delivered.raw_base64,'base64').toString()).facts,{inert:true});
 });
+
+test('native metadata mode rejects host-supplied fact map challenges',async()=>{
+  const p={...packet,operation:'pilot',collector_binding:{metadata_schema:2}};
+  let collected=0;
+  const session={async start(){return JSON.stringify({kind:'install_observation_challenge',session:p.session})+'\n';},
+    async finish(){},poison(){}};
+  await assert.rejects(runCodexHost({tools:{[tool]:async()=>{throw new Error('unused');}},packet:p,session,collectInstallation:async()=>{collected++;}}),
+    /native metadata cannot use host-supplied fact maps/);
+  assert.equal(collected,0);
+});

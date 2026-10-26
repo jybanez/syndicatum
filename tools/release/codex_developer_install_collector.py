@@ -4,6 +4,7 @@ No live entry. Native reader refuses before filesystem access. Layout is a
 reviewed installed/managed mapping; archive file count is not an install schema.
 """
 import hashlib
+import copy
 import base64
 import json
 from pathlib import Path, PurePosixPath
@@ -12,6 +13,7 @@ import secrets
 from codex_developer_fixed_journal import check, digest, packed
 from codex_developer_process_ipc import _unique
 from codex_developer_a1_runner import check_nonreparse_chain
+from codex_developer_metadata_producer import validate_metadata_evidence
 
 
 class ObservationUnavailable(RuntimeError):
@@ -61,7 +63,9 @@ class NativeInstallReader:
         values={}
         for relative in (seen if partial else description['files']):
             part=PurePosixPath(relative)
-            check(not part.is_absolute() and all(x not in ('..','.') for x in part.parts),'installed_layout_relative')
+            check(type(relative) is str and relative and '\\' not in relative and ':' not in relative and
+                  not part.is_absolute() and all(x not in ('','..','.') for x in relative.split('/')),
+                  'installed_layout_relative')
             path=root.joinpath(*part.parts)
             check_nonreparse_chain(path)
             before=path.stat()
@@ -97,13 +101,15 @@ class NativeInstallReader:
             check(len(raw)<=1048576,'managed_ref_bound')
             check_nonreparse_chain(path)
             after=path.stat()
-            check((before.st_size,before.st_mtime_ns,before.st_ino)==
+            check(len(raw)==before.st_size and (before.st_size,before.st_mtime_ns,before.st_ino)==
                   (after.st_size,after.st_mtime_ns,after.st_ino),'managed_ref_read_drift')
             return raw.decode('ascii').strip()
         value=read(git/'HEAD')
         if value.startswith('ref: '):
             name=value[5:];parts=PurePosixPath(name)
-            check(name.startswith('refs/') and not parts.is_absolute() and '..' not in parts.parts,'managed_ref_path')
+            check(name.startswith('refs/') and len(name)<=1024 and not parts.is_absolute() and
+                  all(x not in ('','..','.') for x in name.split('/')) and
+                  all(c.isascii() and (c.isalnum() or c in '/-_.') for c in name),'managed_ref_path')
             path=git.joinpath(*parts.parts)
             check_nonreparse_chain(path.parent)
             try:path.lstat()
@@ -115,15 +121,29 @@ class NativeInstallReader:
         check(len(value)==40 and all(c in '0123456789abcdef' for c in value),'managed_commit_schema')
         return value
 
+    def managed_state(self,role):
+        self.gate()
+        root=Path(self.roots[role])
+        check(root.is_absolute() and len(root.drive)==2 and root.drive[1]==':' and '..' not in root.parts,
+              'local_managed_drive_required')
+        check_nonreparse_chain(root.parent)
+        try:root.lstat()
+        except FileNotFoundError:return {'present':False,'head':None}
+        check_nonreparse_chain(root)
+        return {'present':True,'head':self.git_head(role)}
+
 
 class InstallObservationCollector:
     def __init__(self,metadata,reader,now_ms,binding,expected_binding_sha256,context_sha256):
-        check(callable(metadata) and callable(now_ms) and digest(packed(binding))==expected_binding_sha256,
+        native=binding.get('metadata_schema')==2
+        check((callable(getattr(metadata,'collect',None)) if native else callable(metadata)) and
+              callable(now_ms) and digest(packed(binding))==expected_binding_sha256,
               'install_collector_binding')
         check(hashlib.sha256(Path(__file__).read_bytes()).hexdigest()==binding['collector_source_sha256'],
               'install_collector_source_binding')
         self.metadata,self.reader,self.now=metadata,reader,now_ms
-        self.binding,self.context,self.sequence,self.used=binding,context_sha256,0,set()
+        self.binding,self.context,self.sequence,self.used=copy.deepcopy(binding),context_sha256,0,set()
+        self.bound_digest=expected_binding_sha256
         self.last={};self.failed_once=set();self.provenance={}
 
     def __call__(self,operation,command_context=None):
@@ -135,19 +155,29 @@ class InstallObservationCollector:
         return self._collect(operation,True,command_context)
 
     def _collect(self,operation,partial,command_context):
+        check(digest(packed(self.binding))==self.bound_digest,'install_collector_binding_drift')
         self.sequence+=1
         challenge={'operation':operation,'sequence':self.sequence,'nonce':secrets.token_hex(24),
                    'binding_sha256':digest(packed(self.binding)),'context_sha256':self.context,
                    'command_context':command_context}
-        if partial and operation in self.last:facts=self.last[operation]
+        artifacts=None
+        if partial and operation in self.last and self.binding.get('metadata_schema')!=2:facts=self.last[operation]
         else:
-            raw=self.metadata(challenge)
+            if self.binding.get('metadata_schema')==2:
+                raw,artifacts=self.metadata.collect(challenge,lambda market:self._read_artifacts(operation,partial,market))
+            else:raw=self.metadata(challenge)
             check(type(raw) is bytes and len(raw)<=32768,'install_metadata_bound')
             envelope=json.loads(raw,object_pairs_hook=_unique)
-            check(packed(envelope)==raw and set(envelope)=={'challenge','producer_source_sha256','facts'} and
+            keys={'challenge','producer_source_sha256','facts'}
+            if self.binding.get('metadata_schema')==2:keys.add('observation_evidence')
+            check(packed(envelope)==raw and set(envelope)==keys and
                   envelope['challenge']==challenge and challenge['nonce'] not in self.used and
                   envelope['producer_source_sha256']==self.binding['metadata_producer_source_sha256'],
                   'install_metadata_provenance')
+            if self.binding.get('metadata_schema')==2:
+                validate_metadata_evidence(envelope['observation_evidence'],self.binding)
+                check(digest(packed(artifacts))==envelope['observation_evidence']['artifact_inventory_sha256'],
+                      'native_artifact_inventory_binding')
             self.used.add(challenge['nonce'])
             facts=envelope['facts']
             self.last[operation]=facts
@@ -159,6 +189,19 @@ class InstallObservationCollector:
         self._fresh(facts['observed_ms'])
         if type(facts['writer_processes']) is not list or facts['writer_processes']:
             raise ObservationUnavailable('independent_writer_quiescence_unavailable')
+        if artifacts is None:artifacts=self._read_artifacts(operation,partial,facts['marketplace'])
+        marketplace=facts['marketplace']
+        if marketplace is not None:marketplace={**marketplace,'head':artifacts['head']}
+        self._fresh(facts['observed_ms'])
+        result=packed({'operation':operation,'marketplace':marketplace,'candidate_files':artifacts['files'],
+                       'unrelated_sha256':facts['unrelated_sha256'],'observed_ms':facts['observed_ms'],
+                       'collector_provenance':{**self.provenance[operation],'partial':partial},
+                       'shared_staging_entries':facts['shared_staging_entries'],
+                       'concurrent_cli_operations':facts['concurrent_cli_operations']})
+        check(len(result)<=32768,'install_observation_bound')
+        return result
+
+    def _read_artifacts(self,operation,partial,marketplace):
         if partial:
             files={}
             for role in ('installed_before','installed_after'):
@@ -166,15 +209,11 @@ class InstallObservationCollector:
         else:
             layout=self.binding['installed_after'] if operation=='plugin_add' else self.binding['installed_before']
             files=self.reader.layout(layout)
-        marketplace=facts['marketplace']
-        if marketplace is not None:
-            marketplace={**marketplace,'head':self.reader.git_head(self.binding['managed_root_role'])}
-        self._fresh(facts['observed_ms'])
-        return packed({'operation':operation,'marketplace':marketplace,'candidate_files':files,
-                       'unrelated_sha256':facts['unrelated_sha256'],'observed_ms':facts['observed_ms'],
-                       'collector_provenance':{**self.provenance[operation],'partial':partial},
-                       'shared_staging_entries':facts['shared_staging_entries'],
-                       'concurrent_cli_operations':facts['concurrent_cli_operations']})
+        if self.binding.get('metadata_schema')==2:
+            state=self.reader.managed_state(self.binding['managed_root_role'])
+            check(partial or state['present']==(marketplace is not None),'managed_registration_root_drift')
+            return {'files':files,'head':state['head'],'managed_state':state}
+        return {'files':files,'head':self.reader.git_head(self.binding['managed_root_role']) if marketplace is not None else None}
 
     def _fresh(self,observed):
         check(type(observed) is int and 0<=self.now()-observed<=120000,'install_metadata_stale')

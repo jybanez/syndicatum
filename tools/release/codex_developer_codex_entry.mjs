@@ -10,6 +10,7 @@ export const SOURCE_FILES = Object.freeze([
   'codex_developer_lifecycle.py','codex_pilot_sequence.py',
   'codex_developer_install_collector.py',
   'codex_developer_a1_runner.py',
+  'codex_developer_metadata_producer.py','codex_developer_windows_observer.py',
   'codex-developer-fixed-session-protocol.ps1','codex-developer-fixed-storage.psm1','codex-developer-native-b.psm1',
 ]);
 const fail = message => {throw new Error(message);};
@@ -118,7 +119,8 @@ if($aclHash -cne $p.private_packet_acl_sha256 -or (Get-FileHash -LiteralPath $p.
 
 export async function runCodexHost({tools, packet, session=new CodexToolSession(tools,packet),
     clock=()=>Date.now(), monotonic=()=>performance.now(), collectInstallation=null}){
-  if(packet.operation==='pilot'&&typeof collectInstallation!=='function')fail('independent installation collector not admitted');
+  const nativeMetadata=packet.collector_binding?.metadata_schema===2;
+  if(packet.operation==='pilot'&&!nativeMetadata&&typeof collectInstallation!=='function')fail('independent installation collector not admitted');
   const began=monotonic();
   const evidenceOrder=['before-marketplace_remove','before-marketplace_remove','marketplace_remove',
     'before-marketplace_add','marketplace_add','before-plugin_add','plugin_add'];
@@ -151,6 +153,7 @@ export async function runCodexHost({tools, packet, session=new CodexToolSession(
         if(++count>128)fail('assembly tool invocation capacity');
         await host.handle(value.challenge);
       }else if(value.kind==='install_observation_challenge'){
+        if(nativeMetadata)fail('native metadata cannot use host-supplied fact maps');
         const allowed=['before-marketplace_remove','marketplace_remove','before-marketplace_add','marketplace_add','before-plugin_add','plugin_add'];
         if(packet.operation!=='pilot'||typeof collectInstallation!=='function'||!allowed.includes(value.operation)||
             value.operation!==evidenceOrder[evidenceIndex++]||

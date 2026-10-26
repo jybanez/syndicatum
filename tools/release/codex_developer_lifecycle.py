@@ -19,8 +19,10 @@ from codex_developer_install_collector import InstallObservationCollector
 
 CANDIDATE = '9141daa08d896f2524be30b96d01ab2a14398757'
 ARCHIVE_SHA = '331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb'
-MARKETPLACE = {'url':'https://github.com/jybanez/syndicatum.git','ref':CANDIDATE,
-               'head':CANDIDATE,'sparse':['.agents/plugins','plugins/codex']}
+# CLI list exposes URL but not configured ref/sparse. HEAD/ref resolution is
+# independently observed. The exact ref/sparse remain verified dispatch argv,
+# never fabricated configuration observations.
+MARKETPLACE = {'url':'https://github.com/jybanez/syndicatum.git','head':CANDIDATE}
 COMMANDS = {
     'marketplace_remove': ('plugin','marketplace','remove','syndicatum','--json'),
     'marketplace_add': ('plugin','marketplace','add','https://github.com/jybanez/syndicatum.git',

@@ -136,6 +136,22 @@ class LifecycleFixtures(unittest.TestCase):
                     else:self.assertEqual(reader.git_head('managed'),'a'*40)
                     self.assertIn(((head,),{}),guard.call_args_list)
 
+    def test_native_git_ref_rejects_windows_path_and_traversal_syntax(self):
+        reader=collector_module.NativeInstallReader({'managed':'bound-private-root'})
+        for name in ('refs/heads/C:\\outside','refs/heads/../../outside','refs/heads/..\\outside','refs/heads//main'):
+            with self.subTest(name=name):
+                root=MagicMock();root.is_absolute.return_value=True
+                root.drive='C:';root.parts=('C:\\','artifact')
+                git=MagicMock();head=MagicMock();raw=('ref: '+name).encode('ascii')
+                root.__truediv__.return_value=git;git.__truediv__.return_value=head
+                metadata=MagicMock(st_size=len(raw),st_mtime_ns=1,st_ino=2)
+                head.stat.return_value=metadata;head.open.return_value=io.BytesIO(raw)
+                with patch.object(reader,'gate'),patch.object(collector_module,'Path',return_value=root), \
+                     patch.object(collector_module,'check_nonreparse_chain'):
+                    with self.assertRaisesRegex(fixed.Stop,'managed_ref_path'):reader.git_head('managed')
+                    git.__truediv__.assert_called_once_with('HEAD')
+                    git.joinpath.assert_not_called()
+
     def test_failed_command_collects_independent_postimage_or_precise_unavailability(self):
         for mode in ('nonzero','guard','partial-result','timeout','writer-live','collection-fail'):
             with self.subTest(mode=mode):
