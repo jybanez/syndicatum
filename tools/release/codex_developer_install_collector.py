@@ -11,6 +11,7 @@ import secrets
 
 from codex_developer_fixed_journal import check, digest, packed
 from codex_developer_process_ipc import _unique
+from codex_developer_a1_runner import check_nonreparse_chain
 
 
 class ObservationUnavailable(RuntimeError):
@@ -33,19 +34,22 @@ class NativeInstallReader:
               'protected_root_forbidden')
         # Directory footprint is complete and bounded; never follow reparses or
         # read credential/config state outside the reviewed artifact root.
-        if partial and not root.exists():return {'!root':'unavailable:root_absent'}
+        # For an absent partial postimage, inspect the existing parent before
+        # testing the leaf. Missing/inaccessible ancestors remain unavailable.
+        check_nonreparse_chain(root.parent)
+        if partial:
+            try:root.lstat()
+            except FileNotFoundError:return {'!root':'unavailable:root_absent'}
+        check_nonreparse_chain(root)
         check(root.exists(),'installed_layout_root_absent')
         check(root.is_dir(),'installed_layout_root')
-        cursor=root
-        while cursor.parent!=cursor:
-            check(not cursor.is_symlink() and not cursor.is_junction(),'installed_layout_ancestor_reparse');cursor=cursor.parent
         todo=[root];seen=[];total=0;directories=0
         while todo:
             directory=todo.pop()
             directories+=1;check(directories<=256,'installed_layout_directory_bound')
-            check(not directory.is_symlink() and not directory.is_junction(),'installed_layout_reparse')
+            check_nonreparse_chain(directory)
             for item in directory.iterdir():
-                check(not item.is_symlink() and not item.is_junction(),'installed_layout_reparse')
+                check_nonreparse_chain(item)
                 if item.is_dir():todo.append(item)
                 else:
                     relative=item.relative_to(root).as_posix()
@@ -58,11 +62,17 @@ class NativeInstallReader:
         for relative in (seen if partial else description['files']):
             part=PurePosixPath(relative)
             check(not part.is_absolute() and all(x not in ('..','.') for x in part.parts),'installed_layout_relative')
-            path=root.joinpath(*part.parts);before=path.stat()
+            path=root.joinpath(*part.parts)
+            check_nonreparse_chain(path)
+            before=path.stat()
             if partial and relative not in description['files']:
                 values[relative]='unread:metadata:'+digest(packed({'size':before.st_size,'mtime_ns':before.st_mtime_ns}))
                 continue
-            with path.open('rb') as stream:sha=hashlib.file_digest(stream,'sha256').hexdigest()
+            with path.open('rb') as stream:
+                raw=stream.read(16777217)
+            check(len(raw)<=16777216 and len(raw)==before.st_size,'installed_layout_read_bound')
+            sha=hashlib.sha256(raw).hexdigest()
+            check_nonreparse_chain(path)
             after=path.stat()
             check((before.st_size,before.st_mtime_ns,before.st_ino)==(after.st_size,after.st_mtime_ns,after.st_ino),
                   'installed_layout_read_drift')
@@ -76,26 +86,32 @@ class NativeInstallReader:
               'local_managed_drive_required')
         check(not any(part.lower() in ('.syndicatum','agent-identities','.ssh','.aws','credentials') for part in root.parts),
               'protected_root_forbidden')
-        cursor=root
-        while cursor.parent!=cursor:
-            check(not cursor.is_symlink() and not cursor.is_junction(),'managed_root_reparse');cursor=cursor.parent
-        check(git.is_dir() and not git.is_symlink() and not git.is_junction(),'managed_git_boundary')
+        check_nonreparse_chain(root)
+        check_nonreparse_chain(git)
+        check(git.is_dir(),'managed_git_boundary')
         def read(path):
-            check(path.is_file() and not path.is_symlink() and path.stat().st_size<=1048576,'managed_ref_bound')
-            return path.read_text(encoding='ascii').strip()
+            check_nonreparse_chain(path)
+            before=path.stat()
+            check(path.is_file() and before.st_size<=1048576,'managed_ref_bound')
+            with path.open('rb') as stream:raw=stream.read(1048577)
+            check(len(raw)<=1048576,'managed_ref_bound')
+            check_nonreparse_chain(path)
+            after=path.stat()
+            check((before.st_size,before.st_mtime_ns,before.st_ino)==
+                  (after.st_size,after.st_mtime_ns,after.st_ino),'managed_ref_read_drift')
+            return raw.decode('ascii').strip()
         value=read(git/'HEAD')
         if value.startswith('ref: '):
             name=value[5:];parts=PurePosixPath(name)
             check(name.startswith('refs/') and not parts.is_absolute() and '..' not in parts.parts,'managed_ref_path')
-            for parent in [git.joinpath(*parts.parts).parent,*git.joinpath(*parts.parts).parents]:
-                if parent==git.parent:break
-                check(not parent.is_symlink() and not parent.is_junction(),'managed_ref_reparse')
             path=git.joinpath(*parts.parts)
-            if path.exists():value=read(path)
-            else:
+            check_nonreparse_chain(path.parent)
+            try:path.lstat()
+            except FileNotFoundError:
                 rows=[line.split(' ',1)[0] for line in read(git/'packed-refs').splitlines()
                       if line.endswith(' '+name)]
                 check(len(rows)==1,'managed_ref_unavailable');value=rows[0]
+            else:value=read(path)
         check(len(value)==40 and all(c in '0123456789abcdef' for c in value),'managed_commit_schema')
         return value
 

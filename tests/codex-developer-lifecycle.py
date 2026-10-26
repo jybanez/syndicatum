@@ -1,10 +1,11 @@
 """One C/D lifetime and owner-controlled reload, inert dispatch/observations."""
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/release'))
@@ -86,6 +87,55 @@ def setup(fault=None):
 
 
 class LifecycleFixtures(unittest.TestCase):
+    def test_native_reader_full_reparse_guard_precedes_artifact_and_ref_reads(self):
+        # Pure mocks: no native collector, filesystem inventory or process probe.
+        reader=collector_module.NativeInstallReader({'old':'bound-private-root'})
+        root=MagicMock();root.is_absolute.return_value=True
+        root.drive='C:';root.parts=('C:\\','artifact')
+        for mode in ('layout','git'):
+            with self.subTest(mode=mode),patch.object(reader,'gate'), \
+                 patch.object(collector_module,'Path',return_value=root), \
+                 patch.object(collector_module,'check_nonreparse_chain',side_effect=ValueError('windows_reparse_point')) as guard:
+                with self.assertRaisesRegex(ValueError,'windows_reparse_point'):
+                    if mode=='layout':reader.layout({'root_role':'old','files':[]})
+                    else:reader.git_head('old')
+                guard.assert_called_once_with(root.parent if mode=='layout' else root)
+                root.is_dir.assert_not_called()
+                root.open.assert_not_called()
+
+    def test_partial_missing_leaf_does_not_treat_dangling_reparse_as_absent(self):
+        reader=collector_module.NativeInstallReader({'old':'bound-private-root'})
+        root=MagicMock();root.is_absolute.return_value=True
+        root.drive='C:';root.parts=('C:\\','artifact')
+        def guard(path):
+            if path is root:raise ValueError('windows_reparse_point')
+        with patch.object(reader,'gate'),patch.object(collector_module,'Path',return_value=root), \
+             patch.object(collector_module,'check_nonreparse_chain',side_effect=guard):
+            with self.assertRaisesRegex(ValueError,'windows_reparse_point'):
+                reader.layout({'root_role':'old','files':[]},partial=True)
+            root.lstat.assert_called_once()
+            root.exists.assert_not_called()
+
+    def test_native_git_ref_bounded_read_and_postread_drift(self):
+        reader=collector_module.NativeInstallReader({'managed':'bound-private-root'})
+        for fault in ('oversize','drift',None):
+            with self.subTest(fault=fault):
+                root=MagicMock();root.is_absolute.return_value=True
+                root.drive='C:';root.parts=('C:\\','artifact')
+                git=MagicMock();head=MagicMock()
+                root.__truediv__.return_value=git;git.__truediv__.return_value=head
+                before=MagicMock(st_size=40,st_mtime_ns=1,st_ino=2)
+                after=MagicMock(st_size=40,st_mtime_ns=3 if fault=='drift' else 1,st_ino=2)
+                head.stat.side_effect=[before,after]
+                head.open.return_value=io.BytesIO(b'a'*(1048577 if fault=='oversize' else 40))
+                with patch.object(reader,'gate'),patch.object(collector_module,'Path',return_value=root), \
+                     patch.object(collector_module,'check_nonreparse_chain') as guard:
+                    if fault:
+                        with self.assertRaisesRegex(fixed.Stop,'managed_ref_bound' if fault=='oversize' else 'managed_ref_read_drift'):
+                            reader.git_head('managed')
+                    else:self.assertEqual(reader.git_head('managed'),'a'*40)
+                    self.assertIn(((head,),{}),guard.call_args_list)
+
     def test_failed_command_collects_independent_postimage_or_precise_unavailability(self):
         for mode in ('nonzero','guard','partial-result','timeout','writer-live','collection-fail'):
             with self.subTest(mode=mode):

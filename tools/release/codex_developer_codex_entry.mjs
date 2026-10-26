@@ -9,6 +9,7 @@ export const SOURCE_FILES = Object.freeze([
   'codex_developer_freshness.py','codex-developer-fixed-session-worker.ps1',
   'codex_developer_lifecycle.py','codex_pilot_sequence.py',
   'codex_developer_install_collector.py',
+  'codex_developer_a1_runner.py',
   'codex-developer-fixed-session-protocol.ps1','codex-developer-fixed-storage.psm1','codex-developer-native-b.psm1',
 ]);
 const fail = message => {throw new Error(message);};
