@@ -58,6 +58,13 @@ class EvidenceSink:
             'files':self.files.copy(),'payload_bytes':self.bytes},terminal=True)
 
 
+def safe_failure_summary(error):
+    module=sys.modules.get('codex_developer_windows_observer')
+    if module is not None:return module.failure_details(error)
+    return {'code':'unavailable','phase':'unavailable','api':'unavailable',
+            'win32_status':None,'cleanup_failures':[],
+            'evidence_capture_uncertain':getattr(error,'evidence_capture_uncertain',False) is True}
+
 def run(packet,sources,authorize,factory,*,clock=time.monotonic):
     """One process discovery only; no CLI/layout/ref/runtime capabilities used."""
     require(packet['scope']==SCOPE and packet['capture_identity']==CAPTURE_ID,'process_scope')
@@ -100,6 +107,7 @@ def run(packet,sources,authorize,factory,*,clock=time.monotonic):
                 if hasattr(observer,'last_process_evidence'):sink.json('process-raw-prefix.json',observer.last_process_evidence)
             except Exception:
                 if primary is None:raise
+                primary.evidence_capture_uncertain=True
                 primary.add_note('process_raw_evidence_uncertain; primary preserved')
         checkpoint(4,'retain_current_origin_proposals')
         sink.json('process-origins.json',result)
@@ -122,7 +130,10 @@ def run(packet,sources,authorize,factory,*,clock=time.monotonic):
             try:
                 sink.json('authority-receipts.json',receipts,terminal=True)
                 sink.finish({'scope':SCOPE,'status':'STOP_NO_RETRY','native_admission':False,
-                    'primary_error_type':type(primary).__name__,'historical_child_settlement':'UNVERIFIED',
+                    'primary_error_type':type(primary).__name__,'failure':safe_failure_summary(primary),
+                    'historical_child_settlement':'UNVERIFIED',
                     'timings_ms':timings,'total_ms':round((clock()-began)*1000)})
-            except Exception:primary.add_note('process_terminal_evidence_uncertain; no replay')
+            except Exception:
+                primary.evidence_capture_uncertain=True
+                primary.add_note('process_terminal_evidence_uncertain; no replay')
         raise

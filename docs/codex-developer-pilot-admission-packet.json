@@ -139,8 +139,8 @@
     {
       "name": "codex_developer_windows_observer.py",
       "repository_path": "tools/release/codex_developer_windows_observer.py",
-      "git_blob_bytes_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
-      "size": 17393
+      "git_blob_bytes_sha256": "4afe814877d14d3d060ef9b6b807696e328c2c20f8b7abd46b511c1f2a3864f2",
+      "size": 20493
     }
   ],
   "source_staging": "Exact Git blob bytes, not an assumed autocrlf checkout. No private staging has occurred.",
@@ -543,8 +543,8 @@
       },
       {
         "repository_path": "tools/release/codex_developer_windows_observer.py",
-        "git_blob_bytes_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
-        "size": 17393
+        "git_blob_bytes_sha256": "4afe814877d14d3d060ef9b6b807696e328c2c20f8b7abd46b511c1f2a3864f2",
+        "size": 20493
       }
     ],
     "capture_identity": "developer-a1-5eb6ed67761e450288a3da8968d93f72",
@@ -664,15 +664,15 @@
     "process_origin_discovery": "CLOSED; query metadata only, <=16 unknown image paths privately; no unknown image file read; PROPOSED_NOT_ADMISSION",
     "native_api_test_boundary": "stubbed Win32 adapter paths and inert producer/consumer exercised; no real native process/runtime probe",
     "metadata_producer_source_sha256": "937e7447bcec41cdc50d08047df945f61b133835b802557468b86cd0d2696a59",
-    "windows_observer_source_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
+    "windows_observer_source_sha256": "4afe814877d14d3d060ef9b6b807696e328c2c20f8b7abd46b511c1f2a3864f2",
     "collector_source_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
     "unrelated_scope": "all returned unrelated registration fields plus complete reviewed layouts for every installed syndicatum cache sibling; no global cache byte-attestation"
   },
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "dd1ed02c6a80c9c257c5fb445f74cbc21904b72d8d7bd826eeda399c74d0b6f0",
-      "size": 27228
+      "git_blob_bytes_sha256": "543e874924d255acb62ccc785be37768d283b2a47b46ef2c1acf5d35115a7c25",
+      "size": 30011
     }
   ],
   "admission_acquisition": {
@@ -754,8 +754,8 @@
       {
         "name": "codex_developer_windows_observer.py",
         "repository_path": "tools/release/codex_developer_windows_observer.py",
-        "git_blob_bytes_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
-        "size": 17393
+        "git_blob_bytes_sha256": "4afe814877d14d3d060ef9b6b807696e328c2c20f8b7abd46b511c1f2a3864f2",
+        "size": 20493
       }
     ],
     "retained_executable_hashes": {
@@ -857,8 +857,8 @@
       {
         "name": "codex_developer_process_only.py",
         "repository_path": "tools/release/codex_developer_process_only.py",
-        "git_blob_bytes_sha256": "4528bd056e3d47d35726c190844b1c6366108bdb1d0f19b36ed219b723eff20e",
-        "size": 6727
+        "git_blob_bytes_sha256": "2a2b9fb852f8ab8ce93ea46fced57a431e2472d7beb54a1dbb3f4fe587341288",
+        "size": 7308
       },
       {
         "name": "codex_developer_admission_native.py",
@@ -869,8 +869,8 @@
       {
         "name": "codex_developer_process_host.py",
         "repository_path": "tools/release/codex_developer_process_host.py",
-        "git_blob_bytes_sha256": "fa879833412428ad1b67cc83c248672833e82df4b62c260f49c85242f23a852b",
-        "size": 7893
+        "git_blob_bytes_sha256": "58dc3aa1410bfac09a96a4b46f5d4525926174563d9351d26ebf792dfc928242",
+        "size": 8017
       },
       {
         "name": "codex_developer_a1_tool_host.py",
@@ -911,8 +911,8 @@
       {
         "name": "codex_developer_windows_observer.py",
         "repository_path": "tools/release/codex_developer_windows_observer.py",
-        "git_blob_bytes_sha256": "f204d2f162d45f5d428800ae2bd2d0f00df05d880c5f890f70918e68a080344c",
-        "size": 17393
+        "git_blob_bytes_sha256": "4afe814877d14d3d060ef9b6b807696e328c2c20f8b7abd46b511c1f2a3864f2",
+        "size": 20493
       }
     ],
     "retained_executable_hashes": {

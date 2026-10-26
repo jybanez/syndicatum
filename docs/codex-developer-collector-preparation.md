@@ -412,3 +412,46 @@ exercise success, query failure, coverage gap, sink failure, exact sink-source
 reuse and no CLI calls; separate pure launcher tests verify denial, one-use,
 unchanged parent and actual bootstrap command limit. Neither suite is native
 Windows acceptance. No live diagnostic or allocation has run.
+
+
+### Failure attribution correction (11763), no new diagnostic authorized
+
+Frozen process-only result11762 has incomplete429-process/28-prefix coverage,
+not quiescence; process query ObservationUnavailable has no retained reason.
+That historical code/status cannot be reconstructed from current PID/name,
+partial origins or a new query. Both old captures/proposals remain immutable.
+
+The observer now attaches only allowlisted process failure codes, fixed phase/API
+labels and an optional numeric Win32 status captured immediately after a failed
+API, before cleanup or another native call. OpenProcess, image query, creation
+time, first/next/snapshot enumeration and handle-close failures remain distinct.
+Successful image query with a size-bound failure has no fabricated last-error
+status. Current-query PID/parent/family context stays private with partial raw
+prefixes; it is explicitly not a verified historical creation identity.
+The outer observer wrapper publishes structured failure in raw proof only after
+cleanup, so any secondary close uncertainty is retained separately. Close
+failure preserves an active primary; absence of a primary makes close the
+primary failure. Up to four cleanup details are bounded and allowlisted.
+
+Process-only terminal outcome and pure host stop_summary carry the same safe
+code/phase/API/numeric status plus cleanup details. Unknown codes become
+unavailable; arbitrary exception messages, paths and private context are never
+serialized to public host summaries. Sink failures preserve the primary and set
+evidence_capture_uncertain; missing evidence is never treated as success.
+No native query, retries, ignored inaccessible/vanished process, family shrink,
+automatic exclusion, limit increase, restart or termination is added. Inert
+stubbed-API tests cover OpenProcess, image, creation, enumeration, close and a
+primary-image/secondary-close failure through raw record, terminal and host
+summary, proving a single snapshot/query chain and zero CLI calls. These are
+not Windows acceptance results.
+
+Evidence-based next scope remains SOURCE REVIEW ONLY. The retained records do
+not identify which failure code caused11762; therefore no evidence presently
+justifies bypassing a process or changing limits. After exact-source/current-CI
+review, the only potentially warranted new diagnostic is one separately bound
+process-only attribution attempt with unchanged coverage/limits, a distinct
+fresh leaf/proposal, current preflights and a new owner decision. Whether to
+request it is explicitly deferred to that evidence review. No owner request,
+proposal/capture allocation, observation or repeat CLI acquisition is authorized
+by this source correction; all earlier approvals remain consumed. Installed
+0.2.7 and the listener remain unchanged.

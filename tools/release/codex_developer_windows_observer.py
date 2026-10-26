@@ -14,17 +14,55 @@ from codex_developer_a1_runner import check_nonreparse_chain
 from codex_developer_fixed_journal import check, digest, packed
 
 
-class ObservationUnavailable(RuntimeError):
-    def __init__(self, code):
-        super().__init__(code)
-        self.code = code
+PROCESS_FAILURES={
+ 'process_snapshot_unavailable':('enumeration','CreateToolhelp32Snapshot'),
+ 'process_snapshot_empty_or_failed':('enumeration','Process32FirstW'),
+ 'process_snapshot_incomplete':('enumeration','Process32NextW'),
+ 'process_snapshot_bound':('enumeration','coverage_bound'),
+ 'process_family_bound':('identity','coverage_bound'),
+ 'process_identity_unavailable':('identity','OpenProcess'),
+ 'process_image_unavailable':('image','QueryFullProcessImageNameW'),
+ 'process_creation_unavailable':('creation','GetProcessTimes'),
+ 'process_image_unadmitted':('image','admission_check'),
+ 'process_image_pin_drift':('image','pin_check'),
+ 'process_handle_close_uncertain':('cleanup','CloseHandle'),
+ 'snapshot_close_uncertain':('cleanup','CloseHandle'),
+ 'raw_origin_evidence_bound':('evidence','prefix_bound')}
 
+def failure_details(error):
+    """Bounded public-safe attribution; never serialize exception text/paths."""
+    code=getattr(error,'code',None)
+    if code not in PROCESS_FAILURES:code='unavailable'
+    phase,api=PROCESS_FAILURES.get(code,('unavailable','unavailable'))
+    status=getattr(error,'win32_status',None)
+    if type(status) is not int or not 0<=status<=4294967295:status=None
+    cleanup=[]
+    for item in getattr(error,'cleanup_failures',[])[:4]:
+        if type(item) is dict and item.get('code') in ('process_handle_close_uncertain','snapshot_close_uncertain'):
+            value=item.get('win32_status')
+            cleanup.append({'code':item['code'],'phase':'cleanup','api':'CloseHandle',
+                'win32_status':value if type(value) is int and 0<=value<=4294967295 else None})
+    return {'code':code,'phase':phase,'api':api,'win32_status':status,'cleanup_failures':cleanup,
+            'evidence_capture_uncertain':getattr(error,'evidence_capture_uncertain',False) is True}
+
+class ObservationUnavailable(RuntimeError):
+    def __init__(self, code, *, win32_status=None):
+        super().__init__(code);self.code=code;self.win32_status=win32_status
+
+def last_win32_status():
+    import ctypes
+    return getattr(ctypes,'get_last_error',lambda:None)()
 
 def close_observation_handle(kernel,handle,code):
     if not kernel.CloseHandle(handle):
+        status=last_win32_status() # capture BEFORE notes, sink or another API
+        cleanup=ObservationUnavailable(code,win32_status=status)
         primary=sys.exception()
-        if primary is not None:primary.add_note(code)
-        else:raise ObservationUnavailable(code)
+        if primary is not None:
+            primary.add_note(code)
+            existing=list(getattr(primary,'cleanup_failures',[]))[:3]
+            primary.cleanup_failures=existing+[failure_details(cleanup)]
+        else:raise cleanup
 
 
 def record_origin_prefix(evidence,value):
@@ -71,6 +109,13 @@ class NativeWindowsObserver:
         raise RuntimeError('SOURCE_ONLY: Windows observation disabled')
 
     def processes(self, image_pins, *, discovery=False):
+        try:return self._processes_observe(image_pins,discovery=discovery)
+        except Exception as primary:
+            if hasattr(self,'last_process_evidence'):
+                self.last_process_evidence['failure']=failure_details(primary)
+            raise
+
+    def _processes_observe(self, image_pins, *, discovery=False):
         self.gate()
         self.last_process_evidence={'complete':False,'query_finished':False,'origins':[],'scanned':0,'truncated':False}
         check(os.name == 'nt', 'windows_observation_required')
@@ -94,12 +139,12 @@ class NativeWindowsObserver:
         kernel.GetProcessTimes.restype=w.BOOL
         kernel.CloseHandle.argtypes=[w.HANDLE];kernel.CloseHandle.restype=w.BOOL
         snapshot=kernel.CreateToolhelp32Snapshot(2,0)
-        if snapshot in (None,c.c_void_p(-1).value):raise ObservationUnavailable('process_snapshot_unavailable')
+        if snapshot in (None,c.c_void_p(-1).value):raise ObservationUnavailable('process_snapshot_unavailable',win32_status=last_win32_status())
         rows=[];count=0;hashed={};unadmitted={}
         try:
             entry=Entry();entry.dwSize=c.sizeof(entry)
             ok=kernel.Process32FirstW(snapshot,c.byref(entry))
-            if not ok:raise ObservationUnavailable('process_snapshot_empty_or_failed')
+            if not ok:raise ObservationUnavailable('process_snapshot_empty_or_failed',win32_status=last_win32_status())
             while ok:
                 count+=1
                 self.last_process_evidence['scanned']=count
@@ -107,16 +152,19 @@ class NativeWindowsObserver:
                 name=entry.name.lower()
                 if name in self.FAMILIES:
                     self.last_process_evidence['querying_pid']=int(entry.pid)
+                    self.last_process_evidence['current_query']={'pid':int(entry.pid),'parent_pid':int(entry.parent),
+                        'family':name,'creation_identity_verified':False}
                     if len(rows)>=128:raise ObservationUnavailable('process_family_bound')
                     handle=kernel.OpenProcess(0x1000,False,entry.pid)
-                    if not handle:raise ObservationUnavailable('process_identity_unavailable')
+                    if not handle:raise ObservationUnavailable('process_identity_unavailable',win32_status=last_win32_status())
                     try:
                         size=w.DWORD(32768);buffer=c.create_unicode_buffer(size.value)
                         created,exited,kernel_time,user_time=(w.FILETIME() for _ in range(4))
-                        if not kernel.QueryFullProcessImageNameW(handle,0,buffer,c.byref(size)) or size.value>=32768:
-                            raise ObservationUnavailable('process_image_unavailable')
+                        if not kernel.QueryFullProcessImageNameW(handle,0,buffer,c.byref(size)):
+                            raise ObservationUnavailable('process_image_unavailable',win32_status=last_win32_status())
+                        if size.value>=32768:raise ObservationUnavailable('process_image_unavailable')
                         if not kernel.GetProcessTimes(handle,c.byref(created),c.byref(exited),c.byref(kernel_time),c.byref(user_time)):
-                            raise ObservationUnavailable('process_creation_unavailable')
+                            raise ObservationUnavailable('process_creation_unavailable',win32_status=last_win32_status())
                         # Only read exact reviewed images, not a path nominated by
                         # an unexpected process. Unknown images stop immediately.
                         image=buffer.value
@@ -136,7 +184,8 @@ class NativeWindowsObserver:
                     finally:
                         close_observation_handle(kernel,handle,'process_handle_close_uncertain')
                 ok=kernel.Process32NextW(snapshot,c.byref(entry))
-            if c.get_last_error()!=18:raise ObservationUnavailable('process_snapshot_incomplete')
+            enumeration_status=last_win32_status()
+            if enumeration_status!=18:raise ObservationUnavailable('process_snapshot_incomplete',win32_status=enumeration_status)
         finally:
             close_observation_handle(kernel,snapshot,'snapshot_close_uncertain')
         report={'complete':not bool(unadmitted),'families':sorted(self.FAMILIES),'scanned':count,

@@ -29,6 +29,11 @@ def load(name,raw):
     return module
 
 
+def stop_summary(error,core):
+    return {'scope':SCOPE,'status':'STOP_NO_RETRY','error_type':type(error).__name__,
+            'failure':core.safe_failure_summary(error)}
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser();parser.add_argument('--process-only',action='store_true',required=True)
     for field in ('head','proposal','proposal-sha','entry-sha','parent-sha','session'):parser.add_argument('--'+field,required=True)
@@ -114,7 +119,7 @@ def main(argv=None):
         print(packed({'scope':SCOPE,'status':result['status'],'native_admission':False}).decode(),flush=True)
     except Exception as error:
         print('\n'+bridge.outcome_marker(tag,False),flush=True)
-        print(packed({'scope':SCOPE,'status':'STOP_NO_RETRY','error_type':type(error).__name__}).decode(),flush=True)
+        print(packed(stop_summary(error,core)).decode(),flush=True)
     finally:restore()
 
 
