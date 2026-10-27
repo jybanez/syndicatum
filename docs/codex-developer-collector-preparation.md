@@ -484,3 +484,54 @@ historical settlement unverified; review the new evidence before any next step.
 Preparation alone is not execution authority; one fresh exact owner approval is
 required after current-head checks/final sanitized binding review. All consumed
 pairs and prior evidence/proposals remain unchanged. No native action occurred.
+
+
+### Owner manual completion and CLI-only timing scope (11775)
+
+Jonathan reports the retained executable's manual plugin list returned rows and
+a PowerShell prompt after substantially over8s. The screenshot is owner evidence;
+exact elapsed/exit and equivalence to --json are unmeasured. This supports an
+insufficient diagnostic cutoff, not a broken/hung Codex conclusion. Historical
+child settlement stays unverified. Pending process-attribution request11773 is
+superseded by canonical notice11776 and must not execute, even on late approval.
+Connector tools lack a request-withdraw transition; no Inbox transition is
+claimed. Independent writer coverage is required before installation mutation,
+not before this isolated read-only timing query.
+
+New chain codex_developer_cli_timing_launch.js ->
+codex_developer_cli_timing_host.py -> codex_developer_cli_timing.run binds
+Developer CLI-TIMING-ONLY, fresh developer-0210-cli-timing-11775-v1 capture and
+Syndicatum-Developer-cli-timing-11775-v1.json proposal. Accepted parent/framing,
+capture-only factory and exact EvidenceSink class are retained. Ten Python blobs
+plus catalog =11 local Git children,10s each/60s total/2MiB source total; one
+normal pinned tool shell/one Python child, no new service/hash helper. Initial2
+protected reads precede execution plus seven checkpoint pairs.120s timing-only
+acquisition includes all checkpoints; one CLI query has min(60s,remaining shared
+deadline), a proposed operating bound, not a measured guarantee.
+
+The only CLI argv is plugin list --json. A source-owned TimingCli subclass
+selects plugins/60s/one-query policy; the production NativeReadOnlyCli default
+remains marketplace-first/8s/14 calls. Production collector16s pair deadline,
+freshness and B/C/D120s budgets are unchanged. Accepted incremental read1/finite
+stdout262144/stderr65536 caps preserve elapsed_ms, exit, raw bytes and per-channel
+read states on success/failure. Timeout retains primary error, unverified Popen
+identity and prefixes; no kill, retry, wait successor or automatic rerun. Parsed
+JSON is descriptive only, never admitted installation state.
+
+Seven checkpoints cover capture/source staging, construct CLI only, single query,
+retain raw timing, no-successor boundary, shared capacity and terminal evidence.
+No NativeFactory.observers, process/runtime/layout/ref/staging probe. Known
+runtime hash/full-chain/owner/System32/ACL reads and loader/tool/shell logging,
+console echo restoration plus ordinary CLI cache/log/network effects are
+explicit. A successful query may take20s in an inert simulated-clock test; a60s
+or shorter remaining-deadline timeout stops with no successor. Inert tests are
+not native timing measurements.
+
+Both frozen captures346528 bytes count before payload inside shared16MiB;
+new physical maximum16430688,64files/1MiB record and3terminal slots/640KiB reserve.
+No earlier files/proposals are changed/reused. Fresh exact owner approval/pins,
+source/catalog/known executable/frozen fingerprints/owner/ACL/absent-leaf
+preflights and actual-ID pure command bound are required before one launch.
+This preparation authorizes no CLI call or installation. New timing evidence
+requires review before further acquisition/deployment; no process detour is a
+prerequisite to this timing check.

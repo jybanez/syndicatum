@@ -101,14 +101,19 @@ class NativeReadOnlyCli:
     @staticmethod
     def gate():raise RuntimeError('SOURCE_ONLY: metadata CLI observation disabled')
 
+    def query_policy(self):
+        return ('marketplaces' if len(self.results)%2==0 else 'plugins',8,14)
+
     def read(self, command, deadline):
         self.gate()
-        check(not self.terminal and command in READ_COMMANDS and len(self.results)<14 and
-              command==('marketplaces' if len(self.results)%2==0 else 'plugins') and
+        expected,child_seconds,max_queries=self.query_policy()
+        check(not self.terminal and command in READ_COMMANDS and len(self.results)<max_queries and
+              command==expected and
               time.monotonic()<deadline,'metadata_cli_lifetime')
         # Mark consumed before touching any native resource. A caller cannot
         # retry a failed query or assume timeout killed a child.
         self.terminal=True
+        started=time.monotonic()
         executable=self.binding['cli']['path'];cwd=Path(self.binding['neutral_directory'])
         check_nonreparse_chain(cwd)
         check(cwd.is_dir() and not str(cwd).lower().startswith('c:\\wamp64\\www'),'metadata_neutral_directory')
@@ -146,7 +151,7 @@ class NativeReadOnlyCli:
                 result.put((name,None,error))
         for name,stream,limit in (('stdout',child.stdout,262144),('stderr',child.stderr,65536)):
             threading.Thread(target=drain,args=(name,stream,limit),daemon=True).start()
-        limit=min(deadline,time.monotonic()+8)
+        limit=min(deadline,time.monotonic()+child_seconds)
         try:
             code=child.wait(timeout=max(.001,limit-time.monotonic()))
             values={}
@@ -154,7 +159,8 @@ class NativeReadOnlyCli:
                 name,raw,error=result.get(timeout=max(.001,limit-time.monotonic()))
                 if error:raise error
                 values[name]=raw
-            record.update({'status':'exited','exit':code,
+            with lock:record['channel_reads']={name:{k:v for k,v in state.items() if k!='prefix'} for name,state in channels.items()}
+            record.update({'status':'exited','exit':code,'elapsed_ms':round((time.monotonic()-started)*1000),
                 **{name+'_base64':base64.b64encode(raw).decode('ascii') for name,raw in values.items()}})
             check(code==0 and not values['stderr'],'metadata_cli_unsuccessful_or_warning')
             value=json.loads(values['stdout'],object_pairs_hook=_unique)
@@ -164,6 +170,7 @@ class NativeReadOnlyCli:
             # No kill, cleanup, child reattachment or successor command.
             with lock:
                 record.update({'status':'failed_uncertain','error_type':type(error).__name__,
+                    'elapsed_ms':round((time.monotonic()-started)*1000),
                     **{name+'_prefix_base64':base64.b64encode(state['prefix']).decode('ascii') for name,state in channels.items()},
                     'channel_reads':{name:{k:v for k,v in state.items() if k!='prefix'} for name,state in channels.items()}})
             error.add_note('metadata query uncertain; child may remain; no replay')
