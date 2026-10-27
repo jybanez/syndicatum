@@ -671,8 +671,8 @@
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "d666ea5dbbe5f276274e3223e9a7eebb9825c7e1760a9a55f18bf8e6485be2a6",
-      "size": 39334
+      "git_blob_bytes_sha256": "17fded857a54c7db8ea9f73b7d1953207e7cffb3218f1b08f1e08f43d326cea0",
+      "size": 48240
     }
   ],
   "admission_acquisition": {
@@ -1323,5 +1323,245 @@
       "unknown image hashing",
       "automatic exclusions or promotion"
     ]
+  },
+  "integrated_readiness_11792": {
+    "status": "INTEGRATED_PLANNING_ONLY_NOT_AUTHORITY",
+    "source_request": 11792,
+    "private_table": {
+      "filename": "Syndicatum-Developer-six-origin-readiness-11792-v1.json",
+      "bytes": 13246,
+      "sha256": "87e5d6c4e4e52ee2639a554fc6c7afd4b6de7b2d671e637005f1a982b5238fc8",
+      "protected_owner_SYSTEM_acl": "Developer readback PASS; no public paths/PIDs"
+    },
+    "retained_acquisition": {
+      "source_head": "a3ebf4c2c5ab7e1d4aa3d8c0c0929965808fcf55",
+      "request": 11788,
+      "approval": 11789,
+      "report": 11791,
+      "files": 32,
+      "bytes": 333160,
+      "fingerprint": "babfe3cde36668dd584520a6e0d5b1de2f2e9e6ce3aa620cfd1480a15807812f",
+      "bindings": [
+        {
+          "bytes": 4504,
+          "name": "layout-0.json",
+          "sha256": "936672e43ce0042470c6d4b1acbfe692236041672f5fdb997e0a17022b89489e"
+        },
+        {
+          "bytes": 86,
+          "name": "layout-1.json",
+          "sha256": "9c43dc1629e85a706c72bad0d57eb2df2809b49fc8689798f01c8e8701d8780b"
+        },
+        {
+          "bytes": 66,
+          "name": "managed-state.json",
+          "sha256": "fa14c124e96902a86bddbe85dcd7cb857859b0e616b6b181e4732fdc22fab1ea"
+        },
+        {
+          "bytes": 47076,
+          "name": "runtime-proposal.json",
+          "sha256": "f80759a42aabf4ebabb0a0f8b0caf6c54c064a5f67429ab4ff8b0cbb10cfa398"
+        },
+        {
+          "bytes": 5334,
+          "name": "process-proposal.json",
+          "sha256": "cf57d620068f6c6aa007a1ed3263bdfc66b088531ec218998982c05e0b5c6397"
+        },
+        {
+          "bytes": 2,
+          "name": "staging-metadata.json",
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      ],
+      "installed_layout_files": 45,
+      "candidate_cache_present": false,
+      "runtime_file_pins": 164,
+      "process_scanned": 411,
+      "process_selected": 22,
+      "unknown_origins": 6,
+      "historical_not_current_mutation_preimages": true
+    },
+    "six_origin_table": [
+      {
+        "path_sha256": "0081d95a88c78e11a01f1da46542f8ee7df73588338e1d5e5737f0a1129307ef",
+        "basename": "node.exe",
+        "role": "general Node.js host",
+        "provenance": "other installation path claim; not verified vendor or source provenance",
+        "vendor": "UNAVAILABLE_NO_NEW_IMAGE_READ",
+        "retained_known_roles": [],
+        "snapshot_identity_count": 1,
+        "snapshot_identity_set_sha256": "237f325d0a83aada967adc54b8c5e79a238dabf6aa87db0336503d47bf265146",
+        "byte_observation_admitted": false,
+        "writer_excluded": false,
+        "disposition": "BLOCKER until fresh exact identity and concrete role reviewed"
+      },
+      {
+        "path_sha256": "07442caeec7e9ea8cff838f97a11f3c721e8b344d288c4848a8bbaa7470fb229",
+        "basename": "cmd.exe",
+        "role": "general command shell",
+        "provenance": "System32 path claim; not verified vendor or source provenance",
+        "vendor": "UNAVAILABLE_NO_NEW_IMAGE_READ",
+        "retained_known_roles": [],
+        "snapshot_identity_count": 3,
+        "snapshot_identity_set_sha256": "91072f4226a73c1ec21baa1e165a8e44ff9a933af08ad7aafa30c9f02ffe00c8",
+        "byte_observation_admitted": false,
+        "writer_excluded": false,
+        "disposition": "BLOCKER until fresh exact identity and concrete role reviewed"
+      },
+      {
+        "path_sha256": "53dadc40bb276161fbb4864750877d9641ebe8a5dee5ce338d2554171eebc6d1",
+        "basename": "powershell.exe",
+        "role": "general PowerShell host",
+        "provenance": "System32 path claim; not verified vendor or source provenance",
+        "vendor": "UNAVAILABLE_NO_NEW_IMAGE_READ",
+        "retained_known_roles": [],
+        "snapshot_identity_count": 2,
+        "snapshot_identity_set_sha256": "b3ba03b87fb565f756784c66413d80c606097e58ce224cac1cc8fdaddad27479",
+        "byte_observation_admitted": false,
+        "writer_excluded": false,
+        "disposition": "BLOCKER until fresh exact identity and concrete role reviewed"
+      },
+      {
+        "path_sha256": "61d668c179a189c16f04dcbcbd1c68b4bead013a568e43af55b2d12a6582fea3",
+        "basename": "node.exe",
+        "role": "general Node.js host",
+        "provenance": "user-local path claim; not verified vendor or source provenance",
+        "vendor": "UNAVAILABLE_NO_NEW_IMAGE_READ",
+        "retained_known_roles": [],
+        "snapshot_identity_count": 6,
+        "snapshot_identity_set_sha256": "227e9ef5a994a135b80a58dcbdcc40d237ba19fb33a6ed13fecfb1d1000446af",
+        "byte_observation_admitted": false,
+        "writer_excluded": false,
+        "disposition": "BLOCKER until fresh exact identity and concrete role reviewed"
+      },
+      {
+        "path_sha256": "9fc98d629f2c0874ab3eb8d89d492417a2a0b86a41510a7bb810f62ffca18290",
+        "basename": "node.exe",
+        "role": "general Node.js host",
+        "provenance": "other installation path claim; not verified vendor or source provenance",
+        "vendor": "UNAVAILABLE_NO_NEW_IMAGE_READ",
+        "retained_known_roles": [
+          "node"
+        ],
+        "snapshot_identity_count": 4,
+        "snapshot_identity_set_sha256": "5f182cb3e1d505df852178b5e1df523e9a7a2e866ddfc135b82b69a0f63ff768",
+        "byte_observation_admitted": false,
+        "writer_excluded": false,
+        "disposition": "BLOCKER until fresh exact identity and concrete role reviewed"
+      },
+      {
+        "path_sha256": "de1367d8be37a3d3d16817f55cfaa4d17547b4956ea7823172570fb696c48dd2",
+        "basename": "node.exe",
+        "role": "general Node.js host",
+        "provenance": "other installation path claim; not verified vendor or source provenance",
+        "vendor": "UNAVAILABLE_NO_NEW_IMAGE_READ",
+        "retained_known_roles": [],
+        "snapshot_identity_count": 1,
+        "snapshot_identity_set_sha256": "993d17be16b01d3786a945320b051c675d409c38d4ac66e6e60b575254410c00",
+        "byte_observation_admitted": false,
+        "writer_excluded": false,
+        "disposition": "BLOCKER until fresh exact identity and concrete role reviewed"
+      }
+    ],
+    "verification_boundary": {
+      "status": "SOURCE_SCOPE_PROPOSED_NOT_EXECUTABLE_NOT_AUTHORIZED",
+      "exact_files": "six exact retained private paths ONLY; no root walk/new process query",
+      "proposed_leaf": "developer-0210-six-image-verification-11792-v1",
+      "proposed_proposal": "Syndicatum-Developer-six-image-verification-11792-v1.json",
+      "max_files": 6,
+      "max_bytes_per_file": 134217728,
+      "known_image_pin_bytes": 355066232,
+      "known_plus_new_cap": 536870912,
+      "max_new_image_bytes": 181804680,
+      "operation": "one bounded full-chain/pre-post identity/stable-size stream hash per exact file, <=64KiB raw header prefix per file; available embedded PE vendor strings are unverified claims, no cert-chain/network/unknown file follow",
+      "time": "proposed <=120s including authority, separate bounded preload; exact executable/verifier/source/authority pins still unresolved",
+      "image_observation_is_not_writer_exclusion": true,
+      "failure": "STOP; retain partial proof; no retries/substitution/extra files/cap increase",
+      "postverification_hold": "review byte/provenance results and concrete writer roles BEFORE any mutation; never auto-admit/exclude"
+    },
+    "binding_plan": {
+      "producer": "schema2 concrete NativeMetadataProducer/InstallObservationCollector; digest-sealed exact roots/source/runtime/image pins and independent bracketing",
+      "reader": "retained45-file layout and known roots/ref scopes are planning baselines; before/after actual boundaries require new exact reads",
+      "runtime": "164-file proposal and builtin/frozen/absent-bytecode sets must be bound to actual production host/module loading; historical discovery identity cannot substitute",
+      "images": "three admitted-known executable pins plus six proposed paths, exact total cap; byte hashes not role exclusions",
+      "candidate": {
+        "commit": "9141daa08d896f2524be30b96d01ab2a14398757",
+        "version": "0.2.10",
+        "files": 48,
+        "archive_bytes": 375905,
+        "archive_sha256": "331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb"
+      },
+      "candidate_cache_layout": "NOT_ADMITTED;48-file375905-byte archive is separate from current45-file0.2.7 cache and future installed postimage",
+      "freshness": "production8s CLI/16s pair and pilot120s remain; successful2.422s query and35.453s discovery are samples only"
+    },
+    "B": {
+      "private_container_bytes": 146800640,
+      "logical_evidence_bytes": 33554432,
+      "shared_capture_allowance": 16777216,
+      "shared_frozen_bytes": 905422,
+      "remaining_shared_capture_bytes": 15871794,
+      "private_total": 197132288,
+      "private_cap": 201326592,
+      "margin": 4194304,
+      "external_backup_cap": 1073741824,
+      "backup": "outside webroot/live/config/old evidence; exact approved opaque preimages, original ACLs, source and copy byte/SHA/readback, full manifest; unavailable until new explicit scope",
+      "ACL": "fresh atomic owner/SYSTEM protected roots plus exact SID/final path/file identity/ACE/manifest readback; no reuse",
+      "setup_gate": "all actual backup/cardinality/manifests/publication/time bounds admitted before allocation"
+    },
+    "publication": {
+      "writer_slots": 512,
+      "writer_width": 65536,
+      "head_slots": 512,
+      "head_width": 65536,
+      "receipt_slots": 128,
+      "receipt_width": 49152,
+      "payload_per_writer_fragment": 48384,
+      "logical_publications": 36,
+      "intents_plus_reservation": 8,
+      "failure_margin": "3..8 publications per admitted spec",
+      "formula": "sum ceil(logical_bound_i/48384)+commits+intents+reservation+failure<=512; head slots>=physical heads; receipts incl failure<=128",
+      "actual_36_bounds": "UNRESOLVED; existing retained JSON byte counts are inputs, not a complete admitted journal envelope",
+      "retained_binding_bytes": 57068
+    },
+    "timing": {
+      "pilot_cap_ms": 120000,
+      "native_observation_cap_ms": 120000,
+      "tool_IPC_deadline_ms": 30000,
+      "discovery_total_ms": 35453,
+      "actual_layout_ms": 2609,
+      "actual_runtime_ms": 2625,
+      "actual_process_ms": 375,
+      "actual_managed_refs_ms": 31,
+      "actual_staging_ms": 16,
+      "arithmetic_remaining_after_discovery_ms": 84547,
+      "margin_status": "NOT_ADMITTED; discovery timing does not measure production repeated observations, suppression/stop/install/journal/fsync or host overhead"
+    },
+    "CD": {
+      "authority": "ONE coherent future B/C/D packet after evidence review; no consumed decisions",
+      "fresh_boundaries": [
+        "registration via actual CLI",
+        "installed/managed/candidate artifact postimages",
+        "runtime closure",
+        "process coverage and exact role exclusions",
+        "Task XML/Run preimages and listener owner/creation/image/command/lock witnesses",
+        "cutoff raw state and preserved history/queues/bindings"
+      ],
+      "same_session": "suppress exact admitted Task/Run and stop only owned listener, preserve anchors/exclusive sessions; preparation-only result consumed, no reopening/promotion",
+      "installation": "exact three CLI commands via existing worker; independent before/after six frozen boundaries; no automatic retry/rollback/cleanup; uncertain outcome STOP"
+    },
+    "EF": {
+      "activation": "only owner normal close/open after independently verified candidate install; never force Codex reopen or launch old listener/plugin restart",
+      "acceptance": "new read-only context validates intended lifecycle/installed revision, normal close stops listener, normal open starts as intended, exactly-once routed delivery and one bad route does not block other routes"
+    },
+    "unresolved_fields": [
+      "six exact file byte/provenance verification and fresh process-role dispositions",
+      "exact production binding from retained45/164 proposals plus admitted images",
+      "candidate48-file archive to actual0.2.10 cache postimage mapping",
+      "verified external backup and private ACL/identity/manifests",
+      "36-publication/slot/receipt arithmetic and production timing admission",
+      "fresh pre-mutation facts, same-session C/D authority, owner activation and acceptance"
+    ],
+    "ready_for_owner_execution": false,
+    "new_native_operations_authorized": false
   }
 }

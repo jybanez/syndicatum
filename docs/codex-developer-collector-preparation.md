@@ -597,3 +597,129 @@ Later production collection still needs fresh admitted facts at real mutation
 boundaries. New evidence must be reviewed before a concrete B/C/D decision.
 Preparation alone authorizes no allocation or native query; one fresh exact
 owner decision after current-head/source/private binding checks is required.
+
+
+### Integrated six-origin / B-C-D readiness packet (11792)
+
+This section and integrated_readiness_11792 in the adjacent JSON supersede stale
+planning status summaries above; earlier attempts/pins remain immutable history.
+The latest native evidence is consumed acquisition11788/11789/report11791,
+sourcea3ebf4c2c5ab7e1d4aa3d8c0c0929965808fcf55:45-file0.2.7 cache,0.2.10 cache
+absent,managed HEAD68c586b17628b387f08e42da3f17199f0f8824e7,staging empty,
+164-file runtime proposal,411-process enumeration/22 selected identities/SIX
+unknown origins. Query finished; coverage not admitted. No repeat discovery.
+All905422 frozen bytes remain charged to the shared16MiB allowance.
+
+Private SIX-ORIGIN ADMISSION/WRITER DISPOSITION TABLE:
+Syndicatum-Developer-six-origin-readiness-11792-v1.json,13246bytes,
+SHA87e5d6c4e4e52ee2639a554fc6c7afd4b6de7b2d671e637005f1a982b5238fc8.
+Exact paths/PIDs/parent/creation tuples remain private. The owner/SYSTEM-only
+protected ACL and exact file readback were verified. Public table uses stable
+path and identity-set hashes. Seventeen retained identities are unexcluded:
+
+| Origin path SHA prefix | Basename / proposed role | Retained identities | Already available provenance | Disposition |
+| --- | --- | ---: | --- | --- |
+|0081d95a88c7|node.exe / general script host|1|other installation path claim only|blocker; no exclusion|
+|07442caeec7e|cmd.exe / command shell|3|System32 path claim only|blocker; no exclusion|
+|53dadc40bb27|powershell.exe / script host|2|System32 path claim only|blocker; no exclusion|
+|61d668c179a1|node.exe / general script host|6|user-local path claim only|blocker; no exclusion|
+|9fc98d629f2c|node.exe / general script host|4|exact path matches retained A1 Node22.12.0 executable/SHA; historical only|blocker; no exclusion|
+|de1367d8be37|node.exe / general script host|1|other installation path claim only|blocker; no exclusion|
+
+Basename/friendly directory/vendor claims are not admission. Retained Node hash
+b3b117a08ee61efee09e6fd523ab33c0c018da1b570bde08e4fd914dc1170ed6 is prior evidence,
+not a fresh image pin or writer role. Any exclusion needs a concrete current
+role plus fresh PID/parent/creation/image identity and exact binding rationale.
+Unrelated or unknown-capable writers remain blockers. Neither the stale snapshot
+nor merely allowing an image hash observation excludes its live processes.
+
+Proposed narrowly bounded verification (NO execution authority): exactly six
+private paths in the table, one full-chain/pre-post identity/stable-size stream
+hash per file,<=128MiB each. Existing known image pins total355066232bytes;
+the unchanged512MiB image cap leaves only181804680bytes for ALL six additional
+files, not six times that cap. No sizes have been newly read. If six files do
+not fit, STOP and return the exact shortfall for review; do not raise the cap,
+drop images/coverage or count a retained hash as fresh. At most64KiB raw header
+prefix per file; available embedded PE vendor strings are claims, not offline
+signature trust. No extra file/certificate-chain/network lookup, executable
+launch, new process snapshot, root walk, retry or substitution. Proposed separate
+leaf developer-0210-six-image-verification-11792-v1/proposal
+Syndicatum-Developer-six-image-verification-11792-v1.json are NOT created.
+A concrete pinned verifier/authority/source/sink/time binding and fresh owner
+scope remain unresolved within THIS integrated packet. After verification,
+review results/roles BEFORE mutation; no automatic image admission or exclusion.
+
+Retained exact binding inputs (historical planning evidence): layout-0.json
+4504bytes/SHA936672e43ce0042470c6d4b1acbfe692236041672f5fdb997e0a17022b89489e;
+runtime-proposal.json47076bytes/SHAf80759a42aabf4ebabb0a0f8b0caf6c54c064a5f67429ab4ff8b0cbb10cfa398;
+process-proposal.json5334bytes/SHAcf57d620068f6c6aa007a1ed3263bdfc66b088531ec218998982c05e0b5c6397.
+The JSON pins absent-layout,managed/staging records too. Exact schema2 producer/
+reader/source bindings already implemented stay closed. Map the45-file reader
+inventory and164-file runtime/builtin/frozen/absent-bytecode proposal into the
+production host's actual module/root binding; no discovery identity substitutes
+for a fresh production identity. Source pins remain in the existing catalog.
+Known image pins plus newly reviewed image evidence must fit aggregate bounds.
+The0.2.10 candidate remains commit9141daa08d896f2524be30b96d01ab2a14398757,
+48-file375905-byte archive SHA331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb.
+Archive inventory is NOT the45-file old cache or an admitted future cache layout;
+exact installed postimage mapping remains required.
+
+B capacity/backup/ACL/manifests: fixed containers146800640 + logical evidence
+33554432 + shared capture16777216 =197132288 <=201326592, margin4194304.
+Frozen905422 leaves15871794 capture bytes BEFORE any future verification/new
+sink; no old capture is appended to. External backup is separate,<=1GiB,
+outside webroot/live/config/old evidence, exact approved opaque preimages and
+original ACLs preserved with source/copy hashes/readback/full manifest. No new
+protected state read or backup allocation now. Actual old-cache/managed-source/
+registration configuration and exact route credential/binding/queue/history/
+uploaded-file preimage manifest must be approved/bound before B; unrelated state
+is not a target. Existing file/slot/container design is not redesigned. Fresh
+atomic owner/SYSTEM roots need exact SID/final paths/identities/ACE readback and
+writer/head/receipt manifests; none allocated under consumed acquisitions.
+
+Publication arithmetic:512 writer slots at65536,512 independent head slots at
+65536,128 receipt slots at49152; raw fragment capacity48384bytes. Existing spec
+requires36 logical upper bounds,7 intents+reservation and3..8 failure-publication
+margin. Compute sum ceil(bound_i/48384)+commits+intents+reservation+failure<=512,
+head slots>=physical heads and receipts incl failure<=128 BEFORE B. Six retained
+binding records total57068 bytes, not a complete36-publication envelope; no
+slot/receipt count is invented from that subset. Actual complete canonical/raw
+sizes/publication bounds remain unresolved and must be admitted before setup.
+
+Timing: discovery35453ms includes five authority responses and one-time layout
+2609/runtime2625/process375/refs31/staging16ms.120000-35453=84547ms is arithmetic,
+NOT pilot margin. Production needs independent bracketing/fresh CLI/artifact/
+runtime/writer observations at its real boundaries, plus suppression/owned stop,
+three CLI install commands, journals/fsync/receipts and host IPC. Current2.422s
+successful listing does not prove all production calls fit8s/16s pair or the
+whole120s. Keep native observation120s,tool/IPC30s and pilot120s; no silent
+increase. Complete bound/timing admission is required before C/D.
+
+One future coherent B/C/D decision, not separate component queues: first evidence
+review, admitted exact private installation spec/manifests/runtime/image/role
+bindings and verified external backup. Same held C/D session suppresses ONLY
+admitted Task/Run startup and stops ONLY exact owned listener(PID/start/image/
+command/lock witnesses), preserving cutoff anchors/raw history/queues and
+exclusive sessions. Preparation-only completion is consumed, never reopened or
+promoted. D dispatches the existing exact three CLI commands with independent
+before/after six frozen boundaries; uncertain outcome means STOP, no retry,
+rollback, cleanup or replay. Fresh registration/artifact/runtime/process facts
+are mandatory at those boundaries; historical inputs are not preimages.
+Owner activation is normal deliberate Codex close/open only after installed
+candidate verification; no forced reopen/old listener restart/second MCP server.
+New read-only acceptance observes intended listener session lifecycle, exact
+installed revision, route delivery once and one bad route not blocking others.
+
+ONLY remaining unresolved field groups:
+1. Six exact-file byte/provenance verification plus fresh concrete per-process
+   role dispositions; verifier/source/owner boundary and image-cap fit unresolved.
+2. Production producer/reader/runtime/image binding from retained45/164 proposals,
+   and fresh admitted current facts at actual boundaries.
+3. Candidate48-file archive to actual0.2.10 installed-cache postimage mapping.
+4. Exact opaque backup/ACL/identity/preimage and new private container manifests.
+5. Complete36-publication/slot/receipt arithmetic and production timing admission.
+6. Fresh same-session B/C/D authority, owned listener cutoff/stop identity,
+   owner activation and independent lifecycle/delivery acceptance observations.
+No native operation, new image read, query, allocation, suppression, install,
+activation or merge is authorized by this planning packet.11773 remains
+superseded; historical child settlement remains unverified;0.2.7 unchanged.
