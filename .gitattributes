@@ -9,3 +9,6 @@ vendor/pbb-helper/js/ui/ui.loader.js text eol=lf
 .agents/plugins/marketplace.json text eol=lf
 plugins/codex/** text eol=lf
 plugins/codex/assets/*.png -text
+tools/release/codex-fixed-synthetic-validation.ps1 text eol=lf
+docs/codex-fixed-synthetic-review-packet.json text eol=lf
+tools/release/codex-developer-fixed-storage.psm1 text eol=lf
