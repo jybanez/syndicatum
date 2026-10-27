@@ -726,3 +726,70 @@ ONLY remaining unresolved field groups:
 No native operation, new image read, query, allocation, suppression, install,
 activation or merge is authorized by this planning packet.11773 remains
 superseded; historical child settlement remains unverified;0.2.7 unchanged.
+
+
+### Concrete six-exact-file verification boundary (11796)
+
+New SIX-EXACT-FILE-ONLY core/host/launcher reuse unchanged parent/framing and
+exact EvidenceSink, same ten-source closure and capture factory. Scope binds
+exact SIX retained path hashes, no alternative paths or file enumeration. The
+first checkpoint permits only full-chain/stat metadata for all six files,
+including size/mtime/device/inode, regular-file/alias checks and whole-set cap.
+NO image content hash (including factory's known-runtime image hashes) starts
+until all six metadata records fit <=128MiB/file AND181804680bytes total, with
+known355066232+new<=536870912. No metadata/content reads have run in preparation.
+Metadata failure retains explicit partial-completion status. Shortfall returns
+all six hashed-path sizes/aggregate/per-file excess in safe host summary and
+allocates NO capture or content-hash attempt. Owner decision is still consumed;
+no retries, subset hashing, cap increase or alternate files.
+
+Checkpoint2 then permits factory's unchanged known-runtime hash/ACL preflight,
+sole fresh developer-0210-six-image-verification-11792-v1 owner/SYSTEM capture
+and exact source/proposal staging. Checkpoints3/4/5 each bind a pair of exact
+file reads; metadata identity must still match before opening, fstat identity
+must match after opening, stream<=size+1 with full SHA and<=64KiB prefix, and
+postread chain/size/mtime/device/inode must match. Each file's raw prefix/status
+is saved in finally; primary failure survives sink uncertainty. No successor
+file after failure. Header bytes are evidence, not verified vendor provenance;
+no resource/certificate-chain/network lookup or extra file follow. No target
+execution, CLI/process/runtime/layout/ref/staging query, exclusion or escalation.
+Checkpoints6/7 preserve proposal-only boundary/terminal evidence; seven pairs
+plus initial two protected reads,120s including authority after separate60s
+11-Git-child preload. Source owned Python/tool shell are launch overhead, not
+execution of the six nominated images. Existing production timing unchanged.
+
+All905422 frozen bytes charged before new payload, remaining15871794 inside16MiB;
+64files/1MiB record and3terminal slots640KiB reserved. The13246 private table
+remains charged to33MiB logical evidence, not a second capture allowance. New
+proposal filename is the already planned
+Syndicatum-Developer-six-image-verification-11792-v1.json; exact source/head/
+entry/launcher/parent/paths/table/limits must bind one fresh owner decision after
+review/CI. Currently authorized preflights use retained byte-pinned table/
+source/captures, pure command construction and owner/ACL/absent-leaf only.
+Current executable/six-image content hashes are deliberately NOT refreshed
+before owner scope; known runtime pins remain prior observations and are checked
+inside the authorized stage AFTER all-six metadata fit. Loaded-runtime or
+inventory discovery is never repeated here. Fresh hashes still require evidence
+review and independent current writer-role dispositions BEFORE mutation.
+
+Pure mapping/arithmetic progress alongside this source: exact candidate archive
+was reproduced IN MEMORY from immutable Git9141daa and deterministic builder
+rules:48 entries/375905bytes/SHA331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb.
+It contains47 plugin files plus ONE .agents marketplace catalog; proposed
+installed-cache projection is47 plugin files, not48. JSON pins every proposed
+relative filename/size/SHA. Saved45-file old cache matches immutable managed
+Git68c586b plugin source byte-for-byte. These are source/retained-data mappings,
+not new native reads or proof of the future CLI postimage. That exact fresh
+postimage still must match the admitted projection at the real boundary.
+
+Conditional publication arithmetic now exposes remaining460 raw fragments
+(512-36 commits-8intents/reservation-8failure), at48384bytes each=22256640bytes.
+This is conditional on those slot semantics, NOT a complete36-bound/receipt/head
+admission; actual envelopes/publication counts/timing still require concrete
+spec. No backup scope is broadened; actual opaque preimages/ACL/manifests remain
+owner-bound unresolved. Other five field groups stay in the SAME readiness
+packet: production binding/fresh roles, exact live candidate postimage, backup/
+private manifests, full publication/timing admission, fresh same-session pilot
+and owner activation/acceptance. No standalone component approval queue or
+silent admission follows. New image metadata/content reads, capture allocation,
+B setup/listener/process action/installation/activation/merge remain unauthorized.

@@ -671,8 +671,8 @@
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "2b856c18e3843bb984cba561aa0dded81fe99738c07eb54370ff1b26c150b37d",
-      "size": 48484
+      "git_blob_bytes_sha256": "cc2ad00f22be604022abfea6a227d039df6a2b8251994df291b51865b7245b9e",
+      "size": 53121
     }
   ],
   "admission_acquisition": {
@@ -1464,7 +1464,7 @@
       }
     ],
     "verification_boundary": {
-      "status": "SOURCE_SCOPE_PROPOSED_NOT_EXECUTABLE_NOT_AUTHORIZED",
+      "status": "IMPLEMENTED_CLOSED_SOURCE_REVIEW_REQUIRED",
       "exact_files": "six exact retained private paths ONLY; no root walk/new process query",
       "proposed_leaf": "developer-0210-six-image-verification-11792-v1",
       "proposed_proposal": "Syndicatum-Developer-six-image-verification-11792-v1.json",
@@ -1477,7 +1477,13 @@
       "time": "proposed <=120s including authority, separate bounded preload; exact executable/verifier/source/authority pins still unresolved",
       "image_observation_is_not_writer_exclusion": true,
       "failure": "STOP; retain partial proof; no retries/substitution/extra files/cap increase",
-      "postverification_hold": "review byte/provenance results and concrete writer roles BEFORE any mutation; never auto-admit/exclude"
+      "postverification_hold": "review byte/provenance results and concrete writer roles BEFORE any mutation; never auto-admit/exclude",
+      "entry": "tools/release/codex_developer_six_file_host.py::main -> codex_developer_six_file.run",
+      "all_six_metadata_before_any_image_content_hash": true,
+      "no_new_image_metadata_or_content_preflight_now": true,
+      "shortfall_report": "safe host summary with all six path hashes/sizes,aggregate and per-file shortfall; no capture/target/runtime image hashing before whole set fits",
+      "current_metadata_or_sizes": "NOT_READ",
+      "provenance": "bounded header only; vendor/trust unavailable unless separately reviewed; hashes do not exclude writers"
     },
     "binding_plan": {
       "producer": "schema2 concrete NativeMetadataProducer/InstallObservationCollector; digest-sealed exact roots/source/runtime/image pins and independent bracketing",
@@ -1524,7 +1530,13 @@
       "failure_margin": "3..8 publications per admitted spec",
       "formula": "sum ceil(logical_bound_i/48384)+commits+intents+reservation+failure<=512; head slots>=physical heads; receipts incl failure<=128",
       "actual_36_bounds": "UNRESOLVED; existing retained JSON byte counts are inputs, not a complete admitted journal envelope",
-      "retained_binding_bytes": 57068
+      "retained_binding_bytes": 57068,
+      "conditional_fragment_bound": {
+        "condition": "36 single commit publications,8 intent/reservation and8 failure slots within512; actual writer/head/receipt semantics still require full spec check",
+        "remaining_payload_fragments": 460,
+        "raw_fragment_capacity_bytes": 22256640,
+        "not_an_admitted_36_bound_spec": true
+      }
     },
     "timing": {
       "pilot_cap_ms": 120000,
@@ -1565,6 +1577,368 @@
       "fresh pre-mutation facts, same-session C/D authority, owner activation and acceptance"
     ],
     "ready_for_owner_execution": false,
-    "new_native_operations_authorized": false
+    "new_native_operations_authorized": false,
+    "pure_mapping_progress": {
+      "candidate_archive_reproduced_in_memory": true,
+      "archive_bytes": 375905,
+      "archive_sha256": "331e47a6ee3cd690846ac7f2d302566658e4be195c3a734228f457f55e61feeb",
+      "archive_entries": 48,
+      "marketplace_catalog_entries": 1,
+      "plugin_source_entries": 47,
+      "proposed_candidate_cache_files": {
+        ".codex-plugin/plugin.json": {
+          "size": 1685,
+          "sha256": "e0f4c8e326b3b42f6d4bcfd66a2b105406fb24c3b002bf9344be72671c4f6a37"
+        },
+        ".mcp.json": {
+          "size": 959,
+          "sha256": "18728e4c8777caf551c2ddefe5b16cb114208055b2d30b0b43f78164c0905cfc"
+        },
+        "README.md": {
+          "size": 18407,
+          "sha256": "3ffd1c2c9ab3347ad5f913b732b52e46b27354f141b3ee299d1c509b83873f20"
+        },
+        "assets/icon.png": {
+          "size": 5045,
+          "sha256": "0b426ce681696c0bc8b47a274e926260fde90c39c82e71f3fd2649e1aef231e1"
+        },
+        "assets/logo.png": {
+          "size": 14493,
+          "sha256": "617607f77572759a7f6dc5833beecc581c10bd60e496fa5c8104f1052801937a"
+        },
+        "mcp/agent-profile-store.mjs": {
+          "size": 7787,
+          "sha256": "d3b71616bdaddc4002373ebdae9f3ec1405596d96efb58213cda122ec134e9d4"
+        },
+        "mcp/authorization-listener.mjs": {
+          "size": 5585,
+          "sha256": "7f4ba5d5a9da555670e0cd4d3790a37845be159688721f46e92730fa3ebc6737"
+        },
+        "mcp/background-service-manager.mjs": {
+          "size": 13744,
+          "sha256": "3290aafd1c8b051130b97a9e7175f9f03bdc47fdafe0b2d737646a0c202b9e31"
+        },
+        "mcp/background-service.mjs": {
+          "size": 4921,
+          "sha256": "629046776d07812fb6327b629664dd469f27e4467b58f4735040c31a234f8d0c"
+        },
+        "mcp/codex-driver.mjs": {
+          "size": 6679,
+          "sha256": "3487e238df1b5609d22beb4cfc31a74295f1cd71cd2aec57ce6585a6ed4e04de"
+        },
+        "mcp/codex-session.mjs": {
+          "size": 3922,
+          "sha256": "aeeb537e945d214717e99d1cdc106f0bfc55b87c17e64e87ba2236e6b4b2b5eb"
+        },
+        "mcp/config.mjs": {
+          "size": 6148,
+          "sha256": "3c1bf319207df6876b84315b83113318ae2bcb1199201d13f9639297e1991ecb"
+        },
+        "mcp/connector.mjs": {
+          "size": 11866,
+          "sha256": "b66cb82513992655b9a037696256122514642d91a7a8ca47c6a0ba7d2c846032"
+        },
+        "mcp/device-connector.mjs": {
+          "size": 8309,
+          "sha256": "80ee943cdb14b799bccf7919cb428de96979b390e0c7cafdc1aff15a6627920a"
+        },
+        "mcp/health-heartbeat.mjs": {
+          "size": 1307,
+          "sha256": "3e84c5a5edf8e1423e1083803cfd48a9a8da65b6e763946e819b5d6ad1f33d8e"
+        },
+        "mcp/listener-lock.mjs": {
+          "size": 1473,
+          "sha256": "d5e8ff4307d6d083c1bd48351cd8b2cdb236578104d36bc10c900dbd82c9290c"
+        },
+        "mcp/pairing-state.mjs": {
+          "size": 890,
+          "sha256": "41536d0139d62283b5e0d53e979238ed244d76e3357bf47bc8ef25f26ccae838"
+        },
+        "mcp/paths.mjs": {
+          "size": 4406,
+          "sha256": "8dd0000ac02303af4a830b344c5f16cb2e58fda642f7ded8e9e74a013ca1d281"
+        },
+        "mcp/profile-claim.mjs": {
+          "size": 4413,
+          "sha256": "f7fce9fe36bd734535bbf78b87eaf0d10851482bd2a9d80a9bb090a8cd1d9b36"
+        },
+        "mcp/profile-timeline.mjs": {
+          "size": 25866,
+          "sha256": "0123aef59503c69ac1a339bd99d2d7cfe2011fcbcf46697eeec6c0a7872a1907"
+        },
+        "mcp/runtime.mjs": {
+          "size": 17394,
+          "sha256": "849024219a41ebd203bbf078dd9c4dae06edfe44c292b7c44cfbb7c8a9b8d313"
+        },
+        "mcp/secret-store.mjs": {
+          "size": 5328,
+          "sha256": "18fec8aa30268a32ed4ab46e4dcb75a55ce142e06ef0635ea9b980f18bf47b55"
+        },
+        "mcp/server-migration.mjs": {
+          "size": 5227,
+          "sha256": "5b9ea1c2cd871ef1b41ca638ceee96db528fab412f79cdfb26311f52efef5286"
+        },
+        "mcp/server.mjs": {
+          "size": 32853,
+          "sha256": "e6b14588aebfc61694ed1443a1b947a67b591d83bca0a0385dac5e5d4b0c1165"
+        },
+        "mcp/state-store.mjs": {
+          "size": 5754,
+          "sha256": "542b280c10e4725c0a7c2a953049e4c09ccb97c813e6ce771e3db1ec4260a544"
+        },
+        "mcp/syndicatum-client.mjs": {
+          "size": 6521,
+          "sha256": "f4370aa229f1f6994aad365d99beefd3f121468954fcd3ee7761b1670f033225"
+        },
+        "skills/syndicatum-timeline/SKILL.md": {
+          "size": 10401,
+          "sha256": "547202d4910581ec1536636ad7e5138a97328de16f311d2513e6f8c2dd382b52"
+        },
+        "skills/syndicatum-timeline/references/coordination.md": {
+          "size": 7638,
+          "sha256": "266f7142057573e4b2e005dca039438c18aaffcde5f88755e8c08de71bdf2c61"
+        },
+        "skills/syndicatum-timeline/references/project-plan-stewardship.md": {
+          "size": 2948,
+          "sha256": "be826ec53a08e6bbe178ef3eada9a0d014709dea3825bf53fb4b0fa8bb1e6348"
+        },
+        "skills/syndicatum-timeline/references/project-proposals.md": {
+          "size": 4906,
+          "sha256": "651b4bf452775ece62dc7dd969876fb93703aac5af49e9aa76dd20091704abdb"
+        },
+        "test/authorization-listener.test.mjs": {
+          "size": 3179,
+          "sha256": "da372817e88311c635894abd2bb6c0f332d6e6c1f2fa4c63b712a743d4073d85"
+        },
+        "test/background-service-manager.test.mjs": {
+          "size": 12942,
+          "sha256": "3a48657606d2641c1c26563ee0951fb440f35174d96cd3b9febe8fed9c28ab79"
+        },
+        "test/codex-session.test.mjs": {
+          "size": 3548,
+          "sha256": "4e2348342f1ac0d7c7fee39b7ac24bb93d2aa5502bb9e4407f870e239bdd9ba9"
+        },
+        "test/connector.test.mjs": {
+          "size": 29512,
+          "sha256": "bd503a67b262e7c432f1f932a5565655afe1bb5c2b00f3e1b6eeb4ed449ad83b"
+        },
+        "test/health-heartbeat.test.mjs": {
+          "size": 2353,
+          "sha256": "3a800dd99c215891e3be7ff9bf80879e35e8bcec6d8d9b6eaf4c7d9c35b1c76a"
+        },
+        "test/listener-lock.test.mjs": {
+          "size": 746,
+          "sha256": "599bab7f2d9fe6a69689d05e5971823384233510b795d4d200307beb7d538ae6"
+        },
+        "test/paths.test.mjs": {
+          "size": 2387,
+          "sha256": "ea60c72ef1e8455194125f1caff51ac2638980a35d116767c52b75d752e4ddeb"
+        },
+        "test/plugin-identity.test.mjs": {
+          "size": 2162,
+          "sha256": "3547d7e44d838f191382cec58eb85ad373d88f8d779ab7027daf89053ad049fb"
+        },
+        "test/profile-alias.test.mjs": {
+          "size": 2215,
+          "sha256": "d5169dd815edb3b93ed34d1c87ddfa35b15349053a26f53b3f0b6fb0c63abd18"
+        },
+        "test/profile-claim.test.mjs": {
+          "size": 10527,
+          "sha256": "9f9bfd07ebdc8c7ecc2b956a08e393e29e767a3c6a7134ed4f3a61780b6996d0"
+        },
+        "test/profile-timeline.test.mjs": {
+          "size": 20826,
+          "sha256": "438fd0f599c76be1840a1b94fbaac80fa2aa010dfc4a991289a4c79ada8544f2"
+        },
+        "test/runtime-background.test.mjs": {
+          "size": 9487,
+          "sha256": "b5b51931ffd90f5dece4c4e0b8eb1aaf54d646cd35149b27b5f5511e16a60329"
+        },
+        "test/secret-store.test.mjs": {
+          "size": 1459,
+          "sha256": "09da8920187f19a8583f8fc70e56e38107f54423cf2f4b11d438732708b1e0e6"
+        },
+        "test/server-migration.test.mjs": {
+          "size": 4343,
+          "sha256": "0bbf21cad2c06e8b3d2d3667e226d739bcb92b1da1b3376470d3c068fe78a157"
+        },
+        "test/server-protocol.test.mjs": {
+          "size": 6539,
+          "sha256": "3e243255c31f23e237cd934d620225ed311c14da611736a31abe9e610ac4216d"
+        },
+        "test/skill-contract.test.mjs": {
+          "size": 7057,
+          "sha256": "a2291c13379fff820cf9a115174b0b4f965e3cbf9188488c7ba27acc9c295e2c"
+        },
+        "test/syndicatum-client.test.mjs": {
+          "size": 1880,
+          "sha256": "23132d4da6940917e392d3aa36f260d11223064143b3809f2bc9bb9f7f10b4f5"
+        }
+      },
+      "cache_projection": "47 plugin files under installed root; .agents marketplace catalog is NOT inside plugin cache; proposed, actual CLI postimage still independently verified",
+      "retained_old45_cache_matches_managed_git_source": true,
+      "source_inputs_only": true,
+      "fresh_native_read": false
+    }
+  },
+  "six_file_verification": {
+    "status": "SOURCE_REVIEW_ONLY_NOT_AUTHORITY",
+    "scope": "Developer SIX-EXACT-FILE-ONLY",
+    "source_request": 11796,
+    "entry": "tools/release/codex_developer_six_file_host.py::main -> codex_developer_six_file.run",
+    "proposal_filename": "Syndicatum-Developer-six-image-verification-11792-v1.json",
+    "private_proposal_status": "NOT_CREATED",
+    "capture_identity": "developer-0210-six-image-verification-11792-v1",
+    "existing_parent_path_sha256": "77c775d422390019b43d9f0fc693eadaf4b714cdaafa208b6eed5f1dc8d52d91",
+    "retained_root_map_sha256": "16c23f0c3a50008f75fbeee852f660f9646285bc99905c009b17720317e58047",
+    "parent_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
+    "parent_source": {
+      "repository_path": "tools/release/codex_developer_a1_parent.js",
+      "git_blob_bytes_sha256": "f36b007796ba523862c6477c17ff90fc25e5d447f081f972ce336b02361e9857",
+      "size": 5170
+    },
+    "launcher_source": {
+      "repository_path": "tools/release/codex_developer_six_file_launch.js",
+      "git_blob_bytes_sha256": "a765f4f05222954b08207eeb0c86b19a729125e58cfddfd0ba55a263b780aa2b",
+      "size": 4191
+    },
+    "source_files": [
+      {
+        "name": "codex_developer_six_file.py",
+        "repository_path": "tools/release/codex_developer_six_file.py",
+        "git_blob_bytes_sha256": "4c60491ea3453c3df2a53d5103122f817dac690c08a4f73001228b614f443a14",
+        "size": 11155
+      },
+      {
+        "name": "codex_developer_admission_native.py",
+        "repository_path": "tools/release/codex_developer_admission_native.py",
+        "git_blob_bytes_sha256": "c4639e4bbeafbb44ce41146edf0b88b960283e7f22440462822f88f95d245ef5",
+        "size": 11864
+      },
+      {
+        "name": "codex_developer_six_file_host.py",
+        "repository_path": "tools/release/codex_developer_six_file_host.py",
+        "git_blob_bytes_sha256": "ce1ba71d7ed2b6a24c73429ea83b47a53ff497b9b2ff71ab3f964ab573389b43",
+        "size": 8073
+      },
+      {
+        "name": "codex_developer_a1_tool_host.py",
+        "repository_path": "tools/release/codex_developer_a1_tool_host.py",
+        "git_blob_bytes_sha256": "1514f3880ca942ae21d536b0bf2e1fbca64005f1c927c8d0f2e5fbae31d49dbd",
+        "size": 12999
+      },
+      {
+        "name": "codex_developer_a1_runner.py",
+        "repository_path": "tools/release/codex_developer_a1_runner.py",
+        "git_blob_bytes_sha256": "b68f97a784b5a96fac50a8efda76631340282874977f6aa2a5224fee9edba819",
+        "size": 17558
+      },
+      {
+        "name": "codex_developer_fixed_journal.py",
+        "repository_path": "tools/release/codex_developer_fixed_journal.py",
+        "git_blob_bytes_sha256": "31b45b97843ee4944fe401addbd06edbec7ce97520176fdd9fa0d1c7a439d708",
+        "size": 23620
+      },
+      {
+        "name": "codex_developer_process_ipc.py",
+        "repository_path": "tools/release/codex_developer_process_ipc.py",
+        "git_blob_bytes_sha256": "590eaec4ed50f601398fe022c3d28b5ce387b3e9665e7759adce44a203a00fdf",
+        "size": 9190
+      },
+      {
+        "name": "codex_developer_install_collector.py",
+        "repository_path": "tools/release/codex_developer_install_collector.py",
+        "git_blob_bytes_sha256": "73c2eb383a4bbd43fe8b7393f86378c93a047ce520b60db1c421d2f75de7f742",
+        "size": 13593
+      },
+      {
+        "name": "codex_developer_metadata_producer.py",
+        "repository_path": "tools/release/codex_developer_metadata_producer.py",
+        "git_blob_bytes_sha256": "9a0e55f6f21d7fe58bc5bef2930388c263e4d5625852f9f26be9b156a3524863",
+        "size": 22619
+      },
+      {
+        "name": "codex_developer_windows_observer.py",
+        "repository_path": "tools/release/codex_developer_windows_observer.py",
+        "git_blob_bytes_sha256": "4afe814877d14d3d060ef9b6b807696e328c2c20f8b7abd46b511c1f2a3864f2",
+        "size": 20493
+      }
+    ],
+    "retained_executable_hashes": {
+      "python": "737a7e3b71e3578f8432acc7dd88c452e593622c544bc13da4789d69c63da5ae",
+      "cli": "1103e9e09c71fa2cd0afd6d8f3b9a2d63174fe8efd7cb5bd09f1cb14ef58a098",
+      "powershell": "b90c0f48ca4b13c9426a7863f3d469baf310ca517721dd0b55551b80ec9fee2a"
+    },
+    "launch": {
+      "javascript_hash_helpers": 0,
+      "normal_pinned_tool_shells": 1,
+      "python_capture_host": 1,
+      "python_flags": [
+        "-E",
+        "-s",
+        "-S",
+        "-B",
+        "-P",
+        "-u",
+        "-c"
+      ],
+      "pty": true,
+      "login": false,
+      "command_character_cap": 30000,
+      "local_git_children": 11,
+      "git_per_child_seconds": 10,
+      "git_aggregate_seconds": 60,
+      "git_raw_total_cap": 2097152,
+      "fixed_readonly_cli_children": 0,
+      "protected_reads_before_execution": 2,
+      "protected_checkpoint_reads": 14,
+      "source_preload_effects": "local Git via trusted PATH, no network clone; no OS-image equivalence claim"
+    },
+    "checkpoints": [
+      "all_six_metadata_before_any_image_hash",
+      "capture_only_after_whole_scope_fits",
+      "exact_image_pair_0",
+      "exact_image_pair_1",
+      "exact_image_pair_2",
+      "hash_proposals_are_not_writer_exclusions",
+      "terminal_six_file_proposal"
+    ],
+    "durable_sink": {
+      "files": 64,
+      "bytes": 16777216,
+      "per_record_bytes": 1048576,
+      "reserved_terminal_files": 3,
+      "reserved_terminal_bytes": 655360,
+      "exclusive_writes": true,
+      "fsync": true,
+      "exact_readback": true,
+      "actual_root_allocation": "NOT_PERFORMED",
+      "actual_acl_readback": "NOT_PERFORMED",
+      "contents": [
+        "reviewed sources/proposal",
+        "all-six metadata and whole-scope capacity report",
+        "six bounded header prefixes/hash proposals",
+        "authority/timings/outcome/manifest"
+      ]
+    },
+    "observation_deadline_seconds": 120,
+    "terminal_retention_exception": "up to3 reserved capture-only records; no probe, successor, repair, kill or replay",
+    "native_claims": "UNEXECUTED; inert orchestration, launch denial and typed Win32 stubs only",
+    "new_evidence_is_not_authority": true,
+    "automatic_process_exclusions": false,
+    "automatic_BCD_promotion": false,
+    "capture_budget": "905422 frozen bytes charged first; new physical maximum15871794 inside16MiB;3terminal slots640KiB reserved; metadata shortfall allocates no capture",
+    "consumption": "trusted host/task record required across runtimes; launcher in-memory set plus exclusive capture prevents local/allocated-root replay",
+    "owner_decision": "NOT_REQUESTED_PENDING_SOURCE_REVIEW_AND_CURRENT_HEAD_CI",
+    "ready_for_owner_execution": false,
+    "shared_frozen_bytes": 905422,
+    "excluded_calls": [
+      "target executable launch",
+      "CLI/process/runtime/layout/ref/staging query",
+      "network/certificate-chain lookup",
+      "root walk",
+      "writer exclusion or automatic admission",
+      "retry/alternate scope"
+    ]
   }
 }

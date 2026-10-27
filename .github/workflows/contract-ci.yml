@@ -408,6 +408,8 @@ jobs:
             python tests/codex-developer-process-only.py | tee ci-evidence/codex-developer-process-only.txt
             python tests/codex-developer-cli-timing.py | tee ci-evidence/codex-developer-cli-timing.txt
             python tests/codex-developer-upgrade-evidence.py | tee ci-evidence/codex-developer-upgrade-evidence.txt
+            python tests/codex-developer-six-file.py | tee ci-evidence/codex-developer-six-file.txt
+            node --test tests/codex-developer-six-file-launch.test.mjs | tee ci-evidence/codex-developer-six-file-launch.txt
             node --test tests/codex-developer-upgrade-evidence-launch.test.mjs | tee ci-evidence/codex-developer-upgrade-evidence-launch.txt
             node --test tests/codex-developer-cli-timing-launch.test.mjs | tee ci-evidence/codex-developer-cli-timing-launch.txt
             node --test tests/codex-developer-process-launch.test.mjs | tee ci-evidence/codex-developer-process-launch.txt
