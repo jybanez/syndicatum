@@ -667,7 +667,10 @@ exact installed postimage mapping remains required.
 B capacity/backup/ACL/manifests: fixed containers146800640 + logical evidence
 33554432 + shared capture16777216 =197132288 <=201326592, margin4194304.
 Frozen905422 leaves15871794 capture bytes BEFORE any future verification/new
-sink; no old capture is appended to. External backup is separate,<=1GiB,
+sink; no old capture is appended to. The13246-byte private planning table is
+charged inside the existing33554432 logical-evidence budget, leaving33541186
+logical bytes before other admitted publications; it is not an extra capture
+allowance or an additional unbudgeted allocation. External backup is separate,<=1GiB,
 outside webroot/live/config/old evidence, exact approved opaque preimages and
 original ACLs preserved with source/copy hashes/readback/full manifest. No new
 protected state read or backup allocation now. Actual old-cache/managed-source/

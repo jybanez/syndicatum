@@ -671,8 +671,8 @@
   "review_documents": [
     {
       "repository_path": "docs/codex-developer-collector-preparation.md",
-      "git_blob_bytes_sha256": "17fded857a54c7db8ea9f73b7d1953207e7cffb3218f1b08f1e08f43d326cea0",
-      "size": 48240
+      "git_blob_bytes_sha256": "2b856c18e3843bb984cba561aa0dded81fe99738c07eb54370ff1b26c150b37d",
+      "size": 48484
     }
   ],
   "admission_acquisition": {
@@ -1506,7 +1506,10 @@
       "external_backup_cap": 1073741824,
       "backup": "outside webroot/live/config/old evidence; exact approved opaque preimages, original ACLs, source and copy byte/SHA/readback, full manifest; unavailable until new explicit scope",
       "ACL": "fresh atomic owner/SYSTEM protected roots plus exact SID/final path/file identity/ACE/manifest readback; no reuse",
-      "setup_gate": "all actual backup/cardinality/manifests/publication/time bounds admitted before allocation"
+      "setup_gate": "all actual backup/cardinality/manifests/publication/time bounds admitted before allocation",
+      "planning_table_logical_bytes": 13246,
+      "remaining_logical_evidence_before_other_publications": 33541186,
+      "planning_table_accounting": "charged inside existing33554432 logical-evidence budget; no additional allowance"
     },
     "publication": {
       "writer_slots": 512,
