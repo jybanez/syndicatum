@@ -535,3 +535,65 @@ preflights and actual-ID pure command bound are required before one launch.
 This preparation authorizes no CLI call or installation. New timing evidence
 requires review before further acquisition/deployment; no process detour is a
 prerequisite to this timing check.
+
+
+### Combined upgrade evidence acquisition (11784)
+
+The completed CLI timing capture is consumed historical evidence: plugin list
+--json exited0 in2422ms,10189-byte stdout/zero stderr,0.2.7 installed/enabled.
+This observation does not establish normal latency or historical settlement.
+All three frozen captures572262bytes remain unchanged. Process request11773
+remains superseded; no timing or standalone process diagnostic is repeated.
+
+Separate Developer UPGRADE-EVIDENCE-ONLY chain:
+codex_developer_upgrade_evidence_launch.js ->
+codex_developer_upgrade_evidence_host.py -> codex_developer_upgrade_evidence.run.
+Fresh sole leaf developer-0210-upgrade-evidence-11784-v1; private proposal
+Syndicatum-Developer-upgrade-evidence-11784-v1.json. Reuse unchanged parent/
+authority/framing, exact EvidenceSink class, reviewed capture-only factory,
+NativeInstallReader and runtime/process observer. Ten Python sources plus
+catalog =11 bounded local Git children (10s/child,60s total,2MiB); one pinned
+tool shell/Python child, no CLI child.120s acquisition INCLUDING seven fresh
+checkpoint pairs plus initial2 protected reads. No automatic replay or successor.
+
+Checkpoint1 atomically verifies/creates new owner/SYSTEM capture and stages
+sources/proposal. Exact retained inputs are A1 result-1.json(1324 bytes, fixed
+SHA) and completed timing cli-0-stdout.bin(10189 bytes, fixed SHA). Full chains,
+pre/post size/mtime/inode, byte caps and SHA are verified, raw copies and original
+observation labels saved immediately. A1 report11730 timestamp is a report time,
+not invented exact command time. Timing's original checkpoint3/4 host-observed
+milliseconds bracket the query; they are not the new acquisition time. These
+inputs derive proposed root/sibling scopes, never current mutation preimages.
+The retained root-map SHA remains required. No CLI class is constructed.
+
+Checkpoint2 independently inventories actual0.2.7/0.2.10 caches or absence and
+<=16 syndicatum sibling scopes derived from retained registration. Persist each
+layout before the next (256dirs/512files/16MiB per scope, exact known-file hashes).
+Checkpoint3 reads managed presence/HEAD/refs/staging, retaining <=1MiB ref prefixes
+in finally with original error preserved; same immediate staging scope bounds.
+Checkpoint4 gathers two-pass loaded-runtime proposals under the same three exact
+roots,<=256files/256MiB each/512MiB total; raw prefixes/passes/proposed pins are
+saved in finally before proceeding. Checkpoint5 invokes processes(discovery=True)
+once with corrected safe attribution and the existing4096/128/16/raw262144-byte
+bounds. Known images only; no unknown-image hashing or automatic exclusions.
+Raw process proof is retained even on failure; incomplete coverage stops without
+another diagnostic. Checkpoints6/7 retain proposal boundary and terminal evidence.
+
+Bounded plan: at most18 layouts,2 ref records,3 runtime raw records+proposal,
+process raw+proposal and three terminal records: <=50 files with the ten sources,
+proposal/root/historical inputs included. Individual record cap1MiB and shared
+16MiB budget are enforced independently; simultaneous worst-case payloads may
+STOP rather than silently enlarge the allowance.572262 frozen bytes are charged
+first, leaving16204954 maximum new physical bytes;3terminal slots/640KiB remain
+reserved. Actual phase timing/layout cardinality and physical/accounted totals
+are measured and reported; no guessed closure/cardinality becomes admission.
+
+Known runtime hashes/full chain/owner/System32/ACL, normal loader/tool/shell logs,
+console echo restoration, exact historical inputs, bounded inventory/ref/staging
+and runtime/process query effects are explicit. No fresh CLI/cache/log/network
+query effect is introduced. No installation, listener/process control, unknown
+identity exclusion, escalation or production-freshness/B/C/D budget widening.
+Later production collection still needs fresh admitted facts at real mutation
+boundaries. New evidence must be reviewed before a concrete B/C/D decision.
+Preparation alone authorizes no allocation or native query; one fresh exact
+owner decision after current-head/source/private binding checks is required.
