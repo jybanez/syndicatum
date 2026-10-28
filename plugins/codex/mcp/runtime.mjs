@@ -146,6 +146,10 @@ export class PluginRuntime {
       return this.status;
     }
     this.connector = new DeviceConnector({ config: { ...config, codexPath, activationAllowed: this.activationAllowed }, syndicatum: client, bindings: validBindings, log: logger,
+      onTransport: transport => {
+        this.status = { ...this.status, transport,
+          state: transport.joinedProjects < transport.expectedProjects || this.status.unavailableBindings > 0 ? "degraded" : "running" };
+      },
       onUnavailable: failure => {
         const reasons = this.status.unavailableBindingReasons ?? [];
         if (!reasons.some(item => item.projectId === failure.projectId && item.agentId === failure.agentId)) reasons.push(failure);

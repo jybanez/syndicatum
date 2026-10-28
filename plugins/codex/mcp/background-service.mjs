@@ -41,6 +41,7 @@ function writeHealth(status) {
   const health = { pid: process.pid, updatedAt: new Date().toISOString(), state: status.state, role: status.role || "background",
     bindings: Number(status.bindings || 0), projects: Number(status.projects || 0), unavailableBindings: Number(status.unavailableBindings || 0),
     requestedBindings: Number(status.requestedBindings || 0), initializedBindings: Number(status.initializedBindings || 0),
+    ...(status.transport ? { transport: status.transport } : {}),
     unavailableBindingReasons: Array.isArray(status.unavailableBindingReasons) ? status.unavailableBindingReasons.slice(0, 100) : [],
     ...(status.error ? { error: String(status.error).slice(0, 500) } : {}) };
   const operation = healthWriteQueue.then(() => writeHealthFile(health));

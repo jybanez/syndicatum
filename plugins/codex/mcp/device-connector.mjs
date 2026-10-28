@@ -6,8 +6,14 @@ import { agentProfileId, loadAgentProfile } from "./agent-profile-store.mjs";
 import { SyndicatumClient } from "./syndicatum-client.mjs";
 
 export class DeviceConnector {
-  constructor({ config, syndicatum, bindings, log = console, loadProfile = loadAgentProfile, identityClientFactory = options => new SyndicatumClient(options), driverFactory = options => new CodexDriver(options), onUnavailable = () => {} }) {
+  constructor({ config, syndicatum, bindings, log = console, loadProfile = loadAgentProfile, identityClientFactory = options => new SyndicatumClient(options), driverFactory = options => new CodexDriver(options), onUnavailable = () => {}, onTransport = () => {} }) {
     Object.assign(this, { config, syndicatum, bindings, log, loadProfile, identityClientFactory, driverFactory, onUnavailable }); this.stopped = false; this.sockets = new Set(); this.processors = new Map(); this.initialization = null;
+    this.onTransport = onTransport; this.joinedProjects = new Set();
+  }
+  reportTransport(projectId, joined) {
+    if (joined) this.joinedProjects.add(String(projectId));
+    else this.joinedProjects.delete(String(projectId));
+    this.onTransport({ expectedProjects: this.processors.size, joinedProjects: this.joinedProjects.size });
   }
   initialize() {
     this.initialization ??= this.initializeBindings();
@@ -38,6 +44,7 @@ export class DeviceConnector {
   }
   async start() {
     const { recoveryPlans } = await this.initialize();
+    this.reportTransport("", false);
     const listeners = Promise.all([...this.processors.keys()].map(projectId => this.connectLoop(projectId)));
     await Promise.all(recoveryPlans.map(async ({ binding, processor }) => {
       try {
@@ -70,6 +77,7 @@ export class DeviceConnector {
     while (!this.stopped) {
       try { await this.connectOnce(projectId, await this.syndicatum.admission(projectId)); }
       catch (error) { if (!this.stopped) this.log.error(`Realtime project ${projectId} failed: ${safe(error)}`); }
+      this.reportTransport(projectId, false);
       if (!this.stopped) await new Promise(resolve => setTimeout(resolve, this.config.reconnectDelayMs));
     }
   }
@@ -78,13 +86,14 @@ export class DeviceConnector {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(admission.websocket_url); this.sockets.add(socket);
       let authenticated = false, joined = false, settled = false;
-      const fail = error => { if (!settled) { settled = true; reject(error); } };
+      const fail = error => { if (!settled) { settled = true; this.reportTransport(projectId, false); reject(error); socket.close(); } };
       socket.addEventListener("message", event => {
         let envelope; try { envelope = JSON.parse(String(event.data)); } catch { return; }
         if (envelope?.phase === "system" && envelope.type === "session.awaiting-auth" && !authenticated) { socket.send(JSON.stringify({ namespace: "pbb.realtime.v1", phase: "request", type: "session.auth.request", id: `req_auth_${randomUUID()}`, payload: { token: admission.token }, meta: {} })); return; }
         if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("session.auth") && !joined) { authenticated = true; joined = true; socket.send(JSON.stringify({ namespace: "pbb.realtime.v1", phase: "request", type: "room.join.request", id: `req_join_${randomUUID()}`, room: admission.room, payload: {}, meta: {} })); return; }
         if (envelope?.phase === "error") { fail(new Error(envelope.payload?.message || envelope.payload?.code || "Realtime request rejected.")); socket.close(); return; }
         if (["ack", "response"].includes(envelope?.phase) && String(envelope.type || "").startsWith("room.join")) {
+          this.reportTransport(projectId, true);
           const processors = this.processors.get(String(projectId)) ?? [];
           this.log.info(`Listening in ${admission.room} for ${processors.length} binding(s).`);
           // The listener may have been offline after the startup snapshot was

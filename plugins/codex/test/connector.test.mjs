@@ -10,6 +10,34 @@ import { DeviceConnector } from "../mcp/device-connector.mjs";
 
 const message = { id: 1559, project_id: 1, project_sequence: 1559, sender: { id: 9, display_name: "PBB Realtime" }, addressees: [{ participant_id: 8, reason: "direct" }] };
 
+test("transport readiness follows room join, disconnect and reconnect independently per project", async () => {
+  const original = globalThis.WebSocket;
+  const sockets = [], samples = [];
+  class Socket extends EventTarget {
+    constructor() { super(); sockets.push(this); }
+    send() {}
+    close() { this.dispatchEvent(new Event("close")); }
+    join() { const event = new Event("message"); event.data = JSON.stringify({phase:"ack",type:"room.join.response"}); this.dispatchEvent(event); }
+  }
+  globalThis.WebSocket = Socket;
+  try {
+    const connector = new DeviceConnector({config:{},bindings:[],syndicatum:{},log:{info(){},error(){}},onTransport: value => samples.push(value)});
+    connector.processors.set("1", []); connector.processors.set("2", []);
+    connector.reportTransport("",false);
+    const first = connector.connectOnce("1",{enabled:true,websocket_url:"ws://test"});
+    const second = connector.connectOnce("2",{enabled:true,websocket_url:"ws://test"});
+    sockets[0].join(); sockets[1].join();
+    assert.deepEqual(samples.at(-1),{expectedProjects:2,joinedProjects:2});
+    sockets[0].dispatchEvent(new Event("error"));
+    await assert.rejects(first,/WebSocket error/);
+    assert.deepEqual(samples.at(-1),{expectedProjects:2,joinedProjects:1});
+    const recovered = connector.connectOnce("1",{enabled:true,websocket_url:"ws://test"});
+    sockets[2].join();
+    assert.deepEqual(samples.at(-1),{expectedProjects:2,joinedProjects:2});
+    connector.stop(); await Promise.all([second,recovered]);
+  } finally { globalThis.WebSocket = original; }
+});
+
 for (const coalescingEnabled of [false, true]) test(`close during enqueue preserves durable pending state (coalescing=${coalescingEnabled})`, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "syndicatum-close-race-"));
   const file = path.join(directory, "state.json");
