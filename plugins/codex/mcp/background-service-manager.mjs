@@ -118,6 +118,9 @@ export class BackgroundServiceManager {
         `if ($entry -and $entry.${RUN_VALUE} -cne '${powershellLiteral(expectedCommand)}') { throw 'Unexpected legacy Run-key command; migration stopped.' }`,
         `if ($task) { Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction Stop }`,
         `if ($entry) { Remove-ItemProperty -LiteralPath $key -Name '${RUN_VALUE}' -ErrorAction Stop }`,
+        // Missing legacy entries are expected after the first session. Windows
+        // PowerShell otherwise returns the last suppressed lookup's failure.
+        "exit 0",
       ].join("; ");
       await run(this.spawnImpl, windowsPowerShellPath(this.env), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]);
     } else if (this.platform === "darwin") {

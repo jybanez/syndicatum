@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { spawn } from "node:child_process";
 import { BackgroundServiceManager, powershellTaskArguments, runtimeRevision, windowsPowerShellPath, windowsRunCommand, windowsTaskArgument } from "../mcp/background-service-manager.mjs";
 
 function successfulSpawn(calls, stdout = "") {
@@ -20,6 +21,27 @@ const sessionProcesses = async () => [
   { pid: process.pid, parentPid: 90000, executable: process.execPath, startedAt: "host-start" },
   { pid: 90000, parentPid: 1, executable: "C:\\Codex\\codex.exe", startedAt: "codex-start" },
 ];
+
+test("Windows PowerShell retirement succeeds repeatedly when legacy entries are absent but rejects unexpected entries", { skip: process.platform !== "win32" }, async () => {
+  const localAppData = await mkdtemp(path.join(os.tmpdir(), "syndicatum-retire-absent-"));
+  const calls = [];
+  const template = new BackgroundServiceManager({ platform: "win32", env: { LOCALAPPDATA: localAppData }, spawnImpl: successfulSpawn(calls) });
+  await template.retireLegacyAutostart();
+  const script = calls[0][1].at(-1);
+  const execute = async preamble => {
+    const manager = new BackgroundServiceManager({
+      platform: "win32", env: { LOCALAPPDATA: localAppData },
+      spawnImpl: (command, args, options) => spawn(command, [...args.slice(0, -1), preamble + "; " + script], options),
+    });
+    await manager.retireLegacyAutostart();
+  };
+  // Execute the generated script in real Windows PowerShell. The lookup shims
+  // reproduce suppressed missing-entry errors without touching actual startup.
+  const absent = "function Get-ScheduledTask { [CmdletBinding()]param($TaskName); Write-Error 'missing task' }; function Get-ItemProperty { [CmdletBinding()]param($LiteralPath,$Name); Write-Error 'missing value' }; function Unregister-ScheduledTask { throw 'unexpected mutation' }; function Remove-ItemProperty { throw 'unexpected mutation' }";
+  await execute(absent);
+  await execute(absent);
+  await assert.rejects(execute("function Get-ScheduledTask { [CmdletBinding()]param($TaskName); [pscustomobject]@{Actions=@([pscustomobject]@{Execute='other.exe';Arguments='other'} )} }; function Unregister-ScheduledTask { throw 'unexpected mutation' }"), /Unexpected legacy task action/);
+});
 
 test("background runtime revision changes when connector source changes", async () => {
   const source = await mkdtemp(path.join(os.tmpdir(), "syndicatum-runtime-revision-"));
