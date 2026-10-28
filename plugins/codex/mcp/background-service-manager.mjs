@@ -187,6 +187,7 @@ function readinessState(status) {
   if (!status.running) return "stopped";
   if (status.health && status.healthFresh === false) return "stale_health";
   if (status.health?.state === "authorized_idle") return "authorized_idle";
+  if (status.health?.transport && status.health.transport.joinedProjects < status.health.transport.expectedProjects) return "degraded";
   if (status.health?.state === "degraded") return "degraded";
   if (status.health?.state === "error") return "startup_error";
   if (["starting", "configured", "reloading"].includes(String(status.health?.state || ""))) return "starting_listener";
